@@ -25,27 +25,7 @@ BOOL CMainFrame::OnIdle() {
 }
 
 bool CMainFrame::OnTreeDoubleClick(HWND tree, HTREEITEM hItem) {
-	auto data = GetItemData<TreeItemType>(m_Tree, hItem);
-	if (auto it = m_Views.find(data); it != m_Views.end()) {
-		int count = m_Tabs.GetPageCount();
-		for (int i = 0; i < count; i++) {
-			if (m_Tabs.GetPageHWND(i) == it->second) {
-				m_Tabs.SetActivePage(i);
-				return true;
-			}
-		}
-	}
-	else {
-		auto view = CreateView(data);
-		if (view) {
-			int image, dummy;
-			m_Tree.GetItemImage(hItem, image, dummy);
-			m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, view);
-			m_Views.insert({ data, view->GetHwnd() });
-			return true;
-		}
-	}
-	return false;
+	return ShowView(hItem);
 }
 
 void CMainFrame::UpdateUI() {
@@ -80,8 +60,15 @@ void CMainFrame::InitMenu(HMENU hMenu) {
 		{ ID_VIEW_IMPORTS, IDI_IMPORTS },
 		{ ID_VIEW_MANIFEST, IDI_MANIFEST },
 		{ ID_VIEW_VERSION, IDI_VERSION },
-		{ ID_VIEW_DEBUG, IDI_DEBUG},
+		{ ID_VIEW_DEBUG, IDI_DEBUG },
+		{ ID_EDIT_FIND, IDI_FIND },
+		{ ID_EDIT_FIND_PREVIOUS, IDI_FIND_PREV },
+		{ ID_EDIT_FIND_NEXT, IDI_FIND_NEXT },
 		{ ID_FILE_RUNASADMINISTRATOR, 0, IconHelper::GetShieldIcon() },
+		{ ID_FILE_CLOSE, IDI_CLOSE },
+		{ ID_WINDOW_CLOSE, IDI_WIN_CLOSE },
+		{ ID_WINDOW_CLOSE_ALL, IDI_WIN_CLOSEALL },
+
 	};
 	for (auto& cmd : commands) {
 		if (cmd.icon)
@@ -132,7 +119,7 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 
 	CMenuHandle menuMain = GetMenu();
 
-	const int WindowMenuPosition = 4;
+	const int WindowMenuPosition = 5;
 	m_Tabs.SetWindowMenu(menuMain.GetSubMenu(WindowMenuPosition));
 
 	CMenuHandle hMenu = GetMenu();
@@ -165,19 +152,47 @@ LRESULT CMainFrame::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*
 	return 1;
 }
 
-IView* CMainFrame::CreateView(TreeItemType type) {
+std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 	switch (type) {
 		case TreeItemType::Image:
 		{
 			auto view = new CPEImageView(this, m_PE);
 			if (nullptr == view->Create(m_Tabs, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN)) {
 				ATLASSERT(false);
-				return nullptr;
+				return {};
 			}
-			return view;
+			return { view, view };
 		}
 	}
-	return nullptr;
+	return {};
+}
+
+LRESULT CMainFrame::OnFileNew(WORD, WORD, HWND, BOOL&) {
+	return LRESULT();
+}
+
+bool CMainFrame::ShowView(HTREEITEM hItem) {
+	auto data = GetItemData<TreeItemType>(m_Tree, hItem);
+	if (auto it = m_Views.find(data); it != m_Views.end()) {
+		int count = m_Tabs.GetPageCount();
+		for (int i = 0; i < count; i++) {
+			if (m_Tabs.GetPageHWND(i) == it->second) {
+				m_Tabs.SetActivePage(i);
+				return true;
+			}
+		}
+	}
+	else {
+		auto [view, map] = CreateView(data);
+		if (view) {
+			int image, dummy;
+			m_Tree.GetItemImage(hItem, image, dummy);
+			m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, map);
+			m_Views.insert({ data, view->GetHwnd() });
+			return true;
+		}
+	}
+	return false;
 }
 
 LRESULT CMainFrame::OnFileExit(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
@@ -241,17 +256,17 @@ int CMainFrame::DirectoryIndexToIcon(int index) {
 		GetTreeIcon(IDI_EXPORTS),
 		GetTreeIcon(IDI_IMPORTS),
 		GetTreeIcon(IDI_RESOURCE),
-		-1,
+		GetTreeIcon(IDI_EXCEPTION),
 		GetTreeIcon(IDI_SECURITY),
+		GetTreeIcon(IDI_RELOC),
+		GetTreeIcon(IDI_DEBUG),
 		-1,
 		-1,
 		-1,
 		-1,
 		-1,
 		-1,
-		-1,
-		-1,
-		-1,
+		GetTreeIcon(IDI_DELAY_IMPORT),
 		-1,
 		-1,
 	};
@@ -315,6 +330,10 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	//s_settings.RecentFiles(s_recentFiles.Files());
 	//UpdateRecentFilesMenu();
 
+	m_Views.clear();
+	m_Tabs.RemoveAllPages();
+	ShowView(m_hRoot);
+
 	return true;
 }
 
@@ -325,6 +344,7 @@ TreeItemType CMainFrame::TreeItemWithIndex(TreeItemType type, int index) {
 void CMainFrame::BuildTree(int iconSize) {
 	m_Tree.SetRedraw(FALSE);
 	m_Tree.DeleteAllItems();
+	m_Tree.SetItemHeight(iconSize + 2);
 	if (!m_TreeImages) {
 		BuildTreeImageList(iconSize);
 		m_Tree.SetImageList(m_TreeImages);
@@ -335,9 +355,9 @@ void CMainFrame::BuildTree(int iconSize) {
 
 	auto root = InsertTreeItem(m_Tree, path.substr(path.rfind(L'\\') + 1).c_str(), 0, TreeItemType::Image);
 	auto headers = InsertTreeItem(m_Tree, L"Headers", GetTreeIcon(IDI_HEADERS), TreeItemType::Headers, root);
-	InsertTreeItem(m_Tree, L"DOS Header", GetTreeIcon(IDI_HEADERS), TreeItemType::DOSHeader, headers);
+	InsertTreeItem(m_Tree, L"DOS Header", GetTreeIcon(IDI_MSDOS), TreeItemType::DOSHeader, headers);
 	InsertTreeItem(m_Tree, L"Optional Header", GetTreeIcon(IDI_HEADERS), TreeItemType::OptionalHeader, headers);
-	InsertTreeItem(m_Tree, L"Rich Header", GetTreeIcon(IDI_HEADERS), TreeItemType::RichHeader, headers);
+	InsertTreeItem(m_Tree, L"Rich Header", GetTreeIcon(IDI_RICH_HEADER), TreeItemType::RichHeader, headers);
 
 	auto sections = InsertTreeItem(m_Tree, L"Sections", GetTreeIcon(IDI_SECTIONS), TreeItemType::Sections, root);
 	int i = 0;
@@ -383,6 +403,7 @@ void CMainFrame::BuildTree(int iconSize) {
 		i++;
 	}
 	m_Tree.Expand(resources, TVE_EXPAND);
+	m_hRoot = root;
 
 	m_Tree.Expand(root, TVE_EXPAND);
 	m_Tree.SelectItem(root);
@@ -400,6 +421,16 @@ BOOL CMainFrame::TrackPopupMenu(HMENU hMenu, DWORD flags, int x, int y, HWND hWn
 
 CUpdateUIBase& CMainFrame::GetUI() {
 	return *this;
+}
+
+LRESULT CMainFrame::OnFileClose(WORD, WORD, HWND, BOOL&) {
+	m_Tabs.RemoveAllPages();
+	m_Views.clear();
+	m_PE.Close();
+	m_Tree.DeleteAllItems();
+	UpdateUI();
+
+	return 0;
 }
 
 LRESULT CMainFrame::OnFileOpen(WORD, WORD, HWND, BOOL&) {
@@ -437,7 +468,8 @@ void CMainFrame::BuildTreeImageList(int iconSize) {
 		IDI_SECTIONS, IDI_DIR_OPEN, IDI_RESOURCE, IDI_HEADERS, IDI_DIRS, IDI_SECURITY,
 		IDI_SECTION, IDI_EXPORTS, IDI_IMPORTS, IDI_DEBUG, IDI_FONT, IDI_ICON, IDI_CURSOR,
 		IDI_MANIFEST, IDI_VERSION, IDI_TYPE, IDI_BITMAP, IDI_MESSAGE, IDI_TEXT,
-		IDI_KEYBOARD, IDI_FORM,
+		IDI_KEYBOARD, IDI_FORM, IDI_EXCEPTION, IDI_DELAY_IMPORT, IDI_RELOC,
+		IDI_THREAD, IDI_RICH_HEADER, IDI_MSDOS,
 	};
 
 	bool insert = s_TreeImageIndices.empty();

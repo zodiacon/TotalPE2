@@ -23,7 +23,7 @@ DEFINE_ENUM_FLAG_OPERATORS(DllCharacteristics);
 struct PEStrings abstract final {
 	static std::wstring MagicToString(uint16_t magic);
 	static std::wstring SubsystemToString(uint32_t type);
-	static std::wstring MachineTypeToString(uint16_t);
+	static std::wstring_view MachineTypeToString(uint16_t);
 	static std::wstring CharacteristicsToString(uint32_t cs);
 	static std::wstring ToDecAndHex(uint32_t value, bool hexFirst = false);
 	static std::wstring Sec1970ToString(uint32_t secs);

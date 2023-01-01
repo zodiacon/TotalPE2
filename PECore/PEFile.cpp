@@ -17,6 +17,11 @@ bool PEFile::Open(std::wstring_view path) {
 	return ok;
 }
 
+void PEFile::Close() {
+	m_pe->Clear();
+	m_Path = L"";
+}
+
 std::wstring const& PEFile::GetPath() const {
 	return m_Path;
 }

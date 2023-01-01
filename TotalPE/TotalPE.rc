@@ -70,6 +70,10 @@ BEGIN
     END
     POPUP "&View"
     BEGIN
+        MENUITEM "&Find...\tCtrl+F",            ID_EDIT_FIND
+        MENUITEM "Find &Next\tF3",              ID_EDIT_FIND_NEXT
+        MENUITEM "Find &Previous\tShift+F3",    ID_EDIT_FIND_PREVIOUS
+        MENUITEM SEPARATOR
         MENUITEM "&Status Bar",                 ID_VIEW_STATUS_BAR
     END
     POPUP "&PE"
@@ -174,6 +178,34 @@ IDI_FORM                ICON                    "res\\form.ico"
 IDI_KEYBOARD            ICON                    "res\\keyboard.ico"
 
 IDI_SECURITY            ICON                    "res\\shield.ico"
+
+IDI_DLL_IMPORT          ICON                    "res\\dll-import.ico"
+
+IDI_EXCEPTION           ICON                    "res\\Exception.ico"
+
+IDI_RELOC               ICON                    "res\\relocation.ico"
+
+IDI_DELAY_IMPORT        ICON                    "res\\time-import.ico"
+
+IDI_COMPONENT           ICON                    "res\\component.ico"
+
+IDI_FIND                ICON                    "res\\find.ico"
+
+IDI_FIND_NEXT           ICON                    "res\\find_next.ico"
+
+IDI_FIND_PREV           ICON                    "res\\find_previous.ico"
+
+IDI_CLOSE               ICON                    "res\\Close.ico"
+
+IDI_WIN_CLOSE           ICON                    "res\\window-close.ico"
+
+IDI_WIN_CLOSEALL        ICON                    "res\\windows-close.ico"
+
+IDI_MSDOS               ICON                    "res\\msdos.ico"
+
+IDI_RICH_HEADER         ICON                    "res\\rich.ico"
+
+IDI_THREAD              ICON                    "res\\thread.ico"
 
 
 /////////////////////////////////////////////////////////////////////////////

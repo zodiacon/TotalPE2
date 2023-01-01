@@ -42,7 +42,9 @@ private:
 	LRESULT OnCopy(WORD, WORD, HWND, BOOL&) const;
 
 	struct DataItem {
-		std::wstring Name, Value, Details;
+		std::wstring Name;
+		std::wstring Value;
+		std::wstring Details;
 	};
 
 	CListViewCtrl m_List;

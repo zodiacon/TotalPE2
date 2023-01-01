@@ -239,10 +239,17 @@
     <Image Include="res\bitmap.ico" />
     <Image Include="res\check.ico" />
     <Image Include="res\circle.ico" />
+    <Image Include="res\Close.ico" />
+    <Image Include="res\component.ico" />
     <Image Include="res\copy.ico" />
     <Image Include="res\cursor.ico" />
     <Image Include="res\debug.ico" />
+    <Image Include="res\dll-import.ico" />
+    <Image Include="res\Exception.ico" />
     <Image Include="res\exports.ico" />
+    <Image Include="res\find.ico" />
+    <Image Include="res\find_next.ico" />
+    <Image Include="res\find_previous.ico" />
     <Image Include="res\folder.ico" />
     <Image Include="res\folders.ico" />
     <Image Include="res\font.ico" />
@@ -253,18 +260,25 @@
     <Image Include="res\keyboard.ico" />
     <Image Include="res\manifest.ico" />
     <Image Include="res\message.ico" />
+    <Image Include="res\msdos.ico" />
     <Image Include="res\open.ico" />
     <Image Include="res\paste.ico" />
     <Image Include="res\pin_green.ico" />
+    <Image Include="res\relocation.ico" />
     <Image Include="res\resources.ico" />
+    <Image Include="res\rich.ico" />
     <Image Include="res\save.ico" />
     <Image Include="res\section.ico" />
     <Image Include="res\sections.ico" />
     <Image Include="res\shield.ico" />
     <Image Include="res\text.ico" />
+    <Image Include="res\thread.ico" />
+    <Image Include="res\time-import.ico" />
     <Image Include="res\TotalPE.ico" />
     <Image Include="res\type.ico" />
     <Image Include="res\version.ico" />
+    <Image Include="res\window-close.ico" />
+    <Image Include="res\windows-close.ico" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

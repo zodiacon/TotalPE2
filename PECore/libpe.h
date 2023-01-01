@@ -339,8 +339,8 @@ namespace libpe
 
 	//Security table.
 	struct PESecurity {
-		DWORD           dwOffset;  //File's raw offset of this security descriptor.
-		WIN_CERTIFICATE stWinSert; //Standard WIN_CERTIFICATE header.
+		DWORD           Offset;  //File's raw offset of this security descriptor.
+		WIN_CERTIFICATE WinCert; //Standard WIN_CERTIFICATE header.
 	};
 	using PESECURITY_VEC = std::vector<PESecurity>;
 	inline const std::unordered_map<DWORD, std::wstring_view> MapWinCertRevision {
@@ -356,9 +356,9 @@ namespace libpe
 
 	//Relocation table.
 	struct PERelocData {
-		DWORD dwOffset;     //File's raw offset of this Relocation data descriptor.
-		WORD  wRelocType;   //Relocation type.
-		WORD  wRelocOffset; //Relocation offset (Offset the relocation must be applied to.)
+		DWORD Offset;     //File's raw offset of this Relocation data descriptor.
+		WORD  RelocType;   //Relocation type.
+		WORD  RelocOffset; //Relocation offset (Offset the relocation must be applied to.)
 	};
 	inline const std::unordered_map<DWORD, std::wstring_view> MapRelocType {
 		{ IMAGE_REL_BASED_ABSOLUTE, L"IMAGE_REL_BASED_ABSOLUTE" },
@@ -393,7 +393,7 @@ namespace libpe
 		std::string PDBName; //PDB file name/path.
 	};
 	struct PEDebug {
-		DWORD                 dwOffset;       //File's raw offset of this Debug descriptor.
+		DWORD                 Offset;       //File's raw offset of this Debug descriptor.
 		IMAGE_DEBUG_DIRECTORY DebugDir;     //Standard IMAGE_DEBUG_DIRECTORY header.
 		PEDebugHeader         DebugHdrInfo; //Debug info header.
 	};

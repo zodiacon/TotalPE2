@@ -17,7 +17,7 @@ LRESULT CPEImageView::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam
 
 	cm->AddColumn(L"Name", LVCFMT_LEFT, 150);
 	cm->AddColumn(L"Value", LVCFMT_LEFT, 200);
-	cm->AddColumn(L"Details", LVCFMT_LEFT, 450);
+	cm->AddColumn(L"Details", LVCFMT_LEFT, 550);
 
 	BuildItems();
 
@@ -88,33 +88,53 @@ void CPEImageView::BuildItems() {
 		fileSize = ::GetFileSize(hFile, nullptr);
 		::CloseHandle(hFile);
 	}
+	auto subSystem = is64 ? opt64.Subsystem : opt32.Subsystem;
+	auto magic = is64 ? opt64.Magic : opt32.Magic;
+	auto dllchar = is64 ? opt64.DllCharacteristics : opt32.DllCharacteristics;
 
-	m_Items = std::vector<DataItem>{
+	m_Items = std::vector<DataItem> {
 		{ L"File Name", m_PE.GetPath().substr(m_PE.GetPath().rfind(L'\\') + 1), m_PE.GetPath() },
 		{ L"File Size", PEStrings::ToMemorySize(fileSize) },
-		{ L"Alignment", std::format(L"0x{:X}", is64 ? opt64.FileAlignment : opt32.FileAlignment) },
+		{ L"File Alignment", std::format(L"0x{:X}", is64 ? opt64.FileAlignment : opt32.FileAlignment) },
+		{ L"Section Alignment", std::format(L"0x{:X}", is64 ? opt64.SectionAlignment : opt32.SectionAlignment) },
 		{ L"Checksum", std::format(L"0x{:X}", is64 ? opt64.CheckSum : opt32.CheckSum) },
 		{ L"Time/Date Stamp", std::format(L"0x{:08X}", fheader.TimeDateStamp) },
-		{ L"Machine", std::format(L"{} (0x{:X})", fheader.Machine, fheader.Machine), PEStrings::MachineTypeToString(fheader.Machine) },
-		//{ L"Subsystem", std::to_wstring(header.get_sub_system()), PEStrings::SubsystemToString(header.get_sub_system()) },
-		//{ L"Sections", std::to_wstring(header.get_sections_number()) },
-		//{ L"Characteristics", std::format(L"0x{:08X}", header.get_characteristics()), PEStrings::CharacteristicsToString(header.get_characteristics()) },
-		//{ L"Magic", std::format(L"{} (0x{:X})", header.get_magic(), header.get_magic()), PEStrings::MagicToString(header.get_magic()) },
-		//{ L"DLL Characteristics", std::format(L"0x{:04X}", header.get_characteristics_dll()), PEStrings::DllCharacteristicsToString(header.get_characteristics_dll()) },
-		//{ L"Image Base", std::format(L"0x{:X}", header.get_image_base()) },
-		//{ L"Image Size", PEStrings::ToMemorySize(header.get_image_size()) },
-		//{ L"Stack Reserve", PEStrings::ToMemorySize(header.get_stack_reserve_size()) },
-		//{ L"Stack Commit", PEStrings::ToMemorySize(header.get_stack_commit_size()) },
-		//{ L"Heap Reserve", PEStrings::ToMemorySize(header.get_heap_reserve_size()) },
-		//{ L"Heap Commit", PEStrings::ToMemorySize(header.get_heap_commit_size()) },
-		//{ L"Is Managed?", header.has_directory(IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR) ? L"Yes" : L"No" },
-		//{ L"Code Size", PEStrings::ToMemorySize(header.get_size_of_code()) },
-		//{ L"Entry Point", std::format(L"0x{:X}", header.get_entry_point()) },
-		//{ L"OS Version", std::format(L"{}.{}", header.get_os_ver_major(), header.get_os_ver_minor()) },
-		//{ L"Image Version", std::format(L"{}.{}", header.get_image_ver_major(), header.get_image_ver_minor()) },
-		//{ L"Linker Version", std::format(L"{}.{}", header.get_major_linker(), header.get_minor_linker()) },
-		//{ L"Loader Flags", std::format(L"0x{:X}", header.get_loader_flags()) },
+		{ L"Machine", std::format(L"{} (0x{:X})", fheader.Machine, fheader.Machine), std::format(L"{} ({})", 
+			PEStrings::MachineTypeToString(fheader.Machine), libpe::MapFileHdrMachine.at(fheader.Machine)) },
+		{ L"Subsystem", std::to_wstring(subSystem), std::format(L"{} ({})", PEStrings::SubsystemToString(subSystem), libpe::MapOptHdrSubsystem.at(subSystem)) },
+		{ L"Number of Sections", std::to_wstring(fheader.NumberOfSections) },
+		{ L"Size of Optional Header", std::format(L"{} bytes", fheader.SizeOfOptionalHeader) },
+		{ L"Size of Headers", std::format(L"{} bytes", is64 ? opt64.SizeOfHeaders : opt32.SizeOfHeaders) },
+		{ L"Number of Symbols", std::to_wstring(fheader.NumberOfSymbols) },
+		{ L"Characteristics", std::format(L"0x{:08X}", fheader.Characteristics), PEStrings::CharacteristicsToString(fheader.Characteristics) },
+		{ L"Magic", std::format(L"{} (0x{:X})", magic, magic), std::format(L"{} ({})", PEStrings::MagicToString(magic), libpe::MapOptHdrMagic.at(magic)) },
+		{ L"DLL Characteristics", std::format(L"0x{:04X}", dllchar), PEStrings::DllCharacteristicsToString(dllchar) },
+		{ L"Image Base", std::format(L"0x{:X}", is64 ? opt64.ImageBase : opt32.ImageBase) },
+		{ L"Image Size", PEStrings::ToMemorySize(is64 ? opt64.SizeOfImage : opt32.SizeOfImage) },
+		{ L"Stack Reserve", PEStrings::ToMemorySize(is64 ? opt64.SizeOfStackReserve : opt32.SizeOfStackReserve) },
+		{ L"Stack Commit", PEStrings::ToMemorySize(is64 ? opt64.SizeOfStackCommit : opt32.SizeOfStackCommit) },
+		{ L"Heap Reserve", PEStrings::ToMemorySize(is64 ? opt64.SizeOfHeapReserve : opt32.SizeOfHeapReserve) },
+		{ L"Heap Commit", PEStrings::ToMemorySize(is64 ? opt64.SizeOfHeapCommit : opt32.SizeOfHeapCommit) },
+		{ L"Size of Code", PEStrings::ToMemorySize(is64 ? opt64.SizeOfCode : opt32.SizeOfCode) },
+		{ L"Size of Initialized Data", PEStrings::ToMemorySize(is64 ? opt64.SizeOfInitializedData : opt32.SizeOfInitializedData) },
+		{ L"Size of Uninitialized Data", PEStrings::ToMemorySize(is64 ? opt64.SizeOfUninitializedData : opt32.SizeOfUninitializedData) },
+		{ L"Is Managed?", m_PE->GetFileInfo()->HasCOMDescr ? L"Yes" : L"No" },
+		{ L"Entry Point", std::format(L"0x{:X}", is64 ? opt64.AddressOfEntryPoint : opt32.AddressOfEntryPoint) },
+		{ L"Base of Code", std::format(L"0x{:X}", is64 ? opt64.BaseOfCode : opt32.BaseOfCode) },
+		{ L"OS Version", std::format(L"{}.{}", is64 ? opt64.MajorOperatingSystemVersion : opt32.MajorOperatingSystemVersion,
+			is64 ? opt64.MinorOperatingSystemVersion : opt32.MinorOperatingSystemVersion) },
+		{ L"Image Version", std::format(L"{}.{}", is64 ? opt64.MajorImageVersion: opt32.MajorImageVersion,
+			is64 ? opt64.MinorImageVersion : opt32.MinorImageVersion) },
+		{ L"Subsystem Version", std::format(L"{}.{}", is64 ? opt64.MajorSubsystemVersion : opt32.MajorSubsystemVersion,
+			is64 ? opt64.MinorSubsystemVersion : opt32.MinorSubsystemVersion) },
+		{ L"Linker Version", std::format(L"{}.{}", is64 ? opt64.MajorLinkerVersion : opt32.MajorLinkerVersion,
+			is64 ? opt64.MinorLinkerVersion : opt32.MinorLinkerVersion) },
+		{ L"Loader Flags", std::format(L"0x{:X}", is64 ? opt64.LoaderFlags : opt32.LoaderFlags) },
 	};
+
+	if (!is64) {
+		m_Items.push_back({ L"Base of Data", std::format(L"0x{:X}", opt32.BaseOfData) });
+	}
 
 	m_List.SetItemCount((int)m_Items.size());
 }

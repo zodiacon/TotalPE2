@@ -8,6 +8,8 @@
 class PEFile {
 public:
 	bool Open(std::wstring_view path);
+	void Close();
+
 	std::wstring const& GetPath() const;
 	template<typename T=void>
 	wil::unique_mapview_ptr<T> Map(uint32_t offset, uint32_t size) const {

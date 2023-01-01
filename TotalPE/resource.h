@@ -32,6 +32,22 @@
 #define IDI_FORM                        228
 #define IDI_KEYBOARD                    229
 #define IDI_SECURITY                    230
+#define IDI_DLL_IMPORT                  231
+#define IDI_EXCEPTION                   232
+#define IDI_RELOC                       233
+#define IDI_DELAY_IMPORT                234
+#define IDI_COMPONENT                   235
+#define IDI_FIND                        236
+#define IDI_FIND_NEXT                   237
+#define IDI_ICON4                       238
+#define IDI_FIND_PREV                   238
+#define IDI_CLOSE                       239
+#define IDI_WIN_CLOSE                   240
+#define IDI_WIN_CLOSEALL                241
+#define IDI_MSDOS                       242
+#define IDI_RICH_HEADER                 243
+#define IDI_ICON3                       244
+#define IDI_THREAD                      244
 #define IDC_VERSION                     1000
 #define IDC_COPYRIGHT                   1001
 #define IDC_LINK                        1002
@@ -62,7 +78,7 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        231
+#define _APS_NEXT_RESOURCE_VALUE        245
 #define _APS_NEXT_COMMAND_VALUE         32795
 #define _APS_NEXT_CONTROL_VALUE         1003
 #define _APS_NEXT_SYMED_VALUE           101

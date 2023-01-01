@@ -72,14 +72,14 @@ std::wstring PEStrings::MagicToString(uint16_t magic) {
 	return L"";
 }
 
-std::wstring PEStrings::MachineTypeToString(uint16_t type) {
+std::wstring_view PEStrings::MachineTypeToString(uint16_t type) {
 	switch (type) {
 		case IMAGE_FILE_MACHINE_UNKNOWN: return L"Unknown";
 		case IMAGE_FILE_MACHINE_I386: return L"x86";
 		case IMAGE_FILE_MACHINE_ARM: return L"ARM";
 		case IMAGE_FILE_MACHINE_ARMNT: return L"ARM NT";
 		case IMAGE_FILE_MACHINE_IA64: return L"IA64";
-		case IMAGE_FILE_MACHINE_AMD64: return L"x64 (AMD64)";
+		case IMAGE_FILE_MACHINE_AMD64: return L"x64";
 		case IMAGE_FILE_MACHINE_ARM64: return L"ARM 64";
 	}
 	return L"";

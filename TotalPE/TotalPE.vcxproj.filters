@@ -168,6 +168,48 @@
     <Image Include="res\shield.ico">
       <Filter>Resource Files\Icons</Filter>
     </Image>
+    <Image Include="res\time-import.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\relocation.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\Exception.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\dll-import.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\find_previous.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\component.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\find.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\find_next.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\Close.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\msdos.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\rich.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\thread.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\window-close.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\windows-close.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

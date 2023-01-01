@@ -38,6 +38,7 @@ public:
 		COMMAND_ID_HANDLER(ID_WINDOW_CLOSE_ALL, OnWindowCloseAll)
 		COMMAND_ID_HANDLER(ID_FILE_OPEN, OnFileOpen)
 		COMMAND_RANGE_HANDLER(ID_WINDOW_TABFIRST, ID_WINDOW_TABLAST, OnWindowActivate)
+		COMMAND_ID_HANDLER(ID_FILE_CLOSE, OnFileClose)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
 		MESSAGE_HANDLER(WM_DESTROY, OnDestroy)
 		CHAIN_MSG_MAP(CTreeViewHelper<CMainFrame>)
@@ -52,7 +53,9 @@ private:
 	BOOL TrackPopupMenu(HMENU hMenu, DWORD flags, int x, int y, HWND hWnd) override;
 	CUpdateUIBase& GetUI() override;
 
-	IView* CreateView(TreeItemType type);
+	std::pair<IView*, CMessageMap*> CreateView(TreeItemType type);
+	bool ShowView(HTREEITEM hItem);
+
 	void UpdateUI();
 	void InitMenu(HMENU hMenu);
 	void BuildTree(int iconSize = 16);
@@ -81,6 +84,7 @@ private:
 	LRESULT OnRunAsAdmin(WORD, WORD, HWND, BOOL&);
 	LRESULT OnDropFiles(UINT /*uMsg*/, WPARAM wParam, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnFileOpen(WORD, WORD, HWND, BOOL&);
+	LRESULT OnFileClose(WORD, WORD, HWND, BOOL&);
 
 	CCustomTabView m_Tabs;
 	CCustomSplitterWindow m_Splitter;
@@ -90,6 +94,7 @@ private:
 	std::vector<libpe::PEResFlat> m_FlatResources;
 	CImageList m_TreeImages;
 	std::unordered_map<TreeItemType, HWND> m_Views;
+	HTREEITEM m_hRoot;
 	inline static std::unordered_map<UINT, int> s_TreeImageIndices;
 	inline static int s_Frames{ 1 };
 };
