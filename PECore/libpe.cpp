@@ -43,7 +43,8 @@ namespace libpe
 	public:
 		auto LoadPe(LPCWSTR pwszFile) -> int override;
 		auto LoadPe(std::span<const std::byte> spnFile) -> int override;
-		[[nodiscard]] auto GetFileInfo()const->PEFILEINFO override;
+		[[nodiscard]] auto GetFileInfo()const->PEFILEINFO const* override;
+		[[nodiscard]] auto IsLoaded() const -> bool override;
 		[[nodiscard]] auto GetOffsetFromRVA(ULONGLONG ullRVA)const->DWORD override;
 		[[nodiscard]] auto GetOffsetFromVA(ULONGLONG ullVA)const->DWORD override;
 		[[nodiscard]] auto GetMSDOSHeader() -> IMAGE_DOS_HEADER* override;
@@ -216,10 +217,16 @@ namespace libpe
 		return PEOK;
 	}
 
-	auto Clibpe::GetFileInfo()const->PEFILEINFO
+	auto Clibpe::IsLoaded() const -> bool {
+		return m_fLoaded;
+	}
+
+	auto Clibpe::GetFileInfo()const->PEFILEINFO const*
 	{
-		assert(m_fLoaded);
-		return m_stFileInfo;
+		if (!m_fLoaded)
+			return nullptr;
+
+		return &m_stFileInfo;
 	}
 
 	auto Clibpe::GetOffsetFromRVA(ULONGLONG ullRVA)const->DWORD
@@ -657,7 +664,7 @@ namespace libpe
 	{
 		DWORD dwOffset { };
 		for (const auto& iter : m_vecSecHeaders) {
-			const auto& pSecHdr = iter.stSecHdr;
+			const auto& pSecHdr = iter.SecHdr;
 			//Is RVA within this section?
 			if ((ullRVA >= pSecHdr.VirtualAddress) && (ullRVA < (pSecHdr.VirtualAddress + pSecHdr.Misc.VirtualSize))) {
 				dwOffset = static_cast<DWORD>(ullRVA) - (pSecHdr.VirtualAddress - pSecHdr.PointerToRawData);

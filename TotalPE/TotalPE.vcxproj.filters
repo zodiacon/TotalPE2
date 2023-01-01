@@ -13,6 +13,18 @@
       <UniqueIdentifier>{36604984-7ed1-4571-b9d8-c1acd954e572}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;jpg;jpeg;jpe;manifest</Extensions>
     </Filter>
+    <Filter Include="Views">
+      <UniqueIdentifier>{b8b22a39-2c0a-4246-8048-26f32e5cb518}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Dialogs">
+      <UniqueIdentifier>{90e18280-764c-47c1-90eb-f09a81540cbe}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resource Files\Icons">
+      <UniqueIdentifier>{a4a0dac8-12f4-4062-81e2-0b5bc46ec720}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Helpers">
+      <UniqueIdentifier>{e285b05c-1fe0-4040-8b82-0e98d874aea9}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -24,11 +36,17 @@
     <ClCompile Include="MainFrm.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="View.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="AboutDlg.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Dialogs</Filter>
+    </ClCompile>
+    <ClCompile Include="SecurityHelper.cpp">
+      <Filter>Helpers</Filter>
+    </ClCompile>
+    <ClCompile Include="PEStrings.cpp">
+      <Filter>Helpers</Filter>
+    </ClCompile>
+    <ClCompile Include="PEImageView.cpp">
+      <Filter>Views</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -38,14 +56,23 @@
     <ClInclude Include="MainFrm.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="View.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="AboutDlg.h">
-      <Filter>Header Files</Filter>
+      <Filter>Dialogs</Filter>
     </ClInclude>
     <ClInclude Include="resource.h">
+      <Filter>Resource Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SecurityHelper.h">
+      <Filter>Helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="Interfaces.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="PEStrings.h">
+      <Filter>Helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="PEImageView.h">
+      <Filter>Views</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -54,8 +81,92 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
+    <Image Include="res\check.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\circle.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\copy.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\debug.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\exports.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\folder.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\headers.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\imports.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\manifest.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\open.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\paste.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\pin_green.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\resources.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\save.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\section.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\sections.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
     <Image Include="res\TotalPE.ico">
-      <Filter>Resource Files</Filter>
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\type.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\version.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\folders.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\bitmap.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\cursor.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\font.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\icon.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\message.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\text.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\form.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\keyboard.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\shield.ico">
+      <Filter>Resource Files\Icons</Filter>
     </Image>
   </ItemGroup>
   <ItemGroup>

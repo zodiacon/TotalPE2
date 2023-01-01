@@ -22,6 +22,10 @@ std::wstring const& PEFile::GetPath() const {
 }
 
 
+PEFile::operator bool() const {
+	return !m_Path.empty();
+}
+
 bool PEFile::Read(uint32_t offset, uint32_t size, void* buffer) const {
 	auto p = Map<>(offset, size);
 	if (!p)

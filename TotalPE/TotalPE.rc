@@ -13,13 +13,11 @@
 #undef APSTUDIO_READONLY_SYMBOLS
 
 /////////////////////////////////////////////////////////////////////////////
-// English (U.S.) resources
+// English (United States) resources
 
 #if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
-#ifdef _WIN32
 LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 #pragma code_page(1252)
-#endif //_WIN32
 
 #ifdef APSTUDIO_INVOKED
 /////////////////////////////////////////////////////////////////////////////
@@ -51,32 +49,53 @@ END
 // Menu
 //
 
-IDR_MAINFRAME MENU 
+IDR_MAINFRAME MENU
 BEGIN
     POPUP "&File"
     BEGIN
-        MENUITEM "&New\tCtrl+N",                ID_FILE_NEW
-        MENUITEM "&Open...\tCtrl+O",            ID_FILE_OPEN
-        MENUITEM "&Save\tCtrl+S",               ID_FILE_SAVE
-        MENUITEM "Save &As...",                 ID_FILE_SAVE_AS
+        MENUITEM "&Run As Administrator...",    ID_FILE_RUNASADMINISTRATOR
         MENUITEM SEPARATOR
-        MENUITEM "&Print...\tCtrl+P",           ID_FILE_PRINT
-        MENUITEM "Print Pre&view",              ID_FILE_PRINT_PREVIEW
-        MENUITEM "P&rint Setup...",             ID_FILE_PRINT_SETUP
+        MENUITEM "&New Window\tCtrl+N",         ID_FILE_NEW
+        MENUITEM "&Open...\tCtrl+O",            ID_FILE_OPEN
+        MENUITEM "Open in a &New Window...",    32781
+        MENUITEM "&Save...\tCtrl+S",            ID_FILE_SAVE
+        MENUITEM "&Close",                      ID_FILE_CLOSE
         MENUITEM SEPARATOR
         MENUITEM "E&xit",                       ID_APP_EXIT
     END
     POPUP "&Edit"
     BEGIN
-        MENUITEM "&Undo\tCtrl+Z",               ID_EDIT_UNDO
-        MENUITEM SEPARATOR
-        MENUITEM "Cu&t\tCtrl+X",                ID_EDIT_CUT
         MENUITEM "&Copy\tCtrl+C",               ID_EDIT_COPY
         MENUITEM "&Paste\tCtrl+V",              ID_EDIT_PASTE
     END
     POPUP "&View"
     BEGIN
         MENUITEM "&Status Bar",                 ID_VIEW_STATUS_BAR
+    END
+    POPUP "&PE"
+    BEGIN
+        MENUITEM "&Exports",                    32782
+        MENUITEM "&Imports",                    32783
+        MENUITEM "&Sections",                   32784
+        MENUITEM "&Directories",                32785
+        MENUITEM "&Resources",                  32786
+        MENUITEM "&Manifest",                   32787
+        MENUITEM "&Version",                    32788
+        MENUITEM "&Debug",                      32789
+        MENUITEM "Security",                    ID_PE_SECURITY
+    END
+    POPUP "&Options"
+    BEGIN
+        MENUITEM "&Always On Top",              ID_OPTIONS_ALWAYSONTOP
+        MENUITEM "&Dark Mode",                  ID_OPTIONS_DARKMODE
+        MENUITEM "&Font...",                    ID_OPTIONS_FONT
+        MENUITEM "&Symbols...",                 ID_OPTIONS_SYMBOLS
+        POPUP "&Tree Icon Size"
+        BEGIN
+            MENUITEM "&Small",                      32790
+            MENUITEM "&Medium",                     32791
+            MENUITEM "&Large",                      32792
+        END
     END
     POPUP "&Window"
     BEGIN
@@ -85,9 +104,11 @@ BEGIN
     END
     POPUP "&Help"
     BEGIN
-        MENUITEM "&About TotalPE",              ID_APP_ABOUT
+        MENUITEM "&About Total PE...",          ID_APP_ABOUT
+        MENUITEM "About &WIndows...",           ID_HELP_ABOUTWINDOWS
     END
 END
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -98,24 +119,79 @@ END
 // remains consistent on all systems.
 IDR_MAINFRAME           ICON                    "res\\TotalPE.ico"
 
+IDI_CHECK               ICON                    "res\\check.ico"
+
+IDI_RADIO               ICON                    "res\\circle.ico"
+
+IDI_COPY                ICON                    "res\\copy.ico"
+
+IDI_OPEN                ICON                    "res\\open.ico"
+
+IDI_PIN                 ICON                    "res\\pin_green.ico"
+
+IDI_SECTION             ICON                    "res\\section.ico"
+
+IDI_SECTIONS            ICON                    "res\\sections.ico"
+
+IDI_EXPORTS             ICON                    "res\\exports.ico"
+
+IDI_HEADERS             ICON                    "res\\headers.ico"
+
+IDI_IMPORTS             ICON                    "res\\imports.ico"
+
+IDI_PASTE               ICON                    "res\\paste.ico"
+
+IDI_SAVE                ICON                    "res\\save.ico"
+
+IDI_VERSION             ICON                    "D:\\Dev\\TotalPE2\\TotalPE\\res\\version.ico"
+
+IDI_DEBUG               ICON                    "res\\debug.ico"
+
+IDI_MANIFEST            ICON                    "res\\manifest.ico"
+
+IDI_DIR_OPEN            ICON                    "res\\folder.ico"
+
+IDI_RESOURCE            ICON                    "res\\resources.ico"
+
+IDI_TYPE                ICON                    "res\\type.ico"
+
+IDI_DIRS                ICON                    "res\\folders.ico"
+
+IDI_BITMAP              ICON                    "res\\bitmap.ico"
+
+IDI_CURSOR              ICON                    "res\\cursor.ico"
+
+IDI_FONT                ICON                    "res\\font.ico"
+
+IDI_ICON                ICON                    "res\\icon.ico"
+
+IDI_MESSAGE             ICON                    "res\\message.ico"
+
+IDI_TEXT                ICON                    "res\\text.ico"
+
+IDI_FORM                ICON                    "res\\form.ico"
+
+IDI_KEYBOARD            ICON                    "res\\keyboard.ico"
+
+IDI_SECURITY            ICON                    "res\\shield.ico"
+
+
 /////////////////////////////////////////////////////////////////////////////
 //
 // Dialog
 //
 
-IDD_ABOUTBOX DIALOG  0, 0, 187, 102
-STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "About"
-FONT 9, "Segoe UI"
+IDD_ABOUTBOX DIALOGEX 0, 0, 213, 84
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "About Total PE"
+FONT 9, "Segoe UI", 0, 0, 0x0
 BEGIN
-    DEFPUSHBUTTON   "OK",IDOK,130,81,50,14
-    CTEXT           "TotalPE Application v1.0\n\n(c) Copyright 2022",IDC_STATIC,25,57,78,
-                    32
-    ICON            IDR_MAINFRAME,IDC_STATIC,55,26,18,20
-    GROUPBOX        "",IDC_STATIC,7,7,115,88
+    DEFPUSHBUTTON   "OK",IDOK,81,63,50,14
+    ICON            IDR_MAINFRAME,IDC_STATIC,7,7,18,17
+    LTEXT           "Static",IDC_VERSION,53,10,18,8
+    LTEXT           "Static",IDC_COPYRIGHT,53,23,18,8
+    CONTROL         "<a>Github.com/zodiacon/TotalPE2</a>",IDC_LINK,"SysLink",WS_TABSTOP,57,38,104,14
 END
-
-
 
 
 /////////////////////////////////////////////////////////////////////////////
@@ -124,14 +200,14 @@ END
 //
 
 #ifdef APSTUDIO_INVOKED
-GUIDELINES DESIGNINFO 
+GUIDELINES DESIGNINFO
 BEGIN
     IDD_ABOUTBOX, DIALOG
     BEGIN
         LEFTMARGIN, 7
-        RIGHTMARGIN, 180
+        RIGHTMARGIN, 206
         TOPMARGIN, 7
-        BOTTOMMARGIN, 95
+        BOTTOMMARGIN, 77
     END
 END
 #endif    // APSTUDIO_INVOKED
@@ -142,7 +218,7 @@ END
 // Accelerator
 //
 
-IDR_MAINFRAME ACCELERATORS 
+IDR_MAINFRAME ACCELERATORS
 BEGIN
     "N",            ID_FILE_NEW,            VIRTKEY, CONTROL
     "O",            ID_FILE_OPEN,           VIRTKEY, CONTROL
@@ -167,8 +243,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,1
- PRODUCTVERSION 1,0,0,1
+ FILEVERSION 2,0,0,0
+ PRODUCTVERSION 2,0,0,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -181,35 +257,47 @@ VS_VERSION_INFO VERSIONINFO
 BEGIN
     BLOCK "StringFileInfo"
     BEGIN
-        BLOCK "040904B0"
+        BLOCK "040904b0"
         BEGIN
-            VALUE "CompanyName", "\0"
-            VALUE "FileDescription", "TotalPE Module\0"
-            VALUE "FileVersion", "1, 0, 0, 1\0"
-            VALUE "InternalName", "TotalPE\0"
-            VALUE "LegalCopyright", "Copyright 2022\0"
-            VALUE "OriginalFilename", "TotalPE.exe\0"
-            VALUE "ProductName", "TotalPE Module\0"
-            VALUE "ProductVersion", "1, 0, 0, 1\0"
+            VALUE "CompanyName", "Pavel Yosifovich"
+            VALUE "FileDescription", "Total PE - PE Viewer"
+            VALUE "FileVersion", "2.0.0.0"
+            VALUE "InternalName", "TotalPE"
+            VALUE "LegalCopyright", "©2022-2023 Pavel Yosifovich"
+            VALUE "OriginalFilename", "TotalPE.exe"
+            VALUE "ProductName", "Total PE"
+            VALUE "ProductVersion", "2.0.0.0"
         END
     END
     BLOCK "VarFileInfo"
     BEGIN
-        VALUE "Translation", 0x0409, 0x04B0
+        VALUE "Translation", 0x409, 1200
     END
 END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// AFX_DIALOG_LAYOUT
+//
+
+IDD_ABOUTBOX AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
 // String Table
 //
 
-STRINGTABLE 
+STRINGTABLE
 BEGIN
-    IDR_MAINFRAME	"TotalPE"
+    IDR_MAINFRAME           "Total PE"
 END
 
-STRINGTABLE 
+STRINGTABLE
 BEGIN
     ID_FILE_NEW             "Create a new document\nNew"
     ID_FILE_OPEN            "Open an existing document\nOpen"
@@ -222,19 +310,19 @@ BEGIN
     ID_FILE_PRINT_PREVIEW   "Display full pages\nPrint Preview"
 END
 
-STRINGTABLE 
+STRINGTABLE
 BEGIN
     ID_APP_ABOUT            "Display program information, version number and copyright\nAbout"
     ID_APP_EXIT             "Quit the application; prompts to save documents\nExit"
 END
 
-STRINGTABLE 
+STRINGTABLE
 BEGIN
     ID_NEXT_PANE            "Switch to the next window pane\nNext Pane"
     ID_PREV_PANE            "Switch back to the previous window pane\nPrevious Pane"
 END
 
-STRINGTABLE 
+STRINGTABLE
 BEGIN
     ID_WINDOW_NEW           "Open another window for the active document\nNew Window"
     ID_WINDOW_ARRANGE       "Arrange icons at the bottom of the window\nArrange Icons"
@@ -244,7 +332,7 @@ BEGIN
     ID_WINDOW_SPLIT         "Split the active window into panes\nSplit"
 END
 
-STRINGTABLE 
+STRINGTABLE
 BEGIN
     ID_EDIT_CLEAR           "Erase the selection\nErase"
     ID_EDIT_CLEAR_ALL       "Erase everything\nErase All"
@@ -259,12 +347,12 @@ BEGIN
     ID_EDIT_REDO            "Redo the previously undone action\nRedo"
 END
 
-STRINGTABLE 
+STRINGTABLE
 BEGIN
     ID_VIEW_STATUS_BAR      "Show or hide the status bar\nToggle StatusBar"
 END
 
-STRINGTABLE 
+STRINGTABLE
 BEGIN
     ATL_IDS_SCSIZE          "Change the window size"
     ATL_IDS_SCMOVE          "Change the window position"
@@ -275,22 +363,24 @@ BEGIN
     ATL_IDS_SCCLOSE         "Close the active window and prompts to save the documents"
 END
 
-STRINGTABLE 
+STRINGTABLE
 BEGIN
     ATL_IDS_SCRESTORE       "Restore the window to normal size"
     ATL_IDS_SCTASKLIST      "Activate Task List"
     ATL_IDS_MDICHILD        "Activate this window"
 END
 
-STRINGTABLE 
+STRINGTABLE
 BEGIN
     ATL_IDS_IDLEMESSAGE     "Ready"
+END
+
+STRINGTABLE
+BEGIN
     ATL_IDS_MRU_FILE        "Open this document"
 END
 
-#endif    // English (U.S.) resources
+#endif    // English (United States) resources
 /////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef APSTUDIO_INVOKED
-#endif    // not APSTUDIO_INVOKED

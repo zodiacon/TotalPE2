@@ -17,6 +17,8 @@ public:
 	
 	libpe::Ilibpe* operator->() const;
 
+	operator bool() const;
+
 private:
 	libpe::IlibpePtr m_pe{ libpe::Createlibpe() };
 	std::wstring m_Path;

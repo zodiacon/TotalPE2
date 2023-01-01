@@ -132,8 +132,8 @@ namespace libpe
 
 	//Data directories.
 	struct PEDataDirectory {
-		IMAGE_DATA_DIRECTORY stDataDir;  //Standard header.
-		std::string          strSection; //Name of the section this directory resides in (points to).
+		IMAGE_DATA_DIRECTORY DataDir;  //Standard header.
+		std::string          Section; //Name of the section this directory resides in (points to).
 	};
 	using PEDATADIR_VEC = std::vector<PEDataDirectory>;
 
@@ -143,9 +143,9 @@ namespace libpe
 	//«An 8-byte, null-padded UTF-8 string. For longer names, this member contains a forward slash (/) 
 	//followed by an ASCII representation of a decimal number that is an offset into the string table.»
 	struct PESectionHeader {
-		DWORD                dwOffset;   //File's raw offset of this section header descriptor.
-		IMAGE_SECTION_HEADER stSecHdr;   //Standard section header.
-		std::string          strSecName; //Section full name.
+		DWORD                Offset;   //File's raw offset of this section header descriptor.
+		IMAGE_SECTION_HEADER SecHdr;   //Standard section header.
+		std::string          SectionName; //Section full name.
 	};
 	using PESECHDR_VEC = std::vector<PESectionHeader>;
 	inline const std::unordered_map<DWORD, std::wstring_view> MapSecHdrCharact {
@@ -559,7 +559,8 @@ namespace libpe
 	public:
 		virtual auto LoadPe(LPCWSTR pwszFile) -> int = 0;                   //Load PE file from file.
 		virtual auto LoadPe(std::span<const std::byte> spnFile) -> int = 0; //Load PE file from memory.
-		[[nodiscard]] virtual auto GetFileInfo()const->PEFILEINFO = 0;
+		[[nodiscard]] virtual auto IsLoaded() const -> bool = 0;
+		[[nodiscard]] virtual auto GetFileInfo()const->PEFILEINFO const* = 0;
 		[[nodiscard]] virtual auto GetOffsetFromRVA(ULONGLONG ullRVA)const->DWORD = 0;
 		[[nodiscard]] virtual auto GetOffsetFromVA(ULONGLONG ullVA)const->DWORD = 0;
 		[[nodiscard]] virtual auto GetMSDOSHeader() -> IMAGE_DOS_HEADER* = 0;
