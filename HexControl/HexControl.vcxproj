@@ -20,30 +20,30 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
-    <ProjectGuid>{A8748BE6-216B-4240-A5B2-C095681DE263}</ProjectGuid>
+    <ProjectGuid>{EF5C2F6B-5FCD-446C-BE8D-1485407CD65A}</ProjectGuid>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
@@ -87,9 +87,8 @@
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_WINDOWS;STRICT;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\WTLHelper;..\PECore;..\HexControl</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -103,11 +102,11 @@
     <Midl>
       <MkTypLibCompatible>false</MkTypLibCompatible>
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <HeaderFileName>TotalPE.h</HeaderFileName>
-      <InterfaceIdentifierFileName>TotalPE_i.c</InterfaceIdentifierFileName>
-      <ProxyFileName>TotalPE_p.c</ProxyFileName>
+      <HeaderFileName>HexControl.h</HeaderFileName>
+      <InterfaceIdentifierFileName>HexControl_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>HexControl_p.c</ProxyFileName>
       <GenerateStublessProxies>true</GenerateStublessProxies>
-      <TypeLibraryName>$(IntDir)/TotalPE.tlb</TypeLibraryName>
+      <TypeLibraryName>$(IntDir)/HexControl.tlb</TypeLibraryName>
       <DllDataFileName />
     </Midl>
   </ItemDefinitionGroup>
@@ -120,9 +119,8 @@
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_WINDOWS;STRICT;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\WTLHelper;..\PECore;..\HexControl</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -137,11 +135,11 @@
       <MkTypLibCompatible>false</MkTypLibCompatible>
       <TargetEnvironment>Win32</TargetEnvironment>
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <HeaderFileName>TotalPE.h</HeaderFileName>
-      <InterfaceIdentifierFileName>TotalPE_i.c</InterfaceIdentifierFileName>
-      <ProxyFileName>TotalPE_p.c</ProxyFileName>
+      <HeaderFileName>HexControl.h</HeaderFileName>
+      <InterfaceIdentifierFileName>HexControl_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>HexControl_p.c</ProxyFileName>
       <GenerateStublessProxies>true</GenerateStublessProxies>
-      <TypeLibraryName>$(IntDir)/TotalPE.tlb</TypeLibraryName>
+      <TypeLibraryName>$(IntDir)/HexControl.tlb</TypeLibraryName>
       <DllDataFileName />
     </Midl>
   </ItemDefinitionGroup>
@@ -153,9 +151,8 @@
       <ExceptionHandling>Async</ExceptionHandling>
       <DebugInformationFormat />
       <PreprocessorDefinitions>WIN32;_WINDOWS;STRICT;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\WTLHelper;..\PECore;..\HexControl</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -169,11 +166,11 @@
       <MkTypLibCompatible>false</MkTypLibCompatible>
       <TargetEnvironment>Win32</TargetEnvironment>
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <HeaderFileName>TotalPE.h</HeaderFileName>
-      <InterfaceIdentifierFileName>TotalPE_i.c</InterfaceIdentifierFileName>
-      <ProxyFileName>TotalPE_p.c</ProxyFileName>
+      <HeaderFileName>HexControl.h</HeaderFileName>
+      <InterfaceIdentifierFileName>HexControl_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>HexControl_p.c</ProxyFileName>
       <GenerateStublessProxies>true</GenerateStublessProxies>
-      <TypeLibraryName>$(IntDir)/TotalPE.tlb</TypeLibraryName>
+      <TypeLibraryName>$(IntDir)/HexControl.tlb</TypeLibraryName>
       <DllDataFileName />
     </Midl>
   </ItemDefinitionGroup>
@@ -185,9 +182,8 @@
       <ExceptionHandling>Async</ExceptionHandling>
       <DebugInformationFormat />
       <PreprocessorDefinitions>_WINDOWS;STRICT;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\WTLHelper;..\PECore;..\HexControl</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -200,117 +196,51 @@
     <Midl>
       <MkTypLibCompatible>false</MkTypLibCompatible>
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <HeaderFileName>TotalPE.h</HeaderFileName>
-      <InterfaceIdentifierFileName>TotalPE_i.c</InterfaceIdentifierFileName>
-      <ProxyFileName>TotalPE_p.c</ProxyFileName>
+      <HeaderFileName>HexControl.h</HeaderFileName>
+      <InterfaceIdentifierFileName>HexControl_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>HexControl_p.c</ProxyFileName>
       <GenerateStublessProxies>true</GenerateStublessProxies>
-      <TypeLibraryName>$(IntDir)/TotalPE.tlb</TypeLibraryName>
+      <TypeLibraryName>$(IntDir)/HexControl.tlb</TypeLibraryName>
       <DllDataFileName />
     </Midl>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="AboutDlg.cpp" />
-    <ClCompile Include="HexView.cpp" />
-    <ClCompile Include="MainFrm.cpp" />
+    <ClCompile Include="BufferManager.cpp" />
+    <ClCompile Include="MemoryBuffer.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="PEStrings.cpp" />
-    <ClCompile Include="SectionsView.cpp" />
-    <ClCompile Include="SecurityHelper.cpp" />
-    <ClCompile Include="TotalPE.cpp" />
-    <ClCompile Include="PEImageView.cpp" />
+    <ClCompile Include="Selection.cpp" />
+    <ClCompile Include="SimpleHexControl.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="AboutDlg.h" />
-    <ClInclude Include="HexView.h" />
-    <ClInclude Include="Interfaces.h" />
-    <ClInclude Include="MainFrm.h" />
-    <ClInclude Include="PEStrings.h" />
+    <ClInclude Include="BufferManager.h" />
+    <ClInclude Include="MemoryBuffer.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="pch.h" />
-    <ClInclude Include="SectionsView.h" />
-    <ClInclude Include="SecurityHelper.h" />
-    <ClInclude Include="PEImageView.h" />
-    <ClInclude Include="ViewBase.h" />
+    <ClInclude Include="Selection.h" />
+    <ClInclude Include="SimpleHexControl.h" />
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="TotalPE.rc" />
+    <ResourceCompile Include="HexControl.rc" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="res\bitmap.ico" />
-    <Image Include="res\check.ico" />
-    <Image Include="res\circle.ico" />
-    <Image Include="res\Close.ico" />
-    <Image Include="res\component.ico" />
-    <Image Include="res\copy.ico" />
-    <Image Include="res\cursor.ico" />
-    <Image Include="res\debug.ico" />
-    <Image Include="res\dll-import.ico" />
-    <Image Include="res\Exception.ico" />
-    <Image Include="res\exports.ico" />
-    <Image Include="res\find.ico" />
-    <Image Include="res\find_next.ico" />
-    <Image Include="res\find_previous.ico" />
-    <Image Include="res\folder.ico" />
-    <Image Include="res\folders.ico" />
-    <Image Include="res\font.ico" />
-    <Image Include="res\form.ico" />
-    <Image Include="res\headers.ico" />
-    <Image Include="res\icon.ico" />
-    <Image Include="res\imports.ico" />
-    <Image Include="res\keyboard.ico" />
-    <Image Include="res\manifest.ico" />
-    <Image Include="res\message.ico" />
-    <Image Include="res\msdos.ico" />
-    <Image Include="res\open.ico" />
-    <Image Include="res\paste.ico" />
-    <Image Include="res\pin_green.ico" />
-    <Image Include="res\relocation.ico" />
-    <Image Include="res\resources.ico" />
-    <Image Include="res\rich.ico" />
-    <Image Include="res\save.ico" />
-    <Image Include="res\section.ico" />
-    <Image Include="res\sections.ico" />
-    <Image Include="res\shield.ico" />
-    <Image Include="res\text.ico" />
-    <Image Include="res\thread.ico" />
-    <Image Include="res\time-import.ico" />
-    <Image Include="res\TotalPE.ico" />
-    <Image Include="res\type.ico" />
-    <Image Include="res\version.ico" />
-    <Image Include="res\window-close.ico" />
-    <Image Include="res\windows-close.ico" />
+    <Image Include="res\HexControl.ico" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
   </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\HexControl\HexControl.vcxproj">
-      <Project>{ef5c2f6b-5fcd-446c-be8d-1485407cd65a}</Project>
-    </ProjectReference>
-    <ProjectReference Include="..\PECore\PECore.vcxproj">
-      <Project>{03a66844-1884-41c0-899d-f01c8a601c8e}</Project>
-    </ProjectReference>
-    <ProjectReference Include="..\WTLHelper\WTLHelper.vcxproj">
-      <Project>{ae53419f-a769-4548-8e15-e311904df7df}</Project>
-    </ProjectReference>
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
     <Import Project="..\packages\wtl.10.0.10320\build\native\wtl.targets" Condition="Exists('..\packages\wtl.10.0.10320\build\native\wtl.targets')" />
-    <Import Project="..\packages\Detours.4.0.1\build\native\Detours.targets" Condition="Exists('..\packages\Detours.4.0.1\build\native\Detours.targets')" />
-    <Import Project="..\packages\Microsoft.Windows.ImplementationLibrary.1.0.220914.1\build\native\Microsoft.Windows.ImplementationLibrary.targets" Condition="Exists('..\packages\Microsoft.Windows.ImplementationLibrary.1.0.220914.1\build\native\Microsoft.Windows.ImplementationLibrary.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
     </PropertyGroup>
     <Error Condition="!Exists('..\packages\wtl.10.0.10320\build\native\wtl.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\wtl.10.0.10320\build\native\wtl.targets'))" />
-    <Error Condition="!Exists('..\packages\Detours.4.0.1\build\native\Detours.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Detours.4.0.1\build\native\Detours.targets'))" />
-    <Error Condition="!Exists('..\packages\Microsoft.Windows.ImplementationLibrary.1.0.220914.1\build\native\Microsoft.Windows.ImplementationLibrary.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.Windows.ImplementationLibrary.1.0.220914.1\build\native\Microsoft.Windows.ImplementationLibrary.targets'))" />
   </Target>
 </Project>

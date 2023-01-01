@@ -11,6 +11,7 @@
 #include "SecurityHelper.h"
 #include <ToolbarHelper.h>
 #include "PEStrings.h"
+#include "SectionsView.h"
 
 BOOL CMainFrame::PreTranslateMessage(MSG* pMsg) {
 	if (CFrameWindowImpl<CMainFrame>::PreTranslateMessage(pMsg))
@@ -38,9 +39,11 @@ void CMainFrame::UpdateUI() {
 	UIEnable(ID_VIEW_SECTIONS, fi && fi->HasSections);
 	UIEnable(ID_PE_SECURITY, fi && fi->HasSecurity);
 	UIEnable(ID_FILE_CLOSE, fi != nullptr);
-	//UIEnable(ID_VIEW_MANIFEST, m_pe != nullptr && m_pe->get_resources().entry_by_id(dummy, 24));
-	//UIEnable(ID_VIEW_VERSION, m_pe != nullptr && m_pe->get_resources().entry_by_id(dummy, 16));
+	UIEnable(ID_FILE_SAVE, fi != nullptr);
+	UIEnable(ID_VIEW_MANIFEST, fi && m_HasManifest);
+	UIEnable(ID_VIEW_VERSION, fi && m_HasVersion);
 	UIEnable(ID_FILE_OPENINANEWWINDOW, fi != nullptr);
+	UIEnable(ID_EDIT_COPY, FALSE);
 }
 
 void CMainFrame::InitMenu(HMENU hMenu) {
@@ -109,7 +112,7 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 	m_Tree.Create(m_Splitter, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT);
 
 	m_Splitter.SetSplitterPanes(m_Tree, m_Tabs);
-	m_Splitter.SetSplitterPosPct(25);
+	m_Splitter.SetSplitterPosPct(15);
 
 	// register object for message filtering and idle updates
 	auto pLoop = _Module.GetMessageLoop();
@@ -157,18 +160,24 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		case TreeItemType::Image:
 		{
 			auto view = new CPEImageView(this, m_PE);
-			if (nullptr == view->Create(m_Tabs, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN)) {
+			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};
 			}
 			return { view, view };
 		}
+
+		case TreeItemType::Sections:
+		{
+			auto view = new CSectionsView(this, m_PE);
+				if (nullptr == view->DoCreate(m_Tabs)) {
+					ATLASSERT(false);
+					return {};
+		}
+		return { view, view };
+}
 	}
 	return {};
-}
-
-LRESULT CMainFrame::OnFileNew(WORD, WORD, HWND, BOOL&) {
-	return LRESULT();
 }
 
 bool CMainFrame::ShowView(HTREEITEM hItem) {
@@ -189,6 +198,7 @@ bool CMainFrame::ShowView(HTREEITEM hItem) {
 			m_Tree.GetItemImage(hItem, image, dummy);
 			m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, map);
 			m_Views.insert({ data, view->GetHwnd() });
+			m_Views2.insert({ view->GetHwnd(), data });
 			return true;
 		}
 	}
@@ -215,9 +225,13 @@ LRESULT CMainFrame::OnAppAbout(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCt
 }
 
 LRESULT CMainFrame::OnWindowClose(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
-	int nActivePage = m_Tabs.GetActivePage();
-	if (nActivePage != -1)
-		m_Tabs.RemovePage(nActivePage);
+	if (int page = m_Tabs.GetActivePage(); page >= 0) {
+		auto hWnd = m_Tabs.GetPageHWND(page);
+		auto type = m_Views2.at(hWnd);
+		m_Views.erase(type);
+		m_Views2.erase(hWnd);
+		m_Tabs.RemovePage(page);
+	}
 	else
 		::MessageBeep((UINT)-1);
 
@@ -231,6 +245,8 @@ int CMainFrame::GetTreeIcon(UINT id) {
 
 LRESULT CMainFrame::OnWindowCloseAll(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
 	m_Tabs.RemoveAllPages();
+	m_Views.clear();
+	m_Views2.clear();
 
 	return 0;
 }
@@ -331,6 +347,7 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	//UpdateRecentFilesMenu();
 
 	m_Views.clear();
+	m_Views2.clear();
 	m_Tabs.RemoveAllPages();
 	ShowView(m_hRoot);
 
@@ -386,11 +403,15 @@ void CMainFrame::BuildTree(int iconSize) {
 	std::unordered_map<std::wstring, HTREEITEM> typeItems;
 	m_FlatResources = libpe::Ilibpe::FlatResources(*m_PE->GetResources());
 	i = 0;
+	m_HasManifest = m_HasVersion = false;
 	for (auto const& res : m_FlatResources) {
 		std::wstring type = res.TypeStr.empty() ? PEStrings::ResourceTypeToString(res.TypeID) : std::wstring(res.TypeStr);
 		if (type.empty())
 			type = std::format(L"#{}", res.TypeID);
-
+		if (res.TypeID == (WORD)(LONG_PTR)RT_MANIFEST)
+			m_HasManifest = true;
+		else if (res.TypeID == (WORD)(LONG_PTR)RT_VERSION)
+			m_HasVersion = true;
 		auto it = typeItems.find(type);
 		if (it == typeItems.end()) {
 			auto hItem = InsertTreeItem(m_Tree, type.c_str(), ResourceTypeToIcon(res.TypeID), TreeItemWithIndex(TreeItemType::ResourceTypeName, i), resources, TVI_SORT);

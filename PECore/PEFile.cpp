@@ -32,10 +32,11 @@ PEFile::operator bool() const {
 }
 
 bool PEFile::Read(uint32_t offset, uint32_t size, void* buffer) const {
-	auto p = Map<>(offset, size);
+	uint32_t bias;
+	auto p = Map<BYTE>(offset, size, bias);
 	if (!p)
 		return false;
-	memcpy(buffer, p.get(), size);
+	memcpy(buffer, p.get() + bias, size);
 	return true;
 }
 

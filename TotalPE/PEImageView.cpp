@@ -29,11 +29,7 @@ CString CPEImageView::GetTitle() const {
 	return path.substr(path.rfind(L'\\') + 1).c_str();
 }
 
-HWND CPEImageView::GetHwnd() const {
-	return m_hWnd;
-}
-
-CPEImageView::CPEImageView(IMainFrame* frame, PEFile const& pe) : CFrameView(frame), m_PE(pe) {
+CPEImageView::CPEImageView(IMainFrame* frame, PEFile const& pe) : CViewBase(frame), m_PE(pe) {
 }
 
 CString CPEImageView::GetColumnText(HWND, int row, int col) const {

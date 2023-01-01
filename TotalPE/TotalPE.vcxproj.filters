@@ -48,6 +48,12 @@
     <ClCompile Include="PEImageView.cpp">
       <Filter>Views</Filter>
     </ClCompile>
+    <ClCompile Include="SectionsView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
+    <ClCompile Include="HexView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -72,6 +78,15 @@
       <Filter>Helpers</Filter>
     </ClInclude>
     <ClInclude Include="PEImageView.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="SectionsView.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="HexView.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="ViewBase.h">
       <Filter>Views</Filter>
     </ClInclude>
   </ItemGroup>

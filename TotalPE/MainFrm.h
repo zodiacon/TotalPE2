@@ -94,7 +94,9 @@ private:
 	std::vector<libpe::PEResFlat> m_FlatResources;
 	CImageList m_TreeImages;
 	std::unordered_map<TreeItemType, HWND> m_Views;
+	std::unordered_map<HWND, TreeItemType> m_Views2;
 	HTREEITEM m_hRoot;
+	bool m_HasManifest : 1, m_HasVersion : 1;
 	inline static std::unordered_map<UINT, int> s_TreeImageIndices;
 	inline static int s_Frames{ 1 };
 };

@@ -21,23 +21,16 @@ extern CAppModule _Module;
 #include <atlframe.h>
 #include <atlctrls.h>
 #include <atldlgs.h>
+#include <atlctrlw.h>
 #include <atlctrlx.h>
 #include <atltypes.h>
-#include <atlsplit.h>
+#include <atlgdi.h>
 #include <atltheme.h>
-
-#include <vector>
-#include <memory>
-#include <string>
-#include <string_view>
-#include <format>
-#include <algorithm>
-#include <wil\resource.h>
-#include <dontuse.h>
 #include <strsafe.h>
-#include <cor.h>
-#include <unordered_map>
-#include <WinTrust.h>
+#include <vector>
+#include <string>
+#include <memory>
+
 
 #if defined _M_IX86
   #pragma comment(linker, "/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='x86' publicKeyToken='6595b64144ccf1df' language='*'\"")
