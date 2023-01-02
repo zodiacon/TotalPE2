@@ -52,6 +52,8 @@ private:
 	HWND GetHwnd() const override;
 	BOOL TrackPopupMenu(HMENU hMenu, DWORD flags, int x, int y, HWND hWnd) override;
 	CUpdateUIBase& GetUI() override;
+	HIMAGELIST GetImageList() const override;
+	int GetDataDirectoryIconIndex(int index) const override;
 
 	std::pair<IView*, CMessageMap*> CreateView(TreeItemType type);
 	bool ShowView(HTREEITEM hItem);
@@ -66,6 +68,7 @@ private:
 	static TreeItemType TreeItemWithIndex(TreeItemType type, int index);
 	static int ResourceTypeToIcon(WORD resType);
 	static int DirectoryIndexToIcon(int index);
+	static TreeItemType GetIndex(TreeItemType value);
 
 	// Handler prototypes (uncomment arguments if needed):
 	//	LRESULT MessageHandler(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)

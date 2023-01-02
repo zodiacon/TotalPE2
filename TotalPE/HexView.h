@@ -15,7 +15,7 @@ public:
 
 	CHexControl& Hex();
 
-	bool SetData(PEFile const& pe, DWORD offset, DWORD size);
+	bool SetData(PEFile const& pe, uint32_t offset, uint32_t size);
 	void ClearData();
 
 	BEGIN_MSG_MAP(CHexView)

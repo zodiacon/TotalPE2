@@ -12,6 +12,7 @@
 #include <ToolbarHelper.h>
 #include "PEStrings.h"
 #include "SectionsView.h"
+#include "DataDirectoriesView.h"
 
 BOOL CMainFrame::PreTranslateMessage(MSG* pMsg) {
 	if (CFrameWindowImpl<CMainFrame>::PreTranslateMessage(pMsg))
@@ -156,7 +157,7 @@ LRESULT CMainFrame::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*
 }
 
 std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
-	switch (type) {
+	switch (type & TreeItemType::ItemMask) {
 		case TreeItemType::Image:
 		{
 			auto view = new CPEImageView(this, m_PE);
@@ -170,12 +171,33 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		case TreeItemType::Sections:
 		{
 			auto view = new CSectionsView(this, m_PE);
-				if (nullptr == view->DoCreate(m_Tabs)) {
-					ATLASSERT(false);
-					return {};
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
 		}
-		return { view, view };
-}
+
+		case TreeItemType::Directories:
+		{
+			auto view = new CDataDirectoriesView(this, m_PE);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::Section:
+		{
+			auto const& sec = m_PE->GetSecHeaders()->at(((size_t)type >> ItemShift) - 1);
+			auto view = new CHexView(this, CString(sec.SectionName.c_str()) + L" (Section)");
+			if (!view->DoCreate(m_Tabs))
+				return {};
+
+			view->SetData(m_PE, sec.SecHdr.PointerToRawData, sec.SecHdr.SizeOfRawData);
+			return { view, view };
+		}
 	}
 	return {};
 }
@@ -208,6 +230,10 @@ bool CMainFrame::ShowView(HTREEITEM hItem) {
 LRESULT CMainFrame::OnFileExit(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
 	PostMessage(WM_CLOSE);
 	return 0;
+}
+
+HIMAGELIST CMainFrame::GetImageList() const {
+	return m_TreeImages.m_hImageList;
 }
 
 LRESULT CMainFrame::OnViewStatusBar(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
@@ -278,12 +304,12 @@ int CMainFrame::DirectoryIndexToIcon(int index) {
 		GetTreeIcon(IDI_DEBUG),
 		-1,
 		-1,
-		-1,
+		GetTreeIcon(IDI_THREAD),
 		-1,
 		-1,
 		-1,
 		GetTreeIcon(IDI_DELAY_IMPORT),
-		-1,
+		GetTreeIcon(IDI_COMPONENT),
 		-1,
 	};
 	static_assert(_countof(icons) == 16);
@@ -324,6 +350,7 @@ LRESULT CMainFrame::OnDropFiles(UINT /*uMsg*/, WPARAM wParam, LPARAM /*lParam*/,
 	::DragFinish(hDrop);
 	return 0;
 }
+
 
 bool CMainFrame::OpenPE(PCWSTR path) {
 	CWaitCursor wait;
@@ -372,9 +399,11 @@ void CMainFrame::BuildTree(int iconSize) {
 
 	auto root = InsertTreeItem(m_Tree, path.substr(path.rfind(L'\\') + 1).c_str(), 0, TreeItemType::Image);
 	auto headers = InsertTreeItem(m_Tree, L"Headers", GetTreeIcon(IDI_HEADERS), TreeItemType::Headers, root);
+	InsertTreeItem(m_Tree, L"File Header", GetTreeIcon(IDI_FILE_HEADER), TreeItemType::FileHeader, headers);
 	InsertTreeItem(m_Tree, L"DOS Header", GetTreeIcon(IDI_MSDOS), TreeItemType::DOSHeader, headers);
 	InsertTreeItem(m_Tree, L"Optional Header", GetTreeIcon(IDI_HEADERS), TreeItemType::OptionalHeader, headers);
 	InsertTreeItem(m_Tree, L"Rich Header", GetTreeIcon(IDI_RICH_HEADER), TreeItemType::RichHeader, headers);
+	m_Tree.Expand(headers, TVE_EXPAND);
 
 	auto sections = InsertTreeItem(m_Tree, L"Sections", GetTreeIcon(IDI_SECTIONS), TreeItemType::Sections, root);
 	int i = 0;
@@ -382,7 +411,7 @@ void CMainFrame::BuildTree(int iconSize) {
 		CString name = sec.SectionName.c_str();
 		if (name.IsEmpty())
 			name = CString((PCSTR)sec.SecHdr.Name, 8);
-		InsertTreeItem(m_Tree, name, GetTreeIcon(IDI_SECTION), TreeItemWithIndex(TreeItemType::Section, i), sections);
+		InsertTreeItem(m_Tree, name, GetTreeIcon(IDI_SECTION), TreeItemWithIndex(TreeItemType::Section, (i + 1) << ItemShift), sections);
 		i++;
 	}
 	if (m_PE->GetSecHeaders()->size() < 15)
@@ -393,7 +422,7 @@ void CMainFrame::BuildTree(int iconSize) {
 	for (auto const& dir : *m_PE->GetDataDirs()) {
 		if (dir.DataDir.Size) {
 			InsertTreeItem(m_Tree, PEStrings::GetDataDirectoryName(i), DirectoryIndexToIcon(i),
-				TreeItemWithIndex(TreeItemType::Directory, i), directories);
+				TreeItemWithIndex(TreeItemType::Directory, (i + 1) << ItemShift), directories);
 		}
 		i++;
 	}
@@ -414,13 +443,14 @@ void CMainFrame::BuildTree(int iconSize) {
 			m_HasVersion = true;
 		auto it = typeItems.find(type);
 		if (it == typeItems.end()) {
-			auto hItem = InsertTreeItem(m_Tree, type.c_str(), ResourceTypeToIcon(res.TypeID), TreeItemWithIndex(TreeItemType::ResourceTypeName, i), resources, TVI_SORT);
+			auto hItem = InsertTreeItem(m_Tree, type.c_str(), ResourceTypeToIcon(res.TypeID), 
+				TreeItemWithIndex(TreeItemType::ResourceTypeName, (i + 1) << ItemShift), resources, TVI_SORT);
 			it = typeItems.insert({ type, hItem }).first;
 		}
 		auto name = res.NameID == 0 ? res.NameStr.data() : (L"#" + std::to_wstring(res.NameID));
 		auto lang = res.LangStr.empty() ? PEStrings::LanguageToString(res.LangID) : std::wstring(res.LangStr);
-		InsertTreeItem(m_Tree, std::format(L"{} ({})", name, lang).c_str(), ResourceTypeToIcon(res.TypeID), 
-			TreeItemWithIndex(TreeItemType::Resource, i), it->second, TVI_SORT);
+		InsertTreeItem(m_Tree, std::format(L"{} ({})", name, lang).c_str(), ResourceTypeToIcon(res.TypeID),
+			TreeItemWithIndex(TreeItemType::Resource, (i + 1) << ItemShift), it->second, TVI_SORT);
 		i++;
 	}
 	m_Tree.Expand(resources, TVE_EXPAND);
@@ -452,6 +482,14 @@ LRESULT CMainFrame::OnFileClose(WORD, WORD, HWND, BOOL&) {
 	UpdateUI();
 
 	return 0;
+}
+
+int CMainFrame::GetDataDirectoryIconIndex(int index) const {
+	return DirectoryIndexToIcon(index);
+}
+
+LRESULT CMainFrame::OnFileNew(WORD, WORD, HWND, BOOL&) {
+	return LRESULT();
 }
 
 LRESULT CMainFrame::OnFileOpen(WORD, WORD, HWND, BOOL&) {
@@ -490,7 +528,7 @@ void CMainFrame::BuildTreeImageList(int iconSize) {
 		IDI_SECTION, IDI_EXPORTS, IDI_IMPORTS, IDI_DEBUG, IDI_FONT, IDI_ICON, IDI_CURSOR,
 		IDI_MANIFEST, IDI_VERSION, IDI_TYPE, IDI_BITMAP, IDI_MESSAGE, IDI_TEXT,
 		IDI_KEYBOARD, IDI_FORM, IDI_EXCEPTION, IDI_DELAY_IMPORT, IDI_RELOC,
-		IDI_THREAD, IDI_RICH_HEADER, IDI_MSDOS,
+		IDI_THREAD, IDI_RICH_HEADER, IDI_MSDOS, IDI_FILE_HEADER, IDI_COMPONENT,
 	};
 
 	bool insert = s_TreeImageIndices.empty();

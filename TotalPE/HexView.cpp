@@ -10,7 +10,7 @@ CHexControl& CHexView::Hex() {
 	return m_Hex;
 }
 
-bool CHexView::SetData(PEFile const& pe, DWORD offset, DWORD size) {
+bool CHexView::SetData(PEFile const& pe, uint32_t offset, uint32_t size) {
 	uint32_t bias;
 	m_Ptr = pe.Map<BYTE>(offset, size, bias);
 	ATLASSERT(m_Ptr);

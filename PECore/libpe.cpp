@@ -870,6 +870,12 @@ namespace libpe
 				if (IsPtrSafe(lpszSecRealName))
 					strSecRealName = lpszSecRealName;
 			}
+			else {
+				if (pSecHdr->Name[7] == 0)
+					strSecRealName.assign((char const*)pSecHdr->Name);
+				else
+					strSecRealName.assign((char const*)pSecHdr->Name, 8);
+			}
 
 			m_vecSecHeaders.emplace_back(PtrToOffset(pSecHdr), *pSecHdr, std::move(strSecRealName));
 		}

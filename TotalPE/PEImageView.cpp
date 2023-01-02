@@ -78,19 +78,13 @@ void CPEImageView::BuildItems() {
 	auto opt64 = header->NTHdr64.OptionalHeader;
 	auto opt32 = header->NTHdr32.OptionalHeader;
 
-	DWORD fileSize = 0;
-	HANDLE hFile = ::CreateFile(m_PE.GetPath().c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
-	if (hFile != INVALID_HANDLE_VALUE) {
-		fileSize = ::GetFileSize(hFile, nullptr);
-		::CloseHandle(hFile);
-	}
 	auto subSystem = is64 ? opt64.Subsystem : opt32.Subsystem;
 	auto magic = is64 ? opt64.Magic : opt32.Magic;
 	auto dllchar = is64 ? opt64.DllCharacteristics : opt32.DllCharacteristics;
 
 	m_Items = std::vector<DataItem> {
 		{ L"File Name", m_PE.GetPath().substr(m_PE.GetPath().rfind(L'\\') + 1), m_PE.GetPath() },
-		{ L"File Size", PEStrings::ToMemorySize(fileSize) },
+		{ L"File Size", PEStrings::ToMemorySize(m_PE.GetFileSize()) },
 		{ L"File Alignment", std::format(L"0x{:X}", is64 ? opt64.FileAlignment : opt32.FileAlignment) },
 		{ L"Section Alignment", std::format(L"0x{:X}", is64 ? opt64.SectionAlignment : opt32.SectionAlignment) },
 		{ L"Checksum", std::format(L"0x{:X}", is64 ? opt64.CheckSum : opt32.CheckSum) },

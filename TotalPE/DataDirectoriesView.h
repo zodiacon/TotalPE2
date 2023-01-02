@@ -6,11 +6,11 @@
 #include <CustomSplitterWindow.h>
 #include "HexView.h"
 
-class CSectionsView :
-	public CViewBase<CSectionsView>,
-	public CVirtualListView<CSectionsView> {
+class CDataDirectoriesView :
+	public CViewBase<CDataDirectoriesView>,
+	public CVirtualListView<CDataDirectoriesView> {
 public:
-	CSectionsView(IMainFrame* frame, PEFile const& pe);
+	CDataDirectoriesView(IMainFrame* frame, PEFile const& pe);
 
 	CString GetColumnText(HWND, int row, int col) const;
 	int GetRowImage(HWND, int row, int) const;
@@ -19,17 +19,21 @@ public:
 
 	void UpdateUI();
 
-	BEGIN_MSG_MAP(CSectionsView)
+	BEGIN_MSG_MAP(CDataDirectoriesView)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
-		CHAIN_MSG_MAP(CVirtualListView<CSectionsView>)
+		CHAIN_MSG_MAP(CVirtualListView<CDataDirectoriesView>)
 		CHAIN_MSG_MAP(BaseFrame)
-	ALT_MSG_MAP(1)
+		ALT_MSG_MAP(1)
 		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnCopy)
 	END_MSG_MAP()
 
 private:
 	enum ColumnType {
-		Name, Size, RawData, RawSize, Characteristics, Relocations, LineNumbers, PointerToLines, PointerToReloc, Address,
+		Name, Size, Address, Index, Section,
+	};
+
+	struct DataDirectory : libpe::PEDataDirectory {
+		int Index;
 	};
 
 	CString GetTitle() const override;
@@ -46,7 +50,7 @@ private:
 
 	CListViewCtrl m_List;
 	CCustomHorSplitterWindow m_Splitter;
-	std::vector<libpe::PESectionHeader> m_Sections;
+	std::vector<DataDirectory> m_Directories;
 	PEFile const& m_PE;
 	CHexView m_HexView;
 };

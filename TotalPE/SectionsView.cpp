@@ -2,6 +2,8 @@
 #include "SectionsView.h"
 #include "PEStrings.h"
 #include <SortHelper.h>
+#include <ClipboardHelper.h>
+#include <ListViewhelper.h>
 #include "resource.h"
 
 CString CSectionsView::GetTitle() const {
@@ -14,7 +16,7 @@ CSectionsView::CSectionsView(IMainFrame* frame, PEFile const& pe) : CViewBase(fr
 CString CSectionsView::GetColumnText(HWND h, int row, int col) const {
 	auto& section = m_Sections[row];
 	switch (GetColumnManager(h)->GetColumnTag<ColumnType>(col)) {
-		case ColumnType::Name: return section.Name;
+		case ColumnType::Name: return section.SectionName.c_str();
 		case ColumnType::Size: return PEStrings::ToMemorySize(section.SecHdr.Misc.VirtualSize).c_str();
 		case ColumnType::Address: return std::format(L"0x{:X}", section.SecHdr.VirtualAddress).c_str();
 		case ColumnType::RawData: return std::format(L"0x{:X}", section.SecHdr.PointerToRawData).c_str();
@@ -37,7 +39,7 @@ void CSectionsView::DoSort(SortInfo const* si) {
 		switch (GetColumnManager(si->hWnd)->GetColumnTag<ColumnType>(si->SortColumn)) {
 			case ColumnType::Address: return SortHelper::Sort(s1.SecHdr.VirtualAddress, s2.SecHdr.VirtualAddress, asc);
 			case ColumnType::Size: return SortHelper::Sort(s1.SecHdr.Misc.VirtualSize, s2.SecHdr.Misc.VirtualSize, asc);
-			case ColumnType::Name: return SortHelper::Sort(s1.Name, s2.Name, asc);
+			case ColumnType::Name: return SortHelper::Sort(s1.SectionName, s2.SectionName, asc);
 			case ColumnType::RawData: return SortHelper::Sort(s1.SecHdr.PointerToRawData, s2.SecHdr.PointerToRawData, asc);
 			case ColumnType::RawSize: return SortHelper::Sort(s1.SecHdr.SizeOfRawData, s2.SecHdr.SizeOfRawData, asc);
 			case ColumnType::Characteristics: return SortHelper::Sort(s1.SecHdr.Characteristics, s2.SecHdr.Characteristics, asc);
@@ -52,7 +54,8 @@ void CSectionsView::OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD
 		int selected = m_List.GetSelectedCount();
 		if (selected == 1) {
 			auto const& sec = m_Sections[m_List.GetNextItem(-1, LVNI_SELECTED)];
-			m_HexView.SetData(m_PE, sec.SecHdr.PointerToRawData, sec.SecHdr.SizeOfRawData);
+			auto offset = sec.SecHdr.PointerToRawData;
+			m_HexView.SetData(m_PE, offset, sec.SecHdr.SizeOfRawData);
 		}
 		else {
 			m_HexView.ClearData();
@@ -62,11 +65,7 @@ void CSectionsView::OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD
 }
 
 void CSectionsView::BuildItems() {
-	for (auto const& sec : *m_PE->GetSecHeaders()) {
-		SectionData data(sec);
-		data.Name = sec.SectionName.empty() ? CString((PCSTR)sec.SecHdr.Name, 8) : sec.SectionName.c_str();
-		m_Sections.emplace_back(std::move(data));
-	}
+	m_Sections = *m_PE->GetSecHeaders();
 	m_List.SetItemCount((int)m_Sections.size());
 }
 
@@ -110,5 +109,6 @@ LRESULT CSectionsView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 }
 
 LRESULT CSectionsView::OnCopy(WORD, WORD, HWND, BOOL&) const {
-	return LRESULT();
+	ClipboardHelper::CopyText(m_hWnd, ListViewHelper::GetSelectedRowsAsString(m_List, L","));
+	return 0;
 }

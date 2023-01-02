@@ -54,6 +54,9 @@
     <ClCompile Include="HexView.cpp">
       <Filter>Views</Filter>
     </ClCompile>
+    <ClCompile Include="DataDirectoriesView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -87,6 +90,9 @@
       <Filter>Views</Filter>
     </ClInclude>
     <ClInclude Include="ViewBase.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="DataDirectoriesView.h">
       <Filter>Views</Filter>
     </ClInclude>
   </ItemGroup>
@@ -223,6 +229,9 @@
       <Filter>Resource Files\Icons</Filter>
     </Image>
     <Image Include="res\windows-close.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\FileHeader.ico">
       <Filter>Resource Files\Icons</Filter>
     </Image>
   </ItemGroup>

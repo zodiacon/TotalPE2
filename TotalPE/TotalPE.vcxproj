@@ -210,6 +210,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="AboutDlg.cpp" />
+    <ClCompile Include="DataDirectoriesView.cpp" />
     <ClCompile Include="HexView.cpp" />
     <ClCompile Include="MainFrm.cpp" />
     <ClCompile Include="pch.cpp">
@@ -226,6 +227,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AboutDlg.h" />
+    <ClInclude Include="DataDirectoriesView.h" />
     <ClInclude Include="HexView.h" />
     <ClInclude Include="Interfaces.h" />
     <ClInclude Include="MainFrm.h" />
@@ -252,6 +254,7 @@
     <Image Include="res\dll-import.ico" />
     <Image Include="res\Exception.ico" />
     <Image Include="res\exports.ico" />
+    <Image Include="res\FileHeader.ico" />
     <Image Include="res\find.ico" />
     <Image Include="res\find_next.ico" />
     <Image Include="res\find_previous.ico" />

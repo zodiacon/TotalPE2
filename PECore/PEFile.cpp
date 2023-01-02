@@ -8,6 +8,7 @@ bool PEFile::Open(std::wstring_view path) {
 		wil::unique_hfile hFile(::CreateFile(path.data(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr));
 		if (!hFile)
 			return false;
+		m_FileSize = ::GetFileSize(hFile.get(), nullptr);
 		m_hMap.reset(::CreateFileMapping(hFile.get(), nullptr, PAGE_READONLY, 0, 0, nullptr));
 		if (!m_hMap)
 			return false;
@@ -26,6 +27,9 @@ std::wstring const& PEFile::GetPath() const {
 	return m_Path;
 }
 
+uint32_t PEFile::GetFileSize() const {
+	return m_FileSize;
+}
 
 PEFile::operator bool() const {
 	return !m_Path.empty();

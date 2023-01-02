@@ -207,6 +207,8 @@ IDI_RICH_HEADER         ICON                    "res\\rich.ico"
 
 IDI_THREAD              ICON                    "res\\thread.ico"
 
+IDI_FILE_HEADER         ICON                    "res\\FileHeader.ico"
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
