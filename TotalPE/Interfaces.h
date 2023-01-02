@@ -7,13 +7,16 @@ enum class TreeItemType : uint32_t {
 	Image,
 	Directories,
 	Directory,
-	Sections,
+	DirectoryExports = Directory,
+	DirectoryImports,
+	Sections = Directory + 16,
 	Section,
 	Headers,
 	FileHeader,
 	DOSHeader,
 	OptionalHeader,
 	RichHeader,
+	Debug,
 	Resources,
 	ResourceTypeName,
 	ResourceName,
@@ -33,9 +36,10 @@ struct IMainFrame abstract {
 	virtual BOOL TrackPopupMenu(HMENU hMenu, DWORD flags, int x, int y, HWND hWnd = nullptr) = 0;
 	virtual CUpdateUIBase& GetUI() = 0;
 	virtual HIMAGELIST GetImageList() const = 0;
+	virtual int GetIconIndex(UINT id) const = 0;
 	virtual int GetDataDirectoryIconIndex(int index) const = 0;
-//	virtual bool AddToolBar(HWND tb) = 0;
-	//virtual void SetStatusText(int index, PCWSTR text) = 0;
+	virtual void SetStatusText(int index, PCWSTR text) = 0;
+	virtual CFindReplaceDialog* GetFindDialog() = 0;
 	//virtual CString GetSelectedTreeItemPath() const = 0;
 	//virtual CString GetTreeItemText(int parents) const = 0;
 	//virtual HIMAGELIST GetTreeImageList() const = 0;

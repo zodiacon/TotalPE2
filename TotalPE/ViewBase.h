@@ -17,7 +17,10 @@ public:
 
 	HWND DoCreate(HWND hParent) {
 		auto p = static_cast<T*>(this);
-		return p->Create(hParent, p->rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN);
+		auto hWnd = p->Create(hParent, p->rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN);
+		if (hWnd)
+			p->UpdateUI(true);
+		return hWnd;
 	}
 
 	BEGIN_MSG_MAP(CViewBase)
@@ -34,5 +37,6 @@ public:
 	}
 
 	void Activate(bool) {}
-	void UpdateUI() {}
+	void UpdateUI(bool = false) {}
+
 };

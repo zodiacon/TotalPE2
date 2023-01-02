@@ -72,7 +72,7 @@ void CDataDirectoriesView::BuildItems() {
 	m_List.SetItemCount((int)m_Directories.size());
 }
 
-void CDataDirectoriesView::UpdateUI() {
+void CDataDirectoriesView::UpdateUI(bool first) {
 	auto& ui = Frame()->GetUI();
 	auto pane = m_Splitter.GetActivePane();
 	ui.UIEnable(ID_EDIT_COPY, (pane == 0 && m_List.GetSelectedCount() > 0) || (pane == 1 && m_HexView.Hex().HasSelection()));

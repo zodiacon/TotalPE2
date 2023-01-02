@@ -211,6 +211,7 @@
   <ItemGroup>
     <ClCompile Include="AboutDlg.cpp" />
     <ClCompile Include="DataDirectoriesView.cpp" />
+    <ClCompile Include="ExportsView.cpp" />
     <ClCompile Include="HexView.cpp" />
     <ClCompile Include="MainFrm.cpp" />
     <ClCompile Include="pch.cpp">
@@ -228,6 +229,7 @@
   <ItemGroup>
     <ClInclude Include="AboutDlg.h" />
     <ClInclude Include="DataDirectoriesView.h" />
+    <ClInclude Include="ExportsView.h" />
     <ClInclude Include="HexView.h" />
     <ClInclude Include="Interfaces.h" />
     <ClInclude Include="MainFrm.h" />
@@ -262,6 +264,8 @@
     <Image Include="res\folders.ico" />
     <Image Include="res\font.ico" />
     <Image Include="res\form.ico" />
+    <Image Include="res\function-export.ico" />
+    <Image Include="res\function.ico" />
     <Image Include="res\headers.ico" />
     <Image Include="res\icon.ico" />
     <Image Include="res\imports.ico" />

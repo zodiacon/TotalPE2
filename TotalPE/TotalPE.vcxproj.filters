@@ -25,6 +25,9 @@
     <Filter Include="Helpers">
       <UniqueIdentifier>{e285b05c-1fe0-4040-8b82-0e98d874aea9}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Views\DataDirectories">
+      <UniqueIdentifier>{9f2376cb-ffd2-459f-918d-cdd128472822}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -56,6 +59,9 @@
     </ClCompile>
     <ClCompile Include="DataDirectoriesView.cpp">
       <Filter>Views</Filter>
+    </ClCompile>
+    <ClCompile Include="ExportsView.cpp">
+      <Filter>Views\DataDirectories</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -94,6 +100,9 @@
     </ClInclude>
     <ClInclude Include="DataDirectoriesView.h">
       <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="ExportsView.h">
+      <Filter>Views\DataDirectories</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -232,6 +241,12 @@
       <Filter>Resource Files\Icons</Filter>
     </Image>
     <Image Include="res\FileHeader.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\function.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\function-export.ico">
       <Filter>Resource Files\Icons</Filter>
     </Image>
   </ItemGroup>

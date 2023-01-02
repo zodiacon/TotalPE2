@@ -17,7 +17,7 @@ public:
 	void DoSort(SortInfo const* si);
 	void OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD newState);
 
-	void UpdateUI();
+	void UpdateUI(bool first = false);
 
 	BEGIN_MSG_MAP(CSectionsView)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)

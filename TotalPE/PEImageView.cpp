@@ -129,6 +129,6 @@ void CPEImageView::BuildItems() {
 	m_List.SetItemCount((int)m_Items.size());
 }
 
-void CPEImageView::UpdateUI() {
+void CPEImageView::UpdateUI(bool first) {
 	Frame()->GetUI().UIEnable(ID_EDIT_COPY, m_List.GetSelectedCount() > 0);
 }

@@ -13,8 +13,12 @@
 #include "PEStrings.h"
 #include "SectionsView.h"
 #include "DataDirectoriesView.h"
+#include "ExportsView.h"
 
 BOOL CMainFrame::PreTranslateMessage(MSG* pMsg) {
+	if (m_pFindDlg && m_pFindDlg->IsDialogMessageW(pMsg))
+		return TRUE;
+
 	if (CFrameWindowImpl<CMainFrame>::PreTranslateMessage(pMsg))
 		return TRUE;
 
@@ -86,6 +90,8 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 	DragAcceptFiles();
 	CreateSimpleStatusBar();
 	m_StatusBar.SubclassWindow(m_hWndStatusBar);
+	int parts[] = { 200, 400, 600, 800, 1000 };
+	m_StatusBar.SetParts(_countof(parts), parts);
 
 	ToolBarButtonInfo const buttons[] = {
 		{ ID_FILE_OPEN, IDI_OPEN },
@@ -100,6 +106,8 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 		{ ID_VIEW_MANIFEST, IDI_MANIFEST },
 		{ ID_VIEW_VERSION, IDI_VERSION },
 		{ ID_VIEW_DEBUG, IDI_DEBUG},
+		{ 0 },
+		{ ID_EDIT_FIND, IDI_FIND},
 	};
 	CreateSimpleReBar(ATL_SIMPLE_REBAR_NOBORDER_STYLE);
 	auto tb = ToolbarHelper::CreateAndInitToolBar(m_hWnd, buttons, _countof(buttons));
@@ -171,6 +179,16 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		case TreeItemType::Sections:
 		{
 			auto view = new CSectionsView(this, m_PE);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::DirectoryExports:
+		{
+			auto view = new CExportsView(this, m_PE);
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};
@@ -265,8 +283,8 @@ LRESULT CMainFrame::OnWindowClose(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWn
 }
 
 int CMainFrame::GetTreeIcon(UINT id) {
-	ATLASSERT(s_TreeImageIndices.contains(id));
-	return s_TreeImageIndices[id];
+	ATLASSERT(s_ImageIndices.contains(id));
+	return s_ImageIndices[id];
 }
 
 LRESULT CMainFrame::OnWindowCloseAll(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
@@ -291,6 +309,10 @@ LRESULT CMainFrame::OnRunAsAdmin(WORD, WORD, HWND, BOOL&) {
 	}
 
 	return 0;
+}
+
+CFindReplaceDialog* CMainFrame::GetFindDialog() {
+	return m_pFindDlg;
 }
 
 int CMainFrame::DirectoryIndexToIcon(int index) {
@@ -359,7 +381,7 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 		return false;
 	}
 
-	BuildTree(20);
+	BuildTree(16);
 	UpdateUI();
 
 	CString ftitle;
@@ -422,7 +444,7 @@ void CMainFrame::BuildTree(int iconSize) {
 	for (auto const& dir : *m_PE->GetDataDirs()) {
 		if (dir.DataDir.Size) {
 			InsertTreeItem(m_Tree, PEStrings::GetDataDirectoryName(i), DirectoryIndexToIcon(i),
-				TreeItemWithIndex(TreeItemType::Directory, (i + 1) << ItemShift), directories);
+				TreeItemWithIndex(TreeItemType::Directory, i), directories);
 		}
 		i++;
 	}
@@ -510,6 +532,10 @@ CString CMainFrame::DoFileOpen() const {
 	return path;
 }
 
+int CMainFrame::GetIconIndex(UINT icon) const {
+	return s_ImageIndices.at(icon);
+}
+
 void CMainFrame::BuildTreeImageList(int iconSize) {
 	if (m_TreeImages)
 		return;
@@ -529,12 +555,43 @@ void CMainFrame::BuildTreeImageList(int iconSize) {
 		IDI_MANIFEST, IDI_VERSION, IDI_TYPE, IDI_BITMAP, IDI_MESSAGE, IDI_TEXT,
 		IDI_KEYBOARD, IDI_FORM, IDI_EXCEPTION, IDI_DELAY_IMPORT, IDI_RELOC,
 		IDI_THREAD, IDI_RICH_HEADER, IDI_MSDOS, IDI_FILE_HEADER, IDI_COMPONENT,
+		IDI_FUNCTION, IDI_FUNC_FORWARD,
 	};
 
-	bool insert = s_TreeImageIndices.empty();
+	bool insert = s_ImageIndices.empty();
 	for (auto icon : icons) {
 		int image = m_TreeImages.AddIcon(AtlLoadIconImage(icon, 0, iconSize, iconSize));
 		if (insert)
-			s_TreeImageIndices.insert({ icon, image });
+			s_ImageIndices.insert({ icon, image });
 	}
+}
+
+void CMainFrame::SetStatusText(int index, PCWSTR text) {
+	m_StatusBar.SetText(index, text);
+}
+
+LRESULT CMainFrame::OnEditFind(WORD, WORD, HWND, BOOL&) {
+	ATLASSERT(m_Tabs.GetPageCount() > 0);
+
+	if (m_pFindDlg == nullptr) {
+		m_pFindDlg = new CFindReplaceDialog;
+		m_pFindDlg->Create(TRUE, m_SearchText, nullptr, FR_DOWN | FR_HIDEWHOLEWORD, m_hWnd);
+		m_pFindDlg->ShowWindow(SW_SHOW);
+	}
+
+	return 0;
+}
+
+LRESULT CMainFrame::OnFind(UINT msg, WPARAM wp, LPARAM lp, BOOL&) {
+	if (m_pFindDlg->IsTerminating()) {
+		m_pFindDlg = nullptr;
+		return 0;
+	}
+	m_pFindDlg->SetFocus();
+
+	if (auto page = m_Tabs.GetActivePage(); page >= 0) {
+		m_SearchText = m_pFindDlg->GetFindString();
+		::SendMessage(m_Tabs.GetPageHWND(page), msg, wp, lp);
+	}
+	return 0;
 }

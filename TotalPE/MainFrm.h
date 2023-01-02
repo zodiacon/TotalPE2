@@ -31,9 +31,10 @@ public:
 		COMMAND_TABVIEW_HANDLER(m_Tabs, 1)
 		MESSAGE_HANDLER(WM_DROPFILES, OnDropFiles)
 		COMMAND_ID_HANDLER(ID_FILE_RUNASADMINISTRATOR, OnRunAsAdmin)
-		COMMAND_ID_HANDLER(ID_APP_EXIT, OnFileExit)
+		MESSAGE_HANDLER(CFindReplaceDialog::GetFindReplaceMsg(), OnFind)
 		COMMAND_ID_HANDLER(ID_VIEW_STATUS_BAR, OnViewStatusBar)
 		COMMAND_ID_HANDLER(ID_APP_ABOUT, OnAppAbout)
+		COMMAND_ID_HANDLER(ID_EDIT_FIND, OnEditFind)
 		COMMAND_ID_HANDLER(ID_WINDOW_CLOSE, OnWindowClose)
 		COMMAND_ID_HANDLER(ID_WINDOW_CLOSE_ALL, OnWindowCloseAll)
 		COMMAND_ID_HANDLER(ID_FILE_OPEN, OnFileOpen)
@@ -41,6 +42,7 @@ public:
 		COMMAND_ID_HANDLER(ID_FILE_CLOSE, OnFileClose)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
 		MESSAGE_HANDLER(WM_DESTROY, OnDestroy)
+		COMMAND_ID_HANDLER(ID_APP_EXIT, OnFileExit)
 		CHAIN_MSG_MAP(CTreeViewHelper<CMainFrame>)
 		CHAIN_MSG_MAP(COwnerDrawnMenu<CMainFrame>)
 		CHAIN_MSG_MAP(CAutoUpdateUI<CMainFrame>)
@@ -54,6 +56,9 @@ private:
 	CUpdateUIBase& GetUI() override;
 	HIMAGELIST GetImageList() const override;
 	int GetDataDirectoryIconIndex(int index) const override;
+	int GetIconIndex(UINT icon) const override;
+	void SetStatusText(int index, PCWSTR text) override;
+	CFindReplaceDialog* GetFindDialog() override;
 
 	std::pair<IView*, CMessageMap*> CreateView(TreeItemType type);
 	bool ShowView(HTREEITEM hItem);
@@ -88,6 +93,8 @@ private:
 	LRESULT OnDropFiles(UINT /*uMsg*/, WPARAM wParam, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnFileOpen(WORD, WORD, HWND, BOOL&);
 	LRESULT OnFileClose(WORD, WORD, HWND, BOOL&);
+	LRESULT OnEditFind(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnFind(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 
 	CCustomTabView m_Tabs;
 	CCustomSplitterWindow m_Splitter;
@@ -99,7 +106,9 @@ private:
 	std::unordered_map<TreeItemType, HWND> m_Views;
 	std::unordered_map<HWND, TreeItemType> m_Views2;
 	HTREEITEM m_hRoot;
+	CFindReplaceDialog* m_pFindDlg{ nullptr };
+	CString m_SearchText;
 	bool m_HasManifest : 1, m_HasVersion : 1;
-	inline static std::unordered_map<UINT, int> s_TreeImageIndices;
+	inline static std::unordered_map<UINT, int> s_ImageIndices;
 	inline static int s_Frames{ 1 };
 };
