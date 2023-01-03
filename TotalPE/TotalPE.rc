@@ -61,6 +61,11 @@ BEGIN
         MENUITEM "&Save...\tCtrl+S",            ID_FILE_SAVE
         MENUITEM "&Close",                      ID_FILE_CLOSE
         MENUITEM SEPARATOR
+        POPUP "&Recent Files"
+        BEGIN
+            MENUITEM "(Empty)",                     ID_RECENTFILES_
+        END
+        MENUITEM SEPARATOR
         MENUITEM "E&xit",                       ID_APP_EXIT
     END
     POPUP "&Edit"

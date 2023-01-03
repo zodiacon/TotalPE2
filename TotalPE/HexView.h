@@ -16,6 +16,8 @@ public:
 	CHexControl& Hex();
 
 	bool SetData(PEFile const& pe, uint32_t offset, uint32_t size);
+	bool SetData(std::span<const std::byte> data);
+
 	void ClearData();
 
 	BEGIN_MSG_MAP(CHexView)

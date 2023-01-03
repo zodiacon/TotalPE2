@@ -210,6 +210,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="AboutDlg.cpp" />
+    <ClCompile Include="AppSettings.cpp" />
     <ClCompile Include="DataDirectoriesView.cpp" />
     <ClCompile Include="ExportsView.cpp" />
     <ClCompile Include="Helpers.cpp" />
@@ -223,6 +224,8 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="PEStrings.cpp" />
+    <ClCompile Include="RecentFilesManager.cpp" />
+    <ClCompile Include="ResourcesView.cpp" />
     <ClCompile Include="SectionsView.cpp" />
     <ClCompile Include="SecurityHelper.cpp" />
     <ClCompile Include="TotalPE.cpp" />
@@ -230,6 +233,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AboutDlg.h" />
+    <ClInclude Include="AppSettings.h" />
     <ClInclude Include="DataDirectoriesView.h" />
     <ClInclude Include="ExportsView.h" />
     <ClInclude Include="Helpers.h" />
@@ -238,8 +242,10 @@
     <ClInclude Include="Interfaces.h" />
     <ClInclude Include="MainFrm.h" />
     <ClInclude Include="PEStrings.h" />
+    <ClInclude Include="RecentFilesManager.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="pch.h" />
+    <ClInclude Include="ResourcesView.h" />
     <ClInclude Include="SectionsView.h" />
     <ClInclude Include="SecurityHelper.h" />
     <ClInclude Include="PEImageView.h" />

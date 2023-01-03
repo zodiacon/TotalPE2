@@ -24,6 +24,12 @@ bool CHexView::SetData(PEFile const& pe, uint32_t offset, uint32_t size) {
 	return true;
 }
 
+bool CHexView::SetData(std::span<const std::byte> data) {
+	m_Buffer = std::make_unique<MemoryBuffer>((const uint8_t*)data.data(), (uint32_t)data.size(), false);
+	m_Hex.SetBufferManager(m_Buffer.get());
+	return true;
+}
+
 void CHexView::ClearData() {
 	m_Hex.SetBufferManager(nullptr);
 }

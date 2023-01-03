@@ -99,7 +99,7 @@ LRESULT CDataDirectoriesView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	BuildItems();
 
 	m_Splitter.SetSplitterPanes(m_List, m_HexView);
-	m_Splitter.SetSplitterPosPct(25);
+	m_Splitter.SetSplitterPosPct(30);
 
 	return 0;
 }
@@ -118,7 +118,7 @@ LRESULT CDataDirectoriesView::OnFind(UINT, WPARAM, LPARAM, BOOL&) {
 		m_List.SetFocus();
 	}
 	else {
-		AtlMessageBox(m_hWnd, L"Finnished searching list.", IDR_MAINFRAME, MB_ICONINFORMATION);
+		AtlMessageBox(m_hWnd, L"Finished searching list.", IDR_MAINFRAME, MB_ICONINFORMATION);
 	}
 	return 0;
 }

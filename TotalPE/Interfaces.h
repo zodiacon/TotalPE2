@@ -1,6 +1,7 @@
 #pragma once
 
 #include <DiaHelper.h>
+#include <libpe.h>
 
 constexpr uint32_t ItemShift = 8;
 
@@ -11,6 +12,7 @@ enum class TreeItemType : uint32_t {
 	Directory,
 	DirectoryExports = Directory,
 	DirectoryImports,
+	DirectoryResources,
 	Sections = Directory + 16,
 	Section,
 	Headers,
@@ -33,6 +35,10 @@ enum class TreeItemType : uint32_t {
 };
 DEFINE_ENUM_FLAG_OPERATORS(TreeItemType);
 
+struct FlatResource : libpe::PEResFlat {
+	std::wstring Name, Type, Language;
+};
+
 struct IMainFrame abstract {
 	virtual HWND GetHwnd() const = 0;
 	virtual BOOL TrackPopupMenu(HMENU hMenu, DWORD flags, int x, int y, HWND hWnd = nullptr) = 0;
@@ -43,6 +49,8 @@ struct IMainFrame abstract {
 	virtual void SetStatusText(int index, PCWSTR text) = 0;
 	virtual CFindReplaceDialog* GetFindDialog() = 0;
 	virtual DiaSession const& GetSymbols() const = 0;
+	virtual std::vector<FlatResource> const& GetFlatResources() const = 0;
+	virtual int GetResourceIconIndex(WORD resType) const = 0;
 };
 
 struct IView abstract {

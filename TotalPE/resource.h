@@ -54,7 +54,6 @@
 #define IDR_BIN1                        250
 #define IDR_SYMSRV                      251
 #define IDR_DIA                         252
-#define IDI_ICON1                       253
 #define IDI_FUNCTION2                   253
 #define IDC_VERSION                     1000
 #define IDC_COPYRIGHT                   1001
@@ -81,13 +80,15 @@
 #define ID_TREEICONSIZE_LARGE           32792
 #define ID_FILE_CLOSE32793              32793
 #define ID_PE_SECURITY                  32794
+#define ID_FILE_RECENTFILES             32797
+#define ID_RECENTFILES_                 32798
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        254
-#define _APS_NEXT_COMMAND_VALUE         32797
+#define _APS_NEXT_COMMAND_VALUE         32799
 #define _APS_NEXT_CONTROL_VALUE         1003
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

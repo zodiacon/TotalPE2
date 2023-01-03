@@ -15,6 +15,8 @@
 #include "DataDirectoriesView.h"
 #include "ExportsView.h"
 #include "ImportsView.h"
+#include "AppSettings.h"
+#include "ResourcesView.h"
 
 BOOL CMainFrame::PreTranslateMessage(MSG* pMsg) {
 	if (m_pFindDlg && m_pFindDlg->IsDialogMessageW(pMsg))
@@ -51,6 +53,10 @@ void CMainFrame::UpdateUI() {
 	UIEnable(ID_FILE_OPENINANEWWINDOW, fi != nullptr);
 	UIEnable(ID_EDIT_COPY, FALSE);
 	UIEnable(ID_EDIT_FIND, fi && m_Tabs.GetActivePage() >= 0);
+}
+
+int CMainFrame::GetResourceIconIndex(WORD resType) const {
+	return ResourceTypeToIcon(resType);
 }
 
 void CMainFrame::InitMenu(HMENU hMenu) {
@@ -90,6 +96,16 @@ void CMainFrame::InitMenu(HMENU hMenu) {
 
 LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/) {
 	DragAcceptFiles();
+	auto& settings = AppSettings::Get();
+	s_Frames++;
+	if (s_Frames == 1) {
+		//InitDarkTheme();
+		if (settings.LoadFromKey(L"SOFTWARE\\ScorpioSoftware\\TotalPE")) {
+			m_RecentFiles.Set(settings.RecentFiles());
+			UpdateRecentFilesMenu();
+		}
+	}
+
 	CreateSimpleStatusBar();
 	m_StatusBar.SubclassWindow(m_hWndStatusBar);
 	int parts[] = { 200, 400, 600, 800, 1000 };
@@ -156,6 +172,21 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 }
 
 LRESULT CMainFrame::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& bHandled) {
+	if (--s_Frames == 0) {
+		WINDOWPLACEMENT wp{ sizeof(wp) };
+		GetWindowPlacement(&wp);
+		auto& settings = AppSettings::Get();
+		settings.MainWindowPlacement(wp);
+		settings.Save();
+		
+		// unregister message filtering and idle updates
+		CMessageLoop* pLoop = _Module.GetMessageLoop();
+		ATLASSERT(pLoop != nullptr);
+		pLoop->RemoveMessageFilter(this);
+		pLoop->RemoveIdleHandler(this);
+		bHandled = FALSE;
+	}
+
 	// unregister message filtering and idle updates
 	auto pLoop = _Module.GetMessageLoop();
 	ATLASSERT(pLoop);
@@ -218,6 +249,16 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 			return { view, view };
 		}
 
+		case TreeItemType::DirectoryResources:
+		{
+			auto view = new CResourcesView(this, m_PE);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
 		case TreeItemType::Section:
 		{
 			auto const& sec = m_PE->GetSecHeaders()->at(((size_t)type >> ItemShift) - 1);
@@ -267,7 +308,7 @@ HIMAGELIST CMainFrame::GetImageList() const {
 }
 
 LRESULT CMainFrame::OnViewStatusBar(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
-	BOOL bVisible = !::IsWindowVisible(m_hWndStatusBar);
+	auto bVisible = !::IsWindowVisible(m_hWndStatusBar);
 	::ShowWindow(m_hWndStatusBar, bVisible ? SW_SHOWNOACTIVATE : SW_HIDE);
 	UISetCheck(ID_VIEW_STATUS_BAR, bVisible);
 	UpdateLayout();
@@ -407,9 +448,9 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	CString spath(path);
 	CString title = spath.Mid(spath.ReverseFind(L'\\') + 1) + L" - " + ftitle;
 	SetWindowText(title);
-	//s_recentFiles.AddFile(path);
-	//s_settings.RecentFiles(s_recentFiles.Files());
-	//UpdateRecentFilesMenu();
+	m_RecentFiles.AddFile(path);
+	AppSettings::Get().RecentFiles(m_RecentFiles.Files());
+	UpdateRecentFilesMenu();
 
 	m_Views.clear();
 	m_Views2.clear();
@@ -469,10 +510,12 @@ void CMainFrame::BuildTree(int iconSize) {
 
 	auto resources = InsertTreeItem(m_Tree, L"Resources", GetTreeIcon(IDI_RESOURCE), TreeItemType::Resources, root);
 	std::unordered_map<std::wstring, HTREEITEM> typeItems;
-	m_FlatResources = libpe::Ilibpe::FlatResources(*m_PE->GetResources());
+	auto fresources = libpe::Ilibpe::FlatResources(*m_PE->GetResources());
 	i = 0;
 	m_HasManifest = m_HasVersion = false;
-	for (auto const& res : m_FlatResources) {
+	m_FlatResources.clear();
+	m_FlatResources.reserve(fresources.size());
+	for (auto const& res : fresources) {
 		std::wstring type = res.TypeStr.empty() ? PEStrings::ResourceTypeToString(res.TypeID) : std::wstring(res.TypeStr);
 		if (type.empty())
 			type = std::format(L"#{}", res.TypeID);
@@ -488,8 +531,13 @@ void CMainFrame::BuildTree(int iconSize) {
 		}
 		auto name = res.NameID == 0 ? res.NameStr.data() : (L"#" + std::to_wstring(res.NameID));
 		auto lang = res.LangStr.empty() ? PEStrings::LanguageToString(res.LangID) : std::wstring(res.LangStr);
+		FlatResource fres(res);
 		InsertTreeItem(m_Tree, std::format(L"{} ({})", name, lang).c_str(), ResourceTypeToIcon(res.TypeID),
 			TreeItemWithIndex(TreeItemType::Resource, (i + 1) << ItemShift), it->second, TVI_SORT);
+		fres.Name = std::move(name);
+		fres.Type = std::move(type);
+		fres.Language = std::move(lang);
+		m_FlatResources.emplace_back(std::move(fres));
 		i++;
 	}
 	m_Tree.Expand(resources, TVE_EXPAND);
@@ -525,10 +573,6 @@ LRESULT CMainFrame::OnFileClose(WORD, WORD, HWND, BOOL&) {
 
 int CMainFrame::GetDataDirectoryIconIndex(int index) const {
 	return DirectoryIndexToIcon(index);
-}
-
-LRESULT CMainFrame::OnFileNew(WORD, WORD, HWND, BOOL&) {
-	return LRESULT();
 }
 
 LRESULT CMainFrame::OnFileOpen(WORD, WORD, HWND, BOOL&) {
@@ -610,5 +654,58 @@ LRESULT CMainFrame::OnFind(UINT msg, WPARAM wp, LPARAM lp, BOOL&) {
 		m_SearchText = m_pFindDlg->GetFindString();
 		::SendMessage(m_Tabs.GetPageHWND(page), msg, wp, lp);
 	}
+	return 0;
+}
+
+void CMainFrame::UpdateRecentFilesMenu() {
+	if (m_RecentFiles.IsEmpty())
+		return;
+
+	auto menu = ((CMenuHandle)GetMenu()).GetSubMenu(0);
+	CString text;
+	int i = 0;
+	for (; ; i++) {
+		menu.GetMenuString(i, text, MF_BYPOSITION);
+		if (text == L"&Recent Files")
+			break;
+	}
+	menu = menu.GetSubMenu(i);
+	while (menu.DeleteMenu(0, MF_BYPOSITION))
+		;
+
+	i = 0;
+	for (auto& file : m_RecentFiles.Files()) {
+		menu.AppendMenu(MF_BYPOSITION, ATL_IDS_MRU_FILE + i++, file.c_str());
+	}
+	AddSubMenu(menu);
+}
+
+std::vector<FlatResource> const& CMainFrame::GetFlatResources() const {
+	return m_FlatResources;
+}
+
+LRESULT CMainFrame::OnRecentFile(WORD, WORD id, HWND, BOOL&) {
+	auto& path = m_RecentFiles.Files()[id - ATL_IDS_MRU_FILE];
+	if(path != m_PE.GetPath())
+		OpenPE(path.c_str());
+	return 0;
+}
+
+LRESULT CMainFrame::OnShowWindow(UINT, WPARAM show, LPARAM, BOOL&) {
+	bool static shown = false;
+	if (show && shown) {
+		shown = true;
+		auto wp = AppSettings::Get().MainWindowPlacement();
+		if (wp.showCmd != SW_HIDE) {
+			SetWindowPlacement(&wp);
+			UpdateLayout();
+		}
+		if (AppSettings::Get().AlwaysOnTop())
+			SetWindowPos(HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+	}
+	return 0;
+}
+
+LRESULT CMainFrame::OnMenuSelect(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/) const {
 	return 0;
 }
