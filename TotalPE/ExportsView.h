@@ -10,7 +10,7 @@ class CExportsView :
 public:
 	CExportsView(IMainFrame* frame, PEFile const& pe);
 
-	CString GetColumnText(HWND, int row, int col) const;
+	CString GetColumnText(HWND, int row, int col);
 	void DoSort(SortInfo const* si);
 	void OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD newState);
 	int GetRowImage(HWND, int row, int) const;
@@ -31,7 +31,12 @@ private:
 	CString GetTitle() const override;
 
 	enum class ColumnType {
-		Name, Ordinal, RVA, NameRVA, ForwardedName, UndecoratedName
+		Name, Ordinal, RVA, NameRVA, ForwardedName, UndecoratedName, Detials
+	};
+
+	struct Export : libpe::PEExportFunction {
+		std::wstring Name;
+		bool FromSymbols{ false };
 	};
 
 	void BuildItems();
@@ -46,7 +51,7 @@ private:
 	LRESULT OnFind(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 
 	CListViewCtrl m_List;
-	std::vector<libpe::PEExportFunction> m_Exports;
+	std::vector<Export> m_Exports;
 	PEFile const& m_PE;
 };
 

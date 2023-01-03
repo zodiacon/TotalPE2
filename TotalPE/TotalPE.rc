@@ -215,6 +215,8 @@ IDI_FUNC_FORWARD        ICON                    "res\\function-export.ico"
 
 IDI_INTERFACE           ICON                    "res\\interface.ico"
 
+IDI_FUNCTION2           ICON                    "res\\function-export2.ico"
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -327,6 +329,16 @@ IDD_ABOUTBOX AFX_DIALOG_LAYOUT
 BEGIN
     0
 END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// BIN
+//
+
+IDR_SYMSRV              BIN                     "res\\symsrv.dll"
+
+IDR_DIA                 BIN                     "res\\msdia140.dll"
 
 
 /////////////////////////////////////////////////////////////////////////////

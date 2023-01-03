@@ -10,6 +10,7 @@
 #include <PEFile.h>
 #include <OwnerDrawnMenu.h>
 #include "Interfaces.h"
+#include <DiaHelper.h>
 
 class CMainFrame :
 	public CFrameWindowImpl<CMainFrame>,
@@ -59,6 +60,7 @@ private:
 	int GetIconIndex(UINT icon) const override;
 	void SetStatusText(int index, PCWSTR text) override;
 	CFindReplaceDialog* GetFindDialog() override;
+	DiaSession const& GetSymbols() const override;
 
 	std::pair<IView*, CMessageMap*> CreateView(TreeItemType type);
 	bool ShowView(HTREEITEM hItem);
@@ -108,6 +110,7 @@ private:
 	HTREEITEM m_hRoot;
 	CFindReplaceDialog* m_pFindDlg{ nullptr };
 	CString m_SearchText;
+	DiaSession m_Symbols;
 	bool m_HasManifest : 1, m_HasVersion : 1;
 	inline static std::unordered_map<UINT, int> s_ImageIndices;
 	inline static int s_Frames{ 1 };

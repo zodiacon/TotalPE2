@@ -66,6 +66,9 @@
     <ClCompile Include="ImportsView.cpp">
       <Filter>Views\DataDirectories</Filter>
     </ClCompile>
+    <ClCompile Include="Helpers.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -109,6 +112,9 @@
     </ClInclude>
     <ClInclude Include="ImportsView.h">
       <Filter>Views\DataDirectories</Filter>
+    </ClInclude>
+    <ClInclude Include="Helpers.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -258,8 +264,16 @@
     <Image Include="res\interface.ico">
       <Filter>Resource Files\Icons</Filter>
     </Image>
+    <Image Include="res\function-export2.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+    <None Include="res\symsrv.dll" />
+    <None Include="res\msdia140.dll" />
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="$(MSBuildThisFileDirectory)..\..\natvis\wil.natvis" />
   </ItemGroup>
 </Project>

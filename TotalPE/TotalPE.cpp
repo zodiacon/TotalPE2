@@ -5,6 +5,7 @@
 #include "resource.h"
 #include "MainFrm.h"
 #include <ThemeHelper.h>
+#include "Helpers.h"
 
 CAppModule _Module;
 
@@ -36,6 +37,7 @@ int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPTSTR lp
 	hRes = _Module.Init(nullptr, hInstance);
 	ATLASSERT(SUCCEEDED(hRes));
 
+	Helpers::ExtractModules();
 	ThemeHelper::Init();
 
 	int nRet = Run(lpstrCmdLine, nCmdShow);

@@ -327,6 +327,10 @@ CFindReplaceDialog* CMainFrame::GetFindDialog() {
 	return m_pFindDlg;
 }
 
+DiaSession const& CMainFrame::GetSymbols() const {
+	return m_Symbols;
+}
+
 int CMainFrame::DirectoryIndexToIcon(int index) {
 	static const int icons[] = {
 		GetTreeIcon(IDI_EXPORTS),
@@ -393,6 +397,7 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 		return false;
 	}
 
+	m_Symbols.OpenImage(path);
 	BuildTree(16);
 
 	CString ftitle;
@@ -567,7 +572,7 @@ void CMainFrame::BuildTreeImageList(int iconSize) {
 		IDI_MANIFEST, IDI_VERSION, IDI_TYPE, IDI_BITMAP, IDI_MESSAGE, IDI_TEXT,
 		IDI_KEYBOARD, IDI_FORM, IDI_EXCEPTION, IDI_DELAY_IMPORT, IDI_RELOC,
 		IDI_THREAD, IDI_RICH_HEADER, IDI_MSDOS, IDI_FILE_HEADER, IDI_COMPONENT,
-		IDI_FUNCTION, IDI_FUNC_FORWARD, IDI_INTERFACE, IDI_DLL_IMPORT,
+		IDI_FUNCTION, IDI_FUNC_FORWARD, IDI_INTERFACE, IDI_DLL_IMPORT, IDI_FUNCTION2,
 	};
 
 	bool insert = s_ImageIndices.empty();

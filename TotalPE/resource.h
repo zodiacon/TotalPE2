@@ -51,6 +51,11 @@
 #define IDI_FUNCTION                    246
 #define IDI_FUNC_FORWARD                247
 #define IDI_INTERFACE                   248
+#define IDR_BIN1                        250
+#define IDR_SYMSRV                      251
+#define IDR_DIA                         252
+#define IDI_ICON1                       253
+#define IDI_FUNCTION2                   253
 #define IDC_VERSION                     1000
 #define IDC_COPYRIGHT                   1001
 #define IDC_LINK                        1002
@@ -81,7 +86,7 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        250
+#define _APS_NEXT_RESOURCE_VALUE        254
 #define _APS_NEXT_COMMAND_VALUE         32797
 #define _APS_NEXT_CONTROL_VALUE         1003
 #define _APS_NEXT_SYMED_VALUE           101

@@ -5,19 +5,21 @@
 #include "PEStrings.h"
 #include <SortHelper.h>
 #include "resource.h"
+#include <DiaHelper.h>
 
 CExportsView::CExportsView(IMainFrame* frame, PEFile const& pe) : CViewBase(frame), m_PE(pe) {
 }
 
-CString CExportsView::GetColumnText(HWND h, int row, int col) const {
-	auto const& exp = m_Exports[row];
+CString CExportsView::GetColumnText(HWND h, int row, int col) {
+	auto& exp = m_Exports[row];
 	switch (GetColumnManager(h)->GetColumnTag<ColumnType>(col)) {
-		case ColumnType::Name: return exp.FuncName.c_str();
+		case ColumnType::Name: return exp.Name.c_str();
 		case ColumnType::ForwardedName: return exp.ForwarderName.c_str();
 		case ColumnType::Ordinal: return std::to_wstring(exp.Ordinal).c_str();
 		case ColumnType::RVA: return std::format(L"0x{:X}", exp.FuncRVA).c_str();
 		case ColumnType::NameRVA: return std::format(L"0x{:X}", exp.NameRVA).c_str();
 		case ColumnType::UndecoratedName: return PEStrings::UndecorateName(exp.FuncName.c_str()).c_str();
+		case ColumnType::Detials: return exp.FromSymbols ? L"From symbols" : L"";
 	}
 	return CString();
 }
@@ -43,7 +45,12 @@ void CExportsView::OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD 
 }
 
 int CExportsView::GetRowImage(HWND, int row, int) const {
-	return Frame()->GetIconIndex(m_Exports[row].ForwarderName.empty() ? IDI_FUNC_FORWARD : IDI_FUNCTION);
+	UINT icon = IDI_FUNCTION;
+	if (!m_Exports[row].ForwarderName.empty())
+		icon = IDI_FUNC_FORWARD;
+	else if (m_Exports[row].FromSymbols)
+		icon = IDI_FUNCTION2;
+	return Frame()->GetIconIndex(icon);
 }
 
 int CExportsView::GetSaveColumnRange(HWND, int&) const {
@@ -63,7 +70,22 @@ CString CExportsView::GetTitle() const {
 }
 
 void CExportsView::BuildItems() {
-    m_Exports = m_PE->GetExport()->Funcs;
+	m_Exports.reserve(m_PE->GetExport()->Funcs.size());
+
+	auto const& symbols = Frame()->GetSymbols();
+	for (auto const& exp : m_PE->GetExport()->Funcs) {
+		Export e(exp);
+		if (!exp.FuncName.empty())
+			e.Name = (PCWSTR)CString(exp.FuncName.c_str());
+		else if(symbols) {
+			auto sym = symbols.GetSymbolByAddress(exp.FuncRVA);
+			if (sym) {
+				e.Name = sym.Name();
+				e.FromSymbols = true;
+			}
+		}
+		m_Exports.emplace_back(std::move(e));
+	}
 
 	m_List.SetItemCount((int)m_Exports.size());
 }
@@ -76,12 +98,13 @@ LRESULT CExportsView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 
 	auto cm = GetColumnManager(m_List);
 
-	cm->AddColumn(L"Name", LVCFMT_LEFT, 200, ColumnType::Name);
+	cm->AddColumn(L"Name", LVCFMT_LEFT, 250, ColumnType::Name);
 	cm->AddColumn(L"Function RVA", LVCFMT_RIGHT, 100, ColumnType::RVA);
 	cm->AddColumn(L"Ordinal", LVCFMT_RIGHT, 60, ColumnType::Ordinal);
 	cm->AddColumn(L"Forwarded Name", LVCFMT_LEFT, 250, ColumnType::ForwardedName);
 	cm->AddColumn(L"Name RVA", LVCFMT_RIGHT, 100, ColumnType::NameRVA);
 	cm->AddColumn(L"Undecorated Name", LVCFMT_LEFT, 250, ColumnType::UndecoratedName);
+	cm->AddColumn(L"Details", LVCFMT_LEFT, 150, ColumnType::Detials);
 
 	BuildItems();
 
