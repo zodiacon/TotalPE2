@@ -101,7 +101,8 @@ LRESULT CExportsView::OnFind(UINT, WPARAM, LPARAM, BOOL&) {
 		m_List.SetFocus();
 	}
 	else {
-		AtlMessageBox(m_hWnd, L"Finsihed searching list.", IDR_MAINFRAME, MB_ICONINFORMATION);
+		AtlMessageBox(m_hWnd, L"Finished searching list.", IDR_MAINFRAME, MB_ICONINFORMATION);
 	}
 	return 0;
 }
+

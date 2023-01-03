@@ -6,23 +6,23 @@
 #include <CustomSplitterWindow.h>
 #include "HexView.h"
 
-class CDataDirectoriesView :
-	public CViewBase<CDataDirectoriesView>,
-	public CVirtualListView<CDataDirectoriesView> {
+class CImportsView :
+	public CViewBase<CImportsView>,
+	public CVirtualListView<CImportsView> {
 public:
-	CDataDirectoriesView(IMainFrame* frame, PEFile const& pe);
+	CImportsView(IMainFrame* frame, PEFile const& pe);
 
-	CString GetColumnText(HWND, int row, int col) const;
-	int GetRowImage(HWND, int row, int) const;
+	CString GetColumnText(HWND h, int row, int col) const;
+	int GetRowImage(HWND h, int row, int) const;
 	void DoSort(SortInfo const* si);
 	void OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD newState);
 
-	void UpdateUI(bool first = false);
+	void UpdateUI(bool first = false) const;
 
-	BEGIN_MSG_MAP(CDataDirectoriesView)
+	BEGIN_MSG_MAP(CImportsView)
 		MESSAGE_HANDLER(CFindReplaceDialog::GetFindReplaceMsg(), OnFind)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
-		CHAIN_MSG_MAP(CVirtualListView<CDataDirectoriesView>)
+		CHAIN_MSG_MAP(CVirtualListView<CImportsView>)
 		CHAIN_MSG_MAP(BaseFrame)
 		ALT_MSG_MAP(1)
 		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnCopy)
@@ -30,11 +30,7 @@ public:
 
 private:
 	enum ColumnType {
-		Name, Size, Address, Index, Section,
-	};
-
-	struct DataDirectory : libpe::PEDataDirectory {
-		int Index;
+		ModuleName, Size, FunctionCount, Bound, FunctionName, Hint, Ordinal, UndecoratedName,
 	};
 
 	CString GetTitle() const override;
@@ -49,10 +45,12 @@ private:
 	LRESULT OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnCopy(WORD, WORD, HWND, BOOL&) const;
 	LRESULT OnFind(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
-
-	CListViewCtrl m_List;
+	
+	CListViewCtrl m_ModList, m_FuncList;
 	CCustomHorSplitterWindow m_Splitter;
-	std::vector<DataDirectory> m_Directories;
+	std::vector<libpe::PEImportFunction> m_Functions;
+	std::vector<libpe::PEImport> m_Modules;
+	int m_SelectedModule{ -1 };
 	PEFile const& m_PE;
-	CHexView m_HexView;
+	bool m_Is64;
 };

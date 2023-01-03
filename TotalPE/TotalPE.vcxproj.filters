@@ -63,6 +63,9 @@
     <ClCompile Include="ExportsView.cpp">
       <Filter>Views\DataDirectories</Filter>
     </ClCompile>
+    <ClCompile Include="ImportsView.cpp">
+      <Filter>Views\DataDirectories</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -102,6 +105,9 @@
       <Filter>Views</Filter>
     </ClInclude>
     <ClInclude Include="ExportsView.h">
+      <Filter>Views\DataDirectories</Filter>
+    </ClInclude>
+    <ClInclude Include="ImportsView.h">
       <Filter>Views\DataDirectories</Filter>
     </ClInclude>
   </ItemGroup>
@@ -247,6 +253,9 @@
       <Filter>Resource Files\Icons</Filter>
     </Image>
     <Image Include="res\function-export.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\interface.ico">
       <Filter>Resource Files\Icons</Filter>
     </Image>
   </ItemGroup>

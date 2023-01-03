@@ -108,3 +108,17 @@ LRESULT CDataDirectoriesView::OnCopy(WORD, WORD, HWND, BOOL&) const {
 	ClipboardHelper::CopyText(m_hWnd, ListViewHelper::GetSelectedRowsAsString(m_List, L","));
 	return 0;
 }
+
+LRESULT CDataDirectoriesView::OnFind(UINT, WPARAM, LPARAM, BOOL&) {
+	auto findDlg = Frame()->GetFindDialog();
+	auto index = ListViewHelper::SearchItem(m_List, findDlg->GetFindString(), findDlg->SearchDown(), findDlg->MatchCase());
+
+	if (index >= 0) {
+		m_List.SelectItem(index);
+		m_List.SetFocus();
+	}
+	else {
+		AtlMessageBox(m_hWnd, L"Finnished searching list.", IDR_MAINFRAME, MB_ICONINFORMATION);
+	}
+	return 0;
+}

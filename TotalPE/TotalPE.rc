@@ -179,7 +179,7 @@ IDI_KEYBOARD            ICON                    "res\\keyboard.ico"
 
 IDI_SECURITY            ICON                    "res\\shield.ico"
 
-IDI_DLL_IMPORT          ICON                    "res\\dll-import.ico"
+IDI_DLL_IMPORT          ICON                    "D:\\Dev\\TotalPE2\\TotalPE\\res\\dll-import.ico"
 
 IDI_EXCEPTION           ICON                    "res\\Exception.ico"
 
@@ -212,6 +212,8 @@ IDI_FILE_HEADER         ICON                    "res\\FileHeader.ico"
 IDI_FUNCTION            ICON                    "res\\function.ico"
 
 IDI_FUNC_FORWARD        ICON                    "res\\function-export.ico"
+
+IDI_INTERFACE           ICON                    "res\\interface.ico"
 
 
 /////////////////////////////////////////////////////////////////////////////

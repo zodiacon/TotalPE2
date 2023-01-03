@@ -132,3 +132,17 @@ void CPEImageView::BuildItems() {
 void CPEImageView::UpdateUI(bool first) {
 	Frame()->GetUI().UIEnable(ID_EDIT_COPY, m_List.GetSelectedCount() > 0);
 }
+
+LRESULT CPEImageView::OnFind(UINT, WPARAM, LPARAM, BOOL&) {
+	auto findDlg = Frame()->GetFindDialog();
+	auto index = ListViewHelper::SearchItem(m_List, findDlg->GetFindString(), findDlg->SearchDown(), findDlg->MatchCase());
+
+	if (index >= 0) {
+		m_List.SelectItem(index);
+		m_List.SetFocus();
+	}
+	else {
+		AtlMessageBox(m_hWnd, L"Finished searching list.", IDR_MAINFRAME, MB_ICONINFORMATION);
+	}
+	return 0;
+}

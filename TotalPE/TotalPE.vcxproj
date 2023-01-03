@@ -213,6 +213,7 @@
     <ClCompile Include="DataDirectoriesView.cpp" />
     <ClCompile Include="ExportsView.cpp" />
     <ClCompile Include="HexView.cpp" />
+    <ClCompile Include="ImportsView.cpp" />
     <ClCompile Include="MainFrm.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
@@ -231,6 +232,7 @@
     <ClInclude Include="DataDirectoriesView.h" />
     <ClInclude Include="ExportsView.h" />
     <ClInclude Include="HexView.h" />
+    <ClInclude Include="ImportsView.h" />
     <ClInclude Include="Interfaces.h" />
     <ClInclude Include="MainFrm.h" />
     <ClInclude Include="PEStrings.h" />
@@ -269,6 +271,7 @@
     <Image Include="res\headers.ico" />
     <Image Include="res\icon.ico" />
     <Image Include="res\imports.ico" />
+    <Image Include="res\interface.ico" />
     <Image Include="res\keyboard.ico" />
     <Image Include="res\manifest.ico" />
     <Image Include="res\message.ico" />

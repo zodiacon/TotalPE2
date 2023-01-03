@@ -14,6 +14,7 @@
 #include "SectionsView.h"
 #include "DataDirectoriesView.h"
 #include "ExportsView.h"
+#include "ImportsView.h"
 
 BOOL CMainFrame::PreTranslateMessage(MSG* pMsg) {
 	if (m_pFindDlg && m_pFindDlg->IsDialogMessageW(pMsg))
@@ -30,7 +31,7 @@ BOOL CMainFrame::OnIdle() {
 	return FALSE;
 }
 
-bool CMainFrame::OnTreeDoubleClick(HWND tree, HTREEITEM hItem) {
+bool CMainFrame::OnTreeDoubleClick(HWND, HTREEITEM hItem) {
 	return ShowView(hItem);
 }
 
@@ -49,6 +50,7 @@ void CMainFrame::UpdateUI() {
 	UIEnable(ID_VIEW_VERSION, fi && m_HasVersion);
 	UIEnable(ID_FILE_OPENINANEWWINDOW, fi != nullptr);
 	UIEnable(ID_EDIT_COPY, FALSE);
+	UIEnable(ID_EDIT_FIND, fi && m_Tabs.GetActivePage() >= 0);
 }
 
 void CMainFrame::InitMenu(HMENU hMenu) {
@@ -189,6 +191,16 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		case TreeItemType::DirectoryExports:
 		{
 			auto view = new CExportsView(this, m_PE);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::DirectoryImports:
+		{
+			auto view = new CImportsView(this, m_PE);
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};
@@ -382,7 +394,6 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	}
 
 	BuildTree(16);
-	UpdateUI();
 
 	CString ftitle;
 	ftitle.LoadString(IDR_MAINFRAME);
@@ -399,6 +410,7 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	m_Views2.clear();
 	m_Tabs.RemoveAllPages();
 	ShowView(m_hRoot);
+	UpdateUI();
 
 	return true;
 }
@@ -555,7 +567,7 @@ void CMainFrame::BuildTreeImageList(int iconSize) {
 		IDI_MANIFEST, IDI_VERSION, IDI_TYPE, IDI_BITMAP, IDI_MESSAGE, IDI_TEXT,
 		IDI_KEYBOARD, IDI_FORM, IDI_EXCEPTION, IDI_DELAY_IMPORT, IDI_RELOC,
 		IDI_THREAD, IDI_RICH_HEADER, IDI_MSDOS, IDI_FILE_HEADER, IDI_COMPONENT,
-		IDI_FUNCTION, IDI_FUNC_FORWARD,
+		IDI_FUNCTION, IDI_FUNC_FORWARD, IDI_INTERFACE, IDI_DLL_IMPORT,
 	};
 
 	bool insert = s_ImageIndices.empty();

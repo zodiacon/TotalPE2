@@ -20,6 +20,7 @@ public:
 	void UpdateUI(bool first = false);
 
 	BEGIN_MSG_MAP(CPEImageView)
+		MESSAGE_HANDLER(CFindReplaceDialog::GetFindReplaceMsg(), OnFind)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
 		CHAIN_MSG_MAP(CVirtualListView<CPEImageView>)
 		CHAIN_MSG_MAP(CViewBase<CPEImageView>)
@@ -39,6 +40,7 @@ private:
 
 	LRESULT OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnCopy(WORD, WORD, HWND, BOOL&) const;
+	LRESULT OnFind(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 
 	struct DataItem {
 		std::wstring Name;
