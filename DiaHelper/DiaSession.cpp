@@ -59,15 +59,14 @@ std::vector<DiaSymbol> DiaSession::FindChildren(PCWSTR name, SymbolTag tag, Comp
 	return FindChildren(GlobalScope(), name, tag, options);
 }
 
-DiaSymbol DiaSession::GetSymbolByAddress(DWORD address) const {
-	if (!m_spEnumSym)
-		m_spSession->getSymbolsByAddr(&m_spEnumSym);
-	if (!m_spEnumSym)
-		return {};
-
+DiaSymbol DiaSession::GetSymbolByRVA(DWORD rva, SymbolTag tag) const {
 	CComPtr<IDiaSymbol> spSym;
-	m_spEnumSym->symbolByRVA(address, &spSym);
+	m_spSession->findSymbolByRVA(rva, static_cast<enum SymTagEnum>(tag), &spSym);
 	return DiaSymbol(spSym);
+}
+
+std::wstring const& DiaSession::GetSymbolFile() const {
+	return m_SymbolsFile;
 }
 
 bool DiaSession::OpenCommon(PCWSTR path, bool image) {
@@ -102,7 +101,7 @@ bool DiaSession::OpenCommon(PCWSTR path, bool image) {
 	if (FAILED(hr))
 		return false;
 	if (image)
-		hr = spSource->loadDataForExe(path, nullptr, nullptr);
+		hr = spSource->loadDataForExe(path, nullptr, this);
 	else
 		hr = spSource->loadDataFromPdb(path);
 	if (FAILED(hr))
@@ -116,4 +115,49 @@ bool DiaSession::OpenCommon(PCWSTR path, bool image) {
 	m_spSession = spSession;
 	m_spSource = spSource;
 	return true;
+}
+
+HRESULT __stdcall DiaSession::QueryInterface(REFIID riid, void** ppvObject) {
+	if (riid == __uuidof(IUnknown) || riid == __uuidof(IDiaLoadCallback)) {
+		*ppvObject = static_cast<IDiaLoadCallback*>(this);
+		return S_OK;
+	}
+	return E_NOINTERFACE;
+}
+
+ULONG __stdcall DiaSession::AddRef(void) {
+	return 2;
+}
+
+ULONG __stdcall DiaSession::Release(void) {
+	return 1;
+}
+
+HRESULT __stdcall DiaSession::NotifyDebugDir(BOOL fExecutable, DWORD cbData, BYTE* pbData) {
+	m_DebugDir = true;
+	return S_OK;
+}
+
+HRESULT __stdcall DiaSession::NotifyOpenDBG(LPCOLESTR dbgPath, HRESULT resultCode) {
+	if (resultCode == S_OK) {
+		m_SymbolsFile = dbgPath;
+		m_SymbolsFileType = SymbolsFileType::Dbg;
+	}
+	return S_OK;
+}
+
+HRESULT __stdcall DiaSession::NotifyOpenPDB(LPCOLESTR pdbPath, HRESULT resultCode) {
+	if (resultCode == S_OK) {
+		m_SymbolsFile = pdbPath;
+		m_SymbolsFileType = SymbolsFileType::Pdb;
+	}
+	return S_OK;
+}
+
+HRESULT __stdcall DiaSession::RestrictRegistryAccess(void) {
+	return S_OK;
+}
+
+HRESULT __stdcall DiaSession::RestrictSymbolServerAccess(void) {
+	return S_OK;
 }

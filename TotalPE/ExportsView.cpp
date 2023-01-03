@@ -78,7 +78,7 @@ void CExportsView::BuildItems() {
 		if (!exp.FuncName.empty())
 			e.Name = (PCWSTR)CString(exp.FuncName.c_str());
 		else if(symbols) {
-			auto sym = symbols.GetSymbolByAddress(exp.FuncRVA);
+			auto sym = symbols.GetSymbolByRVA(exp.FuncRVA);
 			if (sym) {
 				e.Name = sym.Name();
 				e.FromSymbols = true;

@@ -81,6 +81,7 @@ void CPEImageView::BuildItems() {
 	auto subSystem = is64 ? opt64.Subsystem : opt32.Subsystem;
 	auto magic = is64 ? opt64.Magic : opt32.Magic;
 	auto dllchar = is64 ? opt64.DllCharacteristics : opt32.DllCharacteristics;
+	auto file = Frame()->GetSymbols().GetSymbolFile();
 
 	m_Items = std::vector<DataItem> {
 		{ L"File Name", m_PE.GetPath().substr(m_PE.GetPath().rfind(L'\\') + 1), m_PE.GetPath() },
@@ -120,6 +121,7 @@ void CPEImageView::BuildItems() {
 		{ L"Linker Version", std::format(L"{}.{}", is64 ? opt64.MajorLinkerVersion : opt32.MajorLinkerVersion,
 			is64 ? opt64.MinorLinkerVersion : opt32.MinorLinkerVersion) },
 		{ L"Loader Flags", std::format(L"0x{:X}", is64 ? opt64.LoaderFlags : opt32.LoaderFlags) },
+		{ L"Symbols", file.empty() ? L"(None)" : L"Loaded", file },
 	};
 
 	if (!is64) {

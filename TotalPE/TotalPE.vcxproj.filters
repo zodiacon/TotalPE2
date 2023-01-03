@@ -265,7 +265,7 @@
       <Filter>Resource Files\Icons</Filter>
     </Image>
     <Image Include="res\function-export2.ico">
-      <Filter>Resource Files</Filter>
+      <Filter>Resource Files\Icons</Filter>
     </Image>
   </ItemGroup>
   <ItemGroup>

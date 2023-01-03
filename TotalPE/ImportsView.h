@@ -24,7 +24,7 @@ public:
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
 		CHAIN_MSG_MAP(CVirtualListView<CImportsView>)
 		CHAIN_MSG_MAP(BaseFrame)
-		ALT_MSG_MAP(1)
+	ALT_MSG_MAP(1)
 		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnCopy)
 	END_MSG_MAP()
 

@@ -6,7 +6,7 @@
 #include <vector>
 #include <string>
 
-class DiaSession {
+class DiaSession : public IDiaLoadCallback {
 public:
 	bool OpenImage(PCWSTR path);
 	bool OpenPdb(PCWSTR path);
@@ -19,15 +19,30 @@ public:
 	// global scope
 	std::vector<DiaSymbol> FindChildren(PCWSTR name = nullptr, SymbolTag tag = SymbolTag::Null, CompareOptions options = CompareOptions::None) const;
 
-	DiaSymbol GetSymbolByAddress(DWORD address) const;
+	DiaSymbol GetSymbolByRVA(DWORD rva, SymbolTag tag = SymbolTag::Null) const;
+	std::wstring const& GetSymbolFile() const;
 
 private:
+	// Inherited via IDiaLoadCallback
+	HRESULT __stdcall QueryInterface(REFIID riid, void** ppvObject) override;
+	ULONG __stdcall AddRef(void) override;
+	ULONG __stdcall Release(void) override;
+	HRESULT __stdcall NotifyDebugDir(BOOL fExecutable, DWORD cbData, BYTE* pbData) override;
+	HRESULT __stdcall NotifyOpenDBG(LPCOLESTR dbgPath, HRESULT resultCode) override;
+	HRESULT __stdcall NotifyOpenPDB(LPCOLESTR pdbPath, HRESULT resultCode) override;
+	HRESULT __stdcall RestrictRegistryAccess(void) override;
+	HRESULT __stdcall RestrictSymbolServerAccess(void) override;
+
 	bool OpenCommon(PCWSTR path, bool image);
 
-private:
+	enum class SymbolsFileType {
+		Dbg,
+		Pdb
+	};
 	CComPtr<IDiaSession> m_spSession;
 	CComPtr<IDiaDataSource> m_spSource;
-	mutable CComPtr<IDiaEnumSymbolsByAddr> m_spEnumSym;
-
+	std::wstring m_SymbolsFile;
+	SymbolsFileType m_SymbolsFileType;
+	bool m_DebugDir{ false };
 };
 

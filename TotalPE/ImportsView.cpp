@@ -25,7 +25,7 @@ CString CImportsView::GetColumnText(HWND h, int row, int col) const {
 		switch (tag) {
 			case ColumnType::FunctionName: return func.FuncName.c_str();
 			case ColumnType::Hint: return std::to_wstring(func.ImpByName.Hint).c_str();
-			case ColumnType::Ordinal: return func.ImpByName.Hint == 0 ? std::to_wstring(func.unThunk.Thunk32.u1.Ordinal).c_str() : L"0";
+			case ColumnType::Ordinal: return func.ImpByName.Name[0] == 0 ? std::to_wstring(func.unThunk.Thunk32.u1.Ordinal).c_str() : L"0";
 			case ColumnType::UndecoratedName: return func.FuncName.empty() ? "" : PEStrings::UndecorateName(func.FuncName.c_str()).c_str();
 		}
 	}
