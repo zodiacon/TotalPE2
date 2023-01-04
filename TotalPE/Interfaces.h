@@ -51,6 +51,7 @@ struct IMainFrame abstract {
 	virtual DiaSession const& GetSymbols() const = 0;
 	virtual std::vector<FlatResource> const& GetFlatResources() const = 0;
 	virtual int GetResourceIconIndex(WORD resType) const = 0;
+	virtual DiaSymbol GetSymbolForName(PCWSTR mod, PCWSTR name) const = 0;
 };
 
 struct IView abstract {

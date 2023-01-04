@@ -66,6 +66,7 @@ private:
 	DiaSession const& GetSymbols() const override;
 	std::vector<FlatResource> const& GetFlatResources() const override;
 	int GetResourceIconIndex(WORD resType) const override;
+	DiaSymbol GetSymbolForName(PCWSTR mod, PCWSTR name) const override;
 
 	std::pair<IView*, CMessageMap*> CreateView(TreeItemType type);
 	bool ShowView(HTREEITEM hItem);

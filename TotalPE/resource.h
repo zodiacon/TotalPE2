@@ -55,6 +55,8 @@
 #define IDR_SYMSRV                      251
 #define IDR_DIA                         252
 #define IDI_FUNCTION2                   253
+#define IDR_MENU1                       254
+#define IDR_CONTEXT                     254
 #define IDC_VERSION                     1000
 #define IDC_COPYRIGHT                   1001
 #define IDC_LINK                        1002
@@ -87,7 +89,7 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        254
+#define _APS_NEXT_RESOURCE_VALUE        255
 #define _APS_NEXT_COMMAND_VALUE         32799
 #define _APS_NEXT_CONTROL_VALUE         1003
 #define _APS_NEXT_SYMED_VALUE           101

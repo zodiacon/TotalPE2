@@ -17,6 +17,7 @@
 #include "ImportsView.h"
 #include "AppSettings.h"
 #include "ResourcesView.h"
+#include "StructView.h"
 
 BOOL CMainFrame::PreTranslateMessage(MSG* pMsg) {
 	if (m_pFindDlg && m_pFindDlg->IsDialogMessageW(pMsg))
@@ -92,6 +93,29 @@ void CMainFrame::InitMenu(HMENU hMenu) {
 		else
 			AddCommand(cmd.id, cmd.hIcon);
 	}
+}
+
+TreeItemType CMainFrame::GetIndex(TreeItemType value) {
+	return TreeItemType();
+}
+
+DiaSymbol CMainFrame::GetSymbolForName(PCWSTR mod, PCWSTR name) const {
+	static std::unordered_map<std::wstring, DiaSession> symbols;
+	auto it = symbols.find(mod);
+	if (it == symbols.end()) {
+		DiaSession session;
+		WCHAR path[MAX_PATH];
+		::GetSystemDirectory(path, _countof(path));
+		wcscat_s(path, L"\\");
+		wcscat_s(path, mod);
+		if (!session.OpenImage(path))
+			return DiaSymbol::Empty;
+		it = symbols.insert({ mod, std::move(session) }).first;
+	}
+
+	auto& session = it->second;
+	auto sym = session.FindChildren(name);
+	return sym.empty() ? DiaSymbol::Empty : sym[0];
 }
 
 LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/) {
@@ -206,6 +230,33 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 				ATLASSERT(false);
 				return {};
 			}
+			return { view, view };
+		}
+
+		case TreeItemType::Headers:
+		{
+			auto view = new CHexView(this, L"Headers");
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			view->SetData(m_PE, 0, m_PE->GetFileInfo()->IsPE64 ?
+				m_PE->GetNTHeader()->NTHdr64.OptionalHeader.SizeOfHeaders : m_PE->GetNTHeader()->NTHdr32.OptionalHeader.SizeOfHeaders);
+			return { view, view };
+		}
+
+		case TreeItemType::DOSHeader:
+		{
+			auto sym = GetSymbolForName(L"ntdll.dll", L"_IMAGE_DOS_HEADER");
+			if(!sym)		// temporary
+				return {};
+
+			auto view = new CStructView(this, sym, L"DOS Header");
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			view->SetValue(m_PE->GetMSDOSHeader());
 			return { view, view };
 		}
 
@@ -429,7 +480,6 @@ LRESULT CMainFrame::OnDropFiles(UINT /*uMsg*/, WPARAM wParam, LPARAM /*lParam*/,
 	::DragFinish(hDrop);
 	return 0;
 }
-
 
 bool CMainFrame::OpenPE(PCWSTR path) {
 	CWaitCursor wait;

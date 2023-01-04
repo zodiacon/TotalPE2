@@ -118,6 +118,14 @@ BEGIN
     END
 END
 
+IDR_CONTEXT MENU
+BEGIN
+    POPUP "general"
+    BEGIN
+        MENUITEM "&Copy\tCtrl+C",               ID_EDIT_COPY
+    END
+END
+
 
 /////////////////////////////////////////////////////////////////////////////
 //

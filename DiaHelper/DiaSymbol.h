@@ -27,6 +27,9 @@ public:
     DiaSymbol LexicalParent() const;
     DiaSymbol Type() const;
     DiaSymbol ArrayIndexType() const;
+    DiaSymbol BaseType() const;
+    DiaSymbol BaseSymbol() const;
+
     LocationKind Location() const;
     SymbolTag Tag() const;
     uint64_t Length() const;

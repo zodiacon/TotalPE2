@@ -30,6 +30,12 @@ bool CHexView::SetData(std::span<const std::byte> data) {
 	return true;
 }
 
+bool CHexView::SetData(PVOID address, uint32_t size, bool copy) {
+	m_Buffer = std::make_unique<MemoryBuffer>((const uint8_t*)address, size, copy);
+	m_Hex.SetBufferManager(m_Buffer.get());
+	return true;
+}
+
 void CHexView::ClearData() {
 	m_Hex.SetBufferManager(nullptr);
 }

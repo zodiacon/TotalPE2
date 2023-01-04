@@ -52,6 +52,7 @@ std::vector<DiaSymbol> DiaSession::FindChildren(DiaSymbol const& parent, PCWSTR 
 			symbols.push_back(DiaSymbol(sym));
 		}
 	}
+	
 	return symbols;
 }
 
@@ -65,8 +66,23 @@ DiaSymbol DiaSession::GetSymbolByRVA(DWORD rva, SymbolTag tag) const {
 	return DiaSymbol(spSym);
 }
 
+DiaSymbol DiaSession::GetSymbolById(DWORD id) const {
+	CComPtr<IDiaSymbol> spSym;
+	m_spSession->symbolById(id, &spSym);
+	return DiaSymbol(spSym);
+}
+
 std::wstring const& DiaSession::GetSymbolFile() const {
 	return m_SymbolsFile;
+}
+
+void DiaSession::SetSymbolPath(PCWSTR path) {
+	m_SymbolPath = path;
+}
+
+std::wstring const& DiaSession::AppendSymbolPath(PCWSTR path) {
+	m_SymbolPath += path;
+	return m_SymbolPath;
 }
 
 bool DiaSession::OpenCommon(PCWSTR path, bool image) {
@@ -101,7 +117,7 @@ bool DiaSession::OpenCommon(PCWSTR path, bool image) {
 	if (FAILED(hr))
 		return false;
 	if (image)
-		hr = spSource->loadDataForExe(path, nullptr, this);
+		hr = spSource->loadDataForExe(path, m_SymbolPath.c_str(), this);
 	else
 		hr = spSource->loadDataFromPdb(path);
 	if (FAILED(hr))

@@ -26,7 +26,7 @@ std::wstring DiaSymbol::Name() const {
 		case SymbolTag::PointerType:
 			return type.Name() + L"*";
 		case SymbolTag::BaseType:
-			return SimpleTypeToString(Simple(), type ? (DWORD)type.Length() : 0);
+			return SimpleTypeToString(Simple(), type ? (DWORD)type.Length() : (DWORD)Length());
 		case SymbolTag::ArrayType:
 			return type.Name() + std::format(L"[{}]", Count());
 		case SymbolTag::FunctionType:
@@ -106,6 +106,18 @@ DiaSymbol DiaSymbol::ArrayIndexType() const {
 	CComPtr<IDiaSymbol> sym;
 	m_spSym->get_arrayIndexType(&sym);
 	return DiaSymbol(sym);
+}
+
+DiaSymbol DiaSymbol::BaseType() const {
+	CComPtr<IDiaSymbol> spSym;
+	m_spSym->get_baseSymbol(&spSym);
+	return DiaSymbol(spSym);
+}
+
+DiaSymbol DiaSymbol::BaseSymbol() const {
+	CComPtr<IDiaSymbol> spSym;
+	m_spSym->get_baseSymbol(&spSym);
+	return DiaSymbol(spSym);
 }
 
 LocationKind DiaSymbol::Location() const {

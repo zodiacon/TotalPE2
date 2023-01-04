@@ -28,6 +28,12 @@
     <Filter Include="Views\DataDirectories">
       <UniqueIdentifier>{9f2376cb-ffd2-459f-918d-cdd128472822}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Views\Resources">
+      <UniqueIdentifier>{74c5c796-e3d7-4acf-b0e4-0b470f1c5a27}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Controls">
+      <UniqueIdentifier>{74de7a63-6ef4-4ccb-a115-224d2a35d493}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -66,9 +72,6 @@
     <ClCompile Include="ImportsView.cpp">
       <Filter>Views\DataDirectories</Filter>
     </ClCompile>
-    <ClCompile Include="Helpers.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="RecentFilesManager.cpp">
       <Filter>Helpers</Filter>
     </ClCompile>
@@ -77,6 +80,12 @@
     </ClCompile>
     <ClCompile Include="ResourcesView.cpp">
       <Filter>Views\DataDirectories</Filter>
+    </ClCompile>
+    <ClCompile Include="StructView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
+    <ClCompile Include="Helpers.cpp">
+      <Filter>Helpers</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -122,9 +131,6 @@
     <ClInclude Include="ImportsView.h">
       <Filter>Views\DataDirectories</Filter>
     </ClInclude>
-    <ClInclude Include="Helpers.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="RecentFilesManager.h">
       <Filter>Helpers</Filter>
     </ClInclude>
@@ -133,6 +139,15 @@
     </ClInclude>
     <ClInclude Include="ResourcesView.h">
       <Filter>Views\DataDirectories</Filter>
+    </ClInclude>
+    <ClInclude Include="TreeListView.h">
+      <Filter>Controls</Filter>
+    </ClInclude>
+    <ClInclude Include="StructView.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="Helpers.h">
+      <Filter>Helpers</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

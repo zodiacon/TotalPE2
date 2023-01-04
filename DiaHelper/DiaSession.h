@@ -20,7 +20,12 @@ public:
 	std::vector<DiaSymbol> FindChildren(PCWSTR name = nullptr, SymbolTag tag = SymbolTag::Null, CompareOptions options = CompareOptions::None) const;
 
 	DiaSymbol GetSymbolByRVA(DWORD rva, SymbolTag tag = SymbolTag::Null) const;
+	DiaSymbol GetSymbolById(DWORD id) const;
+
 	std::wstring const& GetSymbolFile() const;
+
+	void SetSymbolPath(PCWSTR path);
+	std::wstring const& AppendSymbolPath(PCWSTR path);
 
 private:
 	// Inherited via IDiaLoadCallback
@@ -43,6 +48,7 @@ private:
 	CComPtr<IDiaDataSource> m_spSource;
 	std::wstring m_SymbolsFile;
 	SymbolsFileType m_SymbolsFileType;
+	std::wstring m_SymbolPath;
 	bool m_DebugDir{ false };
 };
 

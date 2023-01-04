@@ -10,6 +10,8 @@
 #define _WIN32_WINNT	0x0601
 #define _WIN32_IE	0x0700
 #define _RICHEDIT_VER	0x0500
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
 
 #include <atlbase.h>
 #include <atlstr.h>

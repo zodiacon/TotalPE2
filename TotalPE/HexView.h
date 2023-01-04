@@ -17,6 +17,7 @@ public:
 
 	bool SetData(PEFile const& pe, uint32_t offset, uint32_t size);
 	bool SetData(std::span<const std::byte> data);
+	bool SetData(PVOID address, uint32_t size, bool copy = false);
 
 	void ClearData();
 
