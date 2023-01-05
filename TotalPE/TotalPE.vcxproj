@@ -231,6 +231,7 @@
     <ClCompile Include="SectionsView.cpp" />
     <ClCompile Include="SecurityHelper.cpp" />
     <ClCompile Include="StructView.cpp" />
+    <ClCompile Include="TextView.cpp" />
     <ClCompile Include="TotalPE.cpp" />
     <ClCompile Include="PEImageView.cpp" />
   </ItemGroup>
@@ -255,6 +256,7 @@
     <ClInclude Include="SecurityHelper.h" />
     <ClInclude Include="PEImageView.h" />
     <ClInclude Include="StructView.h" />
+    <ClInclude Include="TextView.h" />
     <ClInclude Include="TreeListView.h" />
     <ClInclude Include="ViewBase.h" />
   </ItemGroup>

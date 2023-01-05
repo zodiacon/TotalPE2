@@ -93,6 +93,9 @@
     <ClCompile Include="IconWriter.cpp">
       <Filter>Helpers</Filter>
     </ClCompile>
+    <ClCompile Include="TextView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -160,6 +163,9 @@
     </ClInclude>
     <ClInclude Include="IconWriter.h">
       <Filter>Helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="TextView.h">
+      <Filter>Views</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

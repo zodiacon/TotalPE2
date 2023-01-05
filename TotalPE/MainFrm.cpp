@@ -19,6 +19,7 @@
 #include "ResourcesView.h"
 #include "StructView.h"
 #include "IconsView.h"
+#include "TextView.h"
 
 BOOL CMainFrame::PreTranslateMessage(MSG* pMsg) {
 	if (m_pFindDlg && m_pFindDlg->IsDialogMessageW(pMsg))
@@ -361,6 +362,14 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		{
 			auto& res = m_FlatResources[((uint32_t)type >> ItemShift) - 1];
 			auto resId = MAKEINTRESOURCE(res.TypeID);
+			if (resId == RT_MANIFEST) {
+				auto view = new CTextView(this, (res.Name + L" (Manifest)").c_str());
+				if (!view->DoCreate(m_Tabs))
+					return {};
+
+				view->SetXmlText(CString((PCSTR)res.Data.data(), (int)res.Data.size()));
+				return { view, view };
+			}
 			bool icon = resId == RT_ICON || resId == RT_GROUP_ICON;
 			bool group = resId == RT_GROUP_ICON || resId == RT_GROUP_CURSOR;
 			if (icon || group) {
@@ -381,6 +390,16 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 					return { view, view };
 				}
 			}
+			//
+			// all other resources - use a hex view
+			//
+			auto view = new CHexView(this, std::format(L"{} ({})", res.Name, res.Type).c_str());
+			if (!view->DoCreate(m_Tabs))
+				return {};
+
+			view->SetData(res.Data);
+			return { view, view };
+
 		}
 	}
 	return {};
