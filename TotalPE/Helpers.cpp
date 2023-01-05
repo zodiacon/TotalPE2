@@ -124,13 +124,13 @@ void Helpers::FillTreeListView(CTreeListView& tv, HTREEITEM hRoot, DiaSymbol con
 			ULONGLONG value = 0;
 			for (uint32_t i = 0; i < count; i++) {
 				auto hChild = tv.GetTreeControl().InsertItem(std::format(L"[{}]", i).c_str(), hItem, TVI_LAST);
+				tv.SetSubItemText(hChild, 1, std::format(L"+{}    ", i * elementSize).c_str(), TLVIFMT_RIGHT);
+				tv.SetSubItemText(hChild, 2, valueType.Name().c_str());
 				if (auto simple = valueType.Simple(); simple != SimpleType::NoType) {
-					tv.SetSubItemText(hChild, 1, std::format(L"+{}    ", i * elementSize).c_str(), TLVIFMT_RIGHT);
-					tv.SetSubItemText(hChild, 2, type.Name().substr(0, type.Name().find(L'[')).c_str());
 					ReadVirtual((PBYTE)address + offset + elementSize * i, (ULONG)elementSize, &value);
 					tv.SetSubItemText(hChild, 3, FormatSimpleValue(&value, (ULONG)elementSize, simple).c_str(), TLVIFMT_RIGHT);
 				}
-				FillTreeListView(tv, hChild, member, session, (PBYTE)address + member.Offset() + elementSize * i);
+				FillTreeListView(tv, hChild, valueType, session, (PBYTE)address + member.Offset() + elementSize * i);
 			}
 		}
 	}

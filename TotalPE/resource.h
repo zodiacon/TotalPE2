@@ -55,8 +55,11 @@
 #define IDR_SYMSRV                      251
 #define IDR_DIA                         252
 #define IDI_FUNCTION2                   253
-#define IDR_MENU1                       254
 #define IDR_CONTEXT                     254
+#define IDI_NUM1                        255
+#define IDI_NUM2                        256
+#define IDI_NUM4                        257
+#define IDI_NUM8                        258
 #define IDC_VERSION                     1000
 #define IDC_COPYRIGHT                   1001
 #define IDC_LINK                        1002
@@ -84,13 +87,20 @@
 #define ID_PE_SECURITY                  32794
 #define ID_FILE_RECENTFILES             32797
 #define ID_RECENTFILES_                 32798
+#define ID_BYTESPERLINE_8               32799
+#define ID_BYTESPERLINE_16              32800
+#define ID_BYTESPERLINE_24              32801
+#define ID_BYTESPERLINE_32              32802
+#define ID_BYTESPERLINE_48              32803
+#define ID_BYTESPERLINE_64              32804
+#define ID_ICON_EXPORT                  32805
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        255
-#define _APS_NEXT_COMMAND_VALUE         32799
+#define _APS_NEXT_RESOURCE_VALUE        259
+#define _APS_NEXT_COMMAND_VALUE         32806
 #define _APS_NEXT_CONTROL_VALUE         1003
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

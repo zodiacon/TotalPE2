@@ -18,6 +18,7 @@
 #include "AppSettings.h"
 #include "ResourcesView.h"
 #include "StructView.h"
+#include "IconsView.h"
 
 BOOL CMainFrame::PreTranslateMessage(MSG* pMsg) {
 	if (m_pFindDlg && m_pFindDlg->IsDialogMessageW(pMsg))
@@ -70,6 +71,7 @@ void CMainFrame::InitMenu(HMENU hMenu) {
 		{ ID_EDIT_PASTE, IDI_PASTE },
 		{ ID_FILE_OPEN, IDI_OPEN },
 		{ ID_FILE_SAVE, IDI_SAVE },
+		{ ID_ICON_EXPORT, IDI_SAVE },
 		{ ID_VIEW_SECTIONS, IDI_SECTIONS },
 		{ ID_VIEW_DIRECTORIES, IDI_DIR_OPEN },
 		{ ID_VIEW_RESOURCES, IDI_RESOURCE },
@@ -116,6 +118,23 @@ DiaSymbol CMainFrame::GetSymbolForName(PCWSTR mod, PCWSTR name) const {
 	auto& session = it->second;
 	auto sym = session.FindChildren(name);
 	return sym.empty() ? DiaSymbol::Empty : sym[0];
+}
+
+bool CMainFrame::AddToolBar(HWND tb) {
+	return UIAddToolBar(tb);
+}
+
+bool CMainFrame::RemoveToolBar(HWND hWndToolBar) {
+	ATLASSERT(::IsWindow(hWndToolBar));
+	TBBUTTONINFO tbbi = { sizeof(TBBUTTONINFO), TBIF_COMMAND | TBIF_STYLE | TBIF_BYINDEX };
+
+	// remove toolbar buttons
+	for (int uItem = 0; ::SendMessage(hWndToolBar, TB_GETBUTTONINFO, uItem, (LPARAM)&tbbi) != -1; uItem++) {
+		if (tbbi.fsStyle ^ BTNS_SEP)
+			UIRemoveElement<CDynamicUpdateUI<CMainFrame>::UPDUI_TOOLBAR>(tbbi.idCommand);
+	}
+
+	return true;	// (CUpdateUIBase::UIAddToolBar(hWndToolBar) != FALSE);
 }
 
 LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/) {
@@ -188,6 +207,8 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 	InitMenu(hMenu);
 	AddMenu(hMenu);
 	UIAddMenu(hMenu);
+	AddMenu(IDR_CONTEXT);
+	UIAddMenu(IDR_CONTEXT);
 
 	UISetCheck(ID_VIEW_STATUS_BAR, 1);
 	UpdateUI();
@@ -260,6 +281,21 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 			return { view, view };
 		}
 
+		case TreeItemType::NTHeader:
+		{
+			auto sym = GetSymbolForName(L"ntdll.dll", m_PE->GetFileInfo()->IsPE32 ? L"_IMAGE_NT_HEADERS32" : L"_IMAGE_NT_HEADERS64");
+			if (!sym)		// temporary
+				return {};
+
+			auto view = new CStructView(this, sym, L"NT Header");
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			view->SetPEOffset(m_PE, m_PE->GetNTHeader()->dwOffset);
+			return { view, view };
+		}
+
 		case TreeItemType::Sections:
 		{
 			auto view = new CSectionsView(this, m_PE);
@@ -319,6 +355,32 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 
 			view->SetData(m_PE, sec.SecHdr.PointerToRawData, sec.SecHdr.SizeOfRawData);
 			return { view, view };
+		}
+
+		case TreeItemType::Resource:
+		{
+			auto& res = m_FlatResources[((uint32_t)type >> ItemShift) - 1];
+			auto resId = MAKEINTRESOURCE(res.TypeID);
+			bool icon = resId == RT_ICON || resId == RT_GROUP_ICON;
+			bool group = resId == RT_GROUP_ICON || resId == RT_GROUP_CURSOR;
+			if (icon || group) {
+				if (!group) {
+					auto view = new CIconsView(this, (res.Name + (icon ? L" (Icon)" : L" (Cursor)")).c_str());
+					if (!view->DoCreate(m_Tabs))
+						return {};
+
+					view->SetIconData(res.Data, icon);
+					return { view, view };
+				}
+				else {
+					auto view = new CIconsView(this, (res.Name + (icon ? L" (Icon Group)" : L" (Cursor Group)")).c_str());
+					if (!view->DoCreate(m_Tabs))
+						return {};
+
+					view->SetGroupIconData(res.Data);
+					return { view, view };
+				}
+			}
 		}
 	}
 	return {};
@@ -529,10 +591,10 @@ void CMainFrame::BuildTree(int iconSize) {
 
 	auto root = InsertTreeItem(m_Tree, path.substr(path.rfind(L'\\') + 1).c_str(), 0, TreeItemType::Image);
 	auto headers = InsertTreeItem(m_Tree, L"Headers", GetTreeIcon(IDI_HEADERS), TreeItemType::Headers, root);
-	InsertTreeItem(m_Tree, L"File Header", GetTreeIcon(IDI_FILE_HEADER), TreeItemType::FileHeader, headers);
 	InsertTreeItem(m_Tree, L"DOS Header", GetTreeIcon(IDI_MSDOS), TreeItemType::DOSHeader, headers);
-	InsertTreeItem(m_Tree, L"Optional Header", GetTreeIcon(IDI_HEADERS), TreeItemType::OptionalHeader, headers);
-	InsertTreeItem(m_Tree, L"Rich Header", GetTreeIcon(IDI_RICH_HEADER), TreeItemType::RichHeader, headers);
+	InsertTreeItem(m_Tree, L"NT Header", GetTreeIcon(IDI_FILE_HEADER), TreeItemType::NTHeader, headers);
+	if(m_PE->GetFileInfo()->HasRichHdr)
+		InsertTreeItem(m_Tree, L"Rich Header", GetTreeIcon(IDI_RICH_HEADER), TreeItemType::RichHeader, headers);
 	m_Tree.Expand(headers, TVE_EXPAND);
 
 	auto sections = InsertTreeItem(m_Tree, L"Sections", GetTreeIcon(IDI_SECTIONS), TreeItemType::Sections, root);

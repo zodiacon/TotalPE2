@@ -215,6 +215,8 @@
     <ClCompile Include="ExportsView.cpp" />
     <ClCompile Include="Helpers.cpp" />
     <ClCompile Include="HexView.cpp" />
+    <ClCompile Include="IconsView.cpp" />
+    <ClCompile Include="IconWriter.cpp" />
     <ClCompile Include="ImportsView.cpp" />
     <ClCompile Include="MainFrm.cpp" />
     <ClCompile Include="pch.cpp">
@@ -239,6 +241,8 @@
     <ClInclude Include="ExportsView.h" />
     <ClInclude Include="Helpers.h" />
     <ClInclude Include="HexView.h" />
+    <ClInclude Include="IconsView.h" />
+    <ClInclude Include="IconWriter.h" />
     <ClInclude Include="ImportsView.h" />
     <ClInclude Include="Interfaces.h" />
     <ClInclude Include="MainFrm.h" />
@@ -288,6 +292,10 @@
     <Image Include="res\manifest.ico" />
     <Image Include="res\message.ico" />
     <Image Include="res\msdos.ico" />
+    <Image Include="res\number-1.ico" />
+    <Image Include="res\number-2.ico" />
+    <Image Include="res\number-4.ico" />
+    <Image Include="res\number-8.ico" />
     <Image Include="res\open.ico" />
     <Image Include="res\paste.ico" />
     <Image Include="res\pin_green.ico" />

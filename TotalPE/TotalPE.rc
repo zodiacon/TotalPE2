@@ -124,6 +124,19 @@ BEGIN
     BEGIN
         MENUITEM "&Copy\tCtrl+C",               ID_EDIT_COPY
     END
+    POPUP "bytesperline"
+    BEGIN
+        MENUITEM "8",                           ID_BYTESPERLINE_8
+        MENUITEM "16",                          ID_BYTESPERLINE_16
+        MENUITEM "24",                          ID_BYTESPERLINE_24
+        MENUITEM "32",                          ID_BYTESPERLINE_32
+        MENUITEM "48",                          ID_BYTESPERLINE_48
+        MENUITEM "64",                          ID_BYTESPERLINE_64
+    END
+    POPUP "icon"
+    BEGIN
+        MENUITEM "&Export...",                  ID_ICON_EXPORT
+    END
 END
 
 
@@ -229,6 +242,14 @@ IDI_FUNC_FORWARD        ICON                    "res\\function-export.ico"
 IDI_INTERFACE           ICON                    "res\\interface.ico"
 
 IDI_FUNCTION2           ICON                    "res\\function-export2.ico"
+
+IDI_NUM1                ICON                    "res\\number-1.ico"
+
+IDI_NUM2                ICON                    "res\\number-2.ico"
+
+IDI_NUM4                ICON                    "res\\number-4.ico"
+
+IDI_NUM8                ICON                    "res\\number-8.ico"
 
 
 /////////////////////////////////////////////////////////////////////////////

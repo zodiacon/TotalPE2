@@ -51,6 +51,7 @@ public:
 		CHAIN_MSG_MAP(COwnerDrawnMenu<CMainFrame>)
 		CHAIN_MSG_MAP(CAutoUpdateUI<CMainFrame>)
 		CHAIN_MSG_MAP(CFrameWindowImpl<CMainFrame>)
+		REFLECT_NOTIFICATIONS_EX()
 	END_MSG_MAP()
 
 private:
@@ -67,6 +68,7 @@ private:
 	std::vector<FlatResource> const& GetFlatResources() const override;
 	int GetResourceIconIndex(WORD resType) const override;
 	DiaSymbol GetSymbolForName(PCWSTR mod, PCWSTR name) const override;
+	bool AddToolBar(HWND tb) override;
 
 	std::pair<IView*, CMessageMap*> CreateView(TreeItemType type);
 	bool ShowView(HTREEITEM hItem);
@@ -82,6 +84,8 @@ private:
 	static int ResourceTypeToIcon(WORD resType);
 	static int DirectoryIndexToIcon(int index);
 	static TreeItemType GetIndex(TreeItemType value);
+
+	bool RemoveToolBar(HWND hWndToolBar);
 
 	// Handler prototypes (uncomment arguments if needed):
 	//	LRESULT MessageHandler(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)

@@ -87,6 +87,12 @@
     <ClCompile Include="Helpers.cpp">
       <Filter>Helpers</Filter>
     </ClCompile>
+    <ClCompile Include="IconsView.cpp">
+      <Filter>Views\Resources</Filter>
+    </ClCompile>
+    <ClCompile Include="IconWriter.cpp">
+      <Filter>Helpers</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -147,6 +153,12 @@
       <Filter>Views</Filter>
     </ClInclude>
     <ClInclude Include="Helpers.h">
+      <Filter>Helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="IconsView.h">
+      <Filter>Views\Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="IconWriter.h">
       <Filter>Helpers</Filter>
     </ClInclude>
   </ItemGroup>
@@ -298,6 +310,18 @@
       <Filter>Resource Files\Icons</Filter>
     </Image>
     <Image Include="res\function-export2.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\number-1.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\number-2.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\number-4.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\number-8.ico">
       <Filter>Resource Files\Icons</Filter>
     </Image>
   </ItemGroup>

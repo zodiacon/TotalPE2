@@ -16,7 +16,7 @@ enum class TreeItemType : uint32_t {
 	Sections = Directory + 16,
 	Section,
 	Headers,
-	FileHeader,
+	NTHeader,
 	DOSHeader,
 	OptionalHeader,
 	RichHeader,
@@ -52,6 +52,8 @@ struct IMainFrame abstract {
 	virtual std::vector<FlatResource> const& GetFlatResources() const = 0;
 	virtual int GetResourceIconIndex(WORD resType) const = 0;
 	virtual DiaSymbol GetSymbolForName(PCWSTR mod, PCWSTR name) const = 0;
+	virtual bool AddToolBar(HWND tb) = 0;
+	virtual bool RemoveToolBar(HWND hWndToolBar) = 0;
 };
 
 struct IView abstract {

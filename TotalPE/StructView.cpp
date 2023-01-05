@@ -1,11 +1,23 @@
 #include "pch.h"
 #include "StructView.h"
 #include "Helpers.h"
+#include "PEFile.h"
 
 CStructView::CStructView(IMainFrame* frame, DiaSymbol const& sym, CString const& title) : CViewBase(frame), m_Object(sym), m_Title(title), m_HexView(frame) {
 }
 
 void CStructView::SetValue(PVOID address) {
+    ShowObject(address);
+}
+
+void CStructView::SetPEOffset(PEFile const& pe, DWORD offset) {
+    uint32_t bias = 0;
+    auto size = (uint32_t)m_Object.Length();
+    m_Ptr = pe.Map<BYTE>(offset, size, bias);
+    ShowObject(m_Ptr.get() + bias);
+}
+
+void CStructView::ShowObject(PVOID address) {
     m_TL.GetTreeControl().DeleteAllItems();
     auto hRoot = m_TL.GetTreeControl().InsertItem(m_Object.Name().c_str(), 0, 0, TVI_ROOT, TVI_LAST);
     m_TL.SetSubItemState(hRoot, 0, TLVIS_BOLD, TLVIS_BOLD);
@@ -21,8 +33,8 @@ LRESULT CStructView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
     m_TL.Create(m_Splitter, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN |
         TVS_HASBUTTONS | TVS_LINESATROOT | TVS_HASLINES | TVS_SHOWSELALWAYS);
     m_TL.GetTreeControl().SetExtendedStyle(TVS_EX_DOUBLEBUFFER, TVS_EX_DOUBLEBUFFER);
-    m_TL.AddColumn(L"Member", 200, HDF_LEFT);
-    m_TL.AddColumn(L"Offset", 50, HDF_CENTER);
+    m_TL.AddColumn(L"Member", 250, HDF_LEFT);
+    m_TL.AddColumn(L"Offset", 60, HDF_CENTER);
     m_TL.AddColumn(L"Type", 180, HDF_LEFT);
     m_TL.AddColumn(L"Value", 150, HDF_LEFT);
     m_TL.AddColumn(L"Details", 150, HDF_LEFT);

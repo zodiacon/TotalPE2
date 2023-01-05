@@ -27,6 +27,7 @@ extern CAppModule _Module;
 #include <atltypes.h>
 #include <atlsplit.h>
 #include <atltheme.h>
+#include <atlscrl.h>
 
 #include <vector>
 #include <memory>
