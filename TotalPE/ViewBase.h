@@ -68,7 +68,7 @@ public:
 		auto p = static_cast<T*>(this);
 		p->Activate(active);
 		if (active)
-			p->UpdateUI();
+			p->UpdateUI(false);
 		return 0;
 	}
 

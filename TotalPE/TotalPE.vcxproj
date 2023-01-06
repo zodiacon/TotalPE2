@@ -210,6 +210,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="AboutDlg.cpp" />
+    <ClCompile Include="AcceleratorTableView.cpp" />
     <ClCompile Include="AppSettings.cpp" />
     <ClCompile Include="DataDirectoriesView.cpp" />
     <ClCompile Include="ExportsView.cpp" />
@@ -230,13 +231,16 @@
     <ClCompile Include="ResourcesView.cpp" />
     <ClCompile Include="SectionsView.cpp" />
     <ClCompile Include="SecurityHelper.cpp" />
+    <ClCompile Include="StringMessageTableView.cpp" />
     <ClCompile Include="StructView.cpp" />
     <ClCompile Include="TextView.cpp" />
     <ClCompile Include="TotalPE.cpp" />
     <ClCompile Include="PEImageView.cpp" />
+    <ClCompile Include="VersionView.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AboutDlg.h" />
+    <ClInclude Include="AcceleratorTableView.h" />
     <ClInclude Include="AppSettings.h" />
     <ClInclude Include="DataDirectoriesView.h" />
     <ClInclude Include="ExportsView.h" />
@@ -255,9 +259,11 @@
     <ClInclude Include="SectionsView.h" />
     <ClInclude Include="SecurityHelper.h" />
     <ClInclude Include="PEImageView.h" />
+    <ClInclude Include="StringMessageTableView.h" />
     <ClInclude Include="StructView.h" />
     <ClInclude Include="TextView.h" />
     <ClInclude Include="TreeListView.h" />
+    <ClInclude Include="VersionView.h" />
     <ClInclude Include="ViewBase.h" />
   </ItemGroup>
   <ItemGroup>

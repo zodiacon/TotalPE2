@@ -96,6 +96,15 @@
     <ClCompile Include="TextView.cpp">
       <Filter>Views</Filter>
     </ClCompile>
+    <ClCompile Include="StringMessageTableView.cpp">
+      <Filter>Views\Resources</Filter>
+    </ClCompile>
+    <ClCompile Include="VersionView.cpp">
+      <Filter>Views\Resources</Filter>
+    </ClCompile>
+    <ClCompile Include="AcceleratorTableView.cpp">
+      <Filter>Views\Resources</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -166,6 +175,15 @@
     </ClInclude>
     <ClInclude Include="TextView.h">
       <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="StringMessageTableView.h">
+      <Filter>Views\Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="VersionView.h">
+      <Filter>Views\Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="AcceleratorTableView.h">
+      <Filter>Views\Resources</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

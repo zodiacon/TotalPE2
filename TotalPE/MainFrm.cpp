@@ -20,6 +20,9 @@
 #include "StructView.h"
 #include "IconsView.h"
 #include "TextView.h"
+#include "StringMessageTableView.h"
+#include "VersionView.h"
+#include "AcceleratorTableView.h"
 
 BOOL CMainFrame::PreTranslateMessage(MSG* pMsg) {
 	if (m_pFindDlg && m_pFindDlg->IsDialogMessageW(pMsg))
@@ -224,7 +227,7 @@ LRESULT CMainFrame::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*
 		auto& settings = AppSettings::Get();
 		settings.MainWindowPlacement(wp);
 		settings.Save();
-		
+
 		// unregister message filtering and idle updates
 		CMessageLoop* pLoop = _Module.GetMessageLoop();
 		ATLASSERT(pLoop != nullptr);
@@ -270,7 +273,7 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		case TreeItemType::DOSHeader:
 		{
 			auto sym = GetSymbolForName(L"ntdll.dll", L"_IMAGE_DOS_HEADER");
-			if(!sym)		// temporary
+			if (!sym)		// temporary
 				return {};
 
 			auto view = new CStructView(this, sym, L"DOS Header");
@@ -359,48 +362,7 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		}
 
 		case TreeItemType::Resource:
-		{
-			auto& res = m_FlatResources[((uint32_t)type >> ItemShift) - 1];
-			auto resId = MAKEINTRESOURCE(res.TypeID);
-			if (resId == RT_MANIFEST) {
-				auto view = new CTextView(this, (res.Name + L" (Manifest)").c_str());
-				if (!view->DoCreate(m_Tabs))
-					return {};
-
-				view->SetXmlText(CString((PCSTR)res.Data.data(), (int)res.Data.size()));
-				return { view, view };
-			}
-			bool icon = resId == RT_ICON || resId == RT_GROUP_ICON;
-			bool group = resId == RT_GROUP_ICON || resId == RT_GROUP_CURSOR;
-			if (icon || group) {
-				if (!group) {
-					auto view = new CIconsView(this, (res.Name + (icon ? L" (Icon)" : L" (Cursor)")).c_str());
-					if (!view->DoCreate(m_Tabs))
-						return {};
-
-					view->SetIconData(res.Data, icon);
-					return { view, view };
-				}
-				else {
-					auto view = new CIconsView(this, (res.Name + (icon ? L" (Icon Group)" : L" (Cursor Group)")).c_str());
-					if (!view->DoCreate(m_Tabs))
-						return {};
-
-					view->SetGroupIconData(res.Data);
-					return { view, view };
-				}
-			}
-			//
-			// all other resources - use a hex view
-			//
-			auto view = new CHexView(this, std::format(L"{} ({})", res.Name, res.Type).c_str());
-			if (!view->DoCreate(m_Tabs))
-				return {};
-
-			view->SetData(res.Data);
-			return { view, view };
-
-		}
+			return CreateResourceView(type);
 	}
 	return {};
 }
@@ -612,7 +574,7 @@ void CMainFrame::BuildTree(int iconSize) {
 	auto headers = InsertTreeItem(m_Tree, L"Headers", GetTreeIcon(IDI_HEADERS), TreeItemType::Headers, root);
 	InsertTreeItem(m_Tree, L"DOS Header", GetTreeIcon(IDI_MSDOS), TreeItemType::DOSHeader, headers);
 	InsertTreeItem(m_Tree, L"NT Header", GetTreeIcon(IDI_FILE_HEADER), TreeItemType::NTHeader, headers);
-	if(m_PE->GetFileInfo()->HasRichHdr)
+	if (m_PE->GetFileInfo()->HasRichHdr)
 		InsertTreeItem(m_Tree, L"Rich Header", GetTreeIcon(IDI_RICH_HEADER), TreeItemType::RichHeader, headers);
 	m_Tree.Expand(headers, TVE_EXPAND);
 
@@ -656,7 +618,7 @@ void CMainFrame::BuildTree(int iconSize) {
 			m_HasVersion = true;
 		auto it = typeItems.find(type);
 		if (it == typeItems.end()) {
-			auto hItem = InsertTreeItem(m_Tree, type.c_str(), ResourceTypeToIcon(res.TypeID), 
+			auto hItem = InsertTreeItem(m_Tree, type.c_str(), ResourceTypeToIcon(res.TypeID),
 				TreeItemWithIndex(TreeItemType::ResourceTypeName, (i + 1) << ItemShift), resources, TVI_SORT);
 			it = typeItems.insert({ type, hItem }).first;
 		}
@@ -713,6 +675,78 @@ LRESULT CMainFrame::OnFileOpen(WORD, WORD, HWND, BOOL&) {
 
 	OpenPE(path);
 	return 0;
+}
+
+std::pair<IView*, CMessageMap*> CMainFrame::CreateResourceView(TreeItemType type) {
+	auto& res = m_FlatResources[((uint32_t)type >> ItemShift) - 1];
+	auto resId = MAKEINTRESOURCE(res.TypeID);
+	if (resId == RT_VERSION) {
+		auto view = new CVersionView(this, (res.Name + L" (Version)").c_str());
+		if (!view->DoCreate(m_Tabs))
+			return {};
+
+		view->SetData(res.Data);
+		return { view, view };
+	}
+	else if (resId == RT_ACCELERATOR) {
+		auto view = new CAcceleratorTableView(this, (res.Name + L" (Accel)").c_str());
+		if (!view->DoCreate(m_Tabs))
+			return {};
+
+		view->AddAccelTable(res.Data);
+		return { view, view };
+	}
+	else if (resId == RT_MANIFEST) {
+		auto view = new CTextView(this, (res.Name + L" (Manifest)").c_str());
+		if (!view->DoCreate(m_Tabs))
+			return {};
+
+		view->SetXmlText(CString((PCSTR)res.Data.data(), (int)res.Data.size()));
+		return { view, view };
+	}
+	else if (resId == RT_STRING || resId == RT_MESSAGETABLE) {
+		auto st = resId == RT_STRING;
+		auto view = new CStringMessageTableView(this, (res.Name + (st ? L" (String Table)" : L" (Manifest)")).c_str());
+		if (!view->DoCreate(m_Tabs))
+			return {};
+
+		if (st)
+			view->SetStringTableData(res.Data, res.NameID);
+		else
+			view->SetMessageTableData(res.Data);
+		return { view, view };
+
+	}
+
+	bool icon = resId == RT_ICON || resId == RT_GROUP_ICON;
+	bool group = resId == RT_GROUP_ICON || resId == RT_GROUP_CURSOR;
+	if (icon || group) {
+		if (!group) {
+			auto view = new CIconsView(this, (res.Name + (icon ? L" (Icon)" : L" (Cursor)")).c_str());
+			if (!view->DoCreate(m_Tabs))
+				return {};
+
+			view->SetIconData(res.Data, icon);
+			return { view, view };
+		}
+		else {
+			auto view = new CIconsView(this, (res.Name + (icon ? L" (Icon Group)" : L" (Cursor Group)")).c_str());
+			if (!view->DoCreate(m_Tabs))
+				return {};
+
+			view->SetGroupIconData(res.Data);
+			return { view, view };
+		}
+	}
+	//
+	// all other resources - use a hex view
+	//
+	auto view = new CHexView(this, std::format(L"{} ({})", res.Name, res.Type).c_str());
+	if (!view->DoCreate(m_Tabs))
+		return {};
+
+	view->SetData(res.Data);
+	return { view, view };
 }
 
 CString CMainFrame::DoFileOpen() const {
@@ -817,7 +851,7 @@ std::vector<FlatResource> const& CMainFrame::GetFlatResources() const {
 
 LRESULT CMainFrame::OnRecentFile(WORD, WORD id, HWND, BOOL&) {
 	auto& path = m_RecentFiles.Files()[id - ATL_IDS_MRU_FILE];
-	if(path != m_PE.GetPath())
+	if (path != m_PE.GetPath())
 		OpenPE(path.c_str());
 	return 0;
 }

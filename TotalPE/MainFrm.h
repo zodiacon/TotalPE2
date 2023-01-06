@@ -21,7 +21,7 @@ class CMainFrame :
 	public CMessageFilter, 
 	public CIdleHandler {
 public:
-	DECLARE_FRAME_WND_CLASS(NULL, IDR_MAINFRAME)
+	DECLARE_FRAME_WND_CLASS(L"TotalPEMainWndClass", IDR_MAINFRAME)
 
 	BOOL PreTranslateMessage(MSG* pMsg) override;
 	BOOL OnIdle() override;
@@ -71,6 +71,7 @@ private:
 	bool AddToolBar(HWND tb) override;
 
 	std::pair<IView*, CMessageMap*> CreateView(TreeItemType type);
+	std::pair<IView*, CMessageMap*> CreateResourceView(TreeItemType type);
 	bool ShowView(HTREEITEM hItem);
 	void UpdateRecentFilesMenu();
 	void UpdateUI();
