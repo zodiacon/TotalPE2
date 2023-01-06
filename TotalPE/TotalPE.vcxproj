@@ -212,6 +212,7 @@
     <ClCompile Include="AboutDlg.cpp" />
     <ClCompile Include="AcceleratorTableView.cpp" />
     <ClCompile Include="AppSettings.cpp" />
+    <ClCompile Include="BitmapView.cpp" />
     <ClCompile Include="DataDirectoriesView.cpp" />
     <ClCompile Include="DebugView.cpp" />
     <ClCompile Include="ExceptionsView.cpp" />
@@ -244,6 +245,7 @@
     <ClInclude Include="AboutDlg.h" />
     <ClInclude Include="AcceleratorTableView.h" />
     <ClInclude Include="AppSettings.h" />
+    <ClInclude Include="BitmapView.h" />
     <ClInclude Include="DataDirectoriesView.h" />
     <ClInclude Include="DebugView.h" />
     <ClInclude Include="ExceptionsView.h" />

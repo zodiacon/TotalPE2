@@ -103,7 +103,7 @@ LRESULT CSectionsView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	BuildItems();
 
 	m_Splitter.SetSplitterPanes(m_List, m_HexView);
-	m_Splitter.SetSplitterPosPct(25);
+	m_Splitter.SetSplitterPosPct(50);
 
 	return 0;
 }

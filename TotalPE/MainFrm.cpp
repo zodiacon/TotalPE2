@@ -25,6 +25,7 @@
 #include "AcceleratorTableView.h"
 #include "ExceptionsView.h"
 #include "DebugView.h"
+#include "BitmapView.h"
 
 BOOL CMainFrame::PreTranslateMessage(MSG* pMsg) {
 	if (m_pFindDlg && m_pFindDlg->IsDialogMessageW(pMsg))
@@ -710,6 +711,14 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateResourceView(TreeItemType type
 		view->SetData(res.Data);
 		return { view, view };
 	}
+	if (resId == RT_BITMAP) {
+		auto view = new CBitmapView(this, (res.Name + L" (Bitmap)").c_str());
+		if (!view->DoCreate(m_Tabs))
+			return {};
+
+		view->SetData(res.Data);
+		return { view, view };
+	}
 	else if (resId == RT_ACCELERATOR) {
 		auto view = new CAcceleratorTableView(this, (res.Name + L" (Accel)").c_str());
 		if (!view->DoCreate(m_Tabs))
@@ -742,7 +751,7 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateResourceView(TreeItemType type
 
 	bool icon = resId == RT_ICON || resId == RT_GROUP_ICON;
 	bool group = resId == RT_GROUP_ICON || resId == RT_GROUP_CURSOR;
-	if (icon || group) {
+	if (icon || group || resId == RT_CURSOR) {
 		if (!group) {
 			auto view = new CIconsView(this, (res.Name + (icon ? L" (Icon)" : L" (Cursor)")).c_str());
 			if (!view->DoCreate(m_Tabs))

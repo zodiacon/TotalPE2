@@ -111,6 +111,9 @@
     <ClCompile Include="DebugView.cpp">
       <Filter>Views\DataDirectories</Filter>
     </ClCompile>
+    <ClCompile Include="BitmapView.cpp">
+      <Filter>Views\Resources</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -196,6 +199,9 @@
     </ClInclude>
     <ClInclude Include="DebugView.h">
       <Filter>Views\DataDirectories</Filter>
+    </ClInclude>
+    <ClInclude Include="BitmapView.h">
+      <Filter>Views\Resources</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
