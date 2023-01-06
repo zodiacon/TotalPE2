@@ -234,6 +234,7 @@
     <ClCompile Include="ResourcesView.cpp" />
     <ClCompile Include="SectionsView.cpp" />
     <ClCompile Include="SecurityHelper.cpp" />
+    <ClCompile Include="SecurityView.cpp" />
     <ClCompile Include="StringMessageTableView.cpp" />
     <ClCompile Include="StructView.cpp" />
     <ClCompile Include="TextView.cpp" />
@@ -265,6 +266,7 @@
     <ClInclude Include="SectionsView.h" />
     <ClInclude Include="SecurityHelper.h" />
     <ClInclude Include="PEImageView.h" />
+    <ClInclude Include="SecurityView.h" />
     <ClInclude Include="StringMessageTableView.h" />
     <ClInclude Include="StructView.h" />
     <ClInclude Include="TextView.h" />
