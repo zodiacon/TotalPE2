@@ -105,6 +105,9 @@
     <ClCompile Include="AcceleratorTableView.cpp">
       <Filter>Views\Resources</Filter>
     </ClCompile>
+    <ClCompile Include="ExceptionsView.cpp">
+      <Filter>Views\DataDirectories</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -184,6 +187,9 @@
     </ClInclude>
     <ClInclude Include="AcceleratorTableView.h">
       <Filter>Views\Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="ExceptionsView.h">
+      <Filter>Views\DataDirectories</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

@@ -52,8 +52,7 @@ void CPEImageView::OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD 
 
 LRESULT CPEImageView::OnCopy(WORD, WORD, HWND, BOOL&) const {
 	auto text = ListViewHelper::GetSelectedRowsAsString(m_List);
-	if (!text.IsEmpty())
-		ClipboardHelper::CopyText(m_hWnd, text);
+	ClipboardHelper::CopyText(m_hWnd, text);
 	return 0;
 }
 

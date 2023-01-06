@@ -332,8 +332,8 @@ namespace libpe
 
 	//Exception table.
 	struct PEException {
-		DWORD                         dwOffset;           //File's raw offset of this exception's descriptor.
-		_IMAGE_RUNTIME_FUNCTION_ENTRY stRuntimeFuncEntry; //Standard _IMAGE_RUNTIME_FUNCTION_ENTRY header.
+		DWORD                         Offset;           //File's raw offset of this exception's descriptor.
+		IMAGE_RUNTIME_FUNCTION_ENTRY RuntimeFuncEntry; //Standard _IMAGE_RUNTIME_FUNCTION_ENTRY header.
 	};
 	using PEEXCEPTION_VEC = std::vector<PEException>;
 

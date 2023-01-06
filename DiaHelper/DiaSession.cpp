@@ -60,9 +60,12 @@ std::vector<DiaSymbol> DiaSession::FindChildren(PCWSTR name, SymbolTag tag, Comp
 	return FindChildren(GlobalScope(), name, tag, options);
 }
 
-DiaSymbol DiaSession::GetSymbolByRVA(DWORD rva, SymbolTag tag) const {
+DiaSymbol DiaSession::GetSymbolByRVA(DWORD rva, SymbolTag tag, long* disp) const {
 	CComPtr<IDiaSymbol> spSym;
-	m_spSession->findSymbolByRVA(rva, static_cast<enum SymTagEnum>(tag), &spSym);
+	if(disp)
+		m_spSession->findSymbolByRVAEx(rva, static_cast<enum SymTagEnum>(tag), &spSym, disp);
+	else
+		m_spSession->findSymbolByRVA(rva, static_cast<enum SymTagEnum>(tag), &spSym);
 	return DiaSymbol(spSym);
 }
 

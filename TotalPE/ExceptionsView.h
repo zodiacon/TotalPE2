@@ -3,26 +3,26 @@
 #include "ViewBase.h"
 #include <VirtualListView.h>
 #include "PEFile.h"
+#include "resource.h"
 
-class CExportsView :
-	public CViewBase<CExportsView>,
-	public CVirtualListView<CExportsView> {
+class CExceptionsView :
+	public CViewBase<CExceptionsView>,
+	public CVirtualListView<CExceptionsView> {
 public:
-	CExportsView(IMainFrame* frame, PEFile const& pe);
+	CExceptionsView(IMainFrame* frame, PEFile const& pe);
 
-	CString GetColumnText(HWND, int row, int col);
+	CString GetColumnText(HWND, int row, int col) const;
 	void DoSort(SortInfo const* si);
 	void OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD newState);
-	int GetRowImage(HWND, int row, int) const;
-	int GetSaveColumnRange(HWND, int&) const;
+	//int GetRowImage(HWND, int row, int) const;
 
 	void UpdateUI(bool first = false) const;
 
-	BEGIN_MSG_MAP(CExportsView)
+	BEGIN_MSG_MAP(CExceptionsView)
 		MESSAGE_HANDLER(CFindReplaceDialog::GetFindReplaceMsg(), OnFind)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
-		CHAIN_MSG_MAP(CVirtualListView<CExportsView>)
-		CHAIN_MSG_MAP(CViewBase<CExportsView>)
+		CHAIN_MSG_MAP(CVirtualListView<CExceptionsView>)
+		CHAIN_MSG_MAP(CViewBase<CExceptionsView>)
 	ALT_MSG_MAP(1)
 		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnCopy)
 	END_MSG_MAP()
@@ -30,13 +30,10 @@ public:
 private:
 	CString GetTitle() const override;
 
-	enum class ColumnType {
-		Name, Ordinal, RVA, NameRVA, ForwardedName, UndecoratedName, Detials
-	};
-
-	struct Export : libpe::PEExportFunction {
-		std::wstring Name;
-		bool FromSymbols{ false };
+	struct Exception : libpe::PEException {
+		std::wstring FuncName;
+		std::wstring UndecoratedName;
+		long Offset;
 	};
 
 	void BuildItems();
@@ -51,7 +48,7 @@ private:
 	LRESULT OnFind(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 
 	CListViewCtrl m_List;
-	std::vector<Export> m_Exports;
+	std::vector<Exception> m_Items;
 	PEFile const& m_PE;
 };
 

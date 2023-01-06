@@ -19,7 +19,7 @@ public:
 	// global scope
 	std::vector<DiaSymbol> FindChildren(PCWSTR name = nullptr, SymbolTag tag = SymbolTag::Null, CompareOptions options = CompareOptions::None) const;
 
-	DiaSymbol GetSymbolByRVA(DWORD rva, SymbolTag tag = SymbolTag::Null) const;
+	DiaSymbol GetSymbolByRVA(DWORD rva, SymbolTag tag = SymbolTag::Null, long* disp = nullptr) const;
 	DiaSymbol GetSymbolById(DWORD id) const;
 
 	std::wstring const& GetSymbolFile() const;

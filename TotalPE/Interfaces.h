@@ -13,6 +13,7 @@ enum class TreeItemType : uint32_t {
 	DirectoryExports = Directory,
 	DirectoryImports,
 	DirectoryResources,
+	DirectoryExceptions,
 	Sections = Directory + 16,
 	Section,
 	Headers,

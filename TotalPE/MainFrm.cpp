@@ -23,6 +23,7 @@
 #include "StringMessageTableView.h"
 #include "VersionView.h"
 #include "AcceleratorTableView.h"
+#include "ExceptionsView.h"
 
 BOOL CMainFrame::PreTranslateMessage(MSG* pMsg) {
 	if (m_pFindDlg && m_pFindDlg->IsDialogMessageW(pMsg))
@@ -323,6 +324,16 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		case TreeItemType::DirectoryImports:
 		{
 			auto view = new CImportsView(this, m_PE);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::DirectoryExceptions:
+		{
+			auto view = new CExceptionsView(this, m_PE);
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};
@@ -679,7 +690,7 @@ LRESULT CMainFrame::OnFileOpen(WORD, WORD, HWND, BOOL&) {
 
 std::pair<IView*, CMessageMap*> CMainFrame::CreateResourceView(TreeItemType type) {
 	auto& res = m_FlatResources[((uint32_t)type >> ItemShift) - 1];
-	auto resId = MAKEINTRESOURCE(res.TypeID);
+	auto const resId = MAKEINTRESOURCE(res.TypeID);
 	if (resId == RT_VERSION) {
 		auto view = new CVersionView(this, (res.Name + L" (Version)").c_str());
 		if (!view->DoCreate(m_Tabs))
