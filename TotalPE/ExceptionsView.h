@@ -13,7 +13,7 @@ public:
 
 	CString GetColumnText(HWND, int row, int col) const;
 	void DoSort(SortInfo const* si);
-	void OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD newState);
+	void OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD newState) const;
 	//int GetRowImage(HWND, int row, int) const;
 
 	void UpdateUI(bool first = false) const;
@@ -33,7 +33,7 @@ private:
 	struct Exception : libpe::PEException {
 		std::wstring FuncName;
 		std::wstring UndecoratedName;
-		long Offset;
+		long Disp;
 	};
 
 	void BuildItems();

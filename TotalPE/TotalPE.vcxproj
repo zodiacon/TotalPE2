@@ -213,6 +213,7 @@
     <ClCompile Include="AcceleratorTableView.cpp" />
     <ClCompile Include="AppSettings.cpp" />
     <ClCompile Include="DataDirectoriesView.cpp" />
+    <ClCompile Include="DebugView.cpp" />
     <ClCompile Include="ExceptionsView.cpp" />
     <ClCompile Include="ExportsView.cpp" />
     <ClCompile Include="Helpers.cpp" />
@@ -244,6 +245,7 @@
     <ClInclude Include="AcceleratorTableView.h" />
     <ClInclude Include="AppSettings.h" />
     <ClInclude Include="DataDirectoriesView.h" />
+    <ClInclude Include="DebugView.h" />
     <ClInclude Include="ExceptionsView.h" />
     <ClInclude Include="ExportsView.h" />
     <ClInclude Include="Helpers.h" />

@@ -108,6 +108,9 @@
     <ClCompile Include="ExceptionsView.cpp">
       <Filter>Views\DataDirectories</Filter>
     </ClCompile>
+    <ClCompile Include="DebugView.cpp">
+      <Filter>Views\DataDirectories</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -189,6 +192,9 @@
       <Filter>Views\Resources</Filter>
     </ClInclude>
     <ClInclude Include="ExceptionsView.h">
+      <Filter>Views\DataDirectories</Filter>
+    </ClInclude>
+    <ClInclude Include="DebugView.h">
       <Filter>Views\DataDirectories</Filter>
     </ClInclude>
   </ItemGroup>

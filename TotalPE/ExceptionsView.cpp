@@ -17,7 +17,7 @@ CString CExceptionsView::GetColumnText(HWND, int row, int col) const {
 		case 3: return item.Offset ? std::format(L"{} + 0x{:X}", item.UndecoratedName, item.Offset).c_str() : item.UndecoratedName.c_str();
 		case 4:
 			if (!item.FuncName.empty()) {
-				return item.Offset == 0 ? item.FuncName.c_str() : std::format(L"{} + 0x{:X}", item.FuncName, item.Offset).c_str();
+				return item.Disp == 0 ? item.FuncName.c_str() : std::format(L"{} + 0x{:X}", item.FuncName, item.Offset).c_str();
 			}
 			break;
 	}
@@ -37,12 +37,14 @@ void CExceptionsView::DoSort(SortInfo const* si) {
 	std::ranges::sort(m_Items, compare);
 }
 
-void CExceptionsView::OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD newState) {
+void CExceptionsView::OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD newState) const {
 	if ((newState & LVIS_SELECTED) || (oldState & LVIS_SELECTED))
 		UpdateUI();
 }
 
 void CExceptionsView::UpdateUI(bool first) const {
+	auto& ui = Frame()->GetUI();
+	ui.UIEnable(ID_EDIT_COPY, m_List.GetSelectedCount() > 0);
 }
 
 CString CExceptionsView::GetTitle() const {
@@ -52,10 +54,10 @@ CString CExceptionsView::GetTitle() const {
 void CExceptionsView::BuildItems() {
 	m_Items.reserve(m_PE->GetExceptions()->size());
 	auto& symbols = Frame()->GetSymbols();
-	for (auto& ex : *m_PE->GetExceptions()) {
+	for (auto const& ex : *m_PE->GetExceptions()) {
 		Exception e(ex);
 		if (symbols) {
-			auto sym = symbols.GetSymbolByRVA(ex.RuntimeFuncEntry.BeginAddress, SymbolTag::Null, &e.Offset);
+			auto sym = symbols.GetSymbolByRVA(ex.RuntimeFuncEntry.BeginAddress, SymbolTag::Null, &e.Disp);
 			if (sym) {
 				e.FuncName = sym.Name();
 				if (!e.FuncName.empty())
