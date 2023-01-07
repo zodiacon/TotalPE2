@@ -93,6 +93,7 @@ void CMainFrame::InitMenu(HMENU hMenu) {
 		{ ID_VIEW_IMPORTS, IDI_IMPORTS },
 		{ ID_VIEW_MANIFEST, IDI_MANIFEST },
 		{ ID_VIEW_VERSION, IDI_VERSION },
+		{ ID_VIEW_DISASSEMBLE, IDI_BINARY },
 		{ ID_PE_SECURITY, IDI_SECURITY },
 		{ ID_VIEW_DEBUG, IDI_DEBUG },
 		{ ID_EDIT_FIND, IDI_FIND },
@@ -139,17 +140,51 @@ bool CMainFrame::AddToolBar(HWND tb) {
 	return UIAddToolBar(tb);
 }
 
-bool CMainFrame::RemoveToolBar(HWND hWndToolBar) {
-	ATLASSERT(::IsWindow(hWndToolBar));
-	TBBUTTONINFO tbbi = { sizeof(TBBUTTONINFO), TBIF_COMMAND | TBIF_STYLE | TBIF_BYINDEX };
+bool CMainFrame::DeleteTreeItem(HTREEITEM hItem) {
+	return m_Tree.DeleteItem(hItem);
+}
 
-	// remove toolbar buttons
-	for (int uItem = 0; ::SendMessage(hWndToolBar, TB_GETBUTTONINFO, uItem, (LPARAM)&tbbi) != -1; uItem++) {
-		if (tbbi.fsStyle ^ BTNS_SEP)
-			UIRemoveElement<CDynamicUpdateUI<CMainFrame>::UPDUI_TOOLBAR>(tbbi.idCommand);
+bool CMainFrame::CreateAssemblyView(std::span<const std::byte> code, uint64_t address, uint32_t rva, PCWSTR title, TreeItemType parent) {
+	auto it = m_Views.find(parent); 
+	if(it == m_Views.end()) {
+		//
+		// parent node does not exist
+		//
+		ATLASSERT(false);
+		return false;
 	}
 
-	return true;	// (CUpdateUIBase::UIAddToolBar(hWndToolBar) != FALSE);
+	auto hParent = it->second->GetHTreeItem();
+	//
+	// check for duplicate
+	//
+	auto hItem = FindChild(m_Tree, hParent, title);
+	if (hItem) {
+		ShowView(hItem);
+		return true;
+	}
+
+	auto view = new CScintillaView(this, title);
+	if (nullptr == view->DoCreate(m_Tabs)) {
+		ATLASSERT(false);
+		return false;
+	}
+
+	view->SetLanguage(LexLanguage::Asm);
+	view->SetAsmCode(code, address, m_PE->GetFileInfo()->IsPE32);
+	view->GetCtrl().SetReadOnly(true);
+	view->SetDeleteFromTree(true);
+
+	auto image = GetIconIndex(IDI_BINARY);
+	auto itemType = TreeItemWithIndex(TreeItemType::Disassembly, (int64_t)rva << ItemShift);
+	hItem = InsertTreeItem(m_Tree, title, image, itemType, hParent, TVI_SORT);
+	m_Tree.EnsureVisible(hItem);
+	view->SetHTreeItem(hItem);
+	m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, view);
+	m_Views.insert({ itemType, view });
+	m_Views2.insert({ view->GetHwnd(), itemType });
+
+	return true;
 }
 
 LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/) {
@@ -240,7 +275,7 @@ bool CMainFrame::ShowView(TreeItemType data, HTREEITEM hItem, UINT icon) {
 	if (auto it = m_Views.find(data); it != m_Views.end()) {
 		int count = m_Tabs.GetPageCount();
 		for (int i = 0; i < count; i++) {
-			if (m_Tabs.GetPageHWND(i) == it->second) {
+			if (m_Tabs.GetPageHWND(i) == it->second->GetHwnd()) {
 				m_Tabs.SetActivePage(i);
 				return true;
 			}
@@ -256,8 +291,9 @@ bool CMainFrame::ShowView(TreeItemType data, HTREEITEM hItem, UINT icon) {
 				int dummy;
 				m_Tree.GetItemImage(hItem, image, dummy);
 			}
+			view->SetHTreeItem(hItem);
 			m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, map);
-			m_Views.insert({ data, view->GetHwnd() });
+			m_Views.insert({ data, view });
 			m_Views2.insert({ view->GetHwnd(), data });
 			return true;
 		}
@@ -861,7 +897,7 @@ void CMainFrame::BuildTreeImageList(int iconSize) {
 		IDI_KEYBOARD, IDI_FORM, IDI_EXCEPTION, IDI_DELAY_IMPORT, IDI_RELOC,
 		IDI_THREAD, IDI_RICH_HEADER, IDI_MSDOS, IDI_FILE_HEADER, IDI_COMPONENT,
 		IDI_FUNCTION, IDI_FUNC_FORWARD, IDI_INTERFACE, IDI_DLL_IMPORT, IDI_FUNCTION2, IDI_SYMBOLS,
-		IDI_TYPE, IDI_ENUM, IDI_BITFIELD, IDI_FIELD, IDI_ARRAY, IDI_UNION,
+		IDI_TYPE, IDI_ENUM, IDI_BITFIELD, IDI_FIELD, IDI_ARRAY, IDI_UNION, IDI_BINARY,
 	};
 
 	bool insert = s_ImageIndices.empty();

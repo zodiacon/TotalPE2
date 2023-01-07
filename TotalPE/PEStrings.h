@@ -32,7 +32,7 @@ struct PEStrings abstract final {
 	static std::wstring ToHex(ULONGLONG value);
 	static std::wstring ToMemorySize(ULONGLONG size);
 	static std::wstring ResourceTypeToString(WORD id);
-	//static CString FormatInstruction(const cs_insn& inst);
+	static CStringA FormatInstruction(const cs_insn& inst);
 	static std::wstring ManagedTypeAttributesToString(CorTypeAttr attr);
 	//static std::wstring MemberAttributesToString(const ManagedMember& member);
 	static std::wstring MethodAttributesToString(CorMethodAttr attr);

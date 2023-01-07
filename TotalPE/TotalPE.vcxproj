@@ -282,6 +282,7 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="res\array.ico" />
+    <Image Include="res\Binary.ico" />
     <Image Include="res\bitfield.ico" />
     <Image Include="res\bitmap.ico" />
     <Image Include="res\check.ico" />

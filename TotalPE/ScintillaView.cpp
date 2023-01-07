@@ -6,6 +6,8 @@
 #include "ScintillaView.h"
 #include "SciLexer.h"
 #include "LexerModule.h"
+#include "..\External\Capstone\capstone.h"
+#include "PEStrings.h"
 
 extern Lexilla::LexerModule lmXML;
 extern Lexilla::LexerModule lmAs;
@@ -19,6 +21,25 @@ CString CScintillaView::GetTitle() const {
 
 CScintillaCtrl& CScintillaView::GetCtrl() {
 	return m_Sci;
+}
+
+bool CScintillaView::SetAsmCode(std::span<const std::byte> code, uint64_t address, bool is32Bit) {
+	csh handle;
+	if (cs_open(CS_ARCH_X86, is32Bit ? CS_MODE_32 : CS_MODE_64, &handle) != CS_ERR_OK)
+		return false;
+	auto bytes = (const uint8_t*)code.data();
+	auto size = code.size();
+	cs_insn inst{};
+	CStringA text;
+	while (cs_disasm_iter(handle, &bytes, &size, &address, &inst)) {
+		text += PEStrings::FormatInstruction(inst) + L"\r\n";
+		if (_strcmpi(inst.mnemonic, "ret") == 0)
+			break;
+	}
+
+	m_Sci.SetText(text);
+	cs_close(&handle);
+	return true;
 }
 
 void CScintillaView::SetText(PCWSTR text) {

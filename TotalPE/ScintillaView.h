@@ -24,6 +24,8 @@ public:
 
 	CString GetTitle() const override;
 	CScintillaCtrl& GetCtrl();
+	
+	bool SetAsmCode(std::span<const std::byte> code, uint64_t address, bool is32Bit);
 
 	void SetText(PCWSTR text);
 	void SetText(PCSTR text);

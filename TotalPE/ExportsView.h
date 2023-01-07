@@ -3,6 +3,7 @@
 #include "ViewBase.h"
 #include <VirtualListView.h>
 #include "PEFile.h"
+#include "resource.h"
 
 class CExportsView :
 	public CViewBase<CExportsView>,
@@ -25,6 +26,7 @@ public:
 		CHAIN_MSG_MAP(CViewBase<CExportsView>)
 	ALT_MSG_MAP(1)
 		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnCopy)
+		COMMAND_ID_HANDLER(ID_VIEW_DISASSEMBLE, OnDissassemble)
 	END_MSG_MAP()
 
 private:
@@ -49,6 +51,7 @@ private:
 	LRESULT OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnCopy(WORD, WORD, HWND, BOOL&) const;
 	LRESULT OnFind(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
+	LRESULT OnDissassemble(WORD, WORD, HWND, BOOL&) const;
 
 	CListViewCtrl m_List;
 	std::vector<Export> m_Exports;

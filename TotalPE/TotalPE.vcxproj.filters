@@ -399,6 +399,9 @@
     <Image Include="res\union.ico">
       <Filter>Resource Files\Icons</Filter>
     </Image>
+    <Image Include="res\Binary.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

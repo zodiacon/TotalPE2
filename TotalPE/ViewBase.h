@@ -6,10 +6,10 @@
 template<typename T, typename TBase = CWindow>
 class CViewBase abstract : 
 	public CFrameView<T, IMainFrame, TBase>, 
+	public IView,
 	public CAutoUpdateUI<T>,
 	public CIdleHandler,
-	public CMessageFilter,
-	public IView {
+	public CMessageFilter {
 public:
 	using BaseFrame = CFrameView<T, IMainFrame, TBase>;
 	explicit CViewBase(IMainFrame* frame) : BaseFrame(frame) {}
@@ -18,6 +18,22 @@ public:
 		auto p = static_cast<T*>(this);
 		p->UIUpdateToolBar();
 		return FALSE;
+	}
+
+	HTREEITEM GetHTreeItem() const override {
+		return m_hItem;
+	}
+
+	void SetHTreeItem(HTREEITEM hItem) override {
+		m_hItem = hItem;
+	}
+
+	bool DeleteFromTree() const override {
+		return m_DeleteFromTree;
+	}
+
+	void SetDeleteFromTree(bool del) {
+		m_DeleteFromTree = del;
 	}
 
 	BOOL PreTranslateMessage(MSG* pMsg) {
@@ -60,6 +76,8 @@ public:
 			_Module.GetMessageLoop()->RemoveIdleHandler(this);
 			_Module.GetMessageLoop()->RemoveMessageFilter(this);
 		}
+		if (m_DeleteFromTree)
+			this->Frame()->DeleteTreeItem(GetHTreeItem());
 		bHandled = FALSE;
 		return 0;
 	}
@@ -75,5 +93,7 @@ public:
 	void Activate(bool) {}
 	void UpdateUI(bool = false) {}
 
-	bool m_Handlers{ false };
+	HTREEITEM m_hItem{ nullptr };
+	bool m_Handlers : 1 { false };
+	bool m_DeleteFromTree : 1 { false};
 };

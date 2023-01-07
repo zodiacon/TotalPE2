@@ -79,6 +79,8 @@ BEGIN
         MENUITEM "Find &Next\tF3",              ID_EDIT_FIND_NEXT
         MENUITEM "Find &Previous\tShift+F3",    ID_EDIT_FIND_PREVIOUS
         MENUITEM SEPARATOR
+        MENUITEM "&Disassemble...",             ID_VIEW_DISASSEMBLE
+        MENUITEM SEPARATOR
         MENUITEM "&Status Bar",                 ID_VIEW_STATUS_BAR
     END
     POPUP "&PE"
@@ -257,6 +259,8 @@ IDI_BITFIELD            ICON                    "res\\bitfield.ico"
 IDI_FIELD               ICON                    "res\\field.ico"
 
 IDI_UNION               ICON                    "res\\union.ico"
+
+IDI_BINARY              ICON                    "res\\Binary.ico"
 
 
 /////////////////////////////////////////////////////////////////////////////

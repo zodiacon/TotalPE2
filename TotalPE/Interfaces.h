@@ -5,7 +5,7 @@
 
 constexpr uint32_t ItemShift = 8;
 
-enum class TreeItemType : uint32_t {
+enum class TreeItemType : int64_t {
 	None = 0,
 	Image,
 	Directories,
@@ -34,6 +34,7 @@ enum class TreeItemType : uint32_t {
 	Symbols,
 	Language,
 	Resource,
+	Disassembly,
 
 	ItemMask = 255,
 };
@@ -57,10 +58,14 @@ struct IMainFrame abstract {
 	virtual int GetResourceIconIndex(WORD resType) const = 0;
 	virtual DiaSymbol GetSymbolForName(PCWSTR mod, PCWSTR name) const = 0;
 	virtual bool AddToolBar(HWND tb) = 0;
-	virtual bool RemoveToolBar(HWND hWndToolBar) = 0;
+	virtual bool DeleteTreeItem(HTREEITEM hItem) = 0;
+	virtual bool CreateAssemblyView(std::span<const std::byte> code, uint64_t address, uint32_t rva, PCWSTR title, TreeItemType parent) = 0;
 };
 
 struct IView abstract {
 	virtual CString GetTitle() const = 0;
 	virtual HWND GetHwnd() const = 0;
+	virtual void SetHTreeItem(HTREEITEM hItem) = 0;
+	virtual HTREEITEM GetHTreeItem() const = 0;
+	virtual bool DeleteFromTree() const = 0;
 };

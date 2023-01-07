@@ -61,6 +61,7 @@ void CExportsView::UpdateUI(bool first) const {
 	auto& ui = Frame()->GetUI();
 	int selected = m_List.GetSelectedCount();
 	ui.UIEnable(ID_EDIT_COPY, selected > 0);
+	ui.UIEnable(ID_VIEW_DISASSEMBLE, selected == 1);
 	if(first)
 		Frame()->SetStatusText(1, std::format(L"Exports: {}", m_Exports.size()).c_str());
 }
@@ -112,7 +113,8 @@ LRESULT CExportsView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 }
 
 LRESULT CExportsView::OnCopy(WORD, WORD, HWND, BOOL&) const {
-    return LRESULT();
+	ClipboardHelper::CopyText(m_hWnd, ListViewHelper::GetSelectedRowsAsString(m_List, L","));
+	return 0;
 }
 
 LRESULT CExportsView::OnFind(UINT, WPARAM, LPARAM, BOOL&) {
@@ -126,6 +128,29 @@ LRESULT CExportsView::OnFind(UINT, WPARAM, LPARAM, BOOL&) {
 	else {
 		AtlMessageBox(m_hWnd, L"Finished searching list.", IDR_MAINFRAME, MB_ICONINFORMATION);
 	}
+	return 0;
+}
+
+LRESULT CExportsView::OnDissassemble(WORD, WORD, HWND, BOOL&) const {
+	ATLASSERT(m_List.GetSelectedCount() == 1);
+	auto& exp = m_Exports[m_List.GetNextItem(-1, LVNI_SELECTED)];
+
+	uint32_t bias;
+	auto offset = m_PE->GetOffsetFromRVA(exp.FuncRVA);
+	uint32_t size = 0x1000;
+	if (size + offset > m_PE.GetFileSize())
+		size = m_PE.GetFileSize() - offset;
+	auto code = m_PE.Map<const std::byte>(offset, size, bias);
+	if (!code) {
+		AtlMessageBox(m_hWnd, L"Failed to retrieve code", IDR_MAINFRAME, MB_ICONERROR);
+		return 0;
+	}
+
+	auto start = code.get() + bias;
+	ULONGLONG imageBase = m_PE->GetFileInfo()->IsPE64 ? m_PE->GetNTHeader()->NTHdr64.OptionalHeader.ImageBase : m_PE->GetNTHeader()->NTHdr32.OptionalHeader.ImageBase;
+	Frame()->CreateAssemblyView(std::span<const std::byte>(start, size), offset + imageBase, exp.FuncRVA,
+		(exp.Name + L" (Export)").c_str(), TreeItemType::DirectoryExports);
+
 	return 0;
 }
 

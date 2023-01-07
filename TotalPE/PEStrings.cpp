@@ -2,7 +2,7 @@
 #include "PEStrings.h"
 #include <atltime.h>
 #include <DbgHelp.h>
-//#include "External/Capstone/capstone.h"
+#include "..\External\Capstone\capstone.h"
 
 #pragma comment(lib, "dbghelp")
 
@@ -190,11 +190,11 @@ std::wstring PEStrings::ResourceTypeToString(WORD id) {
 	return id >= _countof(types) ? L"" : types[id];
 }
 
-//std::wstring PEStrings::FormatInstruction(const cs_insn& inst) {
-//	std::wstringA text;
-//	text.Format("%llX %-10s %s", inst.address, inst.mnemonic, inst.op_str);
-//	return std::wstring(text);
-//}
+CStringA PEStrings::FormatInstruction(const cs_insn& inst) {
+	CStringA text;
+	text.Format("%llX %-10s %s", inst.address, inst.mnemonic, inst.op_str);
+	return text;
+}
 
 std::wstring PEStrings::ManagedTypeAttributesToString(CorTypeAttr attr) {
 	static PCWSTR visiblity[] = {

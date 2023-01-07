@@ -80,6 +80,8 @@ private:
 	int GetResourceIconIndex(WORD resType) const override;
 	DiaSymbol GetSymbolForName(PCWSTR mod, PCWSTR name) const override;
 	bool AddToolBar(HWND tb) override;
+	bool DeleteTreeItem(HTREEITEM hItem) override;
+	bool CreateAssemblyView(std::span<const std::byte> code, uint64_t address, uint32_t rva, PCWSTR title, TreeItemType parent) override;
 
 	std::pair<IView*, CMessageMap*> CreateView(TreeItemType type);
 	std::pair<IView*, CMessageMap*> CreateResourceView(TreeItemType type);
@@ -97,8 +99,6 @@ private:
 	static int ResourceTypeToIcon(WORD resType);
 	static int DirectoryIndexToIcon(int index);
 	static TreeItemType GetIndex(TreeItemType value);
-
-	bool RemoveToolBar(HWND hWndToolBar);
 
 	// Handler prototypes (uncomment arguments if needed):
 	//	LRESULT MessageHandler(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)
@@ -140,7 +140,7 @@ private:
 	PEFile m_PE;
 	std::vector<FlatResource> m_FlatResources;
 	CImageList m_TreeImages;
-	std::unordered_map<TreeItemType, HWND> m_Views;
+	std::unordered_map<TreeItemType, IView*> m_Views;
 	std::unordered_map<HWND, TreeItemType> m_Views2;
 	HTREEITEM m_hRoot;
 	CFindReplaceDialog* m_pFindDlg{ nullptr };
