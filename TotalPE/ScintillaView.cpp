@@ -10,7 +10,7 @@
 #include "PEStrings.h"
 
 extern Lexilla::LexerModule lmXML;
-extern Lexilla::LexerModule lmAs;
+extern Lexilla::LexerModule lmAsm;
 
 CScintillaView::CScintillaView(IMainFrame* frame, PCWSTR title) : CViewBase(frame), m_Title(title) {
 }
@@ -53,7 +53,7 @@ void CScintillaView::SetText(PCSTR text) {
 void CScintillaView::SetLanguage(LexLanguage lang) {
 	switch (lang) {
 		case LexLanguage::Asm:
-			m_Sci.SetLexer(lmAs.Create());
+			m_Sci.SetLexer(lmAsm.Create());
 			break;
 
 		case LexLanguage::Xml:

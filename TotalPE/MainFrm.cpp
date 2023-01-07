@@ -45,8 +45,7 @@ BOOL CMainFrame::OnIdle() {
 }
 
 void CMainFrame::OnFinalMessage(HWND) {
-	if (s_Frames != 0)
-		delete this;
+	delete this;
 }
 
 bool CMainFrame::OnTreeDoubleClick(HWND, HTREEITEM hItem) {

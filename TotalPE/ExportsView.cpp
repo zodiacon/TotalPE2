@@ -57,11 +57,17 @@ int CExportsView::GetSaveColumnRange(HWND, int&) const {
 	return 1;
 }
 
+bool CExportsView::OnRightClickList(HWND, int row, int col, POINT const& pt) {
+	CMenu menu;
+	menu.LoadMenu(IDR_CONTEXT);
+	return Frame()->TrackPopupMenu(menu.GetSubMenu(3), 0, pt.x, pt.y);
+}
+
 void CExportsView::UpdateUI(bool first) const {
 	auto& ui = Frame()->GetUI();
 	int selected = m_List.GetSelectedCount();
 	ui.UIEnable(ID_EDIT_COPY, selected > 0);
-	ui.UIEnable(ID_VIEW_DISASSEMBLE, selected == 1);
+	ui.UIEnable(ID_VIEW_DISASSEMBLE, selected == 1 && m_Exports[m_List.GetNextItem(-1, LVNI_SELECTED)].ForwarderName.empty());
 	if(first)
 		Frame()->SetStatusText(1, std::format(L"Exports: {}", m_Exports.size()).c_str());
 }
@@ -149,7 +155,7 @@ LRESULT CExportsView::OnDissassemble(WORD, WORD, HWND, BOOL&) const {
 	auto start = code.get() + bias;
 	ULONGLONG imageBase = m_PE->GetFileInfo()->IsPE64 ? m_PE->GetNTHeader()->NTHdr64.OptionalHeader.ImageBase : m_PE->GetNTHeader()->NTHdr32.OptionalHeader.ImageBase;
 	Frame()->CreateAssemblyView(std::span<const std::byte>(start, size), offset + imageBase, exp.FuncRVA,
-		(exp.Name + L" (Export)").c_str(), TreeItemType::DirectoryExports);
+		exp.Name.c_str(), TreeItemType::DirectoryExports);
 
 	return 0;
 }

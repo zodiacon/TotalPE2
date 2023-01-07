@@ -134,6 +134,12 @@ BEGIN
     BEGIN
         MENUITEM "&Export...",                  ID_ICON_EXPORT
     END
+    POPUP "export"
+    BEGIN
+        MENUITEM "&Disassemble...",             ID_VIEW_DISASSEMBLE
+        MENUITEM SEPARATOR
+        MENUITEM "&Copy\tCtrl+C",               ID_EDIT_COPY
+    END
 END
 
 

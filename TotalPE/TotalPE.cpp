@@ -25,13 +25,13 @@ int Run(LPTSTR /*lpstrCmdLine*/ = nullptr, int nCmdShow = SW_SHOWDEFAULT) {
 	CMessageLoop theLoop;
 	_Module.AddMessageLoop(&theLoop);
 
-	CMainFrame wndMain;
-	if (wndMain.CreateEx() == nullptr) {
+	auto wndMain = new CMainFrame ;
+	if (wndMain->CreateEx() == nullptr) {
 		ATLTRACE(_T("Main window creation failed!\n"));
 		return 0;
 	}
 
-	wndMain.ShowWindow(nCmdShow);
+	wndMain->ShowWindow(nCmdShow);
 
 	int nRet = theLoop.Run();
 

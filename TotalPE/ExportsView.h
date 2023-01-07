@@ -16,6 +16,7 @@ public:
 	void OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD newState);
 	int GetRowImage(HWND, int row, int) const;
 	int GetSaveColumnRange(HWND, int&) const;
+	bool OnRightClickList(HWND, int row, int col, POINT const& pt);
 
 	void UpdateUI(bool first = false) const;
 
