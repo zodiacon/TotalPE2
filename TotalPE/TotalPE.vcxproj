@@ -89,7 +89,7 @@
       <PreprocessorDefinitions>_WINDOWS;STRICT;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\WTLHelper;..\PECore;..\HexControl;..\DiaHelper</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\WTLHelper;..\PECore;..\HexControl;..\DiaHelper;..\Scintilla\Include;..\Lexilla\lexers;..\Lexilla\Include;..\Lexilla\lexlib</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -122,7 +122,7 @@
       <PreprocessorDefinitions>WIN32;_WINDOWS;STRICT;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\WTLHelper;..\PECore;..\HexControl;..\DiaHelper</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\WTLHelper;..\PECore;..\HexControl;..\DiaHelper;..\Scintilla\Include;..\Lexilla\lexers;..\Lexilla\Include;..\Lexilla\lexlib</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -155,7 +155,7 @@
       <PreprocessorDefinitions>WIN32;_WINDOWS;STRICT;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\WTLHelper;..\PECore;..\HexControl;..\DiaHelper</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\WTLHelper;..\PECore;..\HexControl;..\DiaHelper;..\Scintilla\Include;..\Lexilla\lexers;..\Lexilla\Include;..\Lexilla\lexlib</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -187,7 +187,7 @@
       <PreprocessorDefinitions>_WINDOWS;STRICT;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\WTLHelper;..\PECore;..\HexControl;..\DiaHelper</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\WTLHelper;..\PECore;..\HexControl;..\DiaHelper;..\Scintilla\Include;..\Lexilla\lexers;..\Lexilla\Include;..\Lexilla\lexlib</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -232,6 +232,7 @@
     <ClCompile Include="PEStrings.cpp" />
     <ClCompile Include="RecentFilesManager.cpp" />
     <ClCompile Include="ResourcesView.cpp" />
+    <ClCompile Include="ScintillaView.cpp" />
     <ClCompile Include="SectionsView.cpp" />
     <ClCompile Include="SecurityHelper.cpp" />
     <ClCompile Include="SecurityView.cpp" />
@@ -263,6 +264,8 @@
     <ClInclude Include="resource.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="ResourcesView.h" />
+    <ClInclude Include="ScintillaCtrl.h" />
+    <ClInclude Include="ScintillaView.h" />
     <ClInclude Include="SectionsView.h" />
     <ClInclude Include="SecurityHelper.h" />
     <ClInclude Include="PEImageView.h" />
@@ -349,8 +352,14 @@
     <ProjectReference Include="..\HexControl\HexControl.vcxproj">
       <Project>{ef5c2f6b-5fcd-446c-be8d-1485407cd65a}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\lexilla\src\Lexilla.vcxproj">
+      <Project>{e541c9be-13bc-4ce6-a0a4-31145f51a2c1}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\PECore\PECore.vcxproj">
       <Project>{03a66844-1884-41c0-899d-f01c8a601c8e}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\scintilla\win32\Scintilla.vcxproj">
+      <Project>{19cca8b8-46b9-4609-b7ce-198da19f07bd}</Project>
     </ProjectReference>
     <ProjectReference Include="..\WTLHelper\WTLHelper.vcxproj">
       <Project>{ae53419f-a769-4548-8e15-e311904df7df}</Project>

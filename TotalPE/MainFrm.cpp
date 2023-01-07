@@ -27,6 +27,7 @@
 #include "DebugView.h"
 #include "BitmapView.h"
 #include "SecurityView.h"
+#include "ScintillaView.h"
 
 BOOL CMainFrame::PreTranslateMessage(MSG* pMsg) {
 	if (m_pFindDlg && m_pFindDlg->IsDialogMessageW(pMsg))
@@ -44,7 +45,7 @@ BOOL CMainFrame::OnIdle() {
 }
 
 void CMainFrame::OnFinalMessage(HWND) {
-	if (s_Frames != 1)
+	if (s_Frames != 0)
 		delete this;
 }
 
@@ -773,11 +774,13 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateResourceView(TreeItemType type
 		return { view, view };
 	}
 	else if (resId == RT_MANIFEST) {
-		auto view = new CTextView(this, (res.Name + L" (Manifest)").c_str());
+		auto view = new CScintillaView(this, (res.Name + L" (Manifest)").c_str());
 		if (!view->DoCreate(m_Tabs))
 			return {};
 
-		view->SetXmlText(CString((PCSTR)res.Data.data(), (int)res.Data.size()));
+		view->SetLanguage(LexLanguage::Xml);
+		view->SetText(CStringA((PCSTR)res.Data.data(), (int)res.Data.size()));
+		view->GetCtrl().SetReadOnly(true);
 		return { view, view };
 	}
 	else if (resId == RT_STRING || resId == RT_MESSAGETABLE) {

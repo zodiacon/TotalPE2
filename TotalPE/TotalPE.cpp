@@ -11,6 +11,10 @@
 CAppModule _Module;
 AppSettings g_Settings;
 
+extern "C" int Scintilla_RegisterClasses(void* hInstance);
+
+#pragma comment(lib, "imm32")
+
 int Run(LPTSTR /*lpstrCmdLine*/ = nullptr, int nCmdShow = SW_SHOWDEFAULT) {
 	CMessageLoop theLoop;
 	_Module.AddMessageLoop(&theLoop);
@@ -39,6 +43,9 @@ int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPTSTR lp
 	ATLASSERT(SUCCEEDED(hRes));
 
 	Helpers::ExtractModules();
+
+	Scintilla_RegisterClasses(hInstance);
+
 	ThemeHelper::Init();
 
 	int nRet = Run(lpstrCmdLine, nCmdShow);

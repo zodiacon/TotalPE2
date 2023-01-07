@@ -3,15 +3,15 @@
 #include <FrameView.h>
 #include "Interfaces.h"
 
-template<typename T>
+template<typename T, typename TBase = CWindow>
 class CViewBase abstract : 
-	public CFrameView<T, IMainFrame>, 
+	public CFrameView<T, IMainFrame, TBase>, 
 	public CAutoUpdateUI<T>,
 	public CIdleHandler,
 	public CMessageFilter,
 	public IView {
 public:
-	using BaseFrame = CFrameView<T, IMainFrame>;
+	using BaseFrame = CFrameView<T, IMainFrame, TBase>;
 	explicit CViewBase(IMainFrame* frame) : BaseFrame(frame) {}
 
 	BOOL OnIdle() override {
@@ -21,7 +21,7 @@ public:
 	}
 
 	BOOL PreTranslateMessage(MSG* pMsg) {
-		if (CFrameView<T, IMainFrame>::PreTranslateMessage(pMsg))
+		if (BaseFrame::PreTranslateMessage(pMsg))
 			return TRUE;
 
 		return FALSE;

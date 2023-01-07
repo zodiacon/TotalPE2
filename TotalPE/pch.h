@@ -12,6 +12,7 @@
 #define _RICHEDIT_VER	0x0500
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
+#define _DISABLE_VECTOR_ANNOTATION
 
 #include <atlbase.h>
 #include <atlstr.h>
