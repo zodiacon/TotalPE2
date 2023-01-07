@@ -83,14 +83,14 @@ BEGIN
     END
     POPUP "&PE"
     BEGIN
-        MENUITEM "&Exports",                    32782
-        MENUITEM "&Imports",                    32783
-        MENUITEM "&Sections",                   32784
-        MENUITEM "&Directories",                32785
-        MENUITEM "&Resources",                  32786
-        MENUITEM "&Manifest",                   32787
-        MENUITEM "&Version",                    32788
-        MENUITEM "&Debug",                      32789
+        MENUITEM "&Exports",                    ID_VIEW_EXPORTS
+        MENUITEM "&Imports",                    ID_VIEW_IMPORTS
+        MENUITEM "&Sections",                   ID_VIEW_SECTIONS
+        MENUITEM "&Directories",                ID_VIEW_DIRECTORIES
+        MENUITEM "&Resources",                  ID_VIEW_RESOURCES
+        MENUITEM "&Manifest",                   ID_VIEW_MANIFEST
+        MENUITEM "&Version",                    ID_VIEW_VERSION
+        MENUITEM "&Debug",                      ID_VIEW_DEBUG
         MENUITEM "Security",                    ID_PE_SECURITY
     END
     POPUP "&Options"
@@ -99,17 +99,12 @@ BEGIN
         MENUITEM "&Dark Mode",                  ID_OPTIONS_DARKMODE
         MENUITEM "&Font...",                    ID_OPTIONS_FONT
         MENUITEM "&Symbols...",                 ID_OPTIONS_SYMBOLS
-        POPUP "&Tree Icon Size"
-        BEGIN
-            MENUITEM "&Small",                      32790
-            MENUITEM "&Medium",                     32791
-            MENUITEM "&Large",                      32792
-        END
     END
     POPUP "&Window"
     BEGIN
         MENUITEM "&Close\tCtrl+F4",             ID_WINDOW_CLOSE
         MENUITEM "Close &All",                  ID_WINDOW_CLOSE_ALL
+        MENUITEM "&New Window\tCtrl+N",         ID_FILE_NEW
     END
     POPUP "&Help"
     BEGIN
@@ -251,6 +246,18 @@ IDI_NUM4                ICON                    "res\\number-4.ico"
 
 IDI_NUM8                ICON                    "res\\number-8.ico"
 
+IDI_ENUM                ICON                    "res\\enum.ico"
+
+IDI_SYMBOLS             ICON                    "res\\symbols.ico"
+
+IDI_ARRAY               ICON                    "res\\array.ico"
+
+IDI_BITFIELD            ICON                    "res\\bitfield.ico"
+
+IDI_FIELD               ICON                    "res\\field.ico"
+
+IDI_UNION               ICON                    "res\\union.ico"
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -387,7 +394,7 @@ END
 
 STRINGTABLE
 BEGIN
-    ID_FILE_NEW             "Create a new document\nNew"
+    ID_FILE_NEW             "Create a new windowt\nNew Window"
     ID_FILE_OPEN            "Open an existing document\nOpen"
     ID_FILE_CLOSE           "Close the active document\nClose"
     ID_FILE_SAVE            "Save the active document\nSave"
@@ -466,6 +473,26 @@ END
 STRINGTABLE
 BEGIN
     ATL_IDS_MRU_FILE        "Open this document"
+END
+
+STRINGTABLE
+BEGIN
+    ID_FILE_RUNASADMINISTRATOR 
+                            "Relaunch application with elevated permissions"
+    ID_OPTIONS_ALWAYSONTOP  "\nAlways On Top"
+    ID_VIEW_EXPORTS         "\nExports"
+    ID_VIEW_IMPORTS         "\nImports"
+END
+
+STRINGTABLE
+BEGIN
+    ID_VIEW_SECTIONS        "\nSections"
+    ID_VIEW_DIRECTORIES     "\nDirectories"
+    ID_VIEW_RESOURCES       "\nResources"
+    ID_VIEW_MANIFEST        "\nManifest"
+    ID_VIEW_VERSION         "\nVersion"
+    ID_VIEW_DEBUG           "\nDebug"
+    ID_PE_SECURITY          "\nSecurity"
 END
 
 #endif    // English (United States) resources

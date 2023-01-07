@@ -25,6 +25,7 @@ public:
 
 	BOOL PreTranslateMessage(MSG* pMsg) override;
 	BOOL OnIdle() override;
+	void OnFinalMessage(HWND) override;
 
 	bool OnTreeDoubleClick(HWND tree, HTREEITEM hItem);
 
@@ -41,6 +42,16 @@ public:
 		COMMAND_ID_HANDLER(ID_FILE_OPEN, OnFileOpen)
 		COMMAND_RANGE_HANDLER(ID_WINDOW_TABFIRST, ID_WINDOW_TABLAST, OnWindowActivate)
 		COMMAND_ID_HANDLER(ID_FILE_CLOSE, OnFileClose)
+		COMMAND_ID_HANDLER(ID_VIEW_EXPORTS, OnViewExports)
+		COMMAND_ID_HANDLER(ID_VIEW_IMPORTS, OnViewImports)
+		COMMAND_ID_HANDLER(ID_VIEW_RESOURCES, OnViewResources)
+		COMMAND_ID_HANDLER(ID_VIEW_DEBUG, OnViewDebug)
+		COMMAND_ID_HANDLER(ID_VIEW_MANIFEST, OnViewManifest)
+		COMMAND_ID_HANDLER(ID_VIEW_VERSION, OnViewVersion)
+		COMMAND_ID_HANDLER(ID_PE_SECURITY, OnViewSecurity)
+		COMMAND_ID_HANDLER(ID_VIEW_SECTIONS, OnViewSections)
+		COMMAND_ID_HANDLER(ID_VIEW_DIRECTORIES, OnViewDataDirs)
+		COMMAND_ID_HANDLER(ID_FILE_NEW, OnNewWindow)
 		MESSAGE_HANDLER(WM_SHOWWINDOW, OnShowWindow)
 		MESSAGE_HANDLER(WM_MENUSELECT, OnMenuSelect)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
@@ -73,6 +84,7 @@ private:
 	std::pair<IView*, CMessageMap*> CreateView(TreeItemType type);
 	std::pair<IView*, CMessageMap*> CreateResourceView(TreeItemType type);
 	bool ShowView(HTREEITEM hItem);
+	bool ShowView(TreeItemType type, HTREEITEM hItem = nullptr, UINT icon = 0);
 	void UpdateRecentFilesMenu();
 	void UpdateUI();
 	void InitMenu(HMENU hMenu);
@@ -98,11 +110,11 @@ private:
 	LRESULT OnShowWindow(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnMenuSelect(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/) const;
 	LRESULT OnFileExit(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
-	LRESULT OnFileNew(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewStatusBar(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
-	LRESULT OnAppAbout(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnAppAbout(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) const;
 	LRESULT OnWindowClose(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnWindowCloseAll(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnNewWindow(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnWindowActivate(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnRunAsAdmin(WORD, WORD, HWND, BOOL&);
 	LRESULT OnDropFiles(UINT /*uMsg*/, WPARAM wParam, LPARAM /*lParam*/, BOOL& /*bHandled*/);
@@ -111,6 +123,15 @@ private:
 	LRESULT OnEditFind(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnFind(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnRecentFile(WORD, WORD, HWND, BOOL&);
+	LRESULT OnViewExports(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnViewImports(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnViewResources(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnViewDebug(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnViewSecurity(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnViewSections(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnViewDataDirs(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnViewManifest(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnViewVersion(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 
 	CCustomTabView m_Tabs;
 	CCustomSplitterWindow m_Splitter;
@@ -126,7 +147,7 @@ private:
 	CString m_SearchText;
 	DiaSession m_Symbols;
 	RecentFilesManager m_RecentFiles;
-	bool m_HasManifest : 1, m_HasVersion : 1;
+	HTREEITEM m_hResVersion, m_hResManifest;
 	inline static std::unordered_map<UINT, int> s_ImageIndices;
 	inline static int s_Frames{ 0 };
 };

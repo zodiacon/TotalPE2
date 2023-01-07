@@ -21,7 +21,7 @@ void CStructView::ShowObject(PVOID address) {
     m_TL.GetTreeControl().DeleteAllItems();
     auto hRoot = m_TL.GetTreeControl().InsertItem(m_Object.Name().c_str(), 0, 0, TVI_ROOT, TVI_LAST);
     m_TL.SetSubItemState(hRoot, 0, TLVIS_BOLD, TLVIS_BOLD);
-    Helpers::FillTreeListView(m_TL, hRoot, m_Object, Frame()->GetSymbols(), address);
+    Helpers::FillTreeListView(Frame(), m_TL, hRoot, m_Object, Frame()->GetSymbols(), address);
     m_TL.GetTreeControl().Expand(hRoot, TVE_EXPAND);
     m_HexView.SetData(address, (uint32_t)m_Object.Length());
 }
@@ -33,6 +33,8 @@ LRESULT CStructView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
     m_TL.Create(m_Splitter, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN |
         TVS_HASBUTTONS | TVS_LINESATROOT | TVS_HASLINES | TVS_SHOWSELALWAYS);
     m_TL.GetTreeControl().SetExtendedStyle(TVS_EX_DOUBLEBUFFER, TVS_EX_DOUBLEBUFFER);
+    m_TL.GetTreeControl().SetImageList(Frame()->GetImageList());
+
     m_TL.AddColumn(L"Member", 250, HDF_LEFT);
     m_TL.AddColumn(L"Offset", 60, HDF_CENTER);
     m_TL.AddColumn(L"Type", 180, HDF_LEFT);

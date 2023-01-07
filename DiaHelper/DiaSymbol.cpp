@@ -108,12 +108,6 @@ DiaSymbol DiaSymbol::ArrayIndexType() const {
 	return DiaSymbol(sym);
 }
 
-DiaSymbol DiaSymbol::BaseType() const {
-	CComPtr<IDiaSymbol> spSym;
-	m_spSym->get_baseSymbol(&spSym);
-	return DiaSymbol(spSym);
-}
-
 DiaSymbol DiaSymbol::BaseSymbol() const {
 	CComPtr<IDiaSymbol> spSym;
 	m_spSym->get_baseSymbol(&spSym);

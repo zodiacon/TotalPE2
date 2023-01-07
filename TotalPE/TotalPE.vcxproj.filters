@@ -372,6 +372,24 @@
     <Image Include="res\number-8.ico">
       <Filter>Resource Files\Icons</Filter>
     </Image>
+    <Image Include="res\symbols.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\enum.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\array.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\bitfield.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\field.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\union.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

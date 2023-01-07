@@ -43,6 +43,11 @@ BOOL CMainFrame::OnIdle() {
 	return FALSE;
 }
 
+void CMainFrame::OnFinalMessage(HWND) {
+	if (s_Frames != 1)
+		delete this;
+}
+
 bool CMainFrame::OnTreeDoubleClick(HWND, HTREEITEM hItem) {
 	return ShowView(hItem);
 }
@@ -58,8 +63,8 @@ void CMainFrame::UpdateUI() {
 	UIEnable(ID_PE_SECURITY, fi && fi->HasSecurity);
 	UIEnable(ID_FILE_CLOSE, fi != nullptr);
 	UIEnable(ID_FILE_SAVE, fi != nullptr);
-	UIEnable(ID_VIEW_MANIFEST, fi && m_HasManifest);
-	UIEnable(ID_VIEW_VERSION, fi && m_HasVersion);
+	UIEnable(ID_VIEW_MANIFEST, fi && m_hResManifest != nullptr);
+	UIEnable(ID_VIEW_VERSION, fi && m_hResVersion != nullptr);
 	UIEnable(ID_FILE_OPENINANEWWINDOW, fi != nullptr);
 	UIEnable(ID_EDIT_COPY, FALSE);
 	UIEnable(ID_EDIT_FIND, fi && m_Tabs.GetActivePage() >= 0);
@@ -87,6 +92,7 @@ void CMainFrame::InitMenu(HMENU hMenu) {
 		{ ID_VIEW_IMPORTS, IDI_IMPORTS },
 		{ ID_VIEW_MANIFEST, IDI_MANIFEST },
 		{ ID_VIEW_VERSION, IDI_VERSION },
+		{ ID_PE_SECURITY, IDI_SECURITY },
 		{ ID_VIEW_DEBUG, IDI_DEBUG },
 		{ ID_EDIT_FIND, IDI_FIND },
 		{ ID_EDIT_FIND_PREVIOUS, IDI_FIND_PREV },
@@ -152,10 +158,10 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 	if (s_Frames == 1) {
 		//InitDarkTheme();
 		if (settings.LoadFromKey(L"SOFTWARE\\ScorpioSoftware\\TotalPE")) {
-			m_RecentFiles.Set(settings.RecentFiles());
-			UpdateRecentFilesMenu();
 		}
 	}
+	m_RecentFiles.Set(settings.RecentFiles());
+	UpdateRecentFilesMenu();
 
 	CreateSimpleStatusBar();
 	m_StatusBar.SubclassWindow(m_hWndStatusBar);
@@ -175,6 +181,7 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 		{ ID_VIEW_MANIFEST, IDI_MANIFEST },
 		{ ID_VIEW_VERSION, IDI_VERSION },
 		{ ID_VIEW_DEBUG, IDI_DEBUG},
+		{ ID_PE_SECURITY, IDI_SECURITY },
 		{ 0 },
 		{ ID_EDIT_FIND, IDI_FIND},
 	};
@@ -224,6 +231,39 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 	return 0;
 }
 
+bool CMainFrame::ShowView(TreeItemType data, HTREEITEM hItem, UINT icon) {
+	if (hItem) {
+		m_Tree.EnsureVisible(hItem);
+		m_Tree.SelectItem(hItem);
+	}
+	if (auto it = m_Views.find(data); it != m_Views.end()) {
+		int count = m_Tabs.GetPageCount();
+		for (int i = 0; i < count; i++) {
+			if (m_Tabs.GetPageHWND(i) == it->second) {
+				m_Tabs.SetActivePage(i);
+				return true;
+			}
+		}
+	}
+	else {
+		auto [view, map] = CreateView(data);
+		int image;
+		if (view) {
+			if (icon)
+				image = GetIconIndex(icon);
+			else {
+				int dummy;
+				m_Tree.GetItemImage(hItem, image, dummy);
+			}
+			m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, map);
+			m_Views.insert({ data, view->GetHwnd() });
+			m_Views2.insert({ view->GetHwnd(), data });
+			return true;
+		}
+	}
+	return false;
+}
+
 LRESULT CMainFrame::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& bHandled) {
 	if (--s_Frames == 0) {
 		WINDOWPLACEMENT wp{ sizeof(wp) };
@@ -246,7 +286,6 @@ LRESULT CMainFrame::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*
 	pLoop->RemoveMessageFilter(this);
 	pLoop->RemoveIdleHandler(this);
 
-	bHandled = FALSE;
 	return 1;
 }
 
@@ -403,27 +442,7 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 
 bool CMainFrame::ShowView(HTREEITEM hItem) {
 	auto data = GetItemData<TreeItemType>(m_Tree, hItem);
-	if (auto it = m_Views.find(data); it != m_Views.end()) {
-		int count = m_Tabs.GetPageCount();
-		for (int i = 0; i < count; i++) {
-			if (m_Tabs.GetPageHWND(i) == it->second) {
-				m_Tabs.SetActivePage(i);
-				return true;
-			}
-		}
-	}
-	else {
-		auto [view, map] = CreateView(data);
-		if (view) {
-			int image, dummy;
-			m_Tree.GetItemImage(hItem, image, dummy);
-			m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, map);
-			m_Views.insert({ data, view->GetHwnd() });
-			m_Views2.insert({ view->GetHwnd(), data });
-			return true;
-		}
-	}
-	return false;
+	return ShowView(data, hItem);
 }
 
 LRESULT CMainFrame::OnFileExit(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
@@ -443,9 +462,16 @@ LRESULT CMainFrame::OnViewStatusBar(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*h
 	return 0;
 }
 
-LRESULT CMainFrame::OnAppAbout(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
+LRESULT CMainFrame::OnAppAbout(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) const {
 	CAboutDlg dlg;
 	dlg.DoModal();
+	return 0;
+}
+
+LRESULT CMainFrame::OnNewWindow(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
+	auto frame = new CMainFrame;
+	frame->CreateEx();
+	frame->ShowWindow(SW_SHOWDEFAULT);
 	return 0;
 }
 
@@ -639,17 +665,13 @@ void CMainFrame::BuildTree(int iconSize) {
 	std::unordered_map<std::wstring, HTREEITEM> typeItems;
 	auto fresources = libpe::Ilibpe::FlatResources(*m_PE->GetResources());
 	i = 0;
-	m_HasManifest = m_HasVersion = false;
+	m_hResVersion = m_hResManifest = nullptr;
 	m_FlatResources.clear();
 	m_FlatResources.reserve(fresources.size());
 	for (auto const& res : fresources) {
 		std::wstring type = res.TypeStr.empty() ? PEStrings::ResourceTypeToString(res.TypeID) : std::wstring(res.TypeStr);
 		if (type.empty())
 			type = std::format(L"#{}", res.TypeID);
-		if (res.TypeID == (WORD)(LONG_PTR)RT_MANIFEST)
-			m_HasManifest = true;
-		else if (res.TypeID == (WORD)(LONG_PTR)RT_VERSION)
-			m_HasVersion = true;
 		auto it = typeItems.find(type);
 		if (it == typeItems.end()) {
 			auto hItem = InsertTreeItem(m_Tree, type.c_str(), ResourceTypeToIcon(res.TypeID),
@@ -659,8 +681,15 @@ void CMainFrame::BuildTree(int iconSize) {
 		auto name = res.NameID == 0 ? res.NameStr.data() : (L"#" + std::to_wstring(res.NameID));
 		auto lang = res.LangStr.empty() ? PEStrings::LanguageToString(res.LangID) : std::wstring(res.LangStr);
 		FlatResource fres(res);
-		InsertTreeItem(m_Tree, std::format(L"{} ({})", name, lang).c_str(), ResourceTypeToIcon(res.TypeID),
+		auto hResItem = InsertTreeItem(m_Tree, std::format(L"{} ({})", name, lang).c_str(), ResourceTypeToIcon(res.TypeID),
 			TreeItemWithIndex(TreeItemType::Resource, (i + 1) << ItemShift), it->second, TVI_SORT);
+
+		auto resTypeId = MAKEINTRESOURCE(res.TypeID);
+		if (resTypeId == RT_MANIFEST && m_hResManifest == nullptr)
+			m_hResManifest = hResItem;
+		else if (resTypeId == RT_VERSION && m_hResVersion == nullptr)
+			m_hResVersion = hResItem;
+
 		fres.Name = std::move(name);
 		fres.Type = std::move(type);
 		fres.Language = std::move(lang);
@@ -668,6 +697,11 @@ void CMainFrame::BuildTree(int iconSize) {
 		i++;
 	}
 	m_Tree.Expand(resources, TVE_EXPAND);
+
+	if (m_Symbols) {
+		auto symbols = InsertTreeItem(m_Tree, L"Symbols", GetTreeIcon(IDI_SYMBOLS), TreeItemType::Symbols, root);
+	}
+
 	m_hRoot = root;
 
 	m_Tree.Expand(root, TVE_EXPAND);
@@ -823,7 +857,8 @@ void CMainFrame::BuildTreeImageList(int iconSize) {
 		IDI_MANIFEST, IDI_VERSION, IDI_TYPE, IDI_BITMAP, IDI_MESSAGE, IDI_TEXT,
 		IDI_KEYBOARD, IDI_FORM, IDI_EXCEPTION, IDI_DELAY_IMPORT, IDI_RELOC,
 		IDI_THREAD, IDI_RICH_HEADER, IDI_MSDOS, IDI_FILE_HEADER, IDI_COMPONENT,
-		IDI_FUNCTION, IDI_FUNC_FORWARD, IDI_INTERFACE, IDI_DLL_IMPORT, IDI_FUNCTION2,
+		IDI_FUNCTION, IDI_FUNC_FORWARD, IDI_INTERFACE, IDI_DLL_IMPORT, IDI_FUNCTION2, IDI_SYMBOLS,
+		IDI_TYPE, IDI_ENUM, IDI_BITFIELD, IDI_FIELD, IDI_ARRAY, IDI_UNION,
 	};
 
 	bool insert = s_ImageIndices.empty();
@@ -895,6 +930,51 @@ LRESULT CMainFrame::OnRecentFile(WORD, WORD id, HWND, BOOL&) {
 	auto& path = m_RecentFiles.Files()[id - ATL_IDS_MRU_FILE];
 	if (path != m_PE.GetPath())
 		OpenPE(path.c_str());
+	return 0;
+}
+
+LRESULT CMainFrame::OnViewExports(WORD, WORD, HWND, BOOL&) {
+	ShowView(TreeItemType::DirectoryExports, nullptr, IDI_EXPORTS);
+	return 0;
+}
+
+LRESULT CMainFrame::OnViewImports(WORD, WORD, HWND, BOOL&) {
+	ShowView(TreeItemType::DirectoryImports, nullptr, IDI_IMPORTS);
+	return 0;
+}
+
+LRESULT CMainFrame::OnViewVersion(WORD, WORD, HWND, BOOL&) {
+	ShowView(m_hResVersion);
+	return 0;
+}
+
+LRESULT CMainFrame::OnViewManifest(WORD, WORD, HWND, BOOL&) {
+	ShowView(m_hResManifest);
+	return 0;
+}
+
+LRESULT CMainFrame::OnViewResources(WORD, WORD, HWND, BOOL&) {
+	ShowView(TreeItemType::DirectoryResources, nullptr, IDI_RESOURCE);
+	return 0;
+}
+
+LRESULT CMainFrame::OnViewSections(WORD, WORD, HWND, BOOL&) {
+	ShowView(TreeItemType::Sections, nullptr, IDI_SECTIONS);
+	return 0;
+}
+
+LRESULT CMainFrame::OnViewDebug(WORD, WORD, HWND, BOOL&) {
+	ShowView(TreeItemType::DirectoryDebug, nullptr, IDI_DEBUG);
+	return 0;
+}
+
+LRESULT CMainFrame::OnViewSecurity(WORD, WORD, HWND, BOOL&) {
+	ShowView(TreeItemType::DirectorySecurity, nullptr, IDI_SECURITY);
+	return 0;
+}
+
+LRESULT CMainFrame::OnViewDataDirs(WORD, WORD, HWND, BOOL&) {
+	ShowView(TreeItemType::Directories, nullptr, IDI_DIRS);
 	return 0;
 }
 

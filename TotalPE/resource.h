@@ -60,6 +60,12 @@
 #define IDI_NUM2                        256
 #define IDI_NUM4                        257
 #define IDI_NUM8                        258
+#define IDI_ENUM                        259
+#define IDI_SYMBOLS                     260
+#define IDI_ARRAY                       261
+#define IDI_BITFIELD                    262
+#define IDI_FIELD                       263
+#define IDI_UNION                       264
 #define IDC_VERSION                     1000
 #define IDC_COPYRIGHT                   1001
 #define IDC_LINK                        1002
@@ -94,13 +100,14 @@
 #define ID_BYTESPERLINE_48              32803
 #define ID_BYTESPERLINE_64              32804
 #define ID_ICON_EXPORT                  32805
+#define ID_EDIT_FIND_PREV               32806
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        259
-#define _APS_NEXT_COMMAND_VALUE         32806
+#define _APS_NEXT_RESOURCE_VALUE        265
+#define _APS_NEXT_COMMAND_VALUE         32807
 #define _APS_NEXT_CONTROL_VALUE         1003
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

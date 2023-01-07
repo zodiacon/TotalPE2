@@ -278,6 +278,8 @@
     <ResourceCompile Include="TotalPE.rc" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="res\array.ico" />
+    <Image Include="res\bitfield.ico" />
     <Image Include="res\bitmap.ico" />
     <Image Include="res\check.ico" />
     <Image Include="res\circle.ico" />
@@ -287,8 +289,10 @@
     <Image Include="res\cursor.ico" />
     <Image Include="res\debug.ico" />
     <Image Include="res\dll-import.ico" />
+    <Image Include="res\enum.ico" />
     <Image Include="res\Exception.ico" />
     <Image Include="res\exports.ico" />
+    <Image Include="res\field.ico" />
     <Image Include="res\FileHeader.ico" />
     <Image Include="res\find.ico" />
     <Image Include="res\find_next.ico" />
@@ -322,11 +326,13 @@
     <Image Include="res\section.ico" />
     <Image Include="res\sections.ico" />
     <Image Include="res\shield.ico" />
+    <Image Include="res\symbols.ico" />
     <Image Include="res\text.ico" />
     <Image Include="res\thread.ico" />
     <Image Include="res\time-import.ico" />
     <Image Include="res\TotalPE.ico" />
     <Image Include="res\type.ico" />
+    <Image Include="res\union.ico" />
     <Image Include="res\version.ico" />
     <Image Include="res\window-close.ico" />
     <Image Include="res\windows-close.ico" />
