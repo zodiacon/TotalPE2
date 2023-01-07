@@ -94,6 +94,8 @@ BEGIN
         MENUITEM "&Version",                    ID_VIEW_VERSION
         MENUITEM "&Debug",                      ID_VIEW_DEBUG
         MENUITEM "Security",                    ID_PE_SECURITY
+        MENUITEM SEPARATOR
+        MENUITEM "Disassemble Entry Point...",  ID_PE_DISASSEMBLEENTRYPOINT
     END
     POPUP "&Options"
     BEGIN

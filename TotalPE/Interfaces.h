@@ -35,6 +35,7 @@ enum class TreeItemType : int64_t {
 	Language,
 	Resource,
 	Disassembly,
+	AsmEntryPoint,
 
 	ItemMask = 255,
 };

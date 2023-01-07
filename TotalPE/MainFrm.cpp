@@ -327,6 +327,28 @@ LRESULT CMainFrame::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*
 
 std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 	switch (type & TreeItemType::ItemMask) {
+		case TreeItemType::AsmEntryPoint:
+		{
+			auto view = new CScintillaView(this, L"Entry Point");
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			view->SetLanguage(LexLanguage::Asm);
+			bool is32Bit = m_PE->GetFileInfo()->IsPE32;
+			auto entry = is32Bit ? m_PE->GetNTHeader()->NTHdr32.OptionalHeader.AddressOfEntryPoint : m_PE->GetNTHeader()->NTHdr64.OptionalHeader.AddressOfEntryPoint;
+			ULONGLONG imageBase = is32Bit ? m_PE->GetNTHeader()->NTHdr32.OptionalHeader.ImageBase : m_PE->GetNTHeader()->NTHdr64.OptionalHeader.ImageBase;
+			auto offset = m_PE->GetOffsetFromRVA(entry);
+			uint32_t bias;
+			auto ptr = m_PE.Map<const std::byte>(offset, 0x1000, bias);
+			view->SetAsmCode(std::span(ptr.get() + bias, 0x1000), offset + imageBase, is32Bit);
+			auto hItem = InsertTreeItem(m_Tree, view->GetTitle(), GetIconIndex(IDI_BINARY), type, m_Views.at(TreeItemType::Image)->GetHTreeItem(), TVI_SORT);
+			view->SetDeleteFromTree(true);
+			view->SetHTreeItem(hItem);
+
+			return { view, view };
+		}
+
 		case TreeItemType::Image:
 		{
 			auto view = new CPEImageView(this, m_PE);
@@ -628,6 +650,10 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	}
 
 	m_Symbols.OpenImage(path);
+	m_Views.clear();
+	m_Views2.clear();
+	m_Tabs.RemoveAllPages();
+
 	BuildTree(16);
 
 	CString ftitle;
@@ -641,9 +667,6 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	AppSettings::Get().RecentFiles(m_RecentFiles.Files());
 	UpdateRecentFilesMenu();
 
-	m_Views.clear();
-	m_Views2.clear();
-	m_Tabs.RemoveAllPages();
 	ShowView(m_hRoot);
 	UpdateUI();
 
@@ -761,6 +784,7 @@ CUpdateUIBase& CMainFrame::GetUI() {
 LRESULT CMainFrame::OnFileClose(WORD, WORD, HWND, BOOL&) {
 	m_Tabs.RemoveAllPages();
 	m_Views.clear();
+	m_Views2.clear();
 	m_PE.Close();
 	m_Tree.DeleteAllItems();
 	UpdateUI();
@@ -1032,5 +1056,10 @@ LRESULT CMainFrame::OnShowWindow(UINT, WPARAM show, LPARAM, BOOL&) {
 }
 
 LRESULT CMainFrame::OnMenuSelect(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/) const {
+	return 0;
+}
+
+LRESULT CMainFrame::OnDisassembleEntryPoint(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
+	ShowView(TreeItemType::AsmEntryPoint, nullptr, IDI_BINARY);
 	return 0;
 }
