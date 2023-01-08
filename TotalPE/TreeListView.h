@@ -20,6 +20,9 @@
 //
 // Pavel Yosifovich (2022): code cleanup, modern compiler fixes, safe string functions, bug fixes
 
+#include <Theme.h>
+#include <ThemeHelper.h>
+
 // The TreeListView item structure
 typedef struct _TLVITEM {
 	UINT     mask;
@@ -413,7 +416,8 @@ public:
 		ncm.cbSize = sizeof(ncm);
 		::SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
 		m_fontHeader.CreateFontIndirect(&ncm.lfMenuFont);
-		m_Header.SetFont(m_fontHeader);
+		if(m_Header)
+			m_Header.SetFont(m_fontHeader);
 
 		auto p = static_cast<T*>(this);
 		p->Invalidate();
