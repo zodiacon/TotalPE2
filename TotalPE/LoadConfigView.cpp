@@ -11,7 +11,8 @@
 #include <ClipboardHelper.h>
 
 LRESULT CLoadConfigView::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/) {
-	m_hWndClient = m_List.Create(*this, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | LVS_REPORT | LVS_OWNERDATA, 0);
+	m_hWndClient = m_List.Create(*this, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | 
+		LVS_REPORT | LVS_OWNERDATA | LVS_SHAREIMAGELISTS, 0);
 	m_List.SetExtendedListViewStyle(LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP);
 	auto cm = GetColumnManager(m_List);
 
@@ -74,9 +75,11 @@ void CLoadConfigView::BuildItems() {
 
 	ULONGLONG guardCFFunction = is64 ? lc64.GuardCFCheckFunctionPointer : lc32.GuardCFCheckFunctionPointer;
 	ULONGLONG guardCFDispFunction = is64 ? lc64.GuardCFDispatchFunctionPointer : lc32.GuardCFDispatchFunctionPointer;
-	ULONGLONG guardCFFunctionPtr = 0;
+	ULONGLONG guardCFFunctionPtr = 0, guardCFDispFunctionPtr = 0;
 	if(guardCFFunction)
 		m_PE.Read(m_PE->GetOffsetFromVA(guardCFFunction), is64 ? 8 : 4, &guardCFFunctionPtr);
+	if (guardCFDispFunction)
+		m_PE.Read(m_PE->GetOffsetFromVA(guardCFDispFunction), is64 ? 8 : 4, &guardCFDispFunctionPtr);
 
 	m_Items = std::vector<DataItem>{
 		{ L"Size", std::format(L"{} Bytes", lc32.Size) },
@@ -99,9 +102,9 @@ void CLoadConfigView::BuildItems() {
 		{ L"SE Handler Table", std::format(L"0x{:X}", is64 ? lc64.SEHandlerTable : lc32.SEHandlerTable) },
 		{ L"SE Handler Count", std::format(L"0x{:X}", is64 ? lc64.SEHandlerCount : lc32.SEHandlerCount) },
 		{ L"Guard CF Check Function", std::format(L"0x{:X}", guardCFFunction),
-			symbols && guardCFFunctionPtr ? PEStrings::UndecorateName(symbols.GetSymbolByVA(guardCFFunction).Name().c_str()) : std::wstring(L"") },
+			symbols && guardCFFunctionPtr ? PEStrings::UndecorateName(symbols.GetSymbolByVA(guardCFFunctionPtr).Name().c_str()) : std::wstring(L"") },
 		{ L"Guard CF Dispatch Function", std::format(L"0x{:X}", guardCFDispFunction),
-			symbols && guardCFDispFunction ? PEStrings::UndecorateName(symbols.GetSymbolByVA(guardCFDispFunction).Name().c_str()) : std::wstring(L"") },
+			symbols && guardCFDispFunctionPtr ? PEStrings::UndecorateName(symbols.GetSymbolByVA(guardCFDispFunctionPtr).Name().c_str()) : std::wstring(L"") },
 		{ L"CSD Version", std::format(L"0x{:X}", is64 ? lc64.CSDVersion : lc32.CSDVersion) },
 		{ L"CSD Version", std::format(L"0x{:X}", is64 ? lc64.CSDVersion : lc32.CSDVersion) },
 		{ L"CSD Version", std::format(L"0x{:X}", is64 ? lc64.CSDVersion : lc32.CSDVersion) },

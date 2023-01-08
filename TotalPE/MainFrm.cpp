@@ -72,6 +72,7 @@ void CMainFrame::UpdateUI() {
 	UIEnable(ID_FILE_OPENINANEWWINDOW, fi != nullptr);
 	UIEnable(ID_EDIT_COPY, FALSE);
 	UIEnable(ID_EDIT_FIND, fi && m_Tabs.GetActivePage() >= 0);
+	UIEnable(ID_PE_DISASSEMBLEENTRYPOINT, fi != nullptr);
 }
 
 int CMainFrame::GetResourceIconIndex(WORD resType) const {
@@ -346,18 +347,23 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 	switch (type & TreeItemType::ItemMask) {
 		case TreeItemType::AsmEntryPoint:
 		{
+			bool is32Bit = m_PE->GetFileInfo()->IsPE32;
+			auto entry = is32Bit ? m_PE->GetNTHeader()->NTHdr32.OptionalHeader.AddressOfEntryPoint : m_PE->GetNTHeader()->NTHdr64.OptionalHeader.AddressOfEntryPoint;
+			if (entry == 0)
+				return {};
+
 			auto view = new CScintillaView(this, L"Entry Point");
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};
 			}
 			view->SetLanguage(LexLanguage::Asm);
-			bool is32Bit = m_PE->GetFileInfo()->IsPE32;
-			auto entry = is32Bit ? m_PE->GetNTHeader()->NTHdr32.OptionalHeader.AddressOfEntryPoint : m_PE->GetNTHeader()->NTHdr64.OptionalHeader.AddressOfEntryPoint;
-			ULONGLONG imageBase = is32Bit ? m_PE->GetNTHeader()->NTHdr32.OptionalHeader.ImageBase : m_PE->GetNTHeader()->NTHdr64.OptionalHeader.ImageBase;
+
+			ULONGLONG imageBase = m_PE->GetImageBase();
 			auto offset = m_PE->GetOffsetFromRVA(entry);
 			uint32_t size = 0x500;		// hard coded for now
 			view->SetAsmCode(m_PE.GetSpan(offset, size), offset + imageBase, is32Bit);
+			view->GetCtrl().SetReadOnly(true);
 			auto hItem = InsertTreeItem(m_Tree, view->GetTitle(), GetIconIndex(IDI_BINARY), type, m_Views.at(TreeItemType::Image)->GetHTreeItem(), TVI_SORT);
 			view->SetDeleteFromTree(true);
 			view->SetHTreeItem(hItem);
@@ -1092,7 +1098,8 @@ LRESULT CMainFrame::OnMenuSelect(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lPar
 }
 
 LRESULT CMainFrame::OnDisassembleEntryPoint(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
-	ShowView(TreeItemType::AsmEntryPoint, nullptr, IDI_BINARY);
+	if (!ShowView(TreeItemType::AsmEntryPoint, nullptr, IDI_BINARY))
+		AtlMessageBox(m_hWnd, L"No entry point defined for this PE", IDR_MAINFRAME, MB_ICONWARNING);
 	return 0;
 }
 

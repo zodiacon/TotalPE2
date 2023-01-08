@@ -193,6 +193,7 @@ std::wstring PEStrings::ResourceTypeToString(WORD id) {
 CStringA PEStrings::FormatInstruction(const cs_insn& inst) {
 	CStringA text;
 	text.Format("%llX %-10s %-40s ;", inst.address, inst.mnemonic, inst.op_str);
+//	text.Format("%-10s %-40s ;", inst.mnemonic, inst.op_str);
 	for (int i = 0; i < inst.size; i++)
 		text += std::format(" {:02X}", inst.bytes[i]).c_str();
 	return text;

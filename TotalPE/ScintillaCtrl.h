@@ -176,13 +176,22 @@ public:
 	Colour MarginBackN(int margin);
 	void SetMargins(int margins);
 	int Margins();
-	void StyleClearAll();
+	void StyleClearAll() {
+		Execute(SCI_STYLECLEARALL);
+	}
 
 	void StyleSetFore(int style, Colour fore) {
 		Execute(SCI_STYLESETFORE, style, fore);
 	}
-	void StyleSetBack(int style, Colour back);
-	void StyleSetBold(int style, bool bold);
+
+	void StyleSetBack(int style, Colour back) {
+		Execute(SCI_STYLESETBACK, style, back);
+	}
+
+	void StyleSetBold(int style, bool bold) {
+		Execute(SCI_STYLESETBOLD, style, bold);
+	}
+
 	void StyleSetItalic(int style, bool italic) {
 		Execute(SCI_STYLESETITALIC, style, italic);
 	}
@@ -285,7 +294,9 @@ public:
 	void IndicSetStrokeWidth(int indicator, int hundredths);
 	int IndicGetStrokeWidth(int indicator);
 	void SetWhitespaceFore(bool useSetting, Colour fore);
-	void SetWhitespaceBack(bool useSetting, Colour back);
+	void SetWhitespaceBack(bool useSetting, Colour back) {
+		Execute(SCI_SETWHITESPACEBACK, useSetting, back);
+	}
 	void SetWhitespaceSize(int size);
 	int WhitespaceSize();
 	void SetLineState(Line line, int state);

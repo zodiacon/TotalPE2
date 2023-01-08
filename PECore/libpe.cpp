@@ -67,11 +67,11 @@ namespace libpe {
 		void Destroy()override;
 	private:
 		void ClearAll();
-		[[nodiscard]] auto GetImageBase()const->ULONGLONG;
-		[[nodiscard]] auto GetSecHdrFromName(LPCSTR lpszName)const->PIMAGE_SECTION_HEADER;
-		[[nodiscard]] auto GetSecHdrFromRVA(ULONGLONG ullRVA)const->PIMAGE_SECTION_HEADER;
-		[[nodiscard]] auto GetBaseAddr()const->DWORD_PTR;
-		[[nodiscard]] auto GetDataSize()const->ULONGLONG;
+		[[nodiscard]] auto GetImageBase()const->ULONGLONG override;
+		[[nodiscard]] auto GetSecHdrFromName(LPCSTR lpszName)const->PIMAGE_SECTION_HEADER override;
+		[[nodiscard]] auto GetSecHdrFromRVA(ULONGLONG ullRVA)const->PIMAGE_SECTION_HEADER override;
+		[[nodiscard]] auto GetBaseAddr()const->DWORD_PTR override;
+		[[nodiscard]] auto GetDataSize()const->ULONGLONG override;
 		[[nodiscard]] auto GetDosPtr()const->const IMAGE_DOS_HEADER*;
 		[[nodiscard]] auto GetDirEntryRVA(DWORD dwEntry)const->DWORD;
 		[[nodiscard]] auto GetDirEntrySize(DWORD dwEntry)const->DWORD;

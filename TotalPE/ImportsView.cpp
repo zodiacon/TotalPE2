@@ -116,7 +116,8 @@ LRESULT CImportsView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	m_ModList.SetExtendedListViewStyle(LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP);
 	m_ModList.SetImageList(Frame()->GetImageList(), LVSIL_SMALL);
 
-	m_FuncList.Create(m_Splitter, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | LVS_REPORT | LVS_OWNERDATA | LVS_SHOWSELALWAYS, 0);
+	m_FuncList.Create(m_Splitter, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | LVS_REPORT | 
+		LVS_OWNERDATA | LVS_SHOWSELALWAYS | LVS_SHAREIMAGELISTS, 0);
 	m_FuncList.SetExtendedListViewStyle(LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP);
 	m_FuncList.SetImageList(Frame()->GetImageList(), LVSIL_SMALL);
 
