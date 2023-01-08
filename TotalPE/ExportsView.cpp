@@ -141,20 +141,14 @@ LRESULT CExportsView::OnDissassemble(WORD, WORD, HWND, BOOL&) const {
 	ATLASSERT(m_List.GetSelectedCount() == 1);
 	auto& exp = m_Exports[m_List.GetNextItem(-1, LVNI_SELECTED)];
 
-	uint32_t bias;
 	auto offset = m_PE->GetOffsetFromRVA(exp.FuncRVA);
 	uint32_t size = 0x1000;
 	if (size + offset > m_PE.GetFileSize())
 		size = m_PE.GetFileSize() - offset;
-	auto code = m_PE.Map<const std::byte>(offset, size, bias);
-	if (!code) {
-		AtlMessageBox(m_hWnd, L"Failed to retrieve code", IDR_MAINFRAME, MB_ICONERROR);
-		return 0;
-	}
+	auto code = m_PE.GetSpan(offset, size);
 
-	auto start = code.get() + bias;
 	ULONGLONG imageBase = m_PE->GetFileInfo()->IsPE64 ? m_PE->GetNTHeader()->NTHdr64.OptionalHeader.ImageBase : m_PE->GetNTHeader()->NTHdr32.OptionalHeader.ImageBase;
-	Frame()->CreateAssemblyView(std::span<const std::byte>(start, size), offset + imageBase, exp.FuncRVA,
+	Frame()->CreateAssemblyView(code, offset + imageBase, exp.FuncRVA,
 		exp.Name.c_str(), TreeItemType::DirectoryExports);
 
 	return 0;

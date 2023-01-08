@@ -7,8 +7,8 @@
 #include "PEImageView.h"
 #include "PEFile.h"
 #include "PEStrings.h"
-#include "SortHelper.h"
-#include "ClipboardHelper.h"
+#include <SortHelper.h>
+#include <ClipboardHelper.h>
 
 LRESULT CPEImageView::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/) {
 	m_hWndClient = m_List.Create(*this, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | LVS_REPORT | LVS_OWNERDATA, 0);

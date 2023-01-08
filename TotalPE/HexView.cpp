@@ -13,13 +13,7 @@ CHexControl& CHexView::Hex() {
 }
 
 bool CHexView::SetData(PEFile const& pe, uint32_t offset, uint32_t size) {
-	uint32_t bias;
-	m_Ptr = pe.Map<BYTE>(offset, size, bias);
-	ATLASSERT(m_Ptr);
-	if (!m_Ptr)
-		return false;
-
-	m_Buffer = std::make_unique<MemoryBuffer>(m_Ptr.get() + bias, size, false);
+	m_Buffer = std::make_unique<MemoryBuffer>(pe.GetData() + offset, size, false);
 	m_Hex.SetBufferManager(m_Buffer.get());
 	m_Hex.SetBiasOffset(offset);
 

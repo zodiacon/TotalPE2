@@ -228,6 +228,7 @@
     <ClCompile Include="IconsView.cpp" />
     <ClCompile Include="IconWriter.cpp" />
     <ClCompile Include="ImportsView.cpp" />
+    <ClCompile Include="LoadConfigView.cpp" />
     <ClCompile Include="MainFrm.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
@@ -264,6 +265,7 @@
     <ClInclude Include="IconWriter.h" />
     <ClInclude Include="ImportsView.h" />
     <ClInclude Include="Interfaces.h" />
+    <ClInclude Include="LoadConfigView.h" />
     <ClInclude Include="MainFrm.h" />
     <ClInclude Include="PEStrings.h" />
     <ClInclude Include="RecentFilesManager.h" />

@@ -75,6 +75,15 @@ DiaSymbol DiaSession::GetSymbolById(DWORD id) const {
 	return DiaSymbol(spSym);
 }
 
+DiaSymbol DiaSession::GetSymbolByVA(ULONGLONG va, SymbolTag tag, long* disp) const {
+	CComPtr<IDiaSymbol> spSym;
+	if(disp)
+		m_spSession->findSymbolByVAEx(va, static_cast<enum SymTagEnum>(tag), &spSym, disp);
+	else
+		m_spSession->findSymbolByVA(va, static_cast<enum SymTagEnum>(tag), &spSym);
+	return DiaSymbol(spSym);
+}
+
 std::wstring const& DiaSession::GetSymbolFile() const {
 	return m_SymbolsFile;
 }

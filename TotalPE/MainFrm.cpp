@@ -28,6 +28,7 @@
 #include "BitmapView.h"
 #include "SecurityView.h"
 #include "ScintillaView.h"
+#include "LoadConfigView.h"
 
 const int WindowMenuPosition = 5;
 
@@ -355,9 +356,8 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 			auto entry = is32Bit ? m_PE->GetNTHeader()->NTHdr32.OptionalHeader.AddressOfEntryPoint : m_PE->GetNTHeader()->NTHdr64.OptionalHeader.AddressOfEntryPoint;
 			ULONGLONG imageBase = is32Bit ? m_PE->GetNTHeader()->NTHdr32.OptionalHeader.ImageBase : m_PE->GetNTHeader()->NTHdr64.OptionalHeader.ImageBase;
 			auto offset = m_PE->GetOffsetFromRVA(entry);
-			uint32_t bias;
-			auto ptr = m_PE.Map<const std::byte>(offset, 0x1000, bias);
-			view->SetAsmCode(std::span(ptr.get() + bias, 0x1000), offset + imageBase, is32Bit);
+			uint32_t size = 0x500;		// hard coded for now
+			view->SetAsmCode(m_PE.GetSpan(offset, size), offset + imageBase, is32Bit);
 			auto hItem = InsertTreeItem(m_Tree, view->GetTitle(), GetIconIndex(IDI_BINARY), type, m_Views.at(TreeItemType::Image)->GetHTreeItem(), TVI_SORT);
 			view->SetDeleteFromTree(true);
 			view->SetHTreeItem(hItem);
@@ -368,6 +368,16 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		case TreeItemType::Image:
 		{
 			auto view = new CPEImageView(this, m_PE);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::DirectoryLoadConfig:
+		{
+			auto view = new CLoadConfigView(this, m_PE);
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};

@@ -11,10 +11,8 @@ void CStructView::SetValue(PVOID address) {
 }
 
 void CStructView::SetPEOffset(PEFile const& pe, DWORD offset) {
-    uint32_t bias = 0;
     auto size = (uint32_t)m_Object.Length();
-    m_Ptr = pe.Map<BYTE>(offset, size, bias);
-    ShowObject(m_Ptr.get() + bias);
+    ShowObject((PVOID)(pe.GetData() + offset));
 }
 
 void CStructView::ShowObject(PVOID address) {

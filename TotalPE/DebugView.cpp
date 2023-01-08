@@ -69,9 +69,7 @@ std::wstring CDebugView::GetDetails(int row) const {
 	auto& item = m_Items[row];
 	switch (item.DebugDir.Type) {
 		case IMAGE_DEBUG_TYPE_CODEVIEW:
-			uint32_t bias;
-			auto ptr = m_PE.Map<BYTE>(item.DebugDir.PointerToRawData, item.DebugDir.SizeOfData, bias);
-			auto data = (CodeView*)(ptr.get() + bias);
+			auto data = (CodeView const*)(m_PE.GetData() + item.DebugDir.PointerToRawData);
 			return std::format(L"Format: {}{}{}{} GUID: {} Pdb: {}",
 				data->format[0], data->format[1], data->format[2], data->format[3],
 				PEStrings::GuidToString(data->guid), (PCWSTR)CString(data->pdb));

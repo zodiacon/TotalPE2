@@ -5,14 +5,6 @@
 bool PEFile::Open(std::wstring_view path) {
 	auto ok = m_pe->LoadPe(path.data()) == libpe::PEOK;
 	if (ok) {
-		wil::unique_hfile hFile(::CreateFile(path.data(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr));
-		if (!hFile)
-			return false;
-		m_FileSize = ::GetFileSize(hFile.get(), nullptr);
-		m_hMap.reset(::CreateFileMapping(hFile.get(), nullptr, PAGE_READONLY, 0, 0, nullptr));
-		if (!m_hMap)
-			return false;
-
 		m_Path = path;
 	}
 	return ok;
@@ -28,7 +20,7 @@ std::wstring const& PEFile::GetPath() const {
 }
 
 uint32_t PEFile::GetFileSize() const {
-	return m_FileSize;
+	return (uint32_t)m_pe->GetDataSize();
 }
 
 PEFile::operator bool() const {
@@ -36,12 +28,16 @@ PEFile::operator bool() const {
 }
 
 bool PEFile::Read(uint32_t offset, uint32_t size, void* buffer) const {
-	uint32_t bias;
-	auto p = Map<BYTE>(offset, size, bias);
-	if (!p)
-		return false;
-	memcpy(buffer, p.get() + bias, size);
+	memcpy(buffer, (PBYTE)m_pe->GetBaseAddr() + offset, size);
 	return true;
+}
+
+const BYTE* PEFile::GetData() const {
+	return (const BYTE*)m_pe->GetBaseAddr();
+}
+
+std::span<const std::byte> PEFile::GetSpan(uint32_t offset, uint32_t size) const {
+	return std::span((const std::byte*)GetData() + offset, size);
 }
 
 libpe::Ilibpe* PEFile::operator->() const {

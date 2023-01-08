@@ -580,6 +580,12 @@ namespace libpe
 		[[nodiscard]] virtual auto GetBoundImport() -> PEBOUNDIMPORT_VEC* = 0;
 		[[nodiscard]] virtual auto GetDelayImport() -> PEDELAYIMPORT_VEC* = 0;
 		[[nodiscard]] virtual auto GetCOMDescriptor() -> PECOMDESCRIPTOR* = 0;
+		[[nodiscard]] virtual auto GetImageBase()const->ULONGLONG = 0;
+		[[nodiscard]] virtual auto GetSecHdrFromName(LPCSTR lpszName)const->PIMAGE_SECTION_HEADER = 0;
+		[[nodiscard]] virtual auto GetSecHdrFromRVA(ULONGLONG ullRVA)const->PIMAGE_SECTION_HEADER = 0;
+		[[nodiscard]] virtual auto GetBaseAddr()const->DWORD_PTR = 0;
+		[[nodiscard]] virtual auto GetDataSize()const->ULONGLONG = 0;
+
 		virtual void Clear() = 0; //Clear all internal structs.
 		virtual void Destroy() = 0;
 		[[nodiscard]] static auto FlatResources(const PEResRoot& stResRoot) -> PERESFLAT_VEC;

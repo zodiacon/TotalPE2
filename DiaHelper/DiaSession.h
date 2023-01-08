@@ -21,6 +21,7 @@ public:
 
 	DiaSymbol GetSymbolByRVA(DWORD rva, SymbolTag tag = SymbolTag::Null, long* disp = nullptr) const;
 	DiaSymbol GetSymbolById(DWORD id) const;
+	DiaSymbol GetSymbolByVA(ULONGLONG va, SymbolTag tag = SymbolTag::Null, long* disp = nullptr) const;
 
 	std::wstring const& GetSymbolFile() const;
 
