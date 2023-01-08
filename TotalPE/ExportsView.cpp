@@ -57,7 +57,7 @@ int CExportsView::GetSaveColumnRange(HWND, int&) const {
 	return 1;
 }
 
-bool CExportsView::OnRightClickList(HWND, int row, int col, POINT const& pt) {
+bool CExportsView::OnRightClickList(HWND, int row, int col, POINT const& pt) const {
 	CMenu menu;
 	menu.LoadMenu(IDR_CONTEXT);
 	return Frame()->TrackPopupMenu(menu.GetSubMenu(3), 0, pt.x, pt.y);

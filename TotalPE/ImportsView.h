@@ -16,6 +16,7 @@ public:
 	int GetRowImage(HWND h, int row, int) const;
 	void DoSort(SortInfo const* si);
 	void OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD newState);
+	bool OnRightClickList(HWND h, int row, int col, POINT const& pt) const;
 
 	void UpdateUI(bool first = false) const;
 
@@ -26,6 +27,8 @@ public:
 		CHAIN_MSG_MAP(BaseFrame)
 	ALT_MSG_MAP(1)
 		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnCopy)
+		COMMAND_ID_HANDLER(ID_IMPORT_FILEPROPERTIES, OnFileProperties)
+		COMMAND_ID_HANDLER(ID_IMPORT_GOTOFILELOCATION, OnGotoFileLocation)
 	END_MSG_MAP()
 
 private:
@@ -45,7 +48,9 @@ private:
 	LRESULT OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnCopy(WORD, WORD, HWND, BOOL&) const;
 	LRESULT OnFind(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
-	
+	LRESULT OnFileProperties(WORD, WORD, HWND, BOOL&) const;
+	LRESULT OnGotoFileLocation(WORD, WORD, HWND, BOOL&) const;
+
 	CListViewCtrl m_ModList, m_FuncList;
 	CCustomHorSplitterWindow m_Splitter;
 	std::vector<libpe::PEImportFunction> m_Functions;

@@ -60,7 +60,7 @@ void CImportsView::DoSort(SortInfo const* si) {
 				case ColumnType::UndecoratedName: return SortHelper::Sort(PEStrings::UndecorateName(f1.FuncName.c_str()), PEStrings::UndecorateName(f2.FuncName.c_str()), asc);
 				case ColumnType::Hint: return SortHelper::Sort(f1.ImpByName.Hint, f2.ImpByName.Hint, asc);
 				case ColumnType::Ordinal: return SortHelper::Sort(
-					f1.ImpByName.Hint == 0 ? f1.unThunk.Thunk32.u1.Ordinal : 0, 
+					f1.ImpByName.Hint == 0 ? f1.unThunk.Thunk32.u1.Ordinal : 0,
 					f2.ImpByName.Hint == 0 ? f2.unThunk.Thunk32.u1.Ordinal : 0, asc);
 			}
 			return false;
@@ -99,6 +99,8 @@ void CImportsView::UpdateUI(bool first) const {
 	if (lv) {
 		auto selected = lv.GetSelectedCount();
 		ui.UIEnable(ID_EDIT_COPY, selected > 0);
+		ui.UIEnable(ID_IMPORT_GOTOFILELOCATION, hWnd == m_ModList && selected == 1);
+		ui.UIEnable(ID_IMPORT_FILEPROPERTIES, hWnd == m_ModList && selected == 1);
 	}
 }
 
@@ -109,7 +111,7 @@ CString CImportsView::GetTitle() const {
 LRESULT CImportsView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	m_hWndClient = m_Splitter.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN);
 
-	m_ModList.Create(m_Splitter, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | 
+	m_ModList.Create(m_Splitter, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS |
 		LVS_REPORT | LVS_OWNERDATA | LVS_SHOWSELALWAYS | LVS_SHAREIMAGELISTS, 0);
 	m_ModList.SetExtendedListViewStyle(LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP);
 	m_ModList.SetImageList(Frame()->GetImageList(), LVSIL_SMALL);
@@ -160,9 +162,42 @@ LRESULT CImportsView::OnFind(UINT, WPARAM, LPARAM, BOOL&) {
 			lv.SetFocus();
 		}
 	}
-	if(index < 0) {
+	if (index < 0) {
 		AtlMessageBox(m_hWnd, L"Finished searching list.", IDR_MAINFRAME, MB_ICONINFORMATION);
 	}
 	return 0;
 }
 
+LRESULT CImportsView::OnFileProperties(WORD, WORD, HWND, BOOL&) const {
+	auto& imp = m_Modules[m_ModList.GetNextItem(-1, LVNI_SELECTED)];
+	WCHAR path[MAX_PATH]{};
+	if (::SearchPath(nullptr, CString(imp.ModuleName.c_str()), nullptr, _countof(path), path, nullptr)) {
+		SHELLEXECUTEINFO sei{ sizeof(sei) };
+		sei.fMask = SEE_MASK_INVOKEIDLIST;
+		sei.lpVerb = L"properties";
+		sei.lpFile = path;
+		::ShellExecuteEx(&sei);
+	}
+	else {
+		AtlMessageBox(m_hWnd, L"Failed to locate module", IDR_MAINFRAME, MB_ICONERROR);
+	}
+	return 0;
+}
+
+LRESULT CImportsView::OnGotoFileLocation(WORD, WORD, HWND, BOOL&) const {
+	auto& imp = m_Modules[m_ModList.GetNextItem(-1, LVNI_SELECTED)];
+	WCHAR path[MAX_PATH]{};
+	::SearchPath(nullptr, CString(imp.ModuleName.c_str()), nullptr, _countof(path), path, nullptr);
+	if ((INT_PTR)::ShellExecute(nullptr, L"open", L"explorer",
+		L"/select,\"" + CString(path) + L"\"",
+		nullptr, SW_SHOWDEFAULT) < 32)
+		AtlMessageBox(m_hWnd, L"Failed to locate module", IDR_MAINFRAME, MB_ICONERROR);
+
+	return 0;
+}
+
+bool CImportsView::OnRightClickList(HWND h, int row, int col, POINT const& pt) const {
+	CMenu menu;
+	menu.LoadMenu(IDR_CONTEXT);
+	return Frame()->TrackPopupMenu(menu.GetSubMenu(h == m_ModList ? 4 : 0), 0, pt.x, pt.y);
+}

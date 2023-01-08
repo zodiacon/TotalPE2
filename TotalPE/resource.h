@@ -104,13 +104,15 @@
 #define ID_EDIT_FIND_PREV               32806
 #define ID_VIEW_DISASSEMBLE             32807
 #define ID_PE_DISASSEMBLEENTRYPOINT     32808
+#define ID_IMPORT_FILEPROPERTIES        32809
+#define ID_IMPORT_GOTOFILELOCATION      32810
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        266
-#define _APS_NEXT_COMMAND_VALUE         32809
+#define _APS_NEXT_COMMAND_VALUE         32811
 #define _APS_NEXT_CONTROL_VALUE         1003
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
