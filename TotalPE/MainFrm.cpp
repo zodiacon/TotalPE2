@@ -29,6 +29,8 @@
 #include "SecurityView.h"
 #include "ScintillaView.h"
 
+const int WindowMenuPosition = 5;
+
 BOOL CMainFrame::PreTranslateMessage(MSG* pMsg) {
 	if (m_pFindDlg && m_pFindDlg->IsDialogMessageW(pMsg))
 		return TRUE;
@@ -242,9 +244,6 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 
 	CMenuHandle menuMain = GetMenu();
 
-	const int WindowMenuPosition = 5;
-	m_Tabs.SetWindowMenu(menuMain.GetSubMenu(WindowMenuPosition));
-
 	CMenuHandle hMenu = GetMenu();
 	if (SecurityHelper::IsRunningElevated()) {
 		hMenu.GetSubMenu(0).DeleteMenu(ID_FILE_RUNASADMINISTRATOR, MF_BYCOMMAND);
@@ -268,6 +267,11 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 		DrawMenuBar();
 		UISetCheck(ID_OPTIONS_DARKMODE, true);
 	}
+
+	auto hWinMenu = menuMain.GetSubMenu(WindowMenuPosition);
+	//m_Tabs.m_bWindowsMenuItem = true;
+	m_Tabs.SetWindowMenu(hWinMenu);
+	AddSubMenu(hWinMenu);
 
 	UISetCheck(ID_VIEW_STATUS_BAR, settings.ViewStatusBar());
 	SetAlwaysOnTop(settings.AlwaysOnTop());
@@ -575,6 +579,7 @@ LRESULT CMainFrame::OnWindowCloseAll(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*
 LRESULT CMainFrame::OnWindowActivate(WORD /*wNotifyCode*/, WORD wID, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
 	int nPage = wID - ID_WINDOW_TABFIRST;
 	m_Tabs.SetActivePage(nPage);
+	AddSubMenu(::GetSubMenu(GetMenu(), WindowMenuPosition));
 
 	return 0;
 }
@@ -1134,5 +1139,10 @@ LRESULT CMainFrame::OnToggleDarkMode(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*
 		return TRUE;
 		}, 0);
 
+	return 0;
+}
+
+LRESULT CMainFrame::OnPageActivated(int /*idCtrl*/, LPNMHDR /*pnmh*/, BOOL& /*bHandled*/) {
+	AddSubMenu(::GetSubMenu(GetMenu(), WindowMenuPosition));
 	return 0;
 }

@@ -37,6 +37,7 @@ public:
 		MESSAGE_HANDLER(WM_DROPFILES, OnDropFiles)
 		COMMAND_ID_HANDLER(ID_FILE_RUNASADMINISTRATOR, OnRunAsAdmin)
 		MESSAGE_HANDLER(CFindReplaceDialog::GetFindReplaceMsg(), OnFind)
+		NOTIFY_CODE_HANDLER(TBVN_PAGEACTIVATED, OnPageActivated)
 		COMMAND_ID_HANDLER(ID_VIEW_STATUS_BAR, OnViewStatusBar)
 		COMMAND_ID_HANDLER(ID_APP_ABOUT, OnAppAbout)
 		COMMAND_ID_HANDLER(ID_EDIT_FIND, OnEditFind)
@@ -145,6 +146,7 @@ private:
 	LRESULT OnAlwaysOnTop(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnUpdateDarkMode(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnToggleDarkMode(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnPageActivated(int /*idCtrl*/, LPNMHDR /*pnmh*/, BOOL& /*bHandled*/);
 
 	CCustomTabView m_Tabs;
 	CCustomSplitterWindow m_Splitter;
