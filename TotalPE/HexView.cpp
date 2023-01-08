@@ -67,6 +67,7 @@ LRESULT CHexView::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, 
 	UISetCheck(ID_DATASIZE_1BYTE, true);
 
 	m_hWndClient = m_Hex.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE);
+	UpdateColors();
 
 	bHandled = FALSE;
 	return 0;
@@ -124,3 +125,16 @@ LRESULT CHexView::OnDropDown(int, LPNMHDR hdr, BOOL&) {
 	return 0;
 }
 
+LRESULT CHexView::OnUpdateTheme(UINT, WPARAM, LPARAM, BOOL&) {
+	UpdateColors();
+
+	return 0;
+}
+
+void CHexView::UpdateColors() {
+	HexControlColors colors;
+	colors.Offset = ThemeHelper::IsDefault() ? RGB(0, 0, 128) : RGB(0, 128, 255);
+	colors.Ascii = ThemeHelper::IsDefault() ? RGB(128, 0, 0) : RGB(255, 128, 0);
+	m_Hex.GetColors() = colors;
+	m_Hex.Invalidate();
+}

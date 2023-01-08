@@ -11,6 +11,7 @@
 #include <OwnerDrawnMenu.h>
 #include "Interfaces.h"
 #include "RecentFilesManager.h"
+#include <Theme.h>
 
 class CMainFrame :
 	public CFrameWindowImpl<CMainFrame>,
@@ -22,6 +23,8 @@ class CMainFrame :
 	public CIdleHandler {
 public:
 	DECLARE_FRAME_WND_CLASS(L"TotalPEMainWndClass", IDR_MAINFRAME)
+
+	static const UINT WM_UPDATE_DARKMODE = WM_APP + 56;
 
 	BOOL PreTranslateMessage(MSG* pMsg) override;
 	BOOL OnIdle() override;
@@ -53,8 +56,11 @@ public:
 		COMMAND_ID_HANDLER(ID_VIEW_DIRECTORIES, OnViewDataDirs)
 		COMMAND_ID_HANDLER(ID_PE_DISASSEMBLEENTRYPOINT, OnDisassembleEntryPoint)
 		COMMAND_ID_HANDLER(ID_FILE_NEW, OnNewWindow)
+		COMMAND_ID_HANDLER(ID_OPTIONS_ALWAYSONTOP, OnAlwaysOnTop)
 		MESSAGE_HANDLER(WM_SHOWWINDOW, OnShowWindow)
 		MESSAGE_HANDLER(WM_MENUSELECT, OnMenuSelect)
+		COMMAND_ID_HANDLER(ID_OPTIONS_DARKMODE, OnToggleDarkMode)
+		MESSAGE_HANDLER(WM_UPDATE_DARKMODE, OnUpdateDarkMode)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
 		MESSAGE_HANDLER(WM_DESTROY, OnDestroy)
 		COMMAND_RANGE_HANDLER(ATL_IDS_MRU_FILE, ATL_IDS_MRU_FILE + 29, OnRecentFile)
@@ -86,6 +92,8 @@ private:
 
 	std::pair<IView*, CMessageMap*> CreateView(TreeItemType type);
 	std::pair<IView*, CMessageMap*> CreateResourceView(TreeItemType type);
+	void SetAlwaysOnTop(bool onTop);
+	void InitDarkTheme() const;
 	bool ShowView(HTREEITEM hItem);
 	bool ShowView(TreeItemType type, HTREEITEM hItem = nullptr, UINT icon = 0);
 	void UpdateRecentFilesMenu();
@@ -134,6 +142,9 @@ private:
 	LRESULT OnViewManifest(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewVersion(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnDisassembleEntryPoint(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnAlwaysOnTop(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnUpdateDarkMode(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
+	LRESULT OnToggleDarkMode(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 
 	CCustomTabView m_Tabs;
 	CCustomSplitterWindow m_Splitter;
@@ -152,4 +163,5 @@ private:
 	HTREEITEM m_hResVersion, m_hResManifest;
 	inline static std::unordered_map<UINT, int> s_ImageIndices;
 	inline static int s_Frames{ 0 };
+	inline static Theme s_DarkTheme;
 };

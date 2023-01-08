@@ -54,6 +54,7 @@ bool CMainFrame::OnTreeDoubleClick(HWND, HTREEITEM hItem) {
 
 void CMainFrame::UpdateUI() {
 	auto const fi = m_PE->GetFileInfo();
+	UIEnable(ID_PE_DISASSEMBLEENTRYPOINT, fi != nullptr);
 	UIEnable(ID_VIEW_EXPORTS, fi && fi->HasExport);
 	UIEnable(ID_VIEW_IMPORTS, fi && fi->HasImport);
 	UIEnable(ID_VIEW_RESOURCES, fi && fi->HasResource);
@@ -191,9 +192,8 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 	auto& settings = AppSettings::Get();
 	s_Frames++;
 	if (s_Frames == 1) {
-		//InitDarkTheme();
-		if (settings.LoadFromKey(L"SOFTWARE\\ScorpioSoftware\\TotalPE")) {
-		}
+		InitDarkTheme();
+		settings.LoadFromKey(L"SOFTWARE\\ScorpioSoftware\\TotalPE");
 	}
 	m_RecentFiles.Set(settings.RecentFiles());
 	UpdateRecentFilesMenu();
@@ -254,13 +254,24 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 		SetWindowText(text + L" (Administrator)");
 	}
 
+	SetCheckIcon(IDI_CHECK, IDI_RADIO);
 	InitMenu(hMenu);
 	AddMenu(hMenu);
 	UIAddMenu(hMenu);
 	AddMenu(IDR_CONTEXT);
 	UIAddMenu(IDR_CONTEXT);
 
-	UISetCheck(ID_VIEW_STATUS_BAR, 1);
+	if (settings.DarkMode()) {
+		ThemeHelper::SetCurrentTheme(s_DarkTheme, m_hWnd);
+		ThemeHelper::UpdateMenuColors(*this, true);
+		UpdateMenu(GetMenu(), true);
+		DrawMenuBar();
+		UISetCheck(ID_OPTIONS_DARKMODE, true);
+	}
+
+	UISetCheck(ID_VIEW_STATUS_BAR, settings.ViewStatusBar());
+	SetAlwaysOnTop(settings.AlwaysOnTop());
+
 	UpdateUI();
 
 	return 0;
@@ -306,6 +317,7 @@ LRESULT CMainFrame::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*
 		GetWindowPlacement(&wp);
 		auto& settings = AppSettings::Get();
 		settings.MainWindowPlacement(wp);
+		settings.AlwaysOnTop(GetExStyle() & WS_EX_TOPMOST);
 		settings.Save();
 
 		// unregister message filtering and idle updates
@@ -1055,11 +1067,72 @@ LRESULT CMainFrame::OnShowWindow(UINT, WPARAM show, LPARAM, BOOL&) {
 	return 0;
 }
 
+void CMainFrame::SetAlwaysOnTop(bool onTop) {
+	SetWindowPos(onTop ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
+	UISetCheck(ID_OPTIONS_ALWAYSONTOP, onTop);
+}
+
 LRESULT CMainFrame::OnMenuSelect(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/) const {
 	return 0;
 }
 
 LRESULT CMainFrame::OnDisassembleEntryPoint(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
 	ShowView(TreeItemType::AsmEntryPoint, nullptr, IDI_BINARY);
+	return 0;
+}
+
+LRESULT CMainFrame::OnAlwaysOnTop(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
+	auto onTop = !AppSettings::Get().AlwaysOnTop();
+	AppSettings::Get().AlwaysOnTop(onTop);
+	SetAlwaysOnTop(onTop);
+
+	return 0;
+}
+
+void CMainFrame::InitDarkTheme() const {
+	s_DarkTheme.BackColor = s_DarkTheme.SysColors[COLOR_WINDOW] = RGB(32, 32, 32);
+	s_DarkTheme.TextColor = s_DarkTheme.SysColors[COLOR_WINDOWTEXT] = RGB(248, 248, 248);
+	s_DarkTheme.SysColors[COLOR_HIGHLIGHT] = RGB(10, 10, 160);
+	s_DarkTheme.SysColors[COLOR_HIGHLIGHTTEXT] = RGB(240, 240, 240);
+	s_DarkTheme.SysColors[COLOR_MENUTEXT] = s_DarkTheme.TextColor;
+	s_DarkTheme.SysColors[COLOR_CAPTIONTEXT] = s_DarkTheme.TextColor;
+	s_DarkTheme.SysColors[COLOR_BTNFACE] = s_DarkTheme.BackColor;
+	s_DarkTheme.SysColors[COLOR_BTNTEXT] = s_DarkTheme.TextColor;
+	s_DarkTheme.SysColors[COLOR_3DLIGHT] = RGB(192, 192, 192);
+	s_DarkTheme.SysColors[COLOR_BTNHIGHLIGHT] = RGB(192, 192, 192);
+	s_DarkTheme.SysColors[COLOR_CAPTIONTEXT] = s_DarkTheme.TextColor;
+	s_DarkTheme.SysColors[COLOR_3DSHADOW] = s_DarkTheme.TextColor;
+	s_DarkTheme.SysColors[COLOR_SCROLLBAR] = s_DarkTheme.BackColor;
+	s_DarkTheme.SysColors[COLOR_APPWORKSPACE] = s_DarkTheme.BackColor;
+	s_DarkTheme.StatusBar.BackColor = RGB(16, 0, 16);
+	s_DarkTheme.StatusBar.TextColor = s_DarkTheme.TextColor;
+
+	s_DarkTheme.Name = L"Dark";
+	s_DarkTheme.Menu.BackColor = s_DarkTheme.BackColor;
+	s_DarkTheme.Menu.TextColor = s_DarkTheme.TextColor;
+}
+
+LRESULT CMainFrame::OnUpdateDarkMode(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/) {
+	auto& settings = AppSettings::Get();
+	if (settings.DarkMode())
+		ThemeHelper::SetCurrentTheme(s_DarkTheme, m_hWnd);
+	else
+		ThemeHelper::SetDefaultTheme(m_hWnd);
+	ThemeHelper::UpdateMenuColors(*this, settings.DarkMode());
+	UpdateMenuBase(GetMenu(), true);
+	DrawMenuBar();
+	UISetCheck(ID_OPTIONS_DARKMODE, settings.DarkMode());
+	return 0;
+}
+
+LRESULT CMainFrame::OnToggleDarkMode(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
+	auto& settings = AppSettings::Get();
+	settings.DarkMode(!settings.DarkMode());
+	UISetCheck(ID_OPTIONS_DARKMODE, settings.DarkMode());
+	::EnumThreadWindows(::GetCurrentThreadId(), [](auto hWnd, auto) {
+		::PostMessage(hWnd, WM_UPDATE_DARKMODE, 0, 0);
+		return TRUE;
+		}, 0);
+
 	return 0;
 }
