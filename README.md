@@ -6,7 +6,7 @@ An imporoved version over **Total PE**:
 
 * Tabs
 * Syntax highlighting in assembly and manifest views
-* Use of symbols provdes extra information
+* Use of symbols provding extra information
 * Headers structures view
 * Basic "Find"
 * More to come!
