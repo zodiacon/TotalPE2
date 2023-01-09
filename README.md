@@ -8,6 +8,7 @@ An imporoved version over **Total PE**:
 * Syntax highlighting in assembly and manifest views
 * Use of symbols provdes extra information
 * Headers structures view
+* Basic "Find"
 * More to come!
 
 As usual, it's a work in progress. Some PE viewing features are still missing - examples: some data directories, graphic viewers for dialogs and menus
