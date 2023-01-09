@@ -640,7 +640,7 @@ PCWSTR PEStrings::DebugTypeToString(uint32_t type) {
 	return L"(Reserved)";
 }
 
-PCWSTR PEStrings::x64RelocationTypeToString(BYTE type) {
+PCWSTR PEStrings::x64RelocationTypeToString(WORD type) {
 	switch (type) {
 		case IMAGE_REL_AMD64_ABSOLUTE:	return L"Absolute";
 		case IMAGE_REL_AMD64_ADDR64:	return L"64-bit Address";

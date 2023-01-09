@@ -123,6 +123,9 @@
     <ClCompile Include="LoadConfigView.cpp">
       <Filter>Views\DataDirectories</Filter>
     </ClCompile>
+    <ClCompile Include="RelocationsView.cpp">
+      <Filter>Views\DataDirectories</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -222,6 +225,9 @@
       <Filter>Controls</Filter>
     </ClInclude>
     <ClInclude Include="LoadConfigView.h">
+      <Filter>Views\DataDirectories</Filter>
+    </ClInclude>
+    <ClInclude Include="RelocationsView.h">
       <Filter>Views\DataDirectories</Filter>
     </ClInclude>
   </ItemGroup>

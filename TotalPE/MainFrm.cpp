@@ -29,6 +29,7 @@
 #include "SecurityView.h"
 #include "ScintillaView.h"
 #include "LoadConfigView.h"
+#include "RelocationsView.h"
 
 const int WindowMenuPosition = 5;
 
@@ -468,6 +469,16 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		case TreeItemType::DirectorySecurity:
 		{
 			auto view = new CSecurityView(this, m_PE);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::DirectoryReloc:
+		{
+			auto view = new CRelocationsView(this, m_PE);
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};

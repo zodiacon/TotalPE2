@@ -373,12 +373,12 @@ namespace libpe
 		{ IMAGE_REL_BASED_MACHINE_SPECIFIC_9, L"IMAGE_REL_BASED_MACHINE_SPECIFIC_9" },
 		{ IMAGE_REL_BASED_DIR64, L"IMAGE_REL_BASED_DIR64" }
 	};
-	struct PERELOC {
+	struct PERelocation {
 		DWORD                    Offset;     //File's raw offset of this Relocation descriptor.
 		IMAGE_BASE_RELOCATION    BaseReloc;  //Standard IMAGE_BASE_RELOCATION header.
 		std::vector<PERelocData> RelocData; //Array of the Relocation data struct.
 	};
-	using PERELOC_VEC = std::vector<PERELOC>;
+	using PERELOC_VEC = std::vector<PERelocation>;
 
 
 	//Debug table.

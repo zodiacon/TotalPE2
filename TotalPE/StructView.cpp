@@ -33,10 +33,10 @@ LRESULT CStructView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
     m_TL.GetTreeControl().SetExtendedStyle(TVS_EX_DOUBLEBUFFER, TVS_EX_DOUBLEBUFFER);
     m_TL.GetTreeControl().SetImageList(Frame()->GetImageList());
 
-    m_TL.AddColumn(L"Member", 250, HDF_LEFT);
+    m_TL.AddColumn(L"Member", 250, HDF_CENTER);
     m_TL.AddColumn(L"Offset", 60, HDF_CENTER);
-    m_TL.AddColumn(L"Type", 180, HDF_LEFT);
-    m_TL.AddColumn(L"Value", 150, HDF_LEFT);
+    m_TL.AddColumn(L"Type", 180, HDF_CENTER);
+    m_TL.AddColumn(L"Value", 150, HDF_CENTER);
     m_TL.AddColumn(L"Details", 150, HDF_LEFT);
 
     m_HexView.Create(m_Splitter, rcDefault, nullptr, WS_CHILD | WS_VISIBLE);
