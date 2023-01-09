@@ -127,7 +127,10 @@ DiaSymbol CMainFrame::GetSymbolForName(PCWSTR mod, PCWSTR name) const {
 	if (it == symbols.end()) {
 		DiaSession session;
 		WCHAR path[MAX_PATH];
-		::GetSystemDirectory(path, _countof(path));
+		if (m_PE->GetFileInfo()->IsPE32)
+			::GetSystemWow64Directory(path, _countof(path));
+		else
+			::GetSystemDirectory(path, _countof(path));
 		wcscat_s(path, L"\\");
 		wcscat_s(path, mod);
 		if (!session.OpenImage(path))
@@ -439,7 +442,7 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 
 		case TreeItemType::NTHeader:
 		{
-			auto sym = GetSymbolForName(L"ntdll.dll", m_PE->GetFileInfo()->IsPE32 ? L"_IMAGE_NT_HEADERS32" : L"_IMAGE_NT_HEADERS64");
+			auto sym = GetSymbolForName(L"ntdll.dll", m_PE->GetFileInfo()->IsPE32 ? L"_IMAGE_NT_HEADERS" : L"_IMAGE_NT_HEADERS64");
 			if (!sym)		// temporary
 				return {};
 
