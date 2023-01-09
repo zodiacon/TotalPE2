@@ -13,7 +13,7 @@ public:
 
 	CString GetColumnText(HWND, int row, int col);
 	void DoSort(SortInfo const* si);
-	void OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD newState);
+	void OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD newState) const;
 	int GetRowImage(HWND, int row, int) const;
 	int GetSaveColumnRange(HWND, int&) const;
 	bool OnRightClickList(HWND, int row, int col, POINT const& pt) const;
@@ -28,13 +28,14 @@ public:
 	ALT_MSG_MAP(1)
 		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnCopy)
 		COMMAND_ID_HANDLER(ID_VIEW_DISASSEMBLE, OnDissassemble)
+		CHAIN_MSG_MAP_ALT(CViewBase<CExportsView>, 1)
 	END_MSG_MAP()
 
 private:
 	CString GetTitle() const override;
 
 	enum class ColumnType {
-		Name, Ordinal, RVA, NameRVA, ForwardedName, UndecoratedName, Detials
+		Name, Ordinal, RVA, NameRVA, ForwardedName, UndecoratedName, Details
 	};
 
 	struct Export : libpe::PEExportFunction {

@@ -18,8 +18,8 @@ CString CExportsView::GetColumnText(HWND h, int row, int col) {
 		case ColumnType::Ordinal: return std::to_wstring(exp.Ordinal).c_str();
 		case ColumnType::RVA: return std::format(L"0x{:X}", exp.FuncRVA).c_str();
 		case ColumnType::NameRVA: return std::format(L"0x{:X}", exp.NameRVA).c_str();
-		case ColumnType::UndecoratedName: return PEStrings::UndecorateName(exp.FuncName.c_str()).c_str();
-		case ColumnType::Detials: return exp.FromSymbols ? L"From symbols" : L"";
+		case ColumnType::UndecoratedName: return PEStrings::UndecorateName(exp.Name.c_str()).c_str();
+		case ColumnType::Details: return exp.FromSymbols ? L"From symbols" : L"";
 	}
 	return CString();
 }
@@ -29,17 +29,19 @@ void CExportsView::DoSort(SortInfo const* si) {
 	auto compare = [&](auto& e1, auto& e2) {
 		switch (GetColumnManager(si->hWnd)->GetColumnTag<ColumnType>(si->SortColumn)) {
 			case ColumnType::RVA: return SortHelper::Sort(e1.FuncRVA, e2.FuncRVA, asc);
+			case ColumnType::Ordinal: return SortHelper::Sort(e1.Ordinal, e2.Ordinal, asc);
 			case ColumnType::NameRVA: return SortHelper::Sort(e1.NameRVA, e2.NameRVA, asc);
 			case ColumnType::Name: return SortHelper::Sort(e1.Name, e2.Name, asc);
 			case ColumnType::ForwardedName: return SortHelper::Sort(e1.ForwarderName, e2.ForwarderName, asc);
 			case ColumnType::UndecoratedName: return SortHelper::Sort(PEStrings::UndecorateName(e1.FuncName.c_str()), PEStrings::UndecorateName(e2.FuncName.c_str()), asc);
+			case ColumnType::Details: return SortHelper::Sort(e1.FromSymbols, e2.FromSymbols, asc);
 		}
 		return false;
 	};
 	std::ranges::sort(m_Exports, compare);
 }
 
-void CExportsView::OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD newState) {
+void CExportsView::OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD newState) const {
 	if((newState & LVIS_SELECTED) || (oldState & LVIS_SELECTED))
 		UpdateUI();
 }
@@ -111,7 +113,7 @@ LRESULT CExportsView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	cm->AddColumn(L"Forwarded Name", LVCFMT_LEFT, 250, ColumnType::ForwardedName);
 	cm->AddColumn(L"Name RVA", LVCFMT_RIGHT, 100, ColumnType::NameRVA);
 	cm->AddColumn(L"Undecorated Name", LVCFMT_LEFT, 250, ColumnType::UndecoratedName);
-	cm->AddColumn(L"Details", LVCFMT_LEFT, 150, ColumnType::Detials);
+	cm->AddColumn(L"Details", LVCFMT_LEFT, 150, ColumnType::Details);
 
 	BuildItems();
 

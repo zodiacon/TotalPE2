@@ -15,6 +15,7 @@ public:
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
 		CHAIN_MSG_MAP(CViewBase)
 	ALT_MSG_MAP(1)
+		CHAIN_MSG_MAP_ALT(BaseFrame, 1)
 	END_MSG_MAP()
 
 private:

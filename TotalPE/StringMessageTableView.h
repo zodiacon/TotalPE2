@@ -25,6 +25,7 @@ public:
 		CHAIN_MSG_MAP(CViewBase<CStringMessageTableView>)
 	ALT_MSG_MAP(1)
 		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnCopy)
+		CHAIN_MSG_MAP_ALT(BaseFrame, 1)
 	END_MSG_MAP()
 
 	LRESULT OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);

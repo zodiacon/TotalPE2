@@ -25,6 +25,7 @@ public:
 		CHAIN_MSG_MAP(CViewBase<CLoadConfigView>)
 	ALT_MSG_MAP(1)
 		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnCopy)
+		CHAIN_MSG_MAP_ALT(CViewBase<CLoadConfigView>, 1)
 	END_MSG_MAP()
 
 private:

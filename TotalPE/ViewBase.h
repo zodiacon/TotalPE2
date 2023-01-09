@@ -62,7 +62,14 @@ public:
 		MESSAGE_HANDLER(WM_ACTIVATE, OnActivate)
 		CHAIN_MSG_MAP(CAutoUpdateUI<T>)
 		CHAIN_MSG_MAP(BaseFrame)
+	ALT_MSG_MAP(1)
+		COMMAND_ID_HANDLER(ID_EDIT_FIND_NEXT, OnFindNext)
 	END_MSG_MAP()
+
+	LRESULT OnFindNext(WORD, WORD, HWND, BOOL&) {
+		this->SendMessage(CFindReplaceDialog::GetFindReplaceMsg());
+		return 0;
+	}
 
 	LRESULT OnCreate(UINT /*uMsg*/, WPARAM active, LPARAM lParam, BOOL& /*bHandled*/) {
 		m_Handlers = true;
