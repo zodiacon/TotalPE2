@@ -76,8 +76,9 @@ public:
 			_Module.GetMessageLoop()->RemoveIdleHandler(this);
 			_Module.GetMessageLoop()->RemoveMessageFilter(this);
 		}
-		if (m_DeleteFromTree)
-			this->Frame()->DeleteTreeItem(GetHTreeItem());
+		if (m_DeleteFromTree) {
+			this->Frame()->DeleteTreeItem(m_hItem);
+		}
 		bHandled = FALSE;
 		return 0;
 	}

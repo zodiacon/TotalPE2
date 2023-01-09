@@ -44,6 +44,7 @@ enum class TreeItemType : int64_t {
 	Resource,
 	Disassembly,
 	AsmEntryPoint,
+	FileInHex,
 
 	ItemMask = 255,
 };

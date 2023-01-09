@@ -309,6 +309,8 @@ bool CMainFrame::ShowView(TreeItemType data, HTREEITEM hItem, UINT icon) {
 				int dummy;
 				m_Tree.GetItemImage(hItem, image, dummy);
 			}
+			if (!hItem)
+				hItem = view->GetHTreeItem();
 			view->SetHTreeItem(hItem);
 			m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, map);
 			m_Views.insert({ data, view });
@@ -366,6 +368,21 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 			uint32_t size = 0x500;		// hard coded for now
 			view->SetAsmCode(m_PE.GetSpan(offset, size), offset + imageBase, is32Bit);
 			view->GetCtrl().SetReadOnly(true);
+			auto hItem = InsertTreeItem(m_Tree, view->GetTitle(), GetIconIndex(IDI_BINARY), type, m_Views.at(TreeItemType::Image)->GetHTreeItem(), TVI_SORT);
+			view->SetDeleteFromTree(true);
+			view->SetHTreeItem(hItem);
+
+			return { view, view };
+		}
+
+		case TreeItemType::FileInHex:
+		{
+			auto view = new CHexView(this, L"PE in Hex");
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			view->SetData(m_PE.GetSpan(0, m_PE.GetFileSize()));
 			auto hItem = InsertTreeItem(m_Tree, view->GetTitle(), GetIconIndex(IDI_BINARY), type, m_Views.at(TreeItemType::Image)->GetHTreeItem(), TVI_SORT);
 			view->SetDeleteFromTree(true);
 			view->SetHTreeItem(hItem);
@@ -1182,5 +1199,10 @@ LRESULT CMainFrame::OnToggleDarkMode(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*
 
 LRESULT CMainFrame::OnPageActivated(int /*idCtrl*/, LPNMHDR /*pnmh*/, BOOL& /*bHandled*/) {
 	AddSubMenu(::GetSubMenu(GetMenu(), WindowMenuPosition));
+	return 0;
+}
+
+LRESULT CMainFrame::OnViewFileInHex(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
+	ShowView(TreeItemType::FileInHex, nullptr, IDI_BINARY);
 	return 0;
 }

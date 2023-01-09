@@ -95,7 +95,8 @@ BEGIN
         MENUITEM "&Debug",                      ID_VIEW_DEBUG
         MENUITEM "Security",                    ID_PE_SECURITY
         MENUITEM SEPARATOR
-        MENUITEM "Disassemble Entry Point...",  ID_PE_DISASSEMBLEENTRYPOINT
+        MENUITEM "Disassemble Entry Point",     ID_PE_DISASSEMBLEENTRYPOINT
+        MENUITEM "Entire File in &Hex",         ID_PE_ENTIREFILEINHEX
     END
     POPUP "&Options"
     BEGIN

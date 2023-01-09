@@ -53,6 +53,7 @@ public:
 		COMMAND_ID_HANDLER(ID_VIEW_MANIFEST, OnViewManifest)
 		COMMAND_ID_HANDLER(ID_VIEW_VERSION, OnViewVersion)
 		COMMAND_ID_HANDLER(ID_PE_SECURITY, OnViewSecurity)
+		COMMAND_ID_HANDLER(ID_PE_ENTIREFILEINHEX, OnViewFileInHex)
 		COMMAND_ID_HANDLER(ID_VIEW_SECTIONS, OnViewSections)
 		COMMAND_ID_HANDLER(ID_VIEW_DIRECTORIES, OnViewDataDirs)
 		COMMAND_ID_HANDLER(ID_PE_DISASSEMBLEENTRYPOINT, OnDisassembleEntryPoint)
@@ -149,6 +150,7 @@ private:
 	LRESULT OnUpdateDarkMode(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnToggleDarkMode(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnPageActivated(int /*idCtrl*/, LPNMHDR /*pnmh*/, BOOL& /*bHandled*/);
+	LRESULT OnViewFileInHex(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 
 	CCustomTabView m_Tabs;
 	CCustomSplitterWindow m_Splitter;

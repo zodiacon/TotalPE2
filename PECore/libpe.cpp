@@ -680,7 +680,7 @@ namespace libpe {
 				//Amount of all «Rich» DOUBLE_DWORD structs.
 				//First 16 bytes in «Rich» header are irrelevant. It's "DanS" itself and 12 more zeroed bytes.
 				//That's why we subtracting 0x90 to find out amount of all «Rich» structures:
-				//0x80 («Rich» start) + 16 (0xF) = 0x90.
+				//0x80 («Rich» start) + 16 (0x10) = 0x90.
 				const DWORD dwRichSize = static_cast<DWORD>((reinterpret_cast<DWORD_PTR>(pRichIter) - ullBaseAddr) - 0x90) / 8;
 				const DWORD dwRichXORMask = *(pRichIter + 1); //xor mask of «Rich» header.
 				pRichIter = reinterpret_cast<PDWORD>(ullBaseAddr + 0x90);//VA of «Rich» DOUBLE_DWORD structs start.
