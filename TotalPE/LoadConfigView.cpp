@@ -16,7 +16,7 @@ LRESULT CLoadConfigView::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lPa
 	m_List.SetExtendedListViewStyle(LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP);
 	auto cm = GetColumnManager(m_List);
 
-	cm->AddColumn(L"Name", LVCFMT_LEFT, 200);
+	cm->AddColumn(L"Name", LVCFMT_LEFT, 260);
 	cm->AddColumn(L"Value", LVCFMT_LEFT, 250);
 	cm->AddColumn(L"Details", LVCFMT_LEFT, 550);
 
@@ -75,11 +75,6 @@ void CLoadConfigView::BuildItems() {
 
 	ULONGLONG guardCFFunction = is64 ? lc64.GuardCFCheckFunctionPointer : lc32.GuardCFCheckFunctionPointer;
 	ULONGLONG guardCFDispFunction = is64 ? lc64.GuardCFDispatchFunctionPointer : lc32.GuardCFDispatchFunctionPointer;
-	ULONGLONG guardCFFunctionPtr = 0, guardCFDispFunctionPtr = 0;
-	if(guardCFFunction)
-		m_PE.Read(m_PE->GetOffsetFromVA(guardCFFunction), is64 ? 8 : 4, &guardCFFunctionPtr);
-	if (guardCFDispFunction)
-		m_PE.Read(m_PE->GetOffsetFromVA(guardCFDispFunction), is64 ? 8 : 4, &guardCFDispFunctionPtr);
 
 	m_Items = std::vector<DataItem>{
 		{ L"Size", std::format(L"{} Bytes", lc32.Size) },
@@ -101,14 +96,27 @@ void CLoadConfigView::BuildItems() {
 		{ L"Security Cookie", std::format(L"0x{:X}", is64 ? lc64.SecurityCookie : lc32.SecurityCookie) },
 		{ L"SE Handler Table", std::format(L"0x{:X}", is64 ? lc64.SEHandlerTable : lc32.SEHandlerTable) },
 		{ L"SE Handler Count", std::format(L"0x{:X}", is64 ? lc64.SEHandlerCount : lc32.SEHandlerCount) },
-		{ L"Guard CF Check Function", std::format(L"0x{:X}", guardCFFunction),
-			symbols && guardCFFunctionPtr ? PEStrings::UndecorateName(symbols.GetSymbolByVA(guardCFFunctionPtr).Name().c_str()) : std::wstring(L"") },
-		{ L"Guard CF Dispatch Function", std::format(L"0x{:X}", guardCFDispFunction),
-			symbols && guardCFDispFunctionPtr ? PEStrings::UndecorateName(symbols.GetSymbolByVA(guardCFDispFunctionPtr).Name().c_str()) : std::wstring(L"") },
-		{ L"CSD Version", std::format(L"0x{:X}", is64 ? lc64.CSDVersion : lc32.CSDVersion) },
-		{ L"CSD Version", std::format(L"0x{:X}", is64 ? lc64.CSDVersion : lc32.CSDVersion) },
-		{ L"CSD Version", std::format(L"0x{:X}", is64 ? lc64.CSDVersion : lc32.CSDVersion) },
-		{ L"CSD Version", std::format(L"0x{:X}", is64 ? lc64.CSDVersion : lc32.CSDVersion) },
+		{ L"Guard CF Check Function", std::format(L"0x{:X}", guardCFFunction) },
+		{ L"Guard CF Dispatch Function", std::format(L"0x{:X}", guardCFDispFunction) },
+		{ L"Guard CF Function Table", std::format(L"0x{:X}", is64 ? lc64.GuardCFFunctionTable : lc32.GuardCFFunctionTable) },
+		{ L"Guard CF Function Count", std::format(L"0x{:X}", is64 ? lc64.GuardCFFunctionCount : lc32.GuardCFFunctionCount) },
+		{ L"Guard Flags", std::format(L"0x{:08X}", is64 ? lc64.GuardFlags : lc32.GuardFlags) },
+		{ L"Guard Address Taken IAT Entry Table", std::format(L"0x{:X}", is64 ? lc64.GuardAddressTakenIatEntryTable : lc32.GuardAddressTakenIatEntryTable) },
+		{ L"Guard Address Taken IAT Entry Count", std::format(L"0x{:X}", is64 ? lc64.GuardAddressTakenIatEntryCount : lc32.GuardAddressTakenIatEntryCount) },
+		{ L"Guard Long Jump Target Table", std::format(L"0x{:X}", is64 ? lc64.GuardLongJumpTargetTable : lc32.GuardLongJumpTargetTable) },
+		{ L"Guard Long Jump Target Count", std::format(L"0x{:X}", is64 ? lc64.GuardLongJumpTargetCount : lc32.GuardLongJumpTargetCount) },
+		{ L"Dynamic Value Reloc Table", std::format(L"0x{:X}", is64 ? lc64.DynamicValueRelocTable : lc32.DynamicValueRelocTable) },
+		{ L"CHPE Metadata Pointer", std::format(L"0x{:X}", is64 ? lc64.CHPEMetadataPointer : lc32.CHPEMetadataPointer) },
+		{ L"Guard RF Failure Routine", std::format(L"0x{:X}", is64 ? lc64.GuardRFFailureRoutine : lc32.GuardRFFailureRoutine) },
+		{ L"Guard RF Failure Routine Function Pointer", std::format(L"0x{:X}", is64 ? lc64.GuardRFFailureRoutineFunctionPointer : lc32.GuardRFFailureRoutineFunctionPointer) },
+		{ L"Dynamic Value Relocation Table Offset", std::format(L"0x{:X}", is64 ? lc64.DynamicValueRelocTableOffset : lc32.DynamicValueRelocTableOffset) },
+		{ L"Guard RF Verify Stack Pointer Function Pointer", std::format(L"0x{:X}", is64 ? lc64.DynamicValueRelocTableSection : lc32.DynamicValueRelocTableSection) },
+		{ L"Dynamic Value Relocation Table Section", std::format(L"0x{:X}", is64 ? lc64.GuardRFVerifyStackPointerFunctionPointer : lc32.GuardRFVerifyStackPointerFunctionPointer) },
+		{ L"Hot Patch Table Offset", std::format(L"0x{:X}", is64 ? lc64.HotPatchTableOffset : lc32.HotPatchTableOffset) },
+		{ L"Enclave Configuration Pointer", std::format(L"0x{:X}", is64 ? lc64.EnclaveConfigurationPointer : lc32.EnclaveConfigurationPointer) },
+		{ L"Volatile Metadata Pointer", std::format(L"0x{:X}", is64 ? lc64.VolatileMetadataPointer : lc32.VolatileMetadataPointer) },
+		{ L"Guard EH Continuation Table", std::format(L"0x{:X}", is64 ? lc64.GuardEHContinuationTable : lc32.GuardEHContinuationTable) },
+		{ L"Guard EH Continuation Count", std::format(L"0x{:X}", is64 ? lc64.GuardEHContinuationCount : lc32.GuardEHContinuationCount) },
 	};
 
 	m_List.SetItemCount((int)m_Items.size());

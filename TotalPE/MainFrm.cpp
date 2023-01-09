@@ -278,6 +278,8 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 	UISetCheck(ID_VIEW_STATUS_BAR, settings.ViewStatusBar());
 	SetAlwaysOnTop(settings.AlwaysOnTop());
 
+	if(s_Frames == 1)
+		ParseCommandLine();
 	UpdateUI();
 
 	return 0;
@@ -714,8 +716,8 @@ void CMainFrame::BuildTree(int iconSize) {
 	m_Tree.SetRedraw(FALSE);
 	m_Tree.DeleteAllItems();
 	m_Tree.SetItemHeight(iconSize + 2);
-	if (!m_TreeImages) {
-		BuildTreeImageList(iconSize);
+
+	if (BuildTreeImageList(iconSize)) {
 		m_Tree.SetImageList(m_TreeImages);
 		m_Tabs.SetImageList(m_TreeImages);
 	}
@@ -933,18 +935,26 @@ int CMainFrame::GetIconIndex(UINT icon) const {
 	return s_ImageIndices.at(icon);
 }
 
-void CMainFrame::BuildTreeImageList(int iconSize) {
-	if (m_TreeImages)
-		return;
+bool CMainFrame::BuildTreeImageList(int iconSize) {
+	//
+	// return true if image list existed already
+	//
+	bool exist = m_TreeImages != nullptr;
 
-	m_TreeImages.Create(iconSize, iconSize, ILC_COLOR32, 32, 16);
+	if(!exist)
+		m_TreeImages.Create(iconSize, iconSize, ILC_COLOR32, 32, 16);
 
 	WORD icon = 0;
 	CString path = m_PE.GetPath().c_str();
 	auto hIcon = ::ExtractAssociatedIcon(_Module.GetModuleInstance(), path.GetBuffer(), &icon);
 	if (!hIcon)
 		hIcon = AtlLoadSysIcon(IDI_APPLICATION);
-	m_TreeImages.AddIcon(hIcon);
+	if(!exist)
+		m_TreeImages.AddIcon(hIcon);
+	else {
+		m_TreeImages.ReplaceIcon(0, hIcon);
+		return false;
+	}
 
 	UINT const icons[] = {
 		IDI_SECTIONS, IDI_DIR_OPEN, IDI_RESOURCE, IDI_HEADERS, IDI_DIRS, IDI_SECURITY,
@@ -962,6 +972,7 @@ void CMainFrame::BuildTreeImageList(int iconSize) {
 		if (insert)
 			s_ImageIndices.insert({ icon, image });
 	}
+	return true;
 }
 
 void CMainFrame::SetStatusText(int index, PCWSTR text) {
@@ -1026,6 +1037,16 @@ LRESULT CMainFrame::OnRecentFile(WORD, WORD id, HWND, BOOL&) {
 	if (path != m_PE.GetPath())
 		OpenPE(path.c_str());
 	return 0;
+}
+
+void CMainFrame::ParseCommandLine() {
+	int count;
+	auto args = ::CommandLineToArgvW(::GetCommandLine(), &count);
+	if (args && count > 1) {
+		OpenPE(args[1]);
+	}
+	if (args)
+		::LocalFree(args);
 }
 
 LRESULT CMainFrame::OnViewExports(WORD, WORD, HWND, BOOL&) {

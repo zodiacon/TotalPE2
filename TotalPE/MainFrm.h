@@ -103,7 +103,9 @@ private:
 	void BuildTree(int iconSize = 16);
 	bool OpenPE(PCWSTR path);
 	CString DoFileOpen() const;
-	void BuildTreeImageList(int iconSize = 16);
+	bool BuildTreeImageList(int iconSize = 16);
+	void ParseCommandLine();
+
 	static int GetTreeIcon(UINT id);
 	static TreeItemType TreeItemWithIndex(TreeItemType type, int index);
 	static int ResourceTypeToIcon(WORD resType);

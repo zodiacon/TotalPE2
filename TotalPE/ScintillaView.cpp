@@ -163,7 +163,6 @@ void CScintillaView::UpdateColors() {
 
 	switch (m_Language) {
 		case LexLanguage::Asm:
-			//m_Sci.StyleSetFore(SCE_ASM_DEFAULT, theme->TextColor);
 			m_Sci.StyleSetFore(SCE_ASM_COMMENT, RGB(0, 128, 0));
 			m_Sci.StyleSetFore(SCE_ASM_CPUINSTRUCTION, dark ? RGB(240, 0, 0) : RGB(160, 0, 0));
 			m_Sci.StyleSetFore(SCE_ASM_NUMBER, dark ? RGB(0, 255, 255) : RGB(0, 0, 255));
