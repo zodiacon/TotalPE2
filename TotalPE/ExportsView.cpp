@@ -30,7 +30,7 @@ void CExportsView::DoSort(SortInfo const* si) {
 		switch (GetColumnManager(si->hWnd)->GetColumnTag<ColumnType>(si->SortColumn)) {
 			case ColumnType::RVA: return SortHelper::Sort(e1.FuncRVA, e2.FuncRVA, asc);
 			case ColumnType::NameRVA: return SortHelper::Sort(e1.NameRVA, e2.NameRVA, asc);
-			case ColumnType::Name: return SortHelper::Sort(e1.FuncName, e2.FuncName, asc);
+			case ColumnType::Name: return SortHelper::Sort(e1.Name, e2.Name, asc);
 			case ColumnType::ForwardedName: return SortHelper::Sort(e1.ForwarderName, e2.ForwarderName, asc);
 			case ColumnType::UndecoratedName: return SortHelper::Sort(PEStrings::UndecorateName(e1.FuncName.c_str()), PEStrings::UndecorateName(e2.FuncName.c_str()), asc);
 		}

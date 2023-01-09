@@ -122,7 +122,7 @@ TreeItemType CMainFrame::GetIndex(TreeItemType value) {
 }
 
 DiaSymbol CMainFrame::GetSymbolForName(PCWSTR mod, PCWSTR name) const {
-	static std::unordered_map<std::wstring, DiaSession> symbols;
+	auto& symbols = m_SymbolsForModules;
 	auto it = symbols.find(mod);
 	if (it == symbols.end()) {
 		DiaSession session;
@@ -138,7 +138,7 @@ DiaSymbol CMainFrame::GetSymbolForName(PCWSTR mod, PCWSTR name) const {
 		it = symbols.insert({ mod, std::move(session) }).first;
 	}
 
-	auto& session = it->second;
+	auto const& session = it->second;
 	auto sym = session.FindChildren(name);
 	return sym.empty() ? DiaSymbol::Empty : sym[0];
 }
@@ -699,10 +699,18 @@ LRESULT CMainFrame::OnDropFiles(UINT /*uMsg*/, WPARAM wParam, LPARAM /*lParam*/,
 
 bool CMainFrame::OpenPE(PCWSTR path) {
 	CWaitCursor wait;
+	int bitness = (m_PE && m_PE->GetFileInfo()->IsPE64) * 2 + (m_PE && m_PE->GetFileInfo()->IsPE32);
+
 	if (!m_PE.Open(path)) {
 		AtlMessageBox(m_hWnd, L"Error parsing file", IDR_MAINFRAME, MB_ICONERROR);
 		return false;
 	}
+
+	//
+	// clear symbol cache if bitness of old PE and new PE differ
+	//
+	if (bitness == 1 && m_PE->GetFileInfo()->IsPE64 || bitness == 2 && m_PE->GetFileInfo()->IsPE32)
+		m_SymbolsForModules.clear();
 
 	m_Symbols.OpenImage(path);
 	m_Views.clear();
