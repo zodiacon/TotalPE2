@@ -25,7 +25,7 @@ public:
 		CHAIN_MSG_MAP(CVirtualListView<CSecurityView>)
 		CHAIN_MSG_MAP(CViewBase<CSecurityView>)
 	ALT_MSG_MAP(1)
-		CHAIN_MSG_MAP_ALT(BaseFrame, 1)
+		CHAIN_MSG_MAP_ALT(CViewBase<CSecurityView>, 1)
 	END_MSG_MAP()
 
 	LRESULT OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);

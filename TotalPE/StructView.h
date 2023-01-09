@@ -23,7 +23,7 @@ public:
 		CHAIN_MSG_MAP(CViewBase<CStructView>)
 	ALT_MSG_MAP(1)
 		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnCopy)
-		CHAIN_MSG_MAP_ALT(BaseFrame, 1)
+		CHAIN_MSG_MAP_ALT(CViewBase<CStructView>, 1)
 	END_MSG_MAP()
 
 private:

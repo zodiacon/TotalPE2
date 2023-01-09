@@ -23,10 +23,10 @@ public:
 		MESSAGE_HANDLER(CFindReplaceDialog::GetFindReplaceMsg(), OnFind)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
 		CHAIN_MSG_MAP(CVirtualListView<CResourcesView>)
-		CHAIN_MSG_MAP(BaseFrame)
+		CHAIN_MSG_MAP(CViewBase<CResourcesView>)
 	ALT_MSG_MAP(1)
 		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnCopy)
-		CHAIN_MSG_MAP_ALT(BaseFrame, 1)
+		CHAIN_MSG_MAP_ALT(CViewBase<CResourcesView>, 1)
 	END_MSG_MAP()
 
 private:

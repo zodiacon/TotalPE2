@@ -14,12 +14,7 @@ CString CExceptionsView::GetColumnText(HWND, int row, int col) const {
 		case 0: return std::format(L"0x{:08X}", item.RuntimeFuncEntry.BeginAddress).c_str();
 		case 1: return std::format(L"0x{:08X}", item.RuntimeFuncEntry.EndAddress).c_str();
 		case 2: return std::format(L"0x{:08X}", item.RuntimeFuncEntry.UnwindInfoAddress).c_str();
-		case 3: return item.Offset ? std::format(L"{} + 0x{:X}", item.UndecoratedName, item.Offset).c_str() : item.UndecoratedName.c_str();
-		case 4:
-			if (!item.FuncName.empty()) {
-				return item.Disp == 0 ? item.FuncName.c_str() : std::format(L"{} + 0x{:X}", item.FuncName, item.Offset).c_str();
-			}
-			break;
+		case 3: return item.Disp ? std::format(L"{} + 0x{:X}", item.UndecoratedName, item.Disp).c_str() : item.UndecoratedName.c_str();
 	}
 	return CString();
 }
@@ -60,8 +55,11 @@ void CExceptionsView::BuildItems() {
 			auto sym = symbols.GetSymbolByRVA(ex.RuntimeFuncEntry.BeginAddress, SymbolTag::Null, &e.Disp);
 			if (sym) {
 				e.FuncName = sym.Name();
-				if (!e.FuncName.empty())
-					e.UndecoratedName = PEStrings::UndecorateName(e.FuncName.c_str());
+				if (!e.FuncName.empty()) {
+					e.UndecoratedName = sym.UndecoratedName();
+					if (e.UndecoratedName.empty())
+						e.UndecoratedName = PEStrings::UndecorateName(e.FuncName.c_str());
+				}
 			}
 		}
 		m_Items.emplace_back(std::move(e));
@@ -80,7 +78,6 @@ LRESULT CExceptionsView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	cm->AddColumn(L"End Address", LVCFMT_RIGHT, 120);
 	cm->AddColumn(L"Unwind Info", LVCFMT_RIGHT, 120);
 	cm->AddColumn(L"Function", LVCFMT_LEFT, 320);
-	//cm->AddColumn(L"Symbol Name", LVCFMT_LEFT, 220);
 	cm->UpdateColumns();
 	cm->DeleteColumn(0);
 
