@@ -1,6 +1,7 @@
 #pragma once
 
 enum class AccessMode {
+    Unknown,
     Private = 1,
     Protected,
     Public

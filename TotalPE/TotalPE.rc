@@ -278,6 +278,10 @@ IDI_UNION               ICON                    "res\\union.ico"
 
 IDI_BINARY              ICON                    "res\\Binary.ico"
 
+IDI_DATA                ICON                    "res\\Data.ico"
+
+IDI_GLOBE               ICON                    "res\\globe.ico"
+
 
 /////////////////////////////////////////////////////////////////////////////
 //

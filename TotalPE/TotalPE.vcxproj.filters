@@ -126,6 +126,12 @@
     <ClCompile Include="RelocationsView.cpp">
       <Filter>Views\DataDirectories</Filter>
     </ClCompile>
+    <ClCompile Include="SymbolsView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
+    <ClCompile Include="ViewFactory.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -229,6 +235,9 @@
     </ClInclude>
     <ClInclude Include="RelocationsView.h">
       <Filter>Views\DataDirectories</Filter>
+    </ClInclude>
+    <ClInclude Include="SymbolsView.h">
+      <Filter>Views</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -412,6 +421,12 @@
       <Filter>Resource Files\Icons</Filter>
     </Image>
     <Image Include="res\Binary.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\globe.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\Data.ico">
       <Filter>Resource Files\Icons</Filter>
     </Image>
   </ItemGroup>

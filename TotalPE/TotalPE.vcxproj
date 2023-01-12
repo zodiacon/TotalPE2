@@ -246,10 +246,12 @@
     <ClCompile Include="SecurityView.cpp" />
     <ClCompile Include="StringMessageTableView.cpp" />
     <ClCompile Include="StructView.cpp" />
+    <ClCompile Include="SymbolsView.cpp" />
     <ClCompile Include="TextView.cpp" />
     <ClCompile Include="TotalPE.cpp" />
     <ClCompile Include="PEImageView.cpp" />
     <ClCompile Include="VersionView.cpp" />
+    <ClCompile Include="ViewFactory.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AboutDlg.h" />
@@ -282,6 +284,7 @@
     <ClInclude Include="SecurityView.h" />
     <ClInclude Include="StringMessageTableView.h" />
     <ClInclude Include="StructView.h" />
+    <ClInclude Include="SymbolsView.h" />
     <ClInclude Include="TextView.h" />
     <ClInclude Include="TreeListView.h" />
     <ClInclude Include="VersionView.h" />
@@ -301,6 +304,7 @@
     <Image Include="res\component.ico" />
     <Image Include="res\copy.ico" />
     <Image Include="res\cursor.ico" />
+    <Image Include="res\Data.ico" />
     <Image Include="res\debug.ico" />
     <Image Include="res\dll-import.ico" />
     <Image Include="res\enum.ico" />
@@ -318,6 +322,7 @@
     <Image Include="res\function-export.ico" />
     <Image Include="res\function-export2.ico" />
     <Image Include="res\function.ico" />
+    <Image Include="res\globe.ico" />
     <Image Include="res\headers.ico" />
     <Image Include="res\icon.ico" />
     <Image Include="res\imports.ico" />

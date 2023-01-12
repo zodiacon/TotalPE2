@@ -39,7 +39,13 @@ enum class TreeItemType : int64_t {
 	ResourceLnaguage,
 	ContextMenu,
 	CLR,
+	
 	Symbols,
+	SymbolsFunctions,
+	SymbolsGlobalData,
+	SymbolsTypes,
+	SymbolsEnums,
+
 	Language,
 	Resource,
 	Disassembly,
@@ -49,6 +55,10 @@ enum class TreeItemType : int64_t {
 	ItemMask = 255,
 };
 DEFINE_ENUM_FLAG_OPERATORS(TreeItemType);
+
+enum class SymViewType {
+	None, Function, Data, UDT, Enum,
+};
 
 struct FlatResource : libpe::PEResFlat {
 	std::wstring Name, Type, Language;

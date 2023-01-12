@@ -5,31 +5,12 @@
 #include "pch.h"
 #include "resource.h"
 #include "AboutDlg.h"
-#include "PEImageView.h"
 #include "MainFrm.h"
 #include <IconHelper.h>
 #include "SecurityHelper.h"
 #include <ToolbarHelper.h>
 #include "PEStrings.h"
-#include "SectionsView.h"
-#include "DataDirectoriesView.h"
-#include "ExportsView.h"
-#include "ImportsView.h"
 #include "AppSettings.h"
-#include "ResourcesView.h"
-#include "StructView.h"
-#include "IconsView.h"
-#include "TextView.h"
-#include "StringMessageTableView.h"
-#include "VersionView.h"
-#include "AcceleratorTableView.h"
-#include "ExceptionsView.h"
-#include "DebugView.h"
-#include "BitmapView.h"
-#include "SecurityView.h"
-#include "ScintillaView.h"
-#include "LoadConfigView.h"
-#include "RelocationsView.h"
 
 const int WindowMenuPosition = 5;
 
@@ -152,49 +133,6 @@ bool CMainFrame::DeleteTreeItem(HTREEITEM hItem) {
 	return m_Tree.DeleteItem(hItem);
 }
 
-bool CMainFrame::CreateAssemblyView(std::span<const std::byte> code, uint64_t address, uint32_t rva, PCWSTR title, TreeItemType parent) {
-	auto it = m_Views.find(parent); 
-	if(it == m_Views.end()) {
-		//
-		// parent node does not exist
-		//
-		ATLASSERT(false);
-		return false;
-	}
-
-	auto hParent = it->second->GetHTreeItem();
-	//
-	// check for duplicate
-	//
-	auto hItem = FindChild(m_Tree, hParent, title);
-	if (hItem) {
-		ShowView(hItem);
-		return true;
-	}
-
-	auto view = new CScintillaView(this, title);
-	if (nullptr == view->DoCreate(m_Tabs)) {
-		ATLASSERT(false);
-		return false;
-	}
-
-	view->SetLanguage(LexLanguage::Asm);
-	view->SetAsmCode(code, address, m_PE->GetFileInfo()->IsPE32);
-	view->GetCtrl().SetReadOnly(true);
-	view->SetDeleteFromTree(true);
-
-	auto image = GetIconIndex(IDI_BINARY);
-	auto itemType = TreeItemWithIndex(TreeItemType::Disassembly, (int64_t)rva << ItemShift);
-	hItem = InsertTreeItem(m_Tree, title, image, itemType, hParent, TVI_SORT);
-	m_Tree.EnsureVisible(hItem);
-	view->SetHTreeItem(hItem);
-	m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, view);
-	m_Views.insert({ itemType, view });
-	m_Views2.insert({ view->GetHwnd(), itemType });
-
-	return true;
-}
-
 LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/) {
 	DragAcceptFiles();
 	auto& settings = AppSettings::Get();
@@ -235,7 +173,7 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 	UIAddToolBar(tb);
 
 	m_hWndClient = m_Splitter.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN, WS_EX_CLIENTEDGE);
-	m_Tabs.m_bTabCloseButton = false;
+	//m_Tabs.m_bTabCloseButton = false;
 	m_Tabs.Create(m_Splitter, rcDefault, NULL, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN);
 	m_Tree.Create(m_Splitter, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT);
 
@@ -351,218 +289,6 @@ LRESULT CMainFrame::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*
 	return 1;
 }
 
-std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
-	switch (type & TreeItemType::ItemMask) {
-		case TreeItemType::AsmEntryPoint:
-		{
-			bool is32Bit = m_PE->GetFileInfo()->IsPE32;
-			auto entry = is32Bit ? m_PE->GetNTHeader()->NTHdr32.OptionalHeader.AddressOfEntryPoint : m_PE->GetNTHeader()->NTHdr64.OptionalHeader.AddressOfEntryPoint;
-			if (entry == 0)
-				return {};
-
-			auto view = new CScintillaView(this, L"Entry Point");
-			if (nullptr == view->DoCreate(m_Tabs)) {
-				ATLASSERT(false);
-				return {};
-			}
-			view->SetLanguage(LexLanguage::Asm);
-
-			ULONGLONG imageBase = m_PE->GetImageBase();
-			auto offset = m_PE->GetOffsetFromRVA(entry);
-			uint32_t size = 0x500;		// hard coded for now
-			view->SetAsmCode(m_PE.GetSpan(offset, size), offset + imageBase, is32Bit);
-			view->GetCtrl().SetReadOnly(true);
-			auto hItem = InsertTreeItem(m_Tree, view->GetTitle(), GetIconIndex(IDI_BINARY), type, m_Views.at(TreeItemType::Image)->GetHTreeItem(), TVI_SORT);
-			view->SetDeleteFromTree(true);
-			view->SetHTreeItem(hItem);
-
-			return { view, view };
-		}
-
-		case TreeItemType::FileInHex:
-		{
-			auto view = new CHexView(this, L"PE in Hex");
-			if (nullptr == view->DoCreate(m_Tabs)) {
-				ATLASSERT(false);
-				return {};
-			}
-			view->SetData(m_PE.GetSpan(0, m_PE.GetFileSize()));
-			auto hItem = InsertTreeItem(m_Tree, view->GetTitle(), GetIconIndex(IDI_BINARY), type, m_Views.at(TreeItemType::Image)->GetHTreeItem(), TVI_SORT);
-			view->SetDeleteFromTree(true);
-			view->SetHTreeItem(hItem);
-
-			return { view, view };
-		}
-
-		case TreeItemType::Image:
-		{
-			auto view = new CPEImageView(this, m_PE);
-			if (nullptr == view->DoCreate(m_Tabs)) {
-				ATLASSERT(false);
-				return {};
-			}
-			return { view, view };
-		}
-
-		case TreeItemType::DirectoryLoadConfig:
-		{
-			auto view = new CLoadConfigView(this, m_PE);
-			if (nullptr == view->DoCreate(m_Tabs)) {
-				ATLASSERT(false);
-				return {};
-			}
-			return { view, view };
-		}
-
-		case TreeItemType::Headers:
-		{
-			auto view = new CHexView(this, L"Headers");
-			if (nullptr == view->DoCreate(m_Tabs)) {
-				ATLASSERT(false);
-				return {};
-			}
-			view->SetData(m_PE, 0, m_PE->GetFileInfo()->IsPE64 ?
-				m_PE->GetNTHeader()->NTHdr64.OptionalHeader.SizeOfHeaders : m_PE->GetNTHeader()->NTHdr32.OptionalHeader.SizeOfHeaders);
-			return { view, view };
-		}
-
-		case TreeItemType::DOSHeader:
-		{
-			auto sym = GetSymbolForName(L"ntdll.dll", L"_IMAGE_DOS_HEADER");
-			if (!sym)		// temporary
-				return {};
-
-			auto view = new CStructView(this, sym, L"DOS Header");
-			if (nullptr == view->DoCreate(m_Tabs)) {
-				ATLASSERT(false);
-				return {};
-			}
-			view->SetValue(m_PE->GetMSDOSHeader());
-			return { view, view };
-		}
-
-		case TreeItemType::NTHeader:
-		{
-			auto sym = GetSymbolForName(L"ntdll.dll", m_PE->GetFileInfo()->IsPE32 ? L"_IMAGE_NT_HEADERS" : L"_IMAGE_NT_HEADERS64");
-			if (!sym)		// temporary
-				return {};
-
-			auto view = new CStructView(this, sym, L"NT Header");
-			if (nullptr == view->DoCreate(m_Tabs)) {
-				ATLASSERT(false);
-				return {};
-			}
-			view->SetPEOffset(m_PE, m_PE->GetNTHeader()->dwOffset);
-			return { view, view };
-		}
-
-		case TreeItemType::Sections:
-		{
-			auto view = new CSectionsView(this, m_PE);
-			if (nullptr == view->DoCreate(m_Tabs)) {
-				ATLASSERT(false);
-				return {};
-			}
-			return { view, view };
-		}
-
-		case TreeItemType::DirectorySecurity:
-		{
-			auto view = new CSecurityView(this, m_PE);
-			if (nullptr == view->DoCreate(m_Tabs)) {
-				ATLASSERT(false);
-				return {};
-			}
-			return { view, view };
-		}
-
-		case TreeItemType::DirectoryReloc:
-		{
-			auto view = new CRelocationsView(this, m_PE);
-			if (nullptr == view->DoCreate(m_Tabs)) {
-				ATLASSERT(false);
-				return {};
-			}
-			return { view, view };
-		}
-
-		case TreeItemType::DirectoryExports:
-		{
-			auto view = new CExportsView(this, m_PE);
-			if (nullptr == view->DoCreate(m_Tabs)) {
-				ATLASSERT(false);
-				return {};
-			}
-			return { view, view };
-		}
-
-		case TreeItemType::DirectoryImports:
-		{
-			auto view = new CImportsView(this, m_PE);
-			if (nullptr == view->DoCreate(m_Tabs)) {
-				ATLASSERT(false);
-				return {};
-			}
-			return { view, view };
-		}
-
-		case TreeItemType::DirectoryExceptions:
-		{
-			auto view = new CExceptionsView(this, m_PE);
-			if (nullptr == view->DoCreate(m_Tabs)) {
-				ATLASSERT(false);
-				return {};
-			}
-			return { view, view };
-		}
-
-		case TreeItemType::DirectoryDebug:
-		{
-			auto view = new CDebugView(this, m_PE);
-			if (nullptr == view->DoCreate(m_Tabs)) {
-				ATLASSERT(false);
-				return {};
-			}
-			return { view, view };
-		}
-
-		case TreeItemType::Directories:
-		{
-			auto view = new CDataDirectoriesView(this, m_PE);
-			if (nullptr == view->DoCreate(m_Tabs)) {
-				ATLASSERT(false);
-				return {};
-			}
-			return { view, view };
-		}
-
-		case TreeItemType::DirectoryResources:
-		{
-			auto view = new CResourcesView(this, m_PE);
-			if (nullptr == view->DoCreate(m_Tabs)) {
-				ATLASSERT(false);
-				return {};
-			}
-			return { view, view };
-		}
-
-		case TreeItemType::Section:
-		{
-			auto const& sec = m_PE->GetSecHeaders()->at(((size_t)type >> ItemShift) - 1);
-			auto view = new CHexView(this, CString(sec.SectionName.c_str()) + L" (Section)");
-			if (!view->DoCreate(m_Tabs))
-				return {};
-
-			view->SetData(m_PE, sec.SecHdr.PointerToRawData, sec.SecHdr.SizeOfRawData);
-			return { view, view };
-		}
-
-		case TreeItemType::Resource:
-			return CreateResourceView(type);
-	}
-	return {};
-}
-
 bool CMainFrame::ShowView(HTREEITEM hItem) {
 	auto data = GetItemData<TreeItemType>(m_Tree, hItem);
 	return ShowView(data, hItem);
@@ -600,10 +326,7 @@ LRESULT CMainFrame::OnNewWindow(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndC
 
 LRESULT CMainFrame::OnWindowClose(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
 	if (int page = m_Tabs.GetActivePage(); page >= 0) {
-		auto hWnd = m_Tabs.GetPageHWND(page);
-		auto type = m_Views2.at(hWnd);
-		m_Views.erase(type);
-		m_Views2.erase(hWnd);
+		CloseTab(page);
 		m_Tabs.RemovePage(page);
 	}
 	else
@@ -723,6 +446,7 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	if (bitness == 1 && m_PE->GetFileInfo()->IsPE64 || bitness == 2 && m_PE->GetFileInfo()->IsPE32)
 		m_SymbolsForModules.clear();
 
+	m_Symbols.Close();
 	m_Symbols.OpenImage(path);
 	m_Views.clear();
 	m_Views2.clear();
@@ -831,9 +555,13 @@ void CMainFrame::BuildTree(int iconSize) {
 	}
 	m_Tree.Expand(resources, TVE_EXPAND);
 
-	if (m_Symbols) {
-		auto symbols = InsertTreeItem(m_Tree, L"Symbols", GetTreeIcon(IDI_SYMBOLS), TreeItemType::Symbols, root);
-	}
+	//if (m_Symbols) {
+	//	auto symbols = InsertTreeItem(m_Tree, L"Symbols", GetTreeIcon(IDI_SYMBOLS), TreeItemType::Symbols, root);
+	//	InsertTreeItem(m_Tree, L"Functions", GetTreeIcon(IDI_FUNCTION), TreeItemType::SymbolsFunctions, symbols, TVI_SORT);
+	//	InsertTreeItem(m_Tree, L"Global Data", GetTreeIcon(IDI_DATA), TreeItemType::SymbolsGlobalData, symbols, TVI_SORT);
+	//	InsertTreeItem(m_Tree, L"Types", GetTreeIcon(IDI_TYPE), TreeItemType::SymbolsTypes, symbols, TVI_SORT);
+	//	InsertTreeItem(m_Tree, L"Enums", GetTreeIcon(IDI_ENUM), TreeItemType::SymbolsEnums, symbols, TVI_SORT);
+	//}
 
 	m_hRoot = root;
 
@@ -879,88 +607,6 @@ LRESULT CMainFrame::OnFileOpen(WORD, WORD, HWND, BOOL&) {
 	return 0;
 }
 
-std::pair<IView*, CMessageMap*> CMainFrame::CreateResourceView(TreeItemType type) {
-	auto& res = m_FlatResources[((uint32_t)type >> ItemShift) - 1];
-	auto const resId = MAKEINTRESOURCE(res.TypeID);
-	if (resId == RT_VERSION) {
-		auto view = new CVersionView(this, (res.Name + L" (Version)").c_str());
-		if (!view->DoCreate(m_Tabs))
-			return {};
-
-		view->SetData(res.Data);
-		return { view, view };
-	}
-	if (resId == RT_BITMAP) {
-		auto view = new CBitmapView(this, (res.Name + L" (Bitmap)").c_str());
-		if (!view->DoCreate(m_Tabs))
-			return {};
-
-		view->SetData(res.Data);
-		return { view, view };
-	}
-	else if (resId == RT_ACCELERATOR) {
-		auto view = new CAcceleratorTableView(this, (res.Name + L" (Accel)").c_str());
-		if (!view->DoCreate(m_Tabs))
-			return {};
-
-		view->AddAccelTable(res.Data);
-		return { view, view };
-	}
-	else if (resId == RT_MANIFEST) {
-		auto view = new CScintillaView(this, (res.Name + L" (Manifest)").c_str());
-		if (!view->DoCreate(m_Tabs))
-			return {};
-
-		view->SetLanguage(LexLanguage::Xml);
-		view->SetText(CStringA((PCSTR)res.Data.data(), (int)res.Data.size()));
-		view->GetCtrl().SetReadOnly(true);
-		return { view, view };
-	}
-	else if (resId == RT_STRING || resId == RT_MESSAGETABLE) {
-		auto st = resId == RT_STRING;
-		auto view = new CStringMessageTableView(this, (res.Name + (st ? L" (String Table)" : L" (Manifest)")).c_str());
-		if (!view->DoCreate(m_Tabs))
-			return {};
-
-		if (st)
-			view->SetStringTableData(res.Data, res.NameID);
-		else
-			view->SetMessageTableData(res.Data);
-		return { view, view };
-
-	}
-
-	bool icon = resId == RT_ICON || resId == RT_GROUP_ICON;
-	bool group = resId == RT_GROUP_ICON || resId == RT_GROUP_CURSOR;
-	if (icon || group || resId == RT_CURSOR) {
-		if (!group) {
-			auto view = new CIconsView(this, (res.Name + (icon ? L" (Icon)" : L" (Cursor)")).c_str());
-			if (!view->DoCreate(m_Tabs))
-				return {};
-
-			view->SetIconData(res.Data, icon);
-			return { view, view };
-		}
-		else {
-			auto view = new CIconsView(this, (res.Name + (icon ? L" (Icon Group)" : L" (Cursor Group)")).c_str());
-			if (!view->DoCreate(m_Tabs))
-				return {};
-
-			view->SetGroupIconData(res.Data);
-			return { view, view };
-		}
-	}
-	//
-	// all other resources - use a hex view
-	//
-	auto view = new CHexView(this, std::format(L"{} ({})", res.Name, res.Type).c_str());
-	if (!view->DoCreate(m_Tabs))
-		return {};
-
-	view->SetData(res.Data);
-	return { view, view };
-}
-
 CString CMainFrame::DoFileOpen() const {
 	CSimpleFileDialog dlg(TRUE, nullptr, nullptr, OFN_EXPLORER | OFN_ENABLESIZING,
 		L"All PE Files\0*.exe;*.dll;*.efi;*.ocx;*.cpl;*.sys;*.mui;*.mun;*.scr\0All Files\0*.*\0");
@@ -1003,6 +649,7 @@ bool CMainFrame::BuildTreeImageList(int iconSize) {
 		IDI_THREAD, IDI_RICH_HEADER, IDI_MSDOS, IDI_FILE_HEADER, IDI_COMPONENT,
 		IDI_FUNCTION, IDI_FUNC_FORWARD, IDI_INTERFACE, IDI_DLL_IMPORT, IDI_FUNCTION2, IDI_SYMBOLS,
 		IDI_TYPE, IDI_ENUM, IDI_BITFIELD, IDI_FIELD, IDI_ARRAY, IDI_UNION, IDI_BINARY,
+		IDI_DATA,
 	};
 
 	bool insert = s_ImageIndices.empty();
@@ -1086,6 +733,13 @@ void CMainFrame::ParseCommandLine() {
 	}
 	if (args)
 		::LocalFree(args);
+}
+
+void CMainFrame::CloseTab(int page) {
+	auto hWnd = m_Tabs.GetPageHWND(page);
+	auto type = m_Views2.at(hWnd);
+	m_Views.erase(type);
+	m_Views2.erase(hWnd);
 }
 
 LRESULT CMainFrame::OnViewExports(WORD, WORD, HWND, BOOL&) {
@@ -1226,5 +880,11 @@ LRESULT CMainFrame::OnPageActivated(int /*idCtrl*/, LPNMHDR /*pnmh*/, BOOL& /*bH
 
 LRESULT CMainFrame::OnViewFileInHex(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
 	ShowView(TreeItemType::FileInHex, nullptr, IDI_BINARY);
+	return 0;
+}
+
+LRESULT CMainFrame::OnPageCloseButton(int, LPNMHDR hdr, BOOL&) {
+	CloseTab((int)hdr->idFrom);
+
 	return 0;
 }
