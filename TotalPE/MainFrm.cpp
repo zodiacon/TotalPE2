@@ -518,42 +518,44 @@ void CMainFrame::BuildTree(int iconSize) {
 	}
 	m_Tree.Expand(directories, TVE_EXPAND);
 
-	auto resources = InsertTreeItem(m_Tree, L"Resources", GetTreeIcon(IDI_RESOURCE), TreeItemType::Resources, root);
-	std::unordered_map<std::wstring, HTREEITEM> typeItems;
-	auto fresources = libpe::Ilibpe::FlatResources(*m_PE->GetResources());
-	i = 0;
-	m_hResVersion = m_hResManifest = nullptr;
-	m_FlatResources.clear();
-	m_FlatResources.reserve(fresources.size());
-	for (auto const& res : fresources) {
-		std::wstring type = res.TypeStr.empty() ? PEStrings::ResourceTypeToString(res.TypeID) : std::wstring(res.TypeStr);
-		if (type.empty())
-			type = std::format(L"#{}", res.TypeID);
-		auto it = typeItems.find(type);
-		if (it == typeItems.end()) {
-			auto hItem = InsertTreeItem(m_Tree, type.c_str(), ResourceTypeToIcon(res.TypeID),
-				TreeItemWithIndex(TreeItemType::ResourceTypeName, (i + 1) << ItemShift), resources, TVI_SORT);
-			it = typeItems.insert({ type, hItem }).first;
+	if (m_PE->GetFileInfo()->HasResource) {
+		auto resources = InsertTreeItem(m_Tree, L"Resources", GetTreeIcon(IDI_RESOURCE), TreeItemType::Resources, root);
+		std::unordered_map<std::wstring, HTREEITEM> typeItems;
+		auto fresources = libpe::Ilibpe::FlatResources(*m_PE->GetResources());
+		i = 0;
+		m_hResVersion = m_hResManifest = nullptr;
+		m_FlatResources.clear();
+		m_FlatResources.reserve(fresources.size());
+		for (auto const& res : fresources) {
+			std::wstring type = res.TypeStr.empty() ? PEStrings::ResourceTypeToString(res.TypeID) : std::wstring(res.TypeStr);
+			if (type.empty())
+				type = std::format(L"#{}", res.TypeID);
+			auto it = typeItems.find(type);
+			if (it == typeItems.end()) {
+				auto hItem = InsertTreeItem(m_Tree, type.c_str(), ResourceTypeToIcon(res.TypeID),
+					TreeItemWithIndex(TreeItemType::ResourceTypeName, (i + 1) << ItemShift), resources, TVI_SORT);
+				it = typeItems.insert({ type, hItem }).first;
+			}
+			auto name = res.NameID == 0 ? res.NameStr.data() : (L"#" + std::to_wstring(res.NameID));
+			auto lang = res.LangStr.empty() ? PEStrings::LanguageToString(res.LangID) : std::wstring(res.LangStr);
+			FlatResource fres(res);
+			auto hResItem = InsertTreeItem(m_Tree, std::format(L"{} ({})", name, lang).c_str(), ResourceTypeToIcon(res.TypeID),
+				TreeItemWithIndex(TreeItemType::Resource, (i + 1) << ItemShift), it->second, TVI_SORT);
+
+			auto resTypeId = MAKEINTRESOURCE(res.TypeID);
+			if (resTypeId == RT_MANIFEST && m_hResManifest == nullptr)
+				m_hResManifest = hResItem;
+			else if (resTypeId == RT_VERSION && m_hResVersion == nullptr)
+				m_hResVersion = hResItem;
+
+			fres.Name = std::move(name);
+			fres.Type = std::move(type);
+			fres.Language = std::move(lang);
+			m_FlatResources.emplace_back(std::move(fres));
+			i++;
 		}
-		auto name = res.NameID == 0 ? res.NameStr.data() : (L"#" + std::to_wstring(res.NameID));
-		auto lang = res.LangStr.empty() ? PEStrings::LanguageToString(res.LangID) : std::wstring(res.LangStr);
-		FlatResource fres(res);
-		auto hResItem = InsertTreeItem(m_Tree, std::format(L"{} ({})", name, lang).c_str(), ResourceTypeToIcon(res.TypeID),
-			TreeItemWithIndex(TreeItemType::Resource, (i + 1) << ItemShift), it->second, TVI_SORT);
-
-		auto resTypeId = MAKEINTRESOURCE(res.TypeID);
-		if (resTypeId == RT_MANIFEST && m_hResManifest == nullptr)
-			m_hResManifest = hResItem;
-		else if (resTypeId == RT_VERSION && m_hResVersion == nullptr)
-			m_hResVersion = hResItem;
-
-		fres.Name = std::move(name);
-		fres.Type = std::move(type);
-		fres.Language = std::move(lang);
-		m_FlatResources.emplace_back(std::move(fres));
-		i++;
+		m_Tree.Expand(resources, TVE_EXPAND);
 	}
-	m_Tree.Expand(resources, TVE_EXPAND);
 
 	if (m_Symbols) {
 		m_Symbols.LoadAddress(m_PE->GetImageBase());
