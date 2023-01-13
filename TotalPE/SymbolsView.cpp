@@ -60,7 +60,7 @@ LRESULT CSymbolsView::OnCopy(WORD, WORD, HWND, BOOL&) const {
 	return 0;
 }
 
-void CSymbolsView::UpdateUI(bool first) {
+void CSymbolsView::UpdateUI(bool first) const {
 	Frame()->GetUI().UIEnable(ID_EDIT_COPY, m_List.GetSelectedCount() > 0);
 }
 
@@ -79,7 +79,14 @@ LRESULT CSymbolsView::OnFind(UINT, WPARAM, LPARAM, BOOL&) {
 }
 
 void CSymbolsView::BuildItems() {
-	m_Items = m_Session.FindChildren(nullptr, SymbolTag::Function);
+	auto tag = SymbolTag::Null;
+	switch (m_Type) {
+		case SymViewType::Function: tag = SymbolTag::Function; break;
+		case SymViewType::UDT: tag = SymbolTag::UDT; break;
+		case SymViewType::Enum: tag = SymbolTag::Enum; break;
+		case SymViewType::Data: tag = SymbolTag::Data; break;
+	}
+	m_Items = m_Session.FindChildren(nullptr, tag);
 
 	m_List.SetItemCount((int)m_Items.size());
 }

@@ -555,13 +555,14 @@ void CMainFrame::BuildTree(int iconSize) {
 	}
 	m_Tree.Expand(resources, TVE_EXPAND);
 
-	//if (m_Symbols) {
-	//	auto symbols = InsertTreeItem(m_Tree, L"Symbols", GetTreeIcon(IDI_SYMBOLS), TreeItemType::Symbols, root);
-	//	InsertTreeItem(m_Tree, L"Functions", GetTreeIcon(IDI_FUNCTION), TreeItemType::SymbolsFunctions, symbols, TVI_SORT);
-	//	InsertTreeItem(m_Tree, L"Global Data", GetTreeIcon(IDI_DATA), TreeItemType::SymbolsGlobalData, symbols, TVI_SORT);
-	//	InsertTreeItem(m_Tree, L"Types", GetTreeIcon(IDI_TYPE), TreeItemType::SymbolsTypes, symbols, TVI_SORT);
-	//	InsertTreeItem(m_Tree, L"Enums", GetTreeIcon(IDI_ENUM), TreeItemType::SymbolsEnums, symbols, TVI_SORT);
-	//}
+	if (m_Symbols) {
+		m_Symbols.LoadAddress(m_PE->GetImageBase());
+		//auto symbols = InsertTreeItem(m_Tree, L"Symbols", GetTreeIcon(IDI_SYMBOLS), TreeItemType::Symbols, root);
+		//InsertTreeItem(m_Tree, L"Functions", GetTreeIcon(IDI_FUNCTION), TreeItemType::SymbolsFunctions, symbols, TVI_SORT);
+		//InsertTreeItem(m_Tree, L"Global Data", GetTreeIcon(IDI_DATA), TreeItemType::SymbolsGlobalData, symbols, TVI_SORT);
+		//InsertTreeItem(m_Tree, L"Types", GetTreeIcon(IDI_TYPE), TreeItemType::SymbolsTypes, symbols, TVI_SORT);
+		//InsertTreeItem(m_Tree, L"Enums", GetTreeIcon(IDI_ENUM), TreeItemType::SymbolsEnums, symbols, TVI_SORT);
+	}
 
 	m_hRoot = root;
 
@@ -740,6 +741,10 @@ void CMainFrame::CloseTab(int page) {
 	auto type = m_Views2.at(hWnd);
 	m_Views.erase(type);
 	m_Views2.erase(hWnd);
+}
+
+void CMainFrame::RegisterContextMenu(TreeItemType type, UINT menuId, int subMenu) {
+	m_ContextMenus.try_emplace(type, menuId, subMenu);
 }
 
 LRESULT CMainFrame::OnViewExports(WORD, WORD, HWND, BOOL&) {

@@ -14,7 +14,7 @@ public:
 	void DoSort(SortInfo const* si);
 	void OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD newState);
 
-	void UpdateUI(bool first = false);
+	void UpdateUI(bool first = false) const;
 
 	BEGIN_MSG_MAP(CSymbolsView)
 		MESSAGE_HANDLER(CFindReplaceDialog::GetFindReplaceMsg(), OnFind)

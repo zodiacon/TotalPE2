@@ -28,6 +28,9 @@ public:
 	void SetSymbolPath(PCWSTR path);
 	std::wstring const& AppendSymbolPath(PCWSTR path);
 
+	ULONGLONG LoadAddress() const;
+	bool LoadAddress(ULONGLONG address);
+
 private:
 	// Inherited via IDiaLoadCallback
 	HRESULT __stdcall QueryInterface(REFIID riid, void** ppvObject) override;

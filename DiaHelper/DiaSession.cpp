@@ -97,6 +97,16 @@ std::wstring const& DiaSession::AppendSymbolPath(PCWSTR path) {
 	return m_SymbolPath;
 }
 
+ULONGLONG DiaSession::LoadAddress() const {
+	ULONGLONG address = 0;
+	m_spSession->get_loadAddress(&address);
+	return address;
+}
+
+bool DiaSession::LoadAddress(ULONGLONG address) {
+	return m_spSession->put_loadAddress(address) == S_OK;
+}
+
 bool DiaSession::OpenCommon(PCWSTR path, bool image) {
 	if (g_hDiaDll == nullptr) {
 		WCHAR path[MAX_PATH];

@@ -108,6 +108,7 @@ private:
 	bool BuildTreeImageList(int iconSize = 16);
 	void ParseCommandLine();
 	void CloseTab(int page);
+	void RegisterContextMenu(TreeItemType type, UINT menuId, int subMenu);
 
 	static int GetTreeIcon(UINT id);
 	static TreeItemType TreeItemWithIndex(TreeItemType type, int index);
@@ -155,6 +156,11 @@ private:
 	LRESULT OnViewFileInHex(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnPageCloseButton(int /*idCtrl*/, LPNMHDR /*pnmh*/, BOOL& /*bHandled*/);
 
+	struct ContextMenuInfo {
+		UINT MenuId;
+		int SubMenu;
+	};
+
 	CCustomTabView m_Tabs;
 	CCustomSplitterWindow m_Splitter;
 	CTreeViewCtrl m_Tree;
@@ -170,6 +176,7 @@ private:
 	DiaSession m_Symbols;
 	RecentFilesManager m_RecentFiles;
 	HTREEITEM m_hResVersion, m_hResManifest;
+	std::unordered_map<TreeItemType, ContextMenuInfo> m_ContextMenus;
 	mutable std::unordered_map<std::wstring, DiaSession> m_SymbolsForModules;
 	inline static std::unordered_map<UINT, int> s_ImageIndices;
 	inline static int s_Frames{ 0 };

@@ -25,6 +25,7 @@
 #include "PEImageView.h"
 
 std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
+	CWaitCursor wait;
 	auto symType = SymViewType::None;
 
 	CString title;
