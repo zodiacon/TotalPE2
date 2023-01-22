@@ -37,7 +37,7 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 			if (entry == 0)
 				return {};
 
-			auto view = new CScintillaView(this, L"Entry Point");
+			auto view = new CScintillaView(this, m_PE, L"Entry Point");
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};
@@ -288,7 +288,7 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateResourceView(TreeItemType type
 		return { view, view };
 	}
 	else if (resId == RT_MANIFEST) {
-		auto view = new CScintillaView(this, (res.Name + L" (Manifest)").c_str());
+		auto view = new CScintillaView(this, m_PE, (res.Name + L" (Manifest)").c_str());
 		if (!view->DoCreate(m_Tabs))
 			return {};
 
@@ -362,7 +362,7 @@ bool CMainFrame::CreateAssemblyView(std::span<const std::byte> code, uint64_t ad
 		return true;
 	}
 
-	auto view = new CScintillaView(this, title);
+	auto view = new CScintillaView(this, m_PE, title);
 	if (nullptr == view->DoCreate(m_Tabs)) {
 		ATLASSERT(false);
 		return false;

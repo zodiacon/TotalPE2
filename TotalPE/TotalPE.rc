@@ -155,6 +155,13 @@ BEGIN
         MENUITEM "&Copy\tCtrl+C",               ID_EDIT_COPY
         MENUITEM "&Export...",                  ID_ICON_EXPORT
     END
+    POPUP "assembly"
+    BEGIN
+        MENUITEM "&Copy\tCtrl+C",               ID_EDIT_COPY
+        MENUITEM SEPARATOR
+        MENUITEM "Disassemble at the End",      ID_ASSEMBLY_DISASSEMBLEATTHEEND
+        MENUITEM "Go to Address",               ID_ASSEMBLY_GOTOADDRESS
+    END
 END
 
 

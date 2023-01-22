@@ -8,7 +8,7 @@
 CHexView::CHexView(IMainFrame* frame, CString const& title) : CViewBase(frame), m_Title(title) {
 }
 
-void CHexView::UpdateUI(bool first) {
+void CHexView::UpdateUI(bool first) const {
 	auto& ui = Frame()->GetUI();
 	ui.UIEnable(ID_EDIT_COPY, m_Hex.CanCopy());
 	ui.UIEnable(ID_ICON_EXPORT, m_Hex.CanCopy());

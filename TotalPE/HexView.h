@@ -14,7 +14,7 @@ public:
 		return m_Title;
 	}
 
-	void UpdateUI(bool first = false);
+	void UpdateUI(bool first = false) const;
 
 	CHexControl& Hex();
 

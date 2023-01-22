@@ -54,7 +54,7 @@ void CMainFrame::UpdateUI() {
 	UIEnable(ID_FILE_OPENINANEWWINDOW, fi != nullptr);
 	UIEnable(ID_EDIT_COPY, FALSE);
 	UIEnable(ID_EDIT_FIND, fi && m_Tabs.GetActivePage() >= 0);
-	UIEnable(ID_PE_DISASSEMBLEENTRYPOINT, fi != nullptr);
+	UIEnable(ID_PE_ENTIREFILEINHEX, fi != nullptr);
 }
 
 int CMainFrame::GetResourceIconIndex(WORD resType) const {

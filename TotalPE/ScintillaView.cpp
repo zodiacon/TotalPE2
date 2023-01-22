@@ -3,6 +3,7 @@
 /////////////////////////////////////////////////////////////////////////////
 
 #include "pch.h"
+#include "resource.h"
 #include "ScintillaView.h"
 #include "SciLexer.h"
 #include "LexerModule.h"
@@ -10,6 +11,7 @@
 #include <Theme.h>
 #include "..\External\Capstone\capstone.h"
 #include "PEStrings.h"
+#include "PEFile.h"
 
 const char* KeyWords_ASM[] = {
 	"aaa aad aam aas adc add and arpl blsr bnd bndcl bndcn bndcu bndmov bndstx bound bsf bsr bswap bt btc btr bts call cbw cdq cflush clc cld cli clts "
@@ -95,7 +97,7 @@ const char* KeyWords_ASM[] = {
 extern Lexilla::LexerModule lmXML;
 extern Lexilla::LexerModule lmAsm;
 
-CScintillaView::CScintillaView(IMainFrame* frame, PCWSTR title) : CViewBase(frame), m_Title(title) {
+CScintillaView::CScintillaView(IMainFrame* frame, PEFile const& pe, PCWSTR title) : CViewBase(frame), m_PE(pe), m_Title(title) {
 }
 
 CString CScintillaView::GetTitle() const {
@@ -106,7 +108,18 @@ CScintillaCtrl& CScintillaView::GetCtrl() {
 	return m_Sci;
 }
 
+void CScintillaView::UpdateUI(bool first) {
+	auto& ui = Frame()->GetUI();
+	ui.UIEnable(ID_EDIT_COPY, !m_Sci.IsSelectionEmpty());
+	auto text = m_Sci.GetSelText();
+	auto address = text.starts_with("0x");
+	ui.UIEnable(ID_ASSEMBLY_GOTOADDRESS, address);
+	ui.UIEnable(ID_ASSEMBLY_DISASSEMBLEATTHEEND, address);
+	ui.UIEnable(ID_ASSEMBLY_DISASSEMBLEINANEWTAB, address);
+}
+
 bool CScintillaView::SetAsmCode(std::span<const std::byte> code, uint64_t address, bool is32Bit) {
+	m_Is32Bit = is32Bit;
 	csh handle;
 	if (cs_open(CS_ARCH_X86, is32Bit ? CS_MODE_32 : CS_MODE_64, &handle) != CS_ERR_OK)
 		return false;
@@ -122,6 +135,7 @@ bool CScintillaView::SetAsmCode(std::span<const std::byte> code, uint64_t addres
 
 	m_Sci.SetText(text);
 	cs_close(&handle);
+
 	return true;
 }
 
@@ -190,12 +204,64 @@ LRESULT CScintillaView::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lPar
 
 	m_Sci.StyleSetFont(STYLE_DEFAULT, "Consolas");
 	m_Sci.StyleSetSize(STYLE_DEFAULT, 11);
+	m_Sci.UsePopup(SC_POPUP_NEVER);
 
 	return 0;
 }
 
 LRESULT CScintillaView::OnUpdateTheme(UINT, WPARAM, LPARAM, BOOL&) {
 	UpdateColors();
+	return 0;
+}
+
+LRESULT CScintillaView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
+	UpdateUI();
+	CMenu menu;
+	menu.LoadMenuW(IDR_CONTEXT);
+	return Frame()->TrackPopupMenu(menu.GetSubMenu(m_Language == LexLanguage::Xml ? 0 : 6), 0, 
+		GET_X_LPARAM(lp), GET_Y_LPARAM(lp));
+}
+
+LRESULT CScintillaView::OnGoToAddress(WORD, WORD, HWND, BOOL&) {
+	auto text = m_Sci.GetSelText();
+
+	auto pos = m_Sci.FindTextW(Scintilla::FindOption::WordStart | Scintilla::FindOption::WholeWord, text.substr(2).c_str());
+	if (pos >= 0)
+		m_Sci.GotoPos(pos);
+	else
+		AtlMessageBox(m_hWnd, L"Address not found", IDR_MAINFRAME, MB_ICONWARNING);
+	return 0;
+}
+
+LRESULT CScintillaView::OnDisassembleNewTab(WORD, WORD, HWND, BOOL&) {
+	auto selection = m_Sci.GetSelText();
+	auto address = strtoull(selection.substr(2).c_str(), nullptr, 16);
+
+	return 0;
+}
+
+LRESULT CScintillaView::OnDisassembleAtEnd(WORD, WORD, HWND, BOOL&) {
+	auto selection = m_Sci.GetSelText();
+	auto address = strtoull(selection.substr(2).c_str(), nullptr, 16);
+	csh handle;
+	if (cs_open(CS_ARCH_X86, m_Is32Bit ? CS_MODE_32 : CS_MODE_64, &handle) != CS_ERR_OK)
+		return false;
+
+	auto bytes = (const uint8_t*)m_PE.GetData() + m_PE->GetOffsetFromVA(address);
+	size_t size = 0x1000;
+	cs_insn inst{};
+	CStringA text;
+	while (cs_disasm_iter(handle, &bytes, &size, &address, &inst)) {
+		text += PEStrings::FormatInstruction(inst) + L"\r\n";
+		if (_strcmpi(inst.mnemonic, "ret") == 0)
+			break;
+	}
+	cs_close(&handle);
+
+	m_Sci.SetReadOnly(false);
+	m_Sci.AppendText(text.GetLength() + 1, "\n" + text);
+	m_Sci.SetReadOnly(true);
+
 	return 0;
 }
 

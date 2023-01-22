@@ -47,7 +47,13 @@ public:
 	Position SearchInTarget(std::string_view text);
 	Span SpanSearchInTarget(std::string_view text);
 
-	void AddText(Scintilla::Position length, const char* text);
+	void AddText(Position len, const char* text) {
+		Execute(SCI_ADDTEXT, len, reinterpret_cast<LPARAM>(text));
+	}
+	void AppendText(Position len, const char* text) {
+		Execute(SCI_APPENDTEXT, len, reinterpret_cast<LPARAM>(text));
+	}
+
 	void AddStyledText(Position length, const char* c);
 	void InsertText(Position pos, const char* text);
 	void ChangeInsertion(Scintilla::Position length, const char* text);
@@ -110,7 +116,9 @@ public:
 	void GotoPos(Position caret) {
 		Execute(SCI_GOTOPOS, caret);
 	}
-
+	void UsePopup(int mode) {
+		Execute(SCI_USEPOPUP, mode);
+	}
 	void SetAnchor(Position anchor);
 	Position GetCurLine(Position length, char* text);
 	std::string GetCurLine(Position length);
@@ -387,7 +395,7 @@ public:
 	void SetPrintColourMode(Scintilla::PrintOption mode);
 	Scintilla::PrintOption PrintColourMode();
 	Position FindText(Scintilla::FindOption searchFlags, char const* text) {
-		Sci_TextToFind ttf{ };
+		Sci_TextToFind ttf{};
 		ttf.chrg.cpMax = Length();
 		ttf.lpstrText = text;
 		return (Position)Execute(SCI_FINDTEXT, static_cast<WPARAM>(searchFlags), reinterpret_cast<LPARAM>(&ttf));
@@ -408,7 +416,13 @@ public:
 	}
 	void SetSel(Position anchor, Position caret);
 	Position GetSelText(char* text);
-	std::string GetSelText();
+	std::string GetSelText() {
+		auto len = Execute(SCI_GETTEXTLENGTH);
+		std::string text;
+		text.resize(len);
+		Execute(SCI_GETSELTEXT, len, reinterpret_cast<LPARAM>(text.data()));
+		return text;
+	}
 	Position GetTextRange(void* tr);
 	void HideSelection(bool hide);
 	int PointXFromPosition(Position pos);
