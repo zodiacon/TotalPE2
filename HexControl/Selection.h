@@ -16,6 +16,7 @@ public:
 	bool IsSelected(int64_t offset) const;
 	bool IsEmpty() const;
 	SelectionType GetSelectionType() const;
+	int64_t GetLength() const;
 
 	void Clear();
 

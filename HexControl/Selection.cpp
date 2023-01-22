@@ -49,6 +49,10 @@ SelectionType Selection::GetSelectionType() const {
 	return _type;
 }
 
+int64_t Selection::GetLength() const {
+	return _length;
+}
+
 void Selection::Clear() {
 	_type = SelectionType::Simple;
 	_offset = _anchor = -1;

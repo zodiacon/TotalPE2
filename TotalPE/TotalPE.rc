@@ -150,6 +150,11 @@ BEGIN
         MENUITEM SEPARATOR
         MENUITEM "&Copy\tCtrl+C",               ID_EDIT_COPY
     END
+    POPUP "hex"
+    BEGIN
+        MENUITEM "&Copy\tCtrl+C",               ID_EDIT_COPY
+        MENUITEM "&Export...",                  ID_ICON_EXPORT
+    END
 END
 
 
@@ -352,8 +357,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,6,0,0
- PRODUCTVERSION 0,6,0,0
+ FILEVERSION 0,6,1,0
+ PRODUCTVERSION 0,6,1,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -370,12 +375,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Pavel Yosifovich"
             VALUE "FileDescription", "Total PE - PE Viewer"
-            VALUE "FileVersion", "0.6.0.0"
+            VALUE "FileVersion", "0.6.1.0"
             VALUE "InternalName", "TotalPE"
             VALUE "LegalCopyright", "©2022-2023 Pavel Yosifovich"
             VALUE "OriginalFilename", "TotalPE.exe"
             VALUE "ProductName", "Total PE"
-            VALUE "ProductVersion", "0.6.0.0"
+            VALUE "ProductVersion", "0.6.1.0"
         END
     END
     BLOCK "VarFileInfo"

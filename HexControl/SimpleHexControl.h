@@ -25,6 +25,8 @@ struct IHexControlClient {
 	virtual void OnSizeChanged(int64_t newSize) = 0;
 };
 
+#define NMHX_SELECTION_CHANGED 0x2000
+
 struct NMHexControlNotify : NMHDR {
 };
 
@@ -43,7 +45,7 @@ public:
 	int32_t GetDataSize() const;
 	bool SetBytesPerLine(int32_t bytesPerLine);
 	int32_t GetBytesPerLine() const;
-	bool Copy(int64_t offset = -1, int64_t size = 0);
+	bool Copy(int64_t offset = -1, int64_t size = 0) const;
 	bool Paste(int64_t offset = -1);
 	bool HasSelection() const;
 	bool CanCopy() const;
@@ -98,6 +100,8 @@ private:
 	LRESULT OnLeftButtonUp(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 
 private:
+	bool CopyText(PCWSTR text) const;
+	void SendSelectionChanged();
 	void RecalcLayout();
 	void InitFontMetrics();
 	CPoint GetPointFromOffset(int64_t offset) const;
@@ -131,6 +135,7 @@ private:
 	uint64_t m_CurrentInput{ 0 }, m_OldValue;
 	std::vector<bool> m_Modified;
 	IHexControlClient* m_pClient{ nullptr };
+	NMHexControlNotify m_Notify;
 	bool m_InsertMode{ false };
 	bool m_ReadOnly{ true };
 };

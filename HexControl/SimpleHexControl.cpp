@@ -340,7 +340,7 @@ void CHexControl::RedrawCaretLine() {
 LRESULT CHexControl::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	InitFontMetrics();
 	CreateSolidCaret(m_InsertMode ? 2 : m_CharWidth, m_CharHeight);
-
+	m_Notify.hwndFrom = m_hWnd;
 	return 0;
 }
 
@@ -427,6 +427,12 @@ LRESULT CHexControl::OnVScroll(UINT, WPARAM wParam, LPARAM, BOOL&) {
 		RedrawWindow();
 	}
 	return 0;
+}
+
+void CHexControl::SendSelectionChanged() {
+	m_Notify.idFrom = GetWindowLongPtr(GWLP_ID);
+	m_Notify.code = NMHX_SELECTION_CHANGED;
+	GetParent().SendMessage(WM_NOTIFY, m_Notify.idFrom, reinterpret_cast<LPARAM>(&m_Notify));
 }
 
 void CHexControl::RecalcLayout() {
@@ -544,6 +550,7 @@ void CHexControl::RedrawWindow(RECT* rc) {
 
 void CHexControl::ClearSelection() {
 	m_Selection.Clear();
+	SendSelectionChanged();
 }
 
 void CHexControl::CommitValue(int64_t offset, uint64_t value) {
@@ -576,6 +583,7 @@ LRESULT CHexControl::OnMouseMove(UINT, WPARAM wp, LPARAM lParam, BOOL&) {
 	}
 	else
 		m_Selection.SetSimple(minoffset, abs(offset - m_CaretOffset));
+	SendSelectionChanged();
 	RedrawWindow();
 
 	return 0;
@@ -715,6 +723,7 @@ void CHexControl::SetBufferManager(IBufferManager* mgr) {
 	m_Selection.Clear();
 	RecalcLayout();
 	Invalidate();
+	SendSelectionChanged();
 }
 
 IBufferManager* CHexControl::GetBufferManager() const {
@@ -760,8 +769,26 @@ int32_t CHexControl::GetBytesPerLine() const {
 	return m_BytesPerLine;
 }
 
-bool CHexControl::Copy(int64_t offset, int64_t size) {
-	return false;
+bool CHexControl::Copy(int64_t offset, int64_t size) const {
+	if (offset < 0)
+		offset = m_Selection.GetOffset();
+	if (size == 0)
+		size = m_Selection.GetLength();
+	if (size == 0 || offset < 0)
+		return false;
+
+	auto text = std::format(L"Offset: {:X} Data: ", offset + m_BiasOffset);
+	CString fmt;
+	fmt.Format(L"%%0%dX ", m_DataSize * 2);
+	uint64_t value = 0;
+	CString item;
+	for (int64_t i = 0; i < size; i += m_DataSize) {
+		m_Buffer->GetData(offset + i, (uint8_t*)&value, m_DataSize);
+		item.Format(fmt, value);
+		text += (PCWSTR)item;
+	}
+	CopyText(text.c_str());
+	return true;
 }
 
 bool CHexControl::Paste(int64_t offset) {
@@ -823,4 +850,24 @@ bool CHexControl::DeleteState(int64_t offset) {
 bool CHexControl::SetHexControlClient(IHexControlClient* client) {
 	m_pClient = client;
 	return m_pClient != nullptr;
+}
+
+bool CHexControl::CopyText(PCWSTR text) const {
+	if (::OpenClipboard(m_hWnd)) {
+		::EmptyClipboard();
+		auto size = (::wcslen(text) + 1) * sizeof(WCHAR);
+		auto hData = ::GlobalAlloc(GMEM_MOVEABLE, size);
+		if (hData) {
+			auto p = ::GlobalLock(hData);
+			if (p) {
+				::memcpy(p, text, size);
+				::GlobalUnlock(p);
+				::SetClipboardData(CF_UNICODETEXT, hData);
+			}
+		}
+		::CloseClipboard();
+		if (hData)
+			return true;
+	}
+	return false;
 }

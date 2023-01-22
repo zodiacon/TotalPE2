@@ -8,6 +8,12 @@
 CHexView::CHexView(IMainFrame* frame, CString const& title) : CViewBase(frame), m_Title(title) {
 }
 
+void CHexView::UpdateUI(bool first) {
+	auto& ui = Frame()->GetUI();
+	ui.UIEnable(ID_EDIT_COPY, m_Hex.CanCopy());
+	ui.UIEnable(ID_ICON_EXPORT, m_Hex.CanCopy());
+}
+
 CHexControl& CHexView::Hex() {
 	return m_Hex;
 }
@@ -67,7 +73,18 @@ LRESULT CHexView::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, 
 	return 0;
 }
 
+LRESULT CHexView::OnRightClick(int /*idCtrl*/, LPNMHDR hdr, BOOL& /*bHandled*/) {
+	CMenu menu;
+	menu.LoadMenu(IDR_CONTEXT);
+	CPoint pt;
+	::GetCursorPos(&pt);
+	return Frame()->TrackPopupMenu(menu.GetSubMenu(5), 0, pt.x, pt.y);
+}
+
 LRESULT CHexView::OnCopy(WORD, WORD, HWND, BOOL&) const {
+	ATLASSERT(m_Hex.HasSelection());
+	m_Hex.Copy();
+
 	return 0;
 }
 
@@ -82,6 +99,11 @@ LRESULT CHexView::OnChangeBytesPerLine(WORD, WORD id, HWND, BOOL&) {
 	m_Hex.SetBytesPerLine(bytes[index]);
 	UISetRadioMenuItem(id, ID_BYTESPERLINE_8, ID_BYTESPERLINE_64);
 
+	return 0;
+}
+
+LRESULT CHexView::OnSelectionChanged(int, LPNMHDR hdr, BOOL&) {
+	UpdateUI();
 	return 0;
 }
 

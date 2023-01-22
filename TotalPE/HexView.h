@@ -14,6 +14,8 @@ public:
 		return m_Title;
 	}
 
+	void UpdateUI(bool first = false);
+
 	CHexControl& Hex();
 
 	bool SetData(PEFile const& pe, uint32_t offset, uint32_t size);
@@ -33,7 +35,9 @@ public:
 
 	BEGIN_MSG_MAP(CHexView)
 		COMMAND_RANGE_HANDLER(ID_DATASIZE_1BYTE, ID_DATASIZE_8BYTES, OnChangeDataSize)
+		NOTIFY_CODE_HANDLER(NMHX_SELECTION_CHANGED, OnSelectionChanged)
 		NOTIFY_CODE_HANDLER(TBN_DROPDOWN, OnDropDown)
+		NOTIFY_CODE_HANDLER(NM_RCLICK, OnRightClick)
 		COMMAND_ID_HANDLER(ID_EXPORT, OnSave)
 		MESSAGE_HANDLER(::RegisterWindowMessage(L"WTLHelperUpdateTheme"), OnUpdateTheme)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
@@ -56,6 +60,8 @@ private:
 	LRESULT OnChangeDataSize(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnChangeBytesPerLine(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnUpdateTheme(UINT, WPARAM, LPARAM, BOOL&);
+	LRESULT OnSelectionChanged(int /*idCtrl*/, LPNMHDR hdr, BOOL& /*bHandled*/);
+	LRESULT OnRightClick(int /*idCtrl*/, LPNMHDR hdr, BOOL& /*bHandled*/);
 
 	CHexControl m_Hex;
 	CString m_Title;
