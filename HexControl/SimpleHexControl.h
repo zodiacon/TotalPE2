@@ -57,7 +57,7 @@ public:
 	int64_t SetBiasOffset(int64_t offset);
 	int64_t GetBiasOffset() const;
 	HexControlColors& GetColors();
-	std::wstring GetText(int64_t offset, int64_t size);
+	std::wstring GetText(int64_t offset, int64_t size) const;
 	void Refresh();
 	bool DeleteState(int64_t offset);
 	uint32_t Fill(int64_t offset, uint8_t value, uint32_t count);

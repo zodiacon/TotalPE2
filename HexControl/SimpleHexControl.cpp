@@ -295,6 +295,7 @@ LRESULT CHexControl::OnKeyDown(UINT, WPARAM wParam, LPARAM, BOOL&) {
 			m_Selection.SetSimple(min(m_CaretOffset, m_Selection.GetAnchor()), abs(m_CaretOffset - m_Selection.GetAnchor()));
 		}
 		redraw = true;
+		SendSelectionChanged();
 	}
 
 	NormalizeOffset(m_CaretOffset);
@@ -720,10 +721,9 @@ HWND CHexControl::GetHwnd() const {
 
 void CHexControl::SetBufferManager(IBufferManager* mgr) {
 	m_Buffer = mgr;
-	m_Selection.Clear();
+	ClearSelection();
 	RecalcLayout();
 	Invalidate();
-	SendSelectionChanged();
 }
 
 IBufferManager* CHexControl::GetBufferManager() const {
@@ -796,7 +796,7 @@ bool CHexControl::Paste(int64_t offset) {
 }
 
 bool CHexControl::CanCopy() const {
-	return !m_Selection.IsEmpty();
+	return !HasSelection();
 }
 
 bool CHexControl::CanPaste() const {
@@ -834,7 +834,7 @@ HexControlColors& CHexControl::GetColors() {
 	return m_Colors;
 }
 
-std::wstring CHexControl::GetText(int64_t offset, int64_t size) {
+std::wstring CHexControl::GetText(int64_t offset, int64_t size) const {
 	return std::wstring();
 }
 

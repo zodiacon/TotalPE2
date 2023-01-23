@@ -610,6 +610,20 @@ LRESULT CMainFrame::OnFileOpen(WORD, WORD, HWND, BOOL&) {
 	return 0;
 }
 
+LRESULT CMainFrame::OnFileOpenNewWindow(WORD, WORD, HWND, BOOL&) {
+	auto file = DoFileOpen();
+	if (!file.IsEmpty()) {
+		auto frame = new CMainFrame;
+		frame->CreateEx();
+		frame->ShowWindow(SW_SHOWDEFAULT);
+		if (frame->OpenPE(file))
+			frame->ShowWindow(SW_SHOWDEFAULT);
+		else
+			frame->SendMessage(WM_CLOSE);
+	}
+	return LRESULT();
+}
+
 CString CMainFrame::DoFileOpen() const {
 	CSimpleFileDialog dlg(TRUE, nullptr, nullptr, OFN_EXPLORER | OFN_ENABLESIZING,
 		L"All PE Files\0*.exe;*.dll;*.efi;*.ocx;*.cpl;*.sys;*.mui;*.mun;*.scr\0All Files\0*.*\0");
@@ -892,6 +906,12 @@ LRESULT CMainFrame::OnViewFileInHex(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*h
 
 LRESULT CMainFrame::OnPageCloseButton(int, LPNMHDR hdr, BOOL&) {
 	CloseTab((int)hdr->idFrom);
+
+	return 0;
+}
+
+LRESULT CMainFrame::OnWindowsProperties(WORD, WORD, HWND, BOOL&) {
+	std::thread([this]() { ::ShellAbout(m_hWnd, L"Windows", nullptr, nullptr); }).detach();
 
 	return 0;
 }

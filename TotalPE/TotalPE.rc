@@ -114,6 +114,7 @@ BEGIN
     POPUP "&Help"
     BEGIN
         MENUITEM "&About Total PE...",          ID_APP_ABOUT
+        MENUITEM SEPARATOR
         MENUITEM "About &WIndows...",           ID_HELP_ABOUTWINDOWS
     END
 END
