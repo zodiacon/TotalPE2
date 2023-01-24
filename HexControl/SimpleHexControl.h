@@ -25,7 +25,7 @@ struct IHexControlClient {
 	virtual void OnSizeChanged(int64_t newSize) = 0;
 };
 
-#define NMHX_SELECTION_CHANGED 0x2000
+constexpr auto NMHX_SELECTION_CHANGED = 0x2000;
 
 struct NMHexControlNotify : NMHDR {
 };

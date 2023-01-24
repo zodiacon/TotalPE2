@@ -796,7 +796,7 @@ bool CHexControl::Paste(int64_t offset) {
 }
 
 bool CHexControl::CanCopy() const {
-	return !HasSelection();
+	return HasSelection();
 }
 
 bool CHexControl::CanPaste() const {
