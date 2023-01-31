@@ -199,7 +199,7 @@ IDI_PASTE               ICON                    "res\\paste.ico"
 
 IDI_SAVE                ICON                    "res\\save.ico"
 
-IDI_VERSION             ICON                    "D:\\Dev\\TotalPE2\\TotalPE\\res\\version.ico"
+IDI_VERSION             ICON                    "res\\version.ico"
 
 IDI_DEBUG               ICON                    "res\\debug.ico"
 
