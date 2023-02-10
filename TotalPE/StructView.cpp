@@ -29,7 +29,7 @@ LRESULT CStructView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
         LVS_REPORT | LVS_SHAREIMAGELISTS | LVS_NOSORTHEADER);
     m_TL.SetExtendedListViewStyle(LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT);
     m_TL.SetImageList(Frame()->GetImageList(), LVSIL_SMALL);
-    m_TL.SetIcons(AtlLoadIconImage(IDI_EXPANDED, 0, 16, 16), AtlLoadIconImage(IDI_COLLAPSED, 0, 16, 16));
+//    m_TL.SetIcons(AtlLoadIconImage(IDI_EXPANDED, 0, 16, 16), AtlLoadIconImage(IDI_COLLAPSED, 0, 16, 16));
     m_TL.InsertColumn(0, L"Member", LVCFMT_LEFT, 250);
     m_TL.InsertColumn(1, L"Offset", LVCFMT_RIGHT, 60);
     m_TL.InsertColumn(2, L"Type", 0, 180);

@@ -69,9 +69,7 @@
 #define IDI_BINARY                      265
 #define IDI_DATA                        266
 #define IDI_GLOBE                       267
-#define IDI_COLLAPSED                   268
-#define IDI_ICON2                       269
-#define IDI_EXPANDED                    269
+#define IDI_ICON2                       268
 #define IDC_VERSION                     1000
 #define IDC_COPYRIGHT                   1001
 #define IDC_LINK                        1002
@@ -121,7 +119,7 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        270
+#define _APS_NEXT_RESOURCE_VALUE        269
 #define _APS_NEXT_COMMAND_VALUE         32816
 #define _APS_NEXT_CONTROL_VALUE         1003
 #define _APS_NEXT_SYMED_VALUE           101

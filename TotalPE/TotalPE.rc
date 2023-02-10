@@ -1,6 +1,8 @@
 // Microsoft Visual C++ generated resource script.
 //
 #include "resource.h"
+#include <WTLHelperRes.h>
+#include <WTLHelper.rc>
 
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
@@ -294,11 +296,6 @@ IDI_BINARY              ICON                    "res\\Binary.ico"
 IDI_DATA                ICON                    "res\\Data.ico"
 
 IDI_GLOBE               ICON                    "res\\globe.ico"
-
-IDI_COLLAPSED           ICON                    "res\\Collapsed.ico"
-
-IDI_EXPANDED            ICON                    "res\\Expanded.ico"
-
 
 /////////////////////////////////////////////////////////////////////////////
 //
