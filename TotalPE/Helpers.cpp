@@ -2,7 +2,6 @@
 #include "Helpers.h"
 #include "Resource.h"
 #include <DiaHelper.h>
-#include "TreeListView.h"
 #include "Interfaces.h"
 
 bool Helpers::ExtractResource(HMODULE hModule, UINT resId, PCWSTR type, PCWSTR path, bool overwrite) {
@@ -83,7 +82,7 @@ std::wstring Helpers::FormatSimpleValue(PVOID value, ULONG size, SimpleType type
 	return L"";
 }
 
-void Helpers::FillTreeListView(IMainFrame* frame, CTreeListView& tv, HTREEITEM hRoot, DiaSymbol const& sym, DiaSession const& session, PVOID address) {
+void Helpers::FillTreeListView(IMainFrame* frame, CTreeListView& tv, HTLItem hRoot, DiaSymbol const& sym, DiaSession const& session, PVOID address) {
 	static int iconBitField = frame->GetIconIndex(IDI_BITFIELD);
 	static int iconUnion = frame->GetIconIndex(IDI_UNION);
 	static int iconStruct = frame->GetIconIndex(IDI_TYPE);
@@ -110,21 +109,21 @@ void Helpers::FillTreeListView(IMainFrame* frame, CTreeListView& tv, HTREEITEM h
 
 			}
 		}
-		auto hItem = tv.GetTreeControl().InsertItem(std::format(L"{}", member.Name()).c_str(), image, image, hRoot, TVI_LAST);
-		tv.SetSubItemText(hItem, 2, member.TypeName().c_str());
-		tv.SetSubItemText(hItem, 1, std::format(L"+{}    ", member.Offset()).c_str(), TLVIFMT_RIGHT);
+		auto hItem = tv.AddChildItem(hRoot, std::format(L"{}", member.Name()).c_str(), image);
+		tv.SetItemText(hItem, 2, member.TypeName().c_str());
+		tv.SetItemText(hItem, 1, std::format(L"+{}    ", member.Offset()).c_str());
 
 		if (address) {
 			ULONG64 value = 0;
 			if (member.Location() == LocationKind::BitField) {
 				if (ReadVirtual((PBYTE)address + member.Offset(), (ULONG)type.Length(), &value)) {
-					tv.SetSubItemText(hItem, 3, std::format(L"0x{:X}", (value >> member.BitPosition()) & ((1 << (ULONG)member.Length()) - 1)).c_str(), TLVIFMT_RIGHT);
+					tv.SetItemText(hItem, 3, std::format(L"0x{:X}", (value >> member.BitPosition()) & ((1 << (ULONG)member.Length()) - 1)).c_str());
 				}
 			}
 			else if (type.Simple() != SimpleType::NoType || type.Tag() == SymbolTag::Enum || type.Tag() == SymbolTag::PointerType) {
 				ATLASSERT(type.Length());
 				if (ReadVirtual((PBYTE)address + member.Offset(), (ULONG)type.Length(), &value))
-					tv.SetSubItemText(hItem, 3, FormatSimpleValue(&value, (ULONG)type.Length(), type.Simple()).c_str(), TLVIFMT_RIGHT);
+					tv.SetItemText(hItem, 3, FormatSimpleValue(&value, (ULONG)type.Length(), type.Simple()).c_str());
 			}
 		}
 
@@ -134,7 +133,7 @@ void Helpers::FillTreeListView(IMainFrame* frame, CTreeListView& tv, HTREEITEM h
 					bool isString;
 					auto value = GetSpecialValue(member, type, address, isString);
 					if (!value.empty())
-						tv.SetSubItemText(hItem, 3, value.c_str(), isString ? TLVIFMT_LEFT : TLVIFMT_RIGHT);
+						tv.SetItemText(hItem, 3, value.c_str());
 				}
 				FillTreeListView(frame, tv, hItem, type, session, address == nullptr ? nullptr : (PBYTE)address + member.Offset());
 				break;
@@ -149,12 +148,12 @@ void Helpers::FillTreeListView(IMainFrame* frame, CTreeListView& tv, HTREEITEM h
 				auto offset = member.Offset();
 				ULONGLONG value = 0;
 				for (uint32_t i = 0; i < count; i++) {
-					auto hChild = tv.GetTreeControl().InsertItem(std::format(L"[{}]", i).c_str(), iconArray, iconArray, hItem, TVI_LAST);
-					tv.SetSubItemText(hChild, 1, std::format(L"+{}    ", i * elementSize).c_str(), TLVIFMT_RIGHT);
-					tv.SetSubItemText(hChild, 2, valueType.Name().c_str());
+					auto hChild = tv.AddChildItem(hItem, std::format(L"[{}]", i).c_str(), iconArray);
+					tv.SetItemText(hChild, 1, std::format(L"+{}    ", i * elementSize).c_str());
+					tv.SetItemText(hChild, 2, valueType.Name().c_str());
 					if (auto simple = valueType.Simple(); simple != SimpleType::NoType) {
 						ReadVirtual((PBYTE)address + offset + elementSize * i, (ULONG)elementSize, &value);
-						tv.SetSubItemText(hChild, 3, FormatSimpleValue(&value, (ULONG)elementSize, simple).c_str(), TLVIFMT_RIGHT);
+						tv.SetItemText(hChild, 3, FormatSimpleValue(&value, (ULONG)elementSize, simple).c_str());
 					}
 					FillTreeListView(frame, tv, hChild, valueType, session, (PBYTE)address + member.Offset() + elementSize * i);
 				}

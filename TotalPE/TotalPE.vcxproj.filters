@@ -429,6 +429,12 @@
     <Image Include="res\Data.ico">
       <Filter>Resource Files\Icons</Filter>
     </Image>
+    <Image Include="res\Collapsed.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\Expanded.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
