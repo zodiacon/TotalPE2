@@ -295,6 +295,10 @@ IDI_DATA                ICON                    "res\\Data.ico"
 
 IDI_GLOBE               ICON                    "res\\globe.ico"
 
+IDI_COLLAPSED           ICON                    "res\\Collapsed.ico"
+
+IDI_EXPANDED            ICON                    "res\\Expanded.ico"
+
 
 /////////////////////////////////////////////////////////////////////////////
 //

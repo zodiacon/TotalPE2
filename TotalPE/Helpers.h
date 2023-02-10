@@ -1,5 +1,7 @@
 #pragma once
 
+#include <TreeListViewCtrl.h>
+
 class DiaSymbol;
 class DiaSession;
 class CTreeListView;
@@ -9,7 +11,7 @@ struct IMainFrame;
 struct Helpers abstract final {
 	static bool ExtractResource(HMODULE hModule, UINT resId, PCWSTR type, PCWSTR path, bool overwrite = true);
 	static bool ExtractModules();
-	static void FillTreeListView(IMainFrame* frame, CTreeListView& tv, HTREEITEM hRoot, DiaSymbol const& sym, DiaSession const& session, PVOID address);
+	static void FillTreeListView(IMainFrame* frame, CTreeListView& tv, HTLItem hRoot, DiaSymbol const& sym, DiaSession const& session, PVOID address);
 	static std::wstring GetSpecialValue(DiaSymbol const& field, DiaSymbol const& type, PVOID address, bool& isString);
 	static ULONG ReadVirtual(PVOID address, ULONG size, PVOID buffer);
 	static std::wstring ValueToString(DiaSymbol const& value, PVOID address);

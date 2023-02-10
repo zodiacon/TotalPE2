@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ViewBase.h"
-#include "TreeListView.h"
+#include <TreeListViewCtrl.h>
 #include <CustomSplitterWindow.h>
 #include "HexView.h"
 
