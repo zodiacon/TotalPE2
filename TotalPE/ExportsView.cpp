@@ -150,7 +150,7 @@ LRESULT CExportsView::OnDissassemble(WORD, WORD, HWND, BOOL&) const {
 	auto code = m_PE.GetSpan(offset, size);
 
 	ULONGLONG imageBase = m_PE->GetFileInfo()->IsPE64 ? m_PE->GetNTHeader()->NTHdr64.OptionalHeader.ImageBase : m_PE->GetNTHeader()->NTHdr32.OptionalHeader.ImageBase;
-	Frame()->CreateAssemblyView(code, offset + imageBase, exp.FuncRVA,
+	Frame()->CreateAssemblyView(code, exp.FuncRVA + imageBase, exp.FuncRVA,
 		exp.Name.c_str(), TreeItemType::DirectoryExports);
 
 	return 0;

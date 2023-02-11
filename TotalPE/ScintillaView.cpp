@@ -128,7 +128,7 @@ bool CScintillaView::SetAsmCode(std::span<const std::byte> code, uint64_t addres
 	cs_insn inst{};
 	CStringA text;
 	while (cs_disasm_iter(handle, &bytes, &size, &address, &inst)) {
-		text += PEStrings::FormatInstruction(inst) + L"\r\n";
+		text += PEStrings::FormatInstruction(inst, Frame()->GetSymbols()) + L"\r\n";
 		if (_strcmpi(inst.mnemonic, "ret") == 0)
 			break;
 	}
@@ -252,7 +252,7 @@ LRESULT CScintillaView::OnDisassembleAtEnd(WORD, WORD, HWND, BOOL&) {
 	cs_insn inst{};
 	CStringA text;
 	while (cs_disasm_iter(handle, &bytes, &size, &address, &inst)) {
-		text += PEStrings::FormatInstruction(inst) + L"\r\n";
+		text += PEStrings::FormatInstruction(inst, Frame()->GetSymbols()) + L"\r\n";
 		if (_strcmpi(inst.mnemonic, "ret") == 0)
 			break;
 	}

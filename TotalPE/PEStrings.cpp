@@ -3,6 +3,7 @@
 #include <atltime.h>
 #include <DbgHelp.h>
 #include "..\External\Capstone\capstone.h"
+#include <DiaHelper.h>
 
 #pragma comment(lib, "dbghelp")
 
@@ -190,10 +191,27 @@ std::wstring PEStrings::ResourceTypeToString(WORD id) {
 	return id >= _countof(types) ? L"" : types[id];
 }
 
-CStringA PEStrings::FormatInstruction(const cs_insn& inst) {
-	CStringA text;
-	text.Format("%llX %-10s %-40s ;", inst.address, inst.mnemonic, inst.op_str);
-//	text.Format("%-10s %-40s ;", inst.mnemonic, inst.op_str);
+CStringA PEStrings::FormatInstruction(const cs_insn& inst, DiaSession const& symbols) {
+	CStringA text, extra;
+	static PCSTR branches[] = { "call", "je", "jmp", "jne", "js" };
+	for (auto& br : branches)
+		if (_stricmp(inst.mnemonic, br) == 0) {
+			long disp;
+			auto address = strtoll(inst.op_str, nullptr, 16);
+			if (address != 0 && address != LLONG_MAX && address != LLONG_MIN) {
+				auto sym = symbols.GetSymbolByVA(address, SymbolTag::Null, &disp);
+				if (sym) {
+					extra = sym.Name().c_str();
+					if (!extra.IsEmpty() && disp)
+						extra += std::format(" + 0x{:X}", disp).c_str();
+				}
+			}
+			break;
+		}
+
+	if (!extra.IsEmpty())
+		extra = std::format("{} ({})", inst.op_str, (PCSTR)extra).c_str();
+	text.Format("%llX %-10s %-55s;", inst.address, inst.mnemonic, !extra.IsEmpty() ? (PCSTR)extra : inst.op_str);
 	for (int i = 0; i < inst.size; i++)
 		text += std::format(" {:02X}", inst.bytes[i]).c_str();
 	return text;
