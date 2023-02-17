@@ -13,6 +13,8 @@
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
 
+#include <WTLHelper.rc>
+
 /////////////////////////////////////////////////////////////////////////////
 // English (United States) resources
 
@@ -34,8 +36,6 @@ END
 2 TEXTINCLUDE 
 BEGIN
     "#include ""winres.h""\r\n"
-    "#include <WTLHelperRes.h>""\r\n"
-    "#include <WTLHelper.rc>""\r\n"
     "\0"
 END
 
@@ -72,14 +72,6 @@ END
 // Icon with lowest ID value placed first to ensure application icon
 // remains consistent on all systems.
 IDR_MAINFRAME           ICON                    "res\\TotalPE.ico"
-
-IDI_COLLAPSED           ICON                    "res\\Collapsed.ico"
-
-IDI_COLLAPSED2          ICON                    "res\\Collapsed2.ico"
-
-IDI_EXPANDED            ICON                    "res\\Expanded.ico"
-
-IDI_EXPANDED2           ICON                    "res\\Expanded2.ico"
 
 IDI_CHECK               ICON                    "res\\check.ico"
 

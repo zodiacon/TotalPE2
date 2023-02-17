@@ -203,7 +203,7 @@ CStringA PEStrings::FormatInstruction(const cs_insn& inst, DiaSession const& sym
 				if (sym) {
 					extra = sym.Name().c_str();
 					if (!extra.IsEmpty() && disp)
-						extra += std::format(" + 0x{:X}", disp).c_str();
+						extra += std::format("+0x{:X}", disp).c_str();
 				}
 			}
 			break;
