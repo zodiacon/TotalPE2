@@ -198,7 +198,7 @@ CStringA PEStrings::FormatInstruction(const cs_insn& inst, DiaSession const& sym
 		if (_stricmp(inst.mnemonic, br) == 0) {
 			long disp;
 			auto address = strtoll(inst.op_str, nullptr, 16);
-			if (address != 0 && address != LLONG_MAX && address != LLONG_MIN) {
+			if (symbols && address != 0 && address != LLONG_MAX && address != LLONG_MIN) {
 				auto sym = symbols.GetSymbolByVA(address, SymbolTag::Null, &disp);
 				if (sym) {
 					extra = sym.Name().c_str();
