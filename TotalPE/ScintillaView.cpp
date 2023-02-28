@@ -9,7 +9,6 @@
 #include "LexerModule.h"
 #include <ThemeHelper.h>
 #include <Theme.h>
-#include "..\External\Capstone\capstone.h"
 #include "PEStrings.h"
 #include "PEFile.h"
 

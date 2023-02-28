@@ -11,11 +11,11 @@
 CAppModule _Module;
 AppSettings g_Settings;
 
-#ifdef _DEBUG
-#pragma comment(lib, "../External/Capstone/Capstoned.lib")
-#else
-#pragma comment(lib, "../External/Capstone/Capstone.lib")
-#endif
+//#ifdef _DEBUG
+//#pragma comment(lib, "../External/Capstone/Capstoned.lib")
+//#else
+//#pragma comment(lib, "../External/Capstone/Capstone.lib")
+//#endif
 
 extern "C" int Scintilla_RegisterClasses(void* hInstance);
 
