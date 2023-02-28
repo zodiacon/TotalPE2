@@ -2,7 +2,6 @@
 #include "PEStrings.h"
 #include <atltime.h>
 #include <DbgHelp.h>
-#include "..\External\Capstone\capstone.h"
 #include <DiaHelper.h>
 
 #pragma comment(lib, "dbghelp")
@@ -557,12 +556,12 @@ std::wstring PEStrings::PrimaryLanguageToString(WORD l) {
 }
 
 std::wstring PEStrings::UndecorateName(PCWSTR name) {
-	WCHAR result[512];
+	WCHAR result[2048];
 	return 0 == ::UnDecorateSymbolNameW(name, result, _countof(result), 0) ? L"" : result;
 }
 
 std::string PEStrings::UndecorateName(PCSTR name) {
-	char result[512];
+	char result[2048];
 	return 0 == ::UnDecorateSymbolName(name, result, _countof(result), 0) ? "" : result;
 }
 
