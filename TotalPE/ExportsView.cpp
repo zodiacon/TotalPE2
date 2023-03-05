@@ -79,23 +79,24 @@ CString CExportsView::GetTitle() const {
 }
 
 void CExportsView::BuildItems() {
-	m_Exports.reserve(m_PE->GetExport()->Funcs.size());
+	if (m_PE->GetExport()) {
+		m_Exports.reserve(m_PE->GetExport()->Funcs.size());
 
-	auto const& symbols = Frame()->GetSymbols();
-	for (auto const& exp : m_PE->GetExport()->Funcs) {
-		Export e(exp);
-		if (!exp.FuncName.empty())
-			e.Name = (PCWSTR)CString(exp.FuncName.c_str());
-		else if(symbols) {
-			auto sym = symbols.GetSymbolByRVA(exp.FuncRVA);
-			if (sym) {
-				e.Name = sym.Name();
-				e.FromSymbols = true;
+		auto const& symbols = Frame()->GetSymbols();
+		for (auto const& exp : m_PE->GetExport()->Funcs) {
+			Export e(exp);
+			if (!exp.FuncName.empty())
+				e.Name = (PCWSTR)CString(exp.FuncName.c_str());
+			else if (symbols) {
+				auto sym = symbols.GetSymbolByRVA(exp.FuncRVA);
+				if (sym) {
+					e.Name = sym.Name();
+					e.FromSymbols = true;
+				}
 			}
+			m_Exports.emplace_back(std::move(e));
 		}
-		m_Exports.emplace_back(std::move(e));
 	}
-
 	m_List.SetItemCount((int)m_Exports.size());
 }
 

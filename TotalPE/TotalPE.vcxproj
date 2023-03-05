@@ -318,6 +318,7 @@
     <Image Include="res\circle.ico" />
     <Image Include="res\Close.ico" />
     <Image Include="res\Collapsed.ico" />
+    <Image Include="res\Collapsed2.ico" />
     <Image Include="res\component.ico" />
     <Image Include="res\copy.ico" />
     <Image Include="res\cursor.ico" />
@@ -327,6 +328,7 @@
     <Image Include="res\enum.ico" />
     <Image Include="res\Exception.ico" />
     <Image Include="res\Expanded.ico" />
+    <Image Include="res\Expanded2.ico" />
     <Image Include="res\exports.ico" />
     <Image Include="res\field.ico" />
     <Image Include="res\FileHeader.ico" />

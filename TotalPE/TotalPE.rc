@@ -9,11 +9,10 @@
 //
 #include "winres.h"
 #include "atlres.h"
+#include <WTLHelper.rc>
 
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
-
-#include <WTLHelper.rc>
 
 /////////////////////////////////////////////////////////////////////////////
 // English (United States) resources
@@ -27,6 +26,23 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 //
 // TEXTINCLUDE
 //
+
+1 TEXTINCLUDE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#include ""winres.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "\r\n"
+    "\0"
+END
 
 1 TEXTINCLUDE 
 BEGIN
@@ -330,7 +346,8 @@ BEGIN
     ICON            IDR_MAINFRAME,IDC_STATIC,7,7,20,20
     LTEXT           "Static",IDC_VERSION,53,10,109,8
     LTEXT           "Static",IDC_COPYRIGHT,53,23,123,8
-    CONTROL         "<a>Github.com/zodiacon/TotalPE2</a>",IDC_LINK,"SysLink",WS_TABSTOP,56,39,104,14
+    CONTROL         "<a>https://Github.com/zodiacon/TotalPE2</a>",IDC_LINK,
+                    "SysLink",WS_TABSTOP,49,40,125,14
 END
 
 
