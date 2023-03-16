@@ -475,6 +475,7 @@ namespace libpe {
 		m_vecBoundImp.clear();
 		m_vecDelayImp.clear();
 		m_stCOR20Desc = { };
+		m_ptr.reset();
 	}
 
 	auto Clibpe::GetBaseAddr()const->DWORD_PTR {

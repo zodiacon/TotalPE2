@@ -15,6 +15,7 @@ bool DiaSession::OpenPdb(PCWSTR path) {
 }
 
 void DiaSession::Close() {
+	m_spSource.Release();
 	m_spSession.Release();
 }
 

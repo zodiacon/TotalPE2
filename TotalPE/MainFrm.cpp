@@ -435,6 +435,7 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	CWaitCursor wait;
 	int bitness = (m_PE && m_PE->GetFileInfo()->IsPE64) * 2 + (m_PE && m_PE->GetFileInfo()->IsPE32);
 
+	m_PE.Close();
 	if (!m_PE.Open(path)) {
 		AtlMessageBox(m_hWnd, L"Error parsing file", IDR_MAINFRAME, MB_ICONERROR);
 		return false;
@@ -591,6 +592,7 @@ LRESULT CMainFrame::OnFileClose(WORD, WORD, HWND, BOOL&) {
 	m_Views.clear();
 	m_Views2.clear();
 	m_PE.Close();
+	m_Symbols.Close();
 	m_Tree.DeleteAllItems();
 	UpdateUI();
 
