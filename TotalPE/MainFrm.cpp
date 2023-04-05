@@ -812,7 +812,7 @@ LRESULT CMainFrame::OnViewDataDirs(WORD, WORD, HWND, BOOL&) {
 
 LRESULT CMainFrame::OnShowWindow(UINT, WPARAM show, LPARAM, BOOL&) {
 	bool static shown = false;
-	if (show && shown) {
+	if (show && !shown) {
 		shown = true;
 		auto wp = AppSettings::Get().MainWindowPlacement();
 		if (wp.showCmd != SW_HIDE) {
