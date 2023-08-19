@@ -12,7 +12,7 @@
 #include <string>
 #include <string_view>
 
-#include "ILexer.h"
+#include <Scintilla/ILexer.h>
 
 #include "LexAccessor.h"
 #include "Accessor.h"

@@ -11,9 +11,9 @@
 #include <string>
 #include <string_view>
 
-#include "ILexer.h"
-#include "Scintilla.h"
-#include "SciLexer.h"
+#include <Scintilla/ILexer.h>
+#include <Scintilla/Scintilla.h>
+#include <Scintilla/SciLexer.h>
 
 #include "PropSetSimple.h"
 #include "WordList.h"

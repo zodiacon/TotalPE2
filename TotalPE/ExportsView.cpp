@@ -128,6 +128,9 @@ LRESULT CExportsView::OnCopy(WORD, WORD, HWND, BOOL&) const {
 
 LRESULT CExportsView::OnFind(UINT, WPARAM, LPARAM, BOOL&) {
 	auto findDlg = Frame()->GetFindDialog();
+	if (findDlg == nullptr)
+		return 0;
+
 	auto index = ListViewHelper::SearchItem(m_List, findDlg->GetFindString(), findDlg->SearchDown(), findDlg->MatchCase());
 
 	if (index >= 0) {

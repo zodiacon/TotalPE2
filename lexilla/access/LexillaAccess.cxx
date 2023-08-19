@@ -21,7 +21,7 @@
 #include <windows.h>
 #endif
 
-#include "ILexer.h"
+#include <Scintilla/ILexer.h>
 
 #include "Lexilla.h"
 

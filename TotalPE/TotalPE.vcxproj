@@ -88,12 +88,11 @@
   </PropertyGroup>
   <PropertyGroup Label="Vcpkg" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <VcpkgUseStatic>true</VcpkgUseStatic>
-    <VcpkgUseMD>false</VcpkgUseMD>
   </PropertyGroup>
   <PropertyGroup Label="Vcpkg" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <VcpkgUseStatic>true</VcpkgUseStatic>
-    <VcpkgUseMD>false</VcpkgUseMD>
   </PropertyGroup>
+  <PropertyGroup Label="Vcpkg" />
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
@@ -210,6 +209,8 @@
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
+      <ForceFileOutput>MultiplyDefinedSymbolOnly</ForceFileOutput>
+      <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
     </Link>
     <ResourceCompile>
       <Culture>0x0409</Culture>
@@ -393,9 +394,6 @@
     </ProjectReference>
     <ProjectReference Include="..\PECore\PECore.vcxproj">
       <Project>{03a66844-1884-41c0-899d-f01c8a601c8e}</Project>
-    </ProjectReference>
-    <ProjectReference Include="..\scintilla\win32\Scintilla.vcxproj">
-      <Project>{19cca8b8-46b9-4609-b7ce-198da19f07bd}</Project>
     </ProjectReference>
     <ProjectReference Include="..\WTLHelper\WTLHelper\WTLHelper.vcxproj">
       <Project>{ae53419f-a769-4548-8e15-e311904df7df}</Project>

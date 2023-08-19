@@ -4,11 +4,6 @@
 
 #pragma once
 
-#include "ScintillaTypes.h"
-#include "ILexer.h"
-#include "ScintillaCall.h"
-#include "ScintillaMessages.h"
-#include "Scintilla.h"
 #include "ScintillaCtrl.h"
 #include "ViewBase.h"
 

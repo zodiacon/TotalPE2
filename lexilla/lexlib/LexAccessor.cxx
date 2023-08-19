@@ -10,7 +10,7 @@
 #include <string>
 #include <algorithm>
 
-#include "ILexer.h"
+#include <Scintilla/ILexer.h>
 
 #include "LexAccessor.h"
 #include "CharacterSet.h"

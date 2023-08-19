@@ -5,8 +5,7 @@
 #include "pch.h"
 #include "resource.h"
 #include "ScintillaView.h"
-#include "SciLexer.h"
-#include "LexerModule.h"
+#include <LexerModule.h>
 #include <ThemeHelper.h>
 #include <Theme.h>
 #include "PEStrings.h"
@@ -93,9 +92,6 @@ const char* KeyWords_ASM[] = {
 	"ucomisd ucomiss unpckhpd unpckhps unpcklpd unpcklps xorpd xorps",
 };
 
-extern Lexilla::LexerModule lmXML;
-extern Lexilla::LexerModule lmAsm;
-
 CScintillaView::CScintillaView(IMainFrame* frame, PEFile const& pe, PCWSTR title) : CViewBase(frame), m_PE(pe), m_Title(title) {
 }
 
@@ -148,6 +144,9 @@ void CScintillaView::SetText(PCSTR text) {
 
 void CScintillaView::SetLanguage(LexLanguage lang) {
 	m_Language = lang;
+	extern Lexilla::LexerModule lmXML;
+	extern Lexilla::LexerModule lmAsm;
+
 	switch (lang) {
 		case LexLanguage::Asm:
 		{

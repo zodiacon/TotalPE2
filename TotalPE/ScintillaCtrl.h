@@ -1,16 +1,362 @@
 #pragma once
 
+namespace Scintilla {
+	enum class IndicatorStyle {
+		Plain = 0,
+		Squiggle = 1,
+		TT = 2,
+		Diagonal = 3,
+		Strike = 4,
+		Hidden = 5,
+		Box = 6,
+		RoundBox = 7,
+		StraightBox = 8,
+		Dash = 9,
+		Dots = 10,
+		SquiggleLow = 11,
+		DotBox = 12,
+		SquigglePixmap = 13,
+		CompositionThick = 14,
+		CompositionThin = 15,
+		FullBox = 16,
+		TextFore = 17,
+		Point = 18,
+		PointCharacter = 19,
+		Gradient = 20,
+		GradientCentre = 21,
+		ExplorerLink = 22,
+	};
+
+	enum class MarkerSymbol {
+		Circle = 0,
+		RoundRect = 1,
+		Arrow = 2,
+		SmallRect = 3,
+		ShortArrow = 4,
+		Empty = 5,
+		ArrowDown = 6,
+		Minus = 7,
+		Plus = 8,
+		VLine = 9,
+		LCorner = 10,
+		TCorner = 11,
+		BoxPlus = 12,
+		BoxPlusConnected = 13,
+		BoxMinus = 14,
+		BoxMinusConnected = 15,
+		LCornerCurve = 16,
+		TCornerCurve = 17,
+		CirclePlus = 18,
+		CirclePlusConnected = 19,
+		CircleMinus = 20,
+		CircleMinusConnected = 21,
+		Background = 22,
+		DotDotDot = 23,
+		Arrows = 24,
+		Pixmap = 25,
+		FullRect = 26,
+		LeftRect = 27,
+		Available = 28,
+		Underline = 29,
+		RgbaImage = 30,
+		Bookmark = 31,
+		VerticalBookmark = 32,
+		Character = 10000,
+	};
+
+	enum class MarkerOutline {
+		FolderEnd = 25,
+		FolderOpenMid = 26,
+		FolderMidTail = 27,
+		FolderTail = 28,
+		FolderSub = 29,
+		Folder = 30,
+		FolderOpen = 31,
+	};
+
+	enum class MarginType {
+		Symbol = 0,
+		Number = 1,
+		Back = 2,
+		Fore = 3,
+		Text = 4,
+		RText = 5,
+		Colour = 6,
+	};
+
+	enum class StylesCommon {
+		Default = 32,
+		LineNumber = 33,
+		BraceLight = 34,
+		BraceBad = 35,
+		ControlChar = 36,
+		IndentGuide = 37,
+		CallTip = 38,
+		FoldDisplayText = 39,
+		LastPredefined = 39,
+		Max = 255,
+	};
+
+	enum class Element {
+		List = 0,
+		ListBack = 1,
+		ListSelected = 2,
+		ListSelectedBack = 3,
+		SelectionText = 10,
+		SelectionBack = 11,
+		SelectionAdditionalText = 12,
+		SelectionAdditionalBack = 13,
+		SelectionSecondaryText = 14,
+		SelectionSecondaryBack = 15,
+		SelectionInactiveText = 16,
+		SelectionInactiveBack = 17,
+		Caret = 40,
+		CaretAdditional = 41,
+		CaretLineBack = 50,
+		WhiteSpace = 60,
+		WhiteSpaceBack = 61,
+		HotSpotActive = 70,
+		HotSpotActiveBack = 71,
+		FoldLine = 80,
+		HiddenLine = 81,
+	};
+
+	enum class IndicValue {
+		Bit = 0x1000000,
+		Mask = 0xFFFFFF,
+	};
+
+	enum class IndicFlag {
+		None = 0,
+		ValueFore = 1,
+	};
+
+	enum class AutoCompleteOption {
+		Normal = 0,
+		FixedSize = 1,
+	};
+
+	enum class IndentView {
+		None = 0,
+		Real = 1,
+		LookForward = 2,
+		LookBoth = 3,
+	};
+
+	enum class PrintOption {
+		Normal = 0,
+		InvertLight = 1,
+		BlackOnWhite = 2,
+		ColourOnWhite = 3,
+		ColourOnWhiteDefaultBG = 4,
+		ScreenColours = 5,
+	};
+
+	enum class Alpha {
+		Transparent = 0,
+		Opaque = 255,
+		NoAlpha = 256,
+	};
+
+	enum class WhiteSpace {
+		Invisible = 0,
+		VisibleAlways = 1,
+		VisibleAfterIndent = 2,
+		VisibleOnlyInIndent = 3,
+	};
+
+	enum class TabDrawMode {
+		LongArrow = 0,
+		StrikeOut = 1,
+	};
+
+	enum class EndOfLine {
+		CrLf = 0,
+		Cr = 1,
+		Lf = 2,
+	};
+
+	enum class IMEInteraction {
+		Windowed = 0,
+		Inline = 1,
+	};
+
+	enum class Layer {
+		Base = 0,
+		UnderText = 1,
+		OverText = 2,
+	};
+
+	enum class IdleStyling {
+		None = 0,
+		ToVisible = 1,
+		AfterVisible = 2,
+		All = 3,
+	};
+
+	enum class Wrap {
+		None = 0,
+		Word = 1,
+		Char = 2,
+		WhiteSpace = 3,
+	};
+
+	enum class WrapVisualFlag {
+		None = 0x0000,
+		End = 0x0001,
+		Start = 0x0002,
+		Margin = 0x0004,
+	};
+
+	enum class WrapVisualLocation {
+		Default = 0x0000,
+		EndByText = 0x0001,
+		StartByText = 0x0002,
+	};
+
+	enum class WrapIndentMode {
+		Fixed = 0,
+		Same = 1,
+		Indent = 2,
+		DeepIndent = 3,
+	};
+
+	enum class LineCache {
+		None = 0,
+		Caret = 1,
+		Page = 2,
+		Document = 3,
+	};
+
+	enum class PhasesDraw {
+		One = 0,
+		Two = 1,
+		Multiple = 2,
+	};
+
+	enum class FontQuality {
+		QualityMask = 0xF,
+		QualityDefault = 0,
+		QualityNonAntialiased = 1,
+		QualityAntialiased = 2,
+		QualityLcdOptimized = 3,
+	};
+
+	enum class MultiPaste {
+		Once = 0,
+		Each = 1,
+	};
+
+	enum class Accessibility {
+		Disabled = 0,
+		Enabled = 1,
+	};
+
+	enum class FindOption {
+		None = 0x0,
+		WholeWord = 0x2,
+		MatchCase = 0x4,
+		WordStart = 0x00100000,
+		RegExp = 0x00200000,
+		Posix = 0x00400000,
+		Cxx11RegEx = 0x00800000,
+	};
+	DEFINE_ENUM_FLAG_OPERATORS(FindOption);
+
+	enum class FoldLevel {
+		None = 0x0,
+		Base = 0x400,
+		WhiteFlag = 0x1000,
+		HeaderFlag = 0x2000,
+		NumberMask = 0x0FFF,
+	};
+
+	enum class FoldDisplayTextStyle {
+		Hidden = 0,
+		Standard = 1,
+		Boxed = 2,
+	};
+
+	enum class FoldAction {
+		Contract = 0,
+		Expand = 1,
+		Toggle = 2,
+	};
+
+	enum class AutomaticFold {
+		None = 0x0000,
+		Show = 0x0001,
+		Click = 0x0002,
+		Change = 0x0004,
+	};
+
+	enum class FoldFlag {
+		None = 0x0000,
+		LineBeforeExpanded = 0x0002,
+		LineBeforeContracted = 0x0004,
+		LineAfterExpanded = 0x0008,
+		LineAfterContracted = 0x0010,
+		LevelNumbers = 0x0040,
+		LineState = 0x0080,
+	};
+
+	enum class CharacterSet {
+		Ansi = 0,
+		Default = 1,
+		Baltic = 186,
+		ChineseBig5 = 136,
+		EastEurope = 238,
+		GB2312 = 134,
+		Greek = 161,
+		Hangul = 129,
+		Mac = 77,
+		Oem = 255,
+		Russian = 204,
+		Oem866 = 866,
+		Cyrillic = 1251,
+		ShiftJis = 128,
+		Symbol = 2,
+		Turkish = 162,
+		Johab = 130,
+		Hebrew = 177,
+		Arabic = 178,
+		Vietnamese = 163,
+		Thai = 222,
+		Iso8859_15 = 1000,
+	};
+
+	enum class CaseVisible {
+		Mixed = 0,
+		Upper = 1,
+		Lower = 2,
+		Camel = 3,
+	};
+
+	enum class FontWeight {
+		Normal = 400,
+		SemiBold = 600,
+		Bold = 700,
+	};
+}
+
 template<typename T>
 class CScintillaCtrlT : public T {
-	using Position = Scintilla::Position;
-	using Line = Scintilla::Line;
-	using Span = Scintilla::Span;
-	using Colour = Scintilla::Colour;
-	using ColourAlpha = Scintilla::ColourAlpha;
+	using Position = Sci_Position;
+	using Line = intptr_t;
+	using Colour = int;
+	using ColourAlpha = int;
 public:
 	HWND Create(HWND hWndParent, _U_RECT rect = nullptr, LPCTSTR szWindowName = nullptr,
 		DWORD dwStyle = WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN, DWORD dwExStyle = 0, _U_MENUorID MenuOrID = 0U, PVOID lpCreateParam = nullptr) {
-		return CWindow::Create(GetWndClassName(), hWndParent, rect.m_lpRect, szWindowName, dwStyle, dwExStyle, MenuOrID.m_hMenu, lpCreateParam);
+		auto hWnd = CWindow::Create(GetWndClassName(), hWndParent, rect.m_lpRect, szWindowName, dwStyle, dwExStyle, MenuOrID.m_hMenu, lpCreateParam);
+		if (!hWnd)
+			return nullptr;
+
+		m_Sci = (decltype(m_Sci))::SendMessage(hWnd, SCI_GETDIRECTFUNCTION, 0, 0);
+		ATLASSERT(m_Sci);
+		m_SciWndData = (sptr_t)::SendMessage(hWnd, SCI_GETDIRECTPOINTER, 0, 0);
+		ATLASSERT(m_SciWndData);
+		return hWnd;
 	}
 
 	static LPCTSTR GetWndClassName() {
@@ -18,15 +364,16 @@ public:
 	}
 
 	LRESULT Execute(UINT Msg, WPARAM wParam = 0, LPARAM lParam = 0) const {
+		return m_Sci(m_SciWndData, Msg, wParam, lParam);
+	};
+
+	LRESULT ExecuteMsg(UINT Msg, WPARAM wParam = 0, LPARAM lParam = 0) const {
 		ATLASSERT(::IsWindow(this->m_hWnd));
 		return ::SendMessage(this->m_hWnd, Msg, wParam, lParam);
 	}
 
 	Position LineStart(Line line) const;
 	Position LineEnd(Line line) const;
-	Span SelectionSpan() const {
-		return SelectionEnd() - SelectionStart();
-	}
 
 	bool IsSelectionEmpty() const {
 		return (bool)Execute(SCI_GETSELECTIONEMPTY);
@@ -36,16 +383,12 @@ public:
 		return (int)Execute(SCI_GETSELECTIONS);
 	}
 
-	Span TargetSpan() const;
-	void SetTarget(Span span);
 	void ColouriseAll();
 	char CharacterAt(Position position) const;
 	int UnsignedStyleAt(Position position);
-	std::string StringOfSpan(Span span) const;
 	Position ReplaceTarget(std::string_view text);
 	Position ReplaceTargetRE(std::string_view text);
 	Position SearchInTarget(std::string_view text);
-	Span SpanSearchInTarget(std::string_view text);
 
 	void AddText(Position len, const char* text) {
 		Execute(SCI_ADDTEXT, len, reinterpret_cast<LPARAM>(text));
@@ -54,13 +397,17 @@ public:
 		Execute(SCI_APPENDTEXT, len, reinterpret_cast<LPARAM>(text));
 	}
 
+	void MarkerDefine(int index, Scintilla::MarkerSymbol symbol) {
+		Execute(SCI_MARKERDEFINE, index, static_cast<LPARAM>(symbol));
+	}
+
 	void AddStyledText(Position length, const char* c);
 	void InsertText(Position pos, const char* text);
-	void ChangeInsertion(Scintilla::Position length, const char* text);
+	void ChangeInsertion(Position length, const char* text);
 	void ClearAll() {
 		Execute(SCI_CLEARALL);
 	}
-	void DeleteRange(Scintilla::Position start, Scintilla::Position lengthDelete);
+	void DeleteRange(Position start, Position lengthDelete);
 	void ClearDocumentStyle();
 
 	Position Length() const {
@@ -80,9 +427,7 @@ public:
 	int StyleAt(Position pos) const {
 		return (int)Execute(SCI_GETSTYLEAT, pos);
 	}
-	int StyleIndexAt(Position pos) const {
-		return (int)Execute(SCI_GETSTYLEINDEXAT, pos);
-	}
+
 	void Redo() {
 		Execute(SCI_REDO);
 	}
@@ -97,22 +442,18 @@ public:
 	}
 
 	Position GetStyledText(void* tr) const;
-	bool CanRedo() const {
-		return Execute(SCI_CANREDO);
-	}
 
 	Line MarkerLineFromHandle(int markerHandle);
 	void MarkerDeleteHandle(int markerHandle);
 	int MarkerHandleFromLine(Line line, int which);
 	int MarkerNumberFromLine(Line line, int which);
 	bool UndoCollection();
-	Scintilla::WhiteSpace ViewWS();
-	void SetViewWS(Scintilla::WhiteSpace viewWS);
-	Scintilla::TabDrawMode TabDrawMode();
-	void SetTabDrawMode(Scintilla::TabDrawMode tabDrawMode);
 	Position PositionFromPoint(int x, int y);
 	Position PositionFromPointClose(int x, int y);
-	void GotoLine(Line line);
+	void GotoLine(Line line) {
+		Execute(SCI_GOTOLINE, line);
+	}
+
 	void GotoPos(Position caret) {
 		Execute(SCI_GOTOPOS, caret);
 	}
@@ -121,22 +462,55 @@ public:
 	}
 	void SetAnchor(Position anchor);
 	Position GetCurLine(Position length, char* text);
-	std::string GetCurLine(Position length);
-	Position EndStyled();
-	void ConvertEOLs(Scintilla::EndOfLine eolMode);
-	Scintilla::EndOfLine EOLMode();
-	void SetEOLMode(Scintilla::EndOfLine eolMode);
-	void StartStyling(Position start, int unused);
-	void SetStyling(Position length, int style);
+
+	std::string GetCurLine() const {
+		std::string text;
+		auto len = GetLineLength(LineFromPosition(GetCurrentPos()));
+		if (len == 0)
+			return "";
+		text.resize(len);
+		Execute(SCI_GETCURLINE, len, reinterpret_cast<LPARAM>(text.data()));
+		return text;
+	}
+
+	Position GetLineLength(Line line) const {
+		return Execute(SCI_LINELENGTH, line);
+	}
+
+	Position GetCurrentPos() const {
+		return Execute(SCI_GETCURRENTPOS);
+	}
+
+	Line LineFromPosition(Position pos) const {
+		return Execute(SCI_LINEFROMPOSITION, pos);
+	}
+
+	Position GetEndStyled() const {
+		return Execute(SCI_GETENDSTYLED);
+	}
+
+	void StartStyling(Position start) {
+		Execute(SCI_STARTSTYLING, start);
+	}
+
+	void SetStyling(Position length, int style) {
+		Execute(SCI_SETSTYLING, length, style);
+	}
+
 	bool BufferedDraw();
 	void SetBufferedDraw(bool buffered);
-	void SetTabWidth(int tabWidth);
-	int TabWidth();
+	void SetTabWidth(int tabWidth) {
+		Execute(SCI_SETTABWIDTH, tabWidth);
+	}
+	int GetTabWidth() const {
+		return Execute(SCI_GETTABWIDTH);
+	}
+
 	void SetTabMinimumWidth(int pixels);
-	int TabMinimumWidth();
+	int GetTabMinimumWidth() const;
 	void ClearTabStops(Line line);
 	void AddTabStop(Line line, int x);
-	int GetNextTabStop(Line line, int x);
+	int GetNextTabStop(Line line, int x) const;
 	void SetCodePage(int codePage) {
 		Execute(SCI_SETCODEPAGE, codePage);
 	}
@@ -146,46 +520,72 @@ public:
 	}
 
 	void SetFontLocale(const char* localeName);
-	int FontLocale(char* localeName);
-	std::string FontLocale() const;
-	Scintilla::IMEInteraction IMEInteraction() const;
-	void SetIMEInteraction(Scintilla::IMEInteraction imeInteraction);
-	void MarkerDefine(int markerNumber, Scintilla::MarkerSymbol markerSymbol);
-	void MarkerSetFore(int markerNumber, Colour fore);
-	void MarkerSetBack(int markerNumber, Colour back);
+	int GetFontLocale(char* localeName) const;
+	std::string GetFontLocale() const;
+
+	void MarkerSetFore(int markerNumber, Colour fore) {
+		Execute(SCI_MARKERSETFORE, markerNumber, fore);
+	}
+
+	void MarkerSetBack(int markerNumber, Colour back) {
+		Execute(SCI_MARKERSETBACK, markerNumber, back);
+	}
+
 	void MarkerSetBackSelected(int markerNumber, Colour back);
 	void MarkerSetForeTranslucent(int markerNumber, ColourAlpha fore);
 	void MarkerSetBackTranslucent(int markerNumber, ColourAlpha back);
 	void MarkerSetBackSelectedTranslucent(int markerNumber, ColourAlpha back);
 	void MarkerSetStrokeWidth(int markerNumber, int hundredths);
 	void MarkerEnableHighlight(bool enabled);
-	int MarkerAdd(Line line, int markerNumber);
-	void MarkerDelete(Line line, int markerNumber);
-	void MarkerDeleteAll(int markerNumber);
-	int MarkerGet(Line line);
-	Line MarkerNext(Line lineStart, int markerMask);
-	Line MarkerPrevious(Line lineStart, int markerMask);
+
+	int MarkerAdd(Line line, int markerNumber) {
+		return Execute(SCI_MARKERADD, line, markerNumber);
+	}
+
+	void MarkerDelete(Line line, int markerNumber) {
+		Execute(SCI_MARKERDELETE, line, markerNumber);
+	}
+	void MarkerDeleteAll(int markerNumber) {
+		Execute(SCI_MARKERDELETEALL);
+	}
+
+	int MarkerGet(Line line) const {
+		return Execute(SCI_MARKERGET, line);
+	}
+
+	Line MarkerNext(Line lineStart, int markerMask) const;
+	Line MarkerPrevious(Line lineStart, int markerMask) const;
 	void MarkerDefinePixmap(int markerNumber, const char* pixmap);
 	void MarkerAddSet(Line line, int markerSet);
-	void MarkerSetAlpha(int markerNumber, Scintilla::Alpha alpha);
-	Scintilla::Layer MarkerGetLayer(int markerNumber);
-	void MarkerSetLayer(int markerNumber, Scintilla::Layer layer);
-	void SetMarginTypeN(int margin, Scintilla::MarginType marginType);
-	Scintilla::MarginType MarginTypeN(int margin);
-	void SetMarginWidthN(int margin, int pixelWidth);
-	int MarginWidthN(int margin);
+
+	void SetMarginWidth(int margin, int pixelWidth) {
+		Execute(SCI_SETMARGINWIDTHN, margin, pixelWidth);
+	}
+
+	int GetMarginWidthN(int margin) const {
+		return Execute(SCI_GETMARGINWIDTHN, margin);
+	}
+
 	void SetMarginMaskN(int margin, int mask);
-	int MarginMaskN(int margin);
-	void SetMarginSensitiveN(int margin, bool sensitive);
-	bool MarginSensitiveN(int margin);
-	void SetMarginCursorN(int margin, Scintilla::CursorShape cursor);
-	Scintilla::CursorShape MarginCursorN(int margin);
-	void SetMarginBackN(int margin, Colour back);
-	Colour MarginBackN(int margin);
+	int GetMarginMaskN(int margin) const;
+	void SetMarginSensitive(int margin, bool sensitive) {
+		Execute(SCI_SETMARGINSENSITIVEN, margin, sensitive);
+	}
+
+	bool GetMarginSensitiveN(int margin) const;
+	void SetMarginBack(int margin, Colour back) {
+		Execute(SCI_SETMARGINBACKN, margin, back);
+	}
+
+	Colour GetMarginBackN(int margin) const;
 	void SetMargins(int margins);
-	int Margins();
+	int GetMargins() const;
 	void StyleClearAll() {
 		Execute(SCI_STYLECLEARALL);
+	}
+
+	void SetMarginType(int index, Scintilla::MarginType type) {
+		Execute(SCI_SETMARGINTYPEN, index, (LPARAM)type);
 	}
 
 	void StyleSetFore(int style, Colour fore) {
@@ -232,24 +632,21 @@ public:
 		return (Colour)Execute(SCI_STYLEGETFORE, style);
 	}
 
-	Colour StyleGetBack(int style);
-	bool StyleGetBold(int style);
-	bool StyleGetItalic(int style);
-	int StyleGetSize(int style);
-	int StyleGetFont(int style, char* fontName);
-	std::string StyleGetFont(int style);
-	bool StyleGetEOLFilled(int style);
-	bool StyleGetUnderline(int style);
-	Scintilla::CaseVisible StyleGetCase(int style);
-	Scintilla::CharacterSet StyleGetCharacterSet(int style);
-	bool StyleGetVisible(int style);
-	bool StyleGetChangeable(int style);
-	bool StyleGetHotSpot(int style);
-	void StyleSetCase(int style, Scintilla::CaseVisible caseVisible);
+	Colour StyleGetBack(int style) const;
+	bool StyleGetBold(int style) const;
+	bool StyleGetItalic(int style) const;
+	int StyleGetSize(int style) const;
+	int StyleGetFont(int style, char* fontName) const;
+	std::string StyleGetFont(int style) const;
+	bool StyleGetEOLFilled(int style) const;
+	bool StyleGetUnderline(int style) const;
+	bool StyleGetVisible(int style) const;
+	bool StyleGetChangeable(int style) const;
+	bool StyleGetHotSpot(int style) const;
 	void StyleSetSizeFractional(int style, int sizeHundredthPoints);
 	int StyleGetSizeFractional(int style);
-	void StyleSetWeight(int style, Scintilla::FontWeight weight);
-	Scintilla::FontWeight StyleGetWeight(int style);
+	void StyleSetWeight(int style, int weight);
+	int StyleGetWeight(int style);
 	void StyleSetCharacterSet(int style, Scintilla::CharacterSet characterSet);
 	void StyleSetHotSpot(int style, bool hotspot);
 	void StyleSetCheckMonospaced(int style, bool checkMonospaced);
@@ -257,9 +654,9 @@ public:
 	void SetElementColour(Scintilla::Element element, ColourAlpha colourElement);
 	ColourAlpha ElementColour(Scintilla::Element element);
 	void ResetElementColour(Scintilla::Element element);
-	bool ElementIsSet(Scintilla::Element element);
-	bool ElementAllowsTranslucent(Scintilla::Element element);
-	ColourAlpha ElementBaseColour(Scintilla::Element element);
+	bool IsElementIsSet(Scintilla::Element element) const;
+	bool IsElementAllowsTranslucent(Scintilla::Element element) const;
+	ColourAlpha GetElementBaseColour(Scintilla::Element element) const;
 	void SetSelFore(bool useSetting, Colour fore);
 	void SetSelBack(bool useSetting, Colour back);
 	Scintilla::Alpha SelAlpha();
@@ -270,7 +667,7 @@ public:
 	void SetSelectionLayer(Scintilla::Layer layer);
 	Scintilla::Layer CaretLineLayer();
 	void SetCaretLineLayer(Scintilla::Layer layer);
-	bool CaretLineHighlightSubLine();
+	bool GetCaretLineHighlightSubLine() const;
 	void SetCaretLineHighlightSubLine(bool subLine);
 	void SetCaretFore(Colour fore);
 	void AssignCmdKey(int keyDefinition, int sciCommand);
@@ -278,48 +675,48 @@ public:
 	void ClearAllCmdKeys();
 	void SetStylingEx(Position length, const char* styles);
 	void StyleSetVisible(int style, bool visible);
-	int CaretPeriod();
+	int GetCaretPeriod() const;
 	void SetCaretPeriod(int periodMilliseconds);
 	void SetWordChars(const char* characters);
-	int WordChars(char* characters);
-	std::string WordChars();
+	int GetWordChars(char* characters) const;
+	std::string GetWordChars() const;
 	void SetCharacterCategoryOptimization(int countCharacters);
-	int CharacterCategoryOptimization();
+	int GetCharacterCategoryOptimization() const;
 	void BeginUndoAction();
 	void EndUndoAction();
 	void IndicSetStyle(int indicator, Scintilla::IndicatorStyle indicatorStyle);
 	Scintilla::IndicatorStyle IndicGetStyle(int indicator);
 	void IndicSetFore(int indicator, Colour fore);
-	Colour IndicGetFore(int indicator);
+	Colour IndicGetFore(int indicator) const;
 	void IndicSetUnder(int indicator, bool under);
-	bool IndicGetUnder(int indicator);
+	bool IndicGetUnder(int indicator) const;
 	void IndicSetHoverStyle(int indicator, Scintilla::IndicatorStyle indicatorStyle);
 	Scintilla::IndicatorStyle IndicGetHoverStyle(int indicator);
 	void IndicSetHoverFore(int indicator, Colour fore);
-	Colour IndicGetHoverFore(int indicator);
+	Colour IndicGetHoverFore(int indicator) const;
 	void IndicSetFlags(int indicator, Scintilla::IndicFlag flags);
-	Scintilla::IndicFlag IndicGetFlags(int indicator);
+	Scintilla::IndicFlag IndicGetFlags(int indicator) const;
 	void IndicSetStrokeWidth(int indicator, int hundredths);
-	int IndicGetStrokeWidth(int indicator);
+	int IndicGetStrokeWidth(int indicator) const;
 	void SetWhitespaceFore(bool useSetting, Colour fore);
 	void SetWhitespaceBack(bool useSetting, Colour back) {
 		Execute(SCI_SETWHITESPACEBACK, useSetting, back);
 	}
 	void SetWhitespaceSize(int size);
-	int WhitespaceSize();
+	int GetWhitespaceSize() const;
 	void SetLineState(Line line, int state);
-	int LineState(Line line);
-	int MaxLineState();
-	bool CaretLineVisible();
+	int GetLineState(Line line) const;
+	int GetMaxLineState() const;
+	bool IsCaretLineVisible() const;
 	void SetCaretLineVisible(bool show);
-	Colour CaretLineBack();
+	Colour GetCaretLineBack() const;
 	void SetCaretLineBack(Colour back);
-	int CaretLineFrame();
+	int GetCaretLineFrame() const;
 	void SetCaretLineFrame(int width);
 	void StyleSetChangeable(int style, bool changeable);
 	void AutoCShow(Position lengthEntered, const char* itemList);
 	void AutoCCancel();
-	bool AutoCActive();
+	bool IsAutoCActive() const;
 	Position AutoCPosStart();
 	void AutoCComplete();
 	void AutoCStops(const char* characterSet);
@@ -354,12 +751,10 @@ public:
 	bool UseTabs();
 	void SetLineIndentation(Line line, int indentation);
 	int LineIndentation(Line line);
+
 	Position LineIndentPosition(Line line);
 	Position Column(Position pos) const {
 		return (Position)Execute(SCI_GETCOLUMN, pos);
-	}
-	Position LineNumber(Position pos) const {
-		return (Position)Execute(SCI_LINEFROMPOSITION, pos);
 	}
 	Position CountCharacters(Position start, Position end);
 	Position CountCodeUnits(Position start, Position end);
@@ -372,7 +767,7 @@ public:
 	Position LineEndPosition(Line line);
 	int CodePage();
 	Colour CaretFore();
-	bool IsReadOnly() {
+	bool IsReadOnly() const {
 		return Execute(SCI_GETREADONLY);
 	}
 	void SetCurrentPos(Position caret) {
@@ -394,17 +789,28 @@ public:
 	int PrintMagnification();
 	void SetPrintColourMode(Scintilla::PrintOption mode);
 	Scintilla::PrintOption PrintColourMode();
+
 	Position FindText(Scintilla::FindOption searchFlags, char const* text) {
 		Sci_TextToFind ttf{};
-		ttf.chrg.cpMax = Length();
+		ttf.chrg.cpMax = (long)Length();
 		ttf.lpstrText = text;
 		return (Position)Execute(SCI_FINDTEXT, static_cast<WPARAM>(searchFlags), reinterpret_cast<LPARAM>(&ttf));
 	}
 
 	Position FormatRange(bool draw, void* fr);
-	Line FirstVisibleLine();
-	Position GetLine(Line line, char* text);
-	std::string GetLine(Line line);
+	Line FirstVisibleLine() const;
+	Position GetLine(Line line, char* text) const;
+
+	std::string GetLine(Line line) const {
+		std::string text;
+		auto len = GetLineLength(line);
+		if (len == 0)
+			return "";
+		text.resize(len);
+		Execute(SCI_GETLINE, line, reinterpret_cast<LPARAM>(text.data()));
+		return text;
+	}
+
 	Line LineCount();
 	void AllocateLines(Line lines);
 	void SetMarginLeft(int pixelWidth);
@@ -427,13 +833,11 @@ public:
 	void HideSelection(bool hide);
 	int PointXFromPosition(Position pos);
 	int PointYFromPosition(Position pos);
-	Line LineFromPosition(Position pos) const {
-		return (Line)Execute(SCI_GETLINEENDPOSITION, pos);
-	}
 
 	Position PositionFromLine(Line line) const {
 		return (Position)Execute(SCI_POSITIONFROMLINE, line);
 	}
+
 	void LineScroll(Position columns, Line lines);
 	void ScrollCaret();
 	void ScrollRange(Position secondary, Position primary);
@@ -442,12 +846,27 @@ public:
 		Execute(SCI_SETREADONLY, readOnly);
 	}
 	void Null();
+
 	bool CanPaste() const {
 		return Execute(SCI_CANPASTE);
 	}
+
 	bool CanUndo() const {
 		return Execute(SCI_CANUNDO);
 	}
+
+	bool CanRedo() const {
+		return Execute(SCI_CANREDO);
+	}
+
+	bool CanCopy() const {
+		return !Execute(SCI_GETSELECTIONEMPTY);
+	}
+
+	bool CanCut() const {
+		return !Execute(SCI_GETSELECTIONEMPTY) && !IsReadOnly();
+	}
+
 	void EmptyUndoBuffer() {
 		Execute(SCI_EMPTYUNDOBUFFER);
 	}
@@ -483,10 +902,22 @@ public:
 	std::string GetText(Position length) const {
 		std::string text;
 		text.resize((size_t)length);
-		GetText(length, text.data());
+		GetText(length + 1, text.data());
 		return text;
 	}
-	Position TextLength() const;
+
+	std::string GetAllText() const {
+		std::string text;
+		text.resize(GetTextLength());
+		return GetText(text.length());
+	}
+
+	Position GetTextLength() const {
+		return Execute(SCI_GETTEXTLENGTH);
+	}
+
+	SciFnDirect m_Sci;
+	sptr_t m_SciWndData;
 };
 
 using CScintillaCtrl = CScintillaCtrlT<CWindow>;
@@ -494,6 +925,12 @@ using CScintillaCtrl = CScintillaCtrlT<CWindow>;
 template<typename T>
 class CScintillaCommands {
 	BEGIN_MSG_MAP(CScintillaCommands)
+		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnCopy)
+		COMMAND_ID_HANDLER(ID_EDIT_PASTE, OnPaste)
+		COMMAND_ID_HANDLER(ID_EDIT_CUT, OnCut)
+		COMMAND_ID_HANDLER(ID_EDIT_UNDO, OnUndo)
+		COMMAND_ID_HANDLER(ID_EDIT_REDO, OnRedo)
+		COMMAND_ID_HANDLER(ID_EDIT_CLEAR_ALL, OnClearAll)
 		ALT_MSG_MAP(1)
 		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnCopy)
 		COMMAND_ID_HANDLER(ID_EDIT_PASTE, OnPaste)
