@@ -23,6 +23,7 @@
 #include "TextView.h"
 #include "StringMessageTableView.h"
 #include "PEImageView.h"
+#include "TlsView.h"
 
 std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 	CWaitCursor wait;
@@ -94,6 +95,16 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 				symType = SymViewType::Data;
 		{
 			auto view = new CSymbolsView(this, m_Symbols, symType);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::DirectoryTLS:
+		{
+			auto view = new CTlsView(this, m_PE);
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};

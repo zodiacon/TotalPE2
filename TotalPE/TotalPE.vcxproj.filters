@@ -132,6 +132,9 @@
     <ClCompile Include="ViewFactory.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="TlsView.cpp">
+      <Filter>Views\DataDirectories</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -238,6 +241,9 @@
     </ClInclude>
     <ClInclude Include="SymbolsView.h">
       <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="TlsView.h">
+      <Filter>Views\DataDirectories</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

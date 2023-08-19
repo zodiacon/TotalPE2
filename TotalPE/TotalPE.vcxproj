@@ -104,7 +104,7 @@
       <PreprocessorDefinitions>_WINDOWS;STRICT;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\WTLHelper\WTLHelper;..\PECore;..\HexControl;..\DiaHelper;..\Scintilla\Include;..\Lexilla\lexers;..\Lexilla\Include;..\Lexilla\lexlib</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\WTLHelper\WTLHelper;..\PECore;..\HexControl;..\DiaHelper;..\Lexilla\lexers;..\Lexilla\Include;..\Lexilla\lexlib</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -205,12 +205,11 @@
       <PreprocessorDefinitions>_WINDOWS;STRICT;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\WTLHelper\WTLHelper;..\PECore;..\HexControl;..\DiaHelper;..\Scintilla\Include;..\Lexilla\lexers;..\Lexilla\Include;..\Lexilla\lexlib</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\WTLHelper\WTLHelper;..\PECore;..\HexControl;..\DiaHelper;..\Lexilla\lexers;..\Lexilla\Include;..\Lexilla\lexlib</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <ForceFileOutput>MultiplyDefinedSymbolOnly</ForceFileOutput>
-      <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <ResourceCompile>
       <Culture>0x0409</Culture>
@@ -265,6 +264,7 @@
     <ClCompile Include="StructView.cpp" />
     <ClCompile Include="SymbolsView.cpp" />
     <ClCompile Include="TextView.cpp" />
+    <ClCompile Include="TlsView.cpp" />
     <ClCompile Include="TotalPE.cpp" />
     <ClCompile Include="PEImageView.cpp" />
     <ClCompile Include="VersionView.cpp" />
@@ -303,6 +303,7 @@
     <ClInclude Include="StructView.h" />
     <ClInclude Include="SymbolsView.h" />
     <ClInclude Include="TextView.h" />
+    <ClInclude Include="TlsView.h" />
     <ClInclude Include="TreeListView.h" />
     <ClInclude Include="VersionView.h" />
     <ClInclude Include="ViewBase.h" />

@@ -235,11 +235,11 @@ namespace Scintilla {
 	};
 
 	enum class FontQuality {
-		QualityMask = 0xF,
-		QualityDefault = 0,
-		QualityNonAntialiased = 1,
-		QualityAntialiased = 2,
-		QualityLcdOptimized = 3,
+		Mask = 0xF,
+		Default = 0,
+		NonAntialiased = 1,
+		Antialiased = 2,
+		LcdOptimized = 3,
 	};
 
 	enum class MultiPaste {
