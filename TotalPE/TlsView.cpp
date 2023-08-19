@@ -50,8 +50,8 @@ LRESULT CTlsView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	cm->DeleteColumn(0);
 
 	cm = GetColumnManager(m_GenList);
-	cm->AddColumn(L"Name", LVCFMT_LEFT, 150);
-	cm->AddColumn(L"Value", LVCFMT_RIGHT, 200);
+	cm->AddColumn(L"Name", LVCFMT_LEFT, 160);
+	cm->AddColumn(L"Value", LVCFMT_RIGHT, 180);
 
 	m_Splitter.SetSplitterPanes(m_List, m_GenList);
 	m_Splitter.SetSplitterPosPct(50);

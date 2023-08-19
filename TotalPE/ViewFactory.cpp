@@ -137,7 +137,12 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		case TreeItemType::DOSHeader:
 		{
 			auto sym = GetSymbolForName(L"ntdll.dll", L"_IMAGE_DOS_HEADER");
-			if (!sym)		// temporary
+			if (!sym && m_Symbols) {
+				auto symbols = m_Symbols.FindChildren(L"_IMAGE_DOS_HEADER");
+				if (!symbols.empty())
+					sym = symbols[0];
+			}
+			if (!sym)
 				return {};
 
 			auto view = new CStructView(this, sym, L"DOS Header");
@@ -151,7 +156,13 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 
 		case TreeItemType::NTHeader:
 		{
-			auto sym = GetSymbolForName(L"ntdll.dll", m_PE->GetFileInfo()->IsPE32 ? L"_IMAGE_NT_HEADERS" : L"_IMAGE_NT_HEADERS64");
+			auto name = m_PE->GetFileInfo()->IsPE32 ? L"_IMAGE_NT_HEADERS" : L"_IMAGE_NT_HEADERS64";
+			auto sym = GetSymbolForName(L"ntdll.dll", name);
+			if (!sym && m_Symbols) {
+				auto symbols = m_Symbols.FindChildren(name);
+				if (!symbols.empty())
+					sym = symbols[0];
+			}
 			if (!sym)		// temporary
 				return {};
 
