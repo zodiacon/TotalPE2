@@ -135,6 +135,9 @@
     <ClCompile Include="TlsView.cpp">
       <Filter>Views\DataDirectories</Filter>
     </ClCompile>
+    <ClCompile Include="DelayImportView.cpp">
+      <Filter>Views\DataDirectories</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -243,6 +246,9 @@
       <Filter>Views</Filter>
     </ClInclude>
     <ClInclude Include="TlsView.h">
+      <Filter>Views\DataDirectories</Filter>
+    </ClInclude>
+    <ClInclude Include="DelayImportView.h">
       <Filter>Views\DataDirectories</Filter>
     </ClInclude>
   </ItemGroup>
@@ -442,10 +448,10 @@
       <Filter>Resource Files\Icons</Filter>
     </Image>
     <Image Include="res\Collapsed2.ico">
-      <Filter>Resource Files</Filter>
+      <Filter>Resource Files\Icons</Filter>
     </Image>
     <Image Include="res\Expanded2.ico">
-      <Filter>Resource Files</Filter>
+      <Filter>Resource Files\Icons</Filter>
     </Image>
   </ItemGroup>
   <ItemGroup>

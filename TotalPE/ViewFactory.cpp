@@ -24,6 +24,7 @@
 #include "StringMessageTableView.h"
 #include "PEImageView.h"
 #include "TlsView.h"
+#include "DelayImportView.h"
 
 std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 	CWaitCursor wait;
@@ -105,6 +106,16 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		case TreeItemType::DirectoryTLS:
 		{
 			auto view = new CTlsView(this, m_PE);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::DirectoryDelayImport:
+		{
+			auto view = new CDelayImportView(this, m_PE);
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};
