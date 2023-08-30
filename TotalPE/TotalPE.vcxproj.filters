@@ -455,7 +455,6 @@
     </Image>
   </ItemGroup>
   <ItemGroup>
-    <None Include="packages.config" />
     <None Include="res\symsrv.dll" />
     <None Include="res\msdia140.dll" />
   </ItemGroup>
