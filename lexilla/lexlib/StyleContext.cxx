@@ -12,7 +12,7 @@
 #include <string>
 #include <string_view>
 
-#include <Scintilla/ILexer.h>
+#include "ILexer.h"
 
 #include "LexAccessor.h"
 #include "Accessor.h"
@@ -40,6 +40,8 @@ StyleContext::StyleContext(Sci_PositionU startPos, Sci_PositionU length,
 	styler.StartAt(startPos /*, chMask*/);
 	styler.StartSegment(startPos);
 
+	chPrev = GetRelativeCharacter(-1);
+
 	// Variable width is now 0 so GetNextChar gets the char at currentPos into chNext/widthNext
 	GetNextChar();
 	ch = chNext;
@@ -64,28 +66,21 @@ bool StyleContext::MatchIgnoreCase(const char *s) {
 	return true;
 }
 
-bool StyleContext::MatchIgnoreCase2(const char *s) {
-	if (MakeLowerCase(ch) != MakeLowerCase(static_cast<unsigned char>(*s)))
-		return false;
-	s++;
-	if (!*s)
-		return true;
-	if (MakeLowerCase(chNext) != MakeLowerCase(static_cast<unsigned char>(*s)))
-		return false;
-	s++;
-	for (int n = 2; *s; n++) {
-		if (MakeLowerCase(static_cast<unsigned char>(*s)) !=
-			MakeLowerCase(static_cast<unsigned char>(styler.SafeGetCharAt(currentPos + n))))
-			return false;
-		s++;
-	}
-	return true;
-}
-
 void StyleContext::GetCurrent(char *s, Sci_PositionU len) {
 	styler.GetRange(styler.GetStartSegment(), currentPos, s, len);
 }
 
 void StyleContext::GetCurrentLowered(char *s, Sci_PositionU len) {
 	styler.GetRangeLowered(styler.GetStartSegment(), currentPos, s, len);
+}
+
+void StyleContext::GetCurrentString(std::string &string, Transform transform) {
+	const Sci_PositionU startPos = styler.GetStartSegment();
+	const Sci_PositionU len = currentPos - styler.GetStartSegment();
+	string.resize(len);
+	if (transform == Transform::lower) {
+		styler.GetRangeLowered(startPos, currentPos, string.data(), len + 1);
+	} else {
+		styler.GetRange(startPos, currentPos, string.data(), len + 1);
+	}
 }

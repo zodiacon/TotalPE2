@@ -8,8 +8,12 @@
 #include <LexerModule.h>
 #include <ThemeHelper.h>
 #include <Theme.h>
+
 #include "PEStrings.h"
 #include "PEFile.h"
+
+using namespace Lexilla;
+using namespace Scintilla;
 
 const char* KeyWords_ASM[] = {
 	"aaa aad aam aas adc add and arpl blsr bnd bndcl bndcn bndcu bndmov bndstx bound bsf bsr bswap bt btc btr bts call cbw cdq cflush clc cld cli clts "
@@ -143,17 +147,20 @@ void CScintillaView::SetText(PCSTR text) {
 }
 
 void CScintillaView::SetLanguage(LexLanguage lang) {
+	extern LexerModule lmAs;
+	extern LexerModule lmXML;
+	extern LexerModule lmAsm;
+
 	m_Language = lang;
-	extern Lexilla::LexerModule lmXML;
-	extern Lexilla::LexerModule lmAsm;
 
 	switch (lang) {
 		case LexLanguage::Asm:
 		{
 			auto lexer = lmAsm.Create();
-			for(int i = 0; i < _countof(KeyWords_ASM); i++)
-				lexer->WordListSet(i, KeyWords_ASM[i]);
 			m_Sci.SetLexer(lexer);
+			auto count = _countof(KeyWords_ASM);
+			for(int i = 0; i < count; i++)
+				lexer->WordListSet(i, KeyWords_ASM[i]);
 			break;
 		}
 

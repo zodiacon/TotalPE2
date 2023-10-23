@@ -38,9 +38,9 @@ extern CAppModule _Module;
 #include <unordered_map>
 #include <WinTrust.h>
 #include <capstone\capstone.h>
-#include <scintilla/Scintilla.h>
-#include <scintilla/ILexer.h>
-#include <scintilla/SciLexer.h>
+#include <Scintilla.h>
+#include <ILexer.h>
+#include <SciLexer.h>
 
 #if defined _M_IX86
   #pragma comment(linker, "/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='x86' publicKeyToken='6595b64144ccf1df' language='*'\"")

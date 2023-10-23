@@ -11,9 +11,9 @@
 #include <string>
 #include <string_view>
 
-#include <Scintilla/ILexer.h>
-#include <Scintilla/Scintilla.h>
-#include <Scintilla/SciLexer.h>
+#include "ILexer.h"
+#include "Scintilla.h"
+#include "SciLexer.h"
 
 #include "PropSetSimple.h"
 #include "WordList.h"
@@ -116,7 +116,7 @@ void LexerModule::Fold(Sci_PositionU startPos, Sci_Position lengthDoc, int initS
 			startPos = newStartPos;
 			initStyle = 0;
 			if (startPos > 0) {
-				initStyle = styler.StyleAt(startPos - 1);
+				initStyle = styler.StyleIndexAt(startPos - 1);
 			}
 		}
 		fnFolder(startPos, lengthDoc, initStyle, keywordlists, styler);

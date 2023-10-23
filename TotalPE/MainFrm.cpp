@@ -11,6 +11,7 @@
 #include <ToolbarHelper.h>
 #include "PEStrings.h"
 #include "AppSettings.h"
+#include <thread>
 
 const int WindowMenuPosition = 5;
 

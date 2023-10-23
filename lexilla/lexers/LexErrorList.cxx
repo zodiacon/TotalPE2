@@ -15,9 +15,9 @@
 #include <string>
 #include <string_view>
 
-#include <Scintilla/ILexer.h>
-#include <Scintilla/Scintilla.h>
-#include <Scintilla/SciLexer.h>
+#include "ILexer.h"
+#include "Scintilla.h"
+#include "SciLexer.h"
 
 #include "WordList.h"
 #include "LexAccessor.h"
@@ -63,6 +63,23 @@ bool IsGccExcerpt(const char *s) noexcept {
 	}
 	return true;
 }
+
+const std::string_view bashDiagnosticMark = ": line ";
+bool IsBashDiagnostic(std::string_view sv) {
+	const size_t mark = sv.find(bashDiagnosticMark);
+	if (mark == std::string_view::npos) {
+		return false;
+	}
+	std::string_view rest = sv.substr(mark + bashDiagnosticMark.length());
+	if (rest.empty() || !Is0To9(rest.front())) {
+		return false;
+	}
+	while (!rest.empty() && Is0To9(rest.front())) {
+		rest.remove_prefix(1);
+	}
+	return !rest.empty() && (rest.front() == ':');
+}
+
 
 int RecogniseErrorListLine(const char *lineBuffer, Sci_PositionU lengthLine, Sci_Position &startValue) {
 	if (lineBuffer[0] == '>') {
@@ -136,7 +153,7 @@ int RecogniseErrorListLine(const char *lineBuffer, Sci_PositionU lengthLine, Sci
 		// HTML tidy style: line 42 column 1
 		return SCE_ERR_TIDY;
 	} else if (strstart(lineBuffer, "\tat ") &&
-	           strstr(lineBuffer, "(") &&
+	           strchr(lineBuffer, '(') &&
 	           strstr(lineBuffer, ".java:")) {
 		// Java stack back trace
 		return SCE_ERR_JAVA_STACK;
@@ -153,6 +170,10 @@ int RecogniseErrorListLine(const char *lineBuffer, Sci_PositionU lengthLine, Sci
 		// Microsoft linker warning:
 		// {<object> : } (warning|error) LNK9999
 		return SCE_ERR_MS;
+	} else if (IsBashDiagnostic(lineBuffer)) {
+		// Bash diagnostic
+		// <filename>: line <line>:<message>
+		return SCE_ERR_BASH;
 	} else if (IsGccExcerpt(lineBuffer)) {
 		// GCC code excerpt and pointer to issue
 		//    73 |   GTimeVal last_popdown;

@@ -79,7 +79,7 @@ vpath %.h ../src ../include ../../scintilla/include ../lexlib
 vpath %.cxx ../src ../lexlib ../lexers
 
 DEFINES += -D$(if $(DEBUG),DEBUG,NDEBUG)
-BASE_FLAGS += $(if $(DEBUG),-g,-Os)
+BASE_FLAGS += $(if $(DEBUG),-g,-O3)
 
 INCLUDES = -I ../include -I $(SCINTILLA_INCLUDE) -I ../src -I ../lexlib
 LDFLAGS += -shared
@@ -131,8 +131,12 @@ $(LEXILLA): $(LEXILLA_OBJS) $(VERSION_RESOURCE)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ -o $@
 
 $(LIBLEXILLA):  $(LEXILLA_OBJS)
+ifeq ($(SHAREDEXTENSION),dylib)
+	libtool -static -o $@ $^
+else
 	$(AR) rc $@ $^
 	$(RANLIB) $@
+endif
 
 # Automatically generate dependencies for most files with "make deps"
 include deps.mak

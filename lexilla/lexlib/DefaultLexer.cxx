@@ -12,9 +12,9 @@
 #include <string>
 #include <string_view>
 
-#include <Scintilla/ILexer.h>
-#include <Scintilla/Scintilla.h>
-#include <Scintilla/SciLexer.h>
+#include "ILexer.h"
+#include "Scintilla.h"
+#include "SciLexer.h"
 
 #include "PropSetSimple.h"
 #include "WordList.h"
@@ -35,8 +35,7 @@ DefaultLexer::DefaultLexer(const char *languageName_, int language_,
 	nClasses(nClasses_) {
 }
 
-DefaultLexer::~DefaultLexer() {
-}
+DefaultLexer::~DefaultLexer() = default;
 
 void SCI_METHOD DefaultLexer::Release() {
 	delete this;
