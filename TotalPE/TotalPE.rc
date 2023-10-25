@@ -8,8 +8,7 @@
 // Generated from the TEXTINCLUDE 2 resource.
 //
 #include "winres.h"
-#include "atlres.h"
-#include "WTLHelper.rc"
+#include <atlres.h>
 
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
@@ -26,6 +25,23 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 //
 // TEXTINCLUDE
 //
+
+1 TEXTINCLUDE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#include ""winres.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "\r\n"
+    "\0"
+END
 
 1 TEXTINCLUDE 
 BEGIN
@@ -106,13 +122,13 @@ END
 // remains consistent on all systems.
 IDR_MAINFRAME           ICON                    "res\\TotalPE.ico"
 
-//IDI_COLLAPSED           ICON                    "res\\Collapsed.ico"
-//
-//IDI_COLLAPSED2          ICON                    "res\\Collapsed2.ico"
-//
-//IDI_EXPANDED            ICON                    "res\\Expanded.ico"
-//
-//IDI_EXPANDED2           ICON                    "res\\Expanded2.ico"
+IDI_COLLAPSED           ICON                    "res\\Collapsed.ico"
+
+IDI_COLLAPSED2          ICON                    "res\\Collapsed2.ico"
+
+IDI_EXPANDED            ICON                    "res\\Expanded.ico"
+
+IDI_EXPANDED2           ICON                    "res\\Expanded2.ico"
 
 IDI_CHECK               ICON                    "res\\check.ico"
 
@@ -427,8 +443,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,6,4,0
- PRODUCTVERSION 0,6,4,0
+ FILEVERSION 0,6,5,0
+ PRODUCTVERSION 0,6,5,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -445,12 +461,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Pavel Yosifovich"
             VALUE "FileDescription", "Total PE - PE Viewer"
-            VALUE "FileVersion", "0.6.4"
+            VALUE "FileVersion", "0.6.5.0"
             VALUE "InternalName", "TotalPE"
             VALUE "LegalCopyright", "©2022-2023 Pavel Yosifovich"
             VALUE "OriginalFilename", "TotalPE.exe"
             VALUE "ProductName", "Total PE"
-            VALUE "ProductVersion", "0.6.4"
+            VALUE "ProductVersion", "0.6.5.0"
         END
     END
     BLOCK "VarFileInfo"
