@@ -30,7 +30,7 @@ public:
 	operator bool() const;
 
 private:
-	libpe::IlibpePtr m_pe{ libpe::Createlibpe() };
+	libpe::IlibpePtr m_pe;
 	std::wstring m_Path;
 };
 

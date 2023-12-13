@@ -39,7 +39,7 @@ bool CMainFrame::OnTreeDoubleClick(HWND, HTREEITEM hItem) {
 }
 
 void CMainFrame::UpdateUI() {
-	auto const fi = m_PE->GetFileInfo();
+	auto const fi = m_PE ? m_PE->GetFileInfo() : nullptr;
 	UIEnable(ID_PE_DISASSEMBLEENTRYPOINT, fi != nullptr);
 	UIEnable(ID_VIEW_EXPORTS, fi && fi->HasExport);
 	UIEnable(ID_VIEW_IMPORTS, fi && fi->HasImport);

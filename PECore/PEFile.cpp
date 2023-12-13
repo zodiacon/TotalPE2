@@ -3,6 +3,8 @@
 #include "libpe.h"
 
 bool PEFile::Open(std::wstring_view path) {
+	if(!m_pe)
+		m_pe = libpe::Createlibpe();
 	auto ok = m_pe->LoadPe(path.data()) == libpe::PEOK;
 	if (ok) {
 		m_Path = path;
@@ -11,7 +13,7 @@ bool PEFile::Open(std::wstring_view path) {
 }
 
 void PEFile::Close() {
-	m_pe->Clear();
+	m_pe.reset();
 	m_Path = L"";
 }
 
