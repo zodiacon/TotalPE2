@@ -247,18 +247,18 @@ LRESULT CScintillaView::OnDisassembleNewTab(WORD, WORD, HWND, BOOL&) {
 
 LRESULT CScintillaView::OnDisassembleAtEnd(WORD, WORD, HWND, BOOL&) {
 	auto selection = m_Sci.GetSelText();
-	auto address = strtoull(selection.substr(2).c_str(), nullptr, 16);
+	auto address = strtoull(selection.c_str(), nullptr, 16);
 	csh handle;
 	if (cs_open(CS_ARCH_X86, m_Is32Bit ? CS_MODE_32 : CS_MODE_64, &handle) != CS_ERR_OK)
 		return false;
 
-	auto bytes = (const uint8_t*)m_PE.GetData() + m_PE->GetOffsetFromVA(address);
+	auto bytes = (const uint8_t*)m_PE.GetData() + address - m_PE->GetImageBase();
 	size_t size = 0x1000;
 	cs_insn inst{};
 	CStringA text;
 	while (cs_disasm_iter(handle, &bytes, &size, &address, &inst)) {
 		text += PEStrings::FormatInstruction(inst, Frame()->GetSymbols()) + L"\r\n";
-		if (_strcmpi(inst.mnemonic, "ret") == 0)
+		if (_strcmpi(inst.mnemonic, "ret") == 0 || _strcmpi(inst.mnemonic, "jmp") == 0)
 			break;
 	}
 	cs_close(&handle);

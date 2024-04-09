@@ -5,7 +5,7 @@
 class AppSettings : public Settings {
 public:
 	BEGIN_SETTINGS(AppSettings)
-		SETTING(MainWindowPlacement, WINDOWPLACEMENT{}, SettingType::Binary);
+	SETTING(MainWindowPlacement, WINDOWPLACEMENT{}, SettingType::Binary);
 	SETTING(Font, LOGFONT{}, SettingType::Binary);
 	SETTING(AlwaysOnTop, 0, SettingType::Bool);
 	SETTING(ViewToolBar, 1, SettingType::Bool);
