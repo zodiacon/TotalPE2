@@ -205,7 +205,7 @@ LRESULT CScintillaView::OnSetFocus(UINT, WPARAM, LPARAM, BOOL&) {
 }
 
 LRESULT CScintillaView::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/) {
-	m_hWndClient = m_Sci.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN);
+	m_hWndClient = m_Sci.Create(m_hWnd);
 
 	m_Sci.StyleSetFont(STYLE_DEFAULT, "Consolas");
 	m_Sci.StyleSetSize(STYLE_DEFAULT, 11);
@@ -269,4 +269,10 @@ LRESULT CScintillaView::OnDisassembleAtEnd(WORD, WORD, HWND, BOOL&) {
 
 	return 0;
 }
+
+LRESULT CScintillaView::OnEditCopy(WORD, WORD, HWND, BOOL&) {
+	m_Sci.Copy();
+	return 0;
+}
+
 

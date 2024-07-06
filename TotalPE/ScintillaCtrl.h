@@ -404,9 +404,6 @@ public:
 	void AddStyledText(Position length, const char* c);
 	void InsertText(Position pos, const char* text);
 	void ChangeInsertion(Position length, const char* text);
-	void ClearAll() {
-		Execute(SCI_CLEARALL);
-	}
 	void DeleteRange(Position start, Position lengthDelete);
 	void ClearDocumentStyle();
 
@@ -889,6 +886,10 @@ public:
 
 	void Clear() {
 		Execute(SCI_CLEAR);
+	}
+
+	void ClearAll() {
+		Execute(SCI_CLEARALL);
 	}
 
 	void SetText(const char* text) {

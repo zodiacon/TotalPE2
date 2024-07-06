@@ -21,7 +21,7 @@ public:
 
 	CString GetTitle() const override;
 	CScintillaCtrl& GetCtrl();
-	
+
 	void UpdateUI(bool first = false);
 
 	bool SetAsmCode(std::span<const std::byte> code, uint64_t address, bool is32Bit);
@@ -40,6 +40,7 @@ public:
 		COMMAND_ID_HANDLER(ID_ASSEMBLY_GOTOADDRESS, OnGoToAddress)
 		COMMAND_ID_HANDLER(ID_ASSEMBLY_DISASSEMBLEATTHEEND, OnDisassembleAtEnd)
 		COMMAND_ID_HANDLER(ID_ASSEMBLY_DISASSEMBLEINANEWTAB, OnDisassembleNewTab)
+		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnEditCopy)
 		CHAIN_MSG_MAP_ALT(CViewBase<CScintillaView>, 1)
 	END_MSG_MAP()
 
@@ -58,6 +59,7 @@ private:
 	LRESULT OnGoToAddress(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnDisassembleNewTab(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnDisassembleAtEnd(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnEditCopy(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 
 	CString m_Title;
 	CScintillaCtrl m_Sci;

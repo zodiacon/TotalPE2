@@ -200,7 +200,7 @@ CStringA PEStrings::FormatInstruction(const cs_insn& inst, DiaSession const& sym
 			if (symbols && address != 0 && address != LLONG_MAX && address != LLONG_MIN) {
 				auto sym = symbols.GetSymbolByVA(address, SymbolTag::Null, &disp);
 				if (sym) {
-					extra = sym.Name().c_str();
+					extra = UndecorateName(sym.Name().c_str()).c_str();
 					if (!extra.IsEmpty() && disp)
 						extra += std::format("+0x{:X}", disp).c_str();
 				}

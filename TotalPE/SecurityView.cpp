@@ -6,9 +6,9 @@
 #include <ImageHlp.h>
 #include <PEFile.h>
 
-#pragma comment(lib, "Cryptui")
-#pragma comment(lib, "Crypt32")
-#pragma comment(lib, "imagehlp")
+//#pragma comment(lib, "Cryptui")
+//#pragma comment(lib, "Crypt32")
+//#pragma comment(lib, "imagehlp")
 
 CString CSecurityView::GetTitle() const {
 	return L"Security";
