@@ -596,6 +596,11 @@ LRESULT CMainFrame::OnFileClose(WORD, WORD, HWND, BOOL&) {
 	m_Symbols.Close();
 	m_Tree.DeleteAllItems();
 	UpdateUI();
+	CString ftitle;
+	ftitle.LoadString(IDR_MAINFRAME);
+	if (SecurityHelper::IsRunningElevated())
+		ftitle += L" (Administrator)";
+	SetWindowText(ftitle);
 
 	return 0;
 }
