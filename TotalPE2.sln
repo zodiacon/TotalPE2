@@ -15,8 +15,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "WTLHelper", "WTLHelper\WTLH
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Lexilla", "lexilla\src\Lexilla.vcxproj", "{E541C9BE-13BC-4CE6-A0A4-31145F51A2C1}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Scintilla", "scintilla\win32\Scintilla.vcxproj", "{19CCA8B8-46B9-4609-B7CE-198DA19F07BD}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|ARM64 = Debug|ARM64
@@ -138,24 +136,6 @@ Global
 		{E541C9BE-13BC-4CE6-A0A4-31145F51A2C1}.ReleaseSigned|x64.Build.0 = Release|x64
 		{E541C9BE-13BC-4CE6-A0A4-31145F51A2C1}.ReleaseSigned|x86.ActiveCfg = ReleaseSigned|Win32
 		{E541C9BE-13BC-4CE6-A0A4-31145F51A2C1}.ReleaseSigned|x86.Build.0 = ReleaseSigned|Win32
-		{19CCA8B8-46B9-4609-B7CE-198DA19F07BD}.Debug|ARM64.ActiveCfg = Debug|ARM64
-		{19CCA8B8-46B9-4609-B7CE-198DA19F07BD}.Debug|ARM64.Build.0 = Debug|ARM64
-		{19CCA8B8-46B9-4609-B7CE-198DA19F07BD}.Debug|x64.ActiveCfg = Debug|x64
-		{19CCA8B8-46B9-4609-B7CE-198DA19F07BD}.Debug|x64.Build.0 = Debug|x64
-		{19CCA8B8-46B9-4609-B7CE-198DA19F07BD}.Debug|x86.ActiveCfg = Debug|Win32
-		{19CCA8B8-46B9-4609-B7CE-198DA19F07BD}.Debug|x86.Build.0 = Debug|Win32
-		{19CCA8B8-46B9-4609-B7CE-198DA19F07BD}.Release|ARM64.ActiveCfg = Release|ARM64
-		{19CCA8B8-46B9-4609-B7CE-198DA19F07BD}.Release|ARM64.Build.0 = Release|ARM64
-		{19CCA8B8-46B9-4609-B7CE-198DA19F07BD}.Release|x64.ActiveCfg = Release|x64
-		{19CCA8B8-46B9-4609-B7CE-198DA19F07BD}.Release|x64.Build.0 = Release|x64
-		{19CCA8B8-46B9-4609-B7CE-198DA19F07BD}.Release|x86.ActiveCfg = Release|Win32
-		{19CCA8B8-46B9-4609-B7CE-198DA19F07BD}.Release|x86.Build.0 = Release|Win32
-		{19CCA8B8-46B9-4609-B7CE-198DA19F07BD}.ReleaseSigned|ARM64.ActiveCfg = Release|ARM64
-		{19CCA8B8-46B9-4609-B7CE-198DA19F07BD}.ReleaseSigned|ARM64.Build.0 = Release|ARM64
-		{19CCA8B8-46B9-4609-B7CE-198DA19F07BD}.ReleaseSigned|x64.ActiveCfg = Release|x64
-		{19CCA8B8-46B9-4609-B7CE-198DA19F07BD}.ReleaseSigned|x64.Build.0 = Release|x64
-		{19CCA8B8-46B9-4609-B7CE-198DA19F07BD}.ReleaseSigned|x86.ActiveCfg = Release|Win32
-		{19CCA8B8-46B9-4609-B7CE-198DA19F07BD}.ReleaseSigned|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

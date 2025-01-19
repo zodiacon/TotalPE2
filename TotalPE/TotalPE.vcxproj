@@ -347,7 +347,7 @@
       </DllDataFileName>
     </Midl>
     <PostBuildEvent>
-      <Command>signtool sign /i DigiCert /n Scorpio /fd sha256 $(TargetPath)</Command>
+      <Command>signtool sign /a /n Scorpio /t http://timestamp.digicert.com /fd sha256 $(TargetPath)</Command>
     </PostBuildEvent>
     <Manifest>
       <EnableDpiAwareness>false</EnableDpiAwareness>
@@ -521,9 +521,6 @@
     </ProjectReference>
     <ProjectReference Include="..\PECore\PECore.vcxproj">
       <Project>{03a66844-1884-41c0-899d-f01c8a601c8e}</Project>
-    </ProjectReference>
-    <ProjectReference Include="..\scintilla\win32\Scintilla.vcxproj">
-      <Project>{19cca8b8-46b9-4609-b7ce-198da19f07bd}</Project>
     </ProjectReference>
     <ProjectReference Include="..\WTLHelper\WTLHelper\WTLHelper.vcxproj">
       <Project>{ae53419f-a769-4548-8e15-e311904df7df}</Project>
