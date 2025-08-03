@@ -112,7 +112,6 @@
   </PropertyGroup>
   <PropertyGroup Label="Vcpkg" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <VcpkgUseStatic>true</VcpkgUseStatic>
-    <VcpkgUseMD>false</VcpkgUseMD>
   </PropertyGroup>
   <PropertyGroup Label="Vcpkg" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <VcpkgUseStatic>true</VcpkgUseStatic>
@@ -387,6 +386,7 @@
     <ClCompile Include="SecurityHelper.cpp" />
     <ClCompile Include="SecurityView.cpp" />
     <ClCompile Include="StringMessageTableView.cpp" />
+    <ClCompile Include="StringsView.cpp" />
     <ClCompile Include="StructView.cpp" />
     <ClCompile Include="SymbolsView.cpp" />
     <ClCompile Include="TextView.cpp" />
@@ -427,6 +427,7 @@
     <ClInclude Include="PEImageView.h" />
     <ClInclude Include="SecurityView.h" />
     <ClInclude Include="StringMessageTableView.h" />
+    <ClInclude Include="StringsView.h" />
     <ClInclude Include="StructView.h" />
     <ClInclude Include="SymbolsView.h" />
     <ClInclude Include="TextView.h" />

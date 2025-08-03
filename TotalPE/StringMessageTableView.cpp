@@ -107,3 +107,6 @@ void CStringMessageTableView::UpdateUI(bool) {
 	ui.UIEnable(ID_EDIT_COPY, m_List.GetSelectedCount() > 0);
 }
 
+void CStringMessageTableView::OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD newState) {
+	UpdateUI();
+}

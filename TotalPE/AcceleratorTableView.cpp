@@ -80,3 +80,7 @@ LRESULT CAcceleratorTableView::OnCopy(WORD, WORD, HWND, BOOL&) const {
 	ClipboardHelper::CopyText(m_hWnd, text);
 	return 0;
 }
+
+void CAcceleratorTableView::OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD newState) {
+	UpdateUI();
+}

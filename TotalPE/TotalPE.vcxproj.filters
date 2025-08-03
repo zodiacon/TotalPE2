@@ -138,6 +138,9 @@
     <ClCompile Include="DelayImportView.cpp">
       <Filter>Views\DataDirectories</Filter>
     </ClCompile>
+    <ClCompile Include="StringsView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -250,6 +253,9 @@
     </ClInclude>
     <ClInclude Include="DelayImportView.h">
       <Filter>Views\DataDirectories</Filter>
+    </ClInclude>
+    <ClInclude Include="StringsView.h">
+      <Filter>Views</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

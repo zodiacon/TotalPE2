@@ -18,6 +18,7 @@ public:
 
 	CString GetColumnText(HWND, int row, int col) const;
 	void DoSort(SortInfo const* si);
+	void OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD newState);
 
 	BEGIN_MSG_MAP(CStringMessageTableView)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
