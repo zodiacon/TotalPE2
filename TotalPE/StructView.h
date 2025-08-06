@@ -1,9 +1,9 @@
 #pragma once
 
 #include "ViewBase.h"
-#include <TreeListViewCtrl.h>
 #include <CustomSplitterWindow.h>
 #include "HexView.h"
+#include <TreeListView.h>
 
 class PEFile;
 
@@ -33,7 +33,7 @@ private:
 	LRESULT OnCopy(WORD, WORD, HWND, BOOL&) const;
 
 	CCustomHorSplitterWindow m_Splitter;
-	CTreeListView m_TL;
+	CTreeListViewCtrl m_TL;
 	CHexView m_HexView;
 	CString m_Title;
 	DiaSymbol const& m_Object;

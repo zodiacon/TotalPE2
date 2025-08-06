@@ -16,23 +16,40 @@ void CStructView::SetPEOffset(PEFile const& pe, DWORD offset) {
 }
 
 void CStructView::ShowObject(PVOID address) {
-    m_TL.DeleteAllItems();
-    auto hRoot = m_TL.AddItem(m_Object.Name().c_str(), 0);
+    m_TL.GetTreeControl().DeleteAllItems();
+    auto hRoot = m_TL.GetTreeControl().InsertItem(m_Object.Name().c_str(), 0, 0, TVI_ROOT, TVI_LAST);
     Helpers::FillTreeListView(Frame(), m_TL, hRoot, m_Object, Frame()->GetSymbols(), address);
+    m_TL.GetTreeControl().Expand(hRoot, TVE_EXPAND);
     m_HexView.SetData(address, (uint32_t)m_Object.Length());
 }
 
 LRESULT CStructView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
     m_hWndClient = m_Splitter.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN);
 
-    m_TL.Create(m_Splitter, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN |
-        LVS_REPORT | LVS_SHAREIMAGELISTS | LVS_NOSORTHEADER);
-    m_TL.SetExtendedListViewStyle(LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP);
-    m_TL.SetImageList(Frame()->GetImageList(), LVSIL_SMALL);
-    m_TL.InsertColumn(0, L"Member", LVCFMT_LEFT, 250);
-    m_TL.InsertColumn(1, L"Offset", LVCFMT_RIGHT, 60);
-    m_TL.InsertColumn(2, L"Type", 0, 180);
-    m_TL.InsertColumn(3, L"Value", LVCFMT_RIGHT, 150);
+    m_TL.Create(m_Splitter, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN 
+        | TVS_HASBUTTONS | TVS_LINESATROOT | TVS_HASLINES);
+
+    m_TL.GetTreeControl().SetImageList(Frame()->GetImageList(), TVSIL_NORMAL);
+    HDITEM hdi{ HDI_TEXT | HDI_FORMAT | HDI_WIDTH };
+    hdi.fmt = LVCFMT_LEFT;
+    hdi.cxy = 200;
+    hdi.pszText = (PWSTR)L"Member";
+    m_TL.GetHeaderControl().AddItem(&hdi);
+
+    hdi.fmt = LVCFMT_RIGHT;
+    hdi.pszText = (PWSTR)L"Offset";
+    hdi.cxy = 60;
+    m_TL.GetHeaderControl().AddItem(&hdi);
+
+    hdi.fmt = LVCFMT_CENTER;
+    hdi.pszText = (PWSTR)L"Type";
+    hdi.cxy = 180;
+    m_TL.GetHeaderControl().AddItem(&hdi);
+
+    hdi.fmt = LVCFMT_RIGHT;
+    hdi.pszText = (PWSTR)L"Value";
+    hdi.cxy = 150;
+    m_TL.GetHeaderControl().AddItem(&hdi);
 
     m_HexView.Create(m_Splitter, rcDefault, nullptr, WS_CHILD | WS_VISIBLE);
     m_HexView.SetStatic(true);
