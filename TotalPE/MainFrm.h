@@ -5,6 +5,7 @@
 #pragma once
 
 #include <CustomTabView.h>
+#include <TabViewHelper.h>
 #include <CustomSplitterWindow.h>
 #include <TreeViewHelper.h>
 #include <PEFile.h>
