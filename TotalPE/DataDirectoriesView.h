@@ -34,7 +34,7 @@ private:
 		Name, Size, Address, Index, Section,
 	};
 
-	struct DataDirectory : libpe::PEDataDirectory {
+	struct DataDirectory : PEDataDirectory {
 		int Index;
 	};
 

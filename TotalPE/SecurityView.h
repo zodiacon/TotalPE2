@@ -36,7 +36,7 @@ private:
 	CHexView m_HexView;
 	CListViewCtrl m_List;
 	CCustomHorSplitterWindow m_Splitter;
-	std::vector<libpe::PESecurity> m_Items;
+	std::vector<PESecurity> m_Items;
 	PEFile const& m_PE;
 };
 

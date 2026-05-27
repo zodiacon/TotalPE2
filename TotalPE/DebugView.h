@@ -41,7 +41,7 @@ private:
 	CHexView m_HexView;
 	std::unique_ptr<IBufferManager> m_Buffer;
 	int m_SelectedIndex{ -1 };
-	std::vector<libpe::PEDebug> m_Items;
+	std::vector<PEDebug> m_Items;
 	PEFile const& m_PE;
 };
 

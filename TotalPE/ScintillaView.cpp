@@ -251,7 +251,7 @@ LRESULT CScintillaView::OnDisassembleAtEnd(WORD, WORD, HWND, BOOL&) {
 	if (cs_open(CS_ARCH_X86, m_Is32Bit ? CS_MODE_32 : CS_MODE_64, &handle) != CS_ERR_OK)
 		return false;
 
-	auto bytes = (const uint8_t*)m_PE.GetData() + address - m_PE->GetImageBase();
+	auto bytes = (const uint8_t*)m_PE.GetData() + address - m_PE.GetImageBase();
 	size_t size = 0x1000;
 	cs_insn inst{};
 	CStringA text;

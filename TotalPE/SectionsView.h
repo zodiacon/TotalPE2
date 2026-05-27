@@ -49,7 +49,7 @@ private:
 
 	CListViewCtrl m_List;
 	CCustomHorSplitterWindow m_Splitter;
-	std::vector<libpe::PESectionHeader> m_Sections;
+	std::vector<PESectionHeader> m_Sections;
 	PEFile const& m_PE;
 	CHexView m_HexView;
 };

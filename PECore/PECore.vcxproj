@@ -230,12 +230,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="libpe.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="PEFile.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="libpe.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>

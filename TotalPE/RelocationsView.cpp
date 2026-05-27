@@ -98,7 +98,7 @@ LRESULT CRelocationsView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 }
 
 void CRelocationsView::BuildItems() {
-	m_Items = *m_PE->GetRelocations();
+	m_Items = *m_PE.GetRelocations();
 	m_List.SetItemCount((int)m_Items.size());
 }
 

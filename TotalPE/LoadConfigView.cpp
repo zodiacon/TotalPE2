@@ -68,9 +68,9 @@ void CLoadConfigView::DoSort(SortInfo const* si) {
 }
 
 void CLoadConfigView::BuildItems() {
-	auto& lc32 = m_PE->GetLoadConfig()->LCD32;
-	auto& lc64 = m_PE->GetLoadConfig()->LCD64;
-	auto is64 = m_PE->GetFileInfo()->IsPE64;
+	auto& lc32 = m_PE.GetLoadConfig()->LCD32;
+	auto& lc64 = m_PE.GetLoadConfig()->LCD64;
+	auto is64 = m_PE.GetFileInfo()->IsPE64;
 	auto symbols = Frame()->GetSymbols();
 
 	ULONGLONG guardCFFunction = is64 ? lc64.GuardCFCheckFunctionPointer : lc32.GuardCFCheckFunctionPointer;

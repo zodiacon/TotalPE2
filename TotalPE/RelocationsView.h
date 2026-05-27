@@ -31,8 +31,8 @@ private:
 
 	CListViewCtrl m_List, m_RelocList;
 	CCustomSplitterWindow m_Splitter;
-	std::vector<libpe::PERelocation> m_Items;
-	std::vector<libpe::PERelocData> m_RelocData;
+	std::vector<PERelocation> m_Items;
+	std::vector<PERelocData> m_RelocData;
 	PEFile const& m_PE;
 };
 

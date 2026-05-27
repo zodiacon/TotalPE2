@@ -34,8 +34,8 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 	switch (type & TreeItemType::ItemMask) {
 		case TreeItemType::AsmEntryPoint:
 		{
-			bool is32Bit = m_PE->GetFileInfo()->IsPE32;
-			auto entry = is32Bit ? m_PE->GetNTHeader()->NTHdr32.OptionalHeader.AddressOfEntryPoint : m_PE->GetNTHeader()->NTHdr64.OptionalHeader.AddressOfEntryPoint;
+			bool is32Bit = m_PE.GetFileInfo()->IsPE32;
+			auto entry = is32Bit ? m_PE.GetNTHeader()->NTHdr32.OptionalHeader.AddressOfEntryPoint : m_PE.GetNTHeader()->NTHdr64.OptionalHeader.AddressOfEntryPoint;
 			if (entry == 0)
 				return {};
 
@@ -46,8 +46,8 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 			}
 			view->SetLanguage(LexLanguage::Asm);
 
-			ULONGLONG imageBase = m_PE->GetImageBase();
-			auto offset = m_PE->GetOffsetFromRVA(entry);
+			ULONGLONG imageBase = m_PE.GetImageBase();
+			auto offset = m_PE.GetOffsetFromRVA(entry);
 			uint32_t size = 0x500;		// hard coded for now
 			view->SetAsmCode(m_PE.GetSpan(offset, size), offset + imageBase, is32Bit);
 			view->GetCtrl().SetReadOnly(true);
@@ -140,8 +140,8 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 				ATLASSERT(false);
 				return {};
 			}
-			view->SetData(m_PE, 0, m_PE->GetFileInfo()->IsPE64 ?
-				m_PE->GetNTHeader()->NTHdr64.OptionalHeader.SizeOfHeaders : m_PE->GetNTHeader()->NTHdr32.OptionalHeader.SizeOfHeaders);
+			view->SetData(m_PE, 0, m_PE.GetFileInfo()->IsPE64 ?
+				m_PE.GetNTHeader()->NTHdr64.OptionalHeader.SizeOfHeaders : m_PE.GetNTHeader()->NTHdr32.OptionalHeader.SizeOfHeaders);
 			return { view, view };
 		}
 
@@ -161,13 +161,13 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 				ATLASSERT(false);
 				return {};
 			}
-			view->SetValue(m_PE->GetMSDOSHeader());
+			view->SetValue(const_cast<IMAGE_DOS_HEADER*>(m_PE.GetMSDOSHeader()));
 			return { view, view };
 		}
 
 		case TreeItemType::NTHeader:
 		{
-			auto name = m_PE->GetFileInfo()->IsPE32 ? L"_IMAGE_NT_HEADERS" : L"_IMAGE_NT_HEADERS64";
+			auto name = m_PE.GetFileInfo()->IsPE32 ? L"_IMAGE_NT_HEADERS" : L"_IMAGE_NT_HEADERS64";
 			auto sym = GetSymbolForName(L"ntdll.dll", name);
 			if (!sym && m_Symbols) {
 				auto symbols = m_Symbols.FindChildren(name);
@@ -182,7 +182,7 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 				ATLASSERT(false);
 				return {};
 			}
-			view->SetPEOffset(m_PE, m_PE->GetNTHeader()->dwOffset);
+			view->SetPEOffset(m_PE, m_PE.GetNTHeader()->dwOffset);
 			return { view, view };
 		}
 
@@ -278,7 +278,7 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 
 		case TreeItemType::Section:
 		{
-			auto const& sec = m_PE->GetSecHeaders()->at(((size_t)type >> ItemShift) - 1);
+			auto const& sec = m_PE.GetSecHeaders()->at(((size_t)type >> ItemShift) - 1);
 			auto view = new CHexView(this, CString(sec.SectionName.c_str()) + L" (Section)");
 			if (!view->DoCreate(m_Tabs))
 				return {};
@@ -402,7 +402,7 @@ bool CMainFrame::CreateAssemblyView(std::span<const std::byte> code, uint64_t ad
 	}
 
 	view->SetLanguage(LexLanguage::Asm);
-	view->SetAsmCode(code, address, m_PE->GetFileInfo()->IsPE32);
+	view->SetAsmCode(code, address, m_PE.GetFileInfo()->IsPE32);
 	view->GetCtrl().SetReadOnly(true);
 	view->SetDeleteFromTree(true);
 

@@ -38,7 +38,7 @@ private:
 		Name, Ordinal, RVA, NameRVA, ForwardedName, UndecoratedName, Details
 	};
 
-	struct Export : libpe::PEExportFunction {
+	struct Export : PEExportFunction {
 		std::wstring Name;
 		bool FromSymbols{ false };
 	};

@@ -68,12 +68,12 @@ void CPEImageView::DoSort(SortInfo const* si) {
 }
 
 void CPEImageView::BuildItems() {
-	auto header = m_PE->GetNTHeader();
+	auto header = m_PE.GetNTHeader();
 	//
 	// file header is bitness agnostic
 	//
 	auto fheader = header->NTHdr32.FileHeader;
-	auto is64 = m_PE->GetFileInfo()->IsPE64;
+	auto is64 = m_PE.GetFileInfo()->IsPE64;
 	auto opt64 = header->NTHdr64.OptionalHeader;
 	auto opt32 = header->NTHdr32.OptionalHeader;
 
@@ -90,14 +90,14 @@ void CPEImageView::BuildItems() {
 		{ L"Checksum", std::format(L"0x{:X}", is64 ? opt64.CheckSum : opt32.CheckSum) },
 		{ L"Time/Date Stamp", std::format(L"0x{:08X}", fheader.TimeDateStamp) },
 		{ L"Machine", std::format(L"{} (0x{:X})", fheader.Machine, fheader.Machine), std::format(L"{} ({})", 
-			PEStrings::MachineTypeToString(fheader.Machine), libpe::MapFileHdrMachine.at(fheader.Machine)) },
-		{ L"Subsystem", std::to_wstring(subSystem), std::format(L"{} ({})", PEStrings::SubsystemToString(subSystem), libpe::MapOptHdrSubsystem.at(subSystem)) },
+			PEStrings::MachineTypeToString(fheader.Machine), MapFileHdrMachine.at(fheader.Machine)) },
+		{ L"Subsystem", std::to_wstring(subSystem), std::format(L"{} ({})", PEStrings::SubsystemToString(subSystem), MapOptHdrSubsystem.at(subSystem)) },
 		{ L"Number of Sections", std::to_wstring(fheader.NumberOfSections) },
 		{ L"Size of Optional Header", std::format(L"{} bytes", fheader.SizeOfOptionalHeader) },
 		{ L"Size of Headers", std::format(L"{} bytes", is64 ? opt64.SizeOfHeaders : opt32.SizeOfHeaders) },
 		{ L"Number of Symbols", std::to_wstring(fheader.NumberOfSymbols) },
 		{ L"Characteristics", std::format(L"0x{:08X}", fheader.Characteristics), PEStrings::CharacteristicsToString(fheader.Characteristics) },
-		{ L"Magic", std::format(L"{} (0x{:X})", magic, magic), std::format(L"{} ({})", PEStrings::MagicToString(magic), libpe::MapOptHdrMagic.at(magic)) },
+		{ L"Magic", std::format(L"{} (0x{:X})", magic, magic), std::format(L"{} ({})", PEStrings::MagicToString(magic), MapOptHdrMagic.at(magic)) },
 		{ L"DLL Characteristics", std::format(L"0x{:04X}", dllchar), PEStrings::DllCharacteristicsToString(dllchar) },
 		{ L"Image Base", std::format(L"0x{:X}", is64 ? opt64.ImageBase : opt32.ImageBase) },
 		{ L"Image Size", PEStrings::ToMemorySize(is64 ? opt64.SizeOfImage : opt32.SizeOfImage) },
@@ -108,7 +108,7 @@ void CPEImageView::BuildItems() {
 		{ L"Size of Code", PEStrings::ToMemorySize(is64 ? opt64.SizeOfCode : opt32.SizeOfCode) },
 		{ L"Size of Initialized Data", PEStrings::ToMemorySize(is64 ? opt64.SizeOfInitializedData : opt32.SizeOfInitializedData) },
 		{ L"Size of Uninitialized Data", PEStrings::ToMemorySize(is64 ? opt64.SizeOfUninitializedData : opt32.SizeOfUninitializedData) },
-		{ L"Is Managed?", m_PE->GetFileInfo()->HasCOMDescr ? L"Yes" : L"No" },
+		{ L"Is Managed?", m_PE.GetFileInfo()->HasCOMDescr ? L"Yes" : L"No" },
 		{ L"Entry Point", std::format(L"0x{:X}", is64 ? opt64.AddressOfEntryPoint : opt32.AddressOfEntryPoint) },
 		{ L"Base of Code", std::format(L"0x{:X}", is64 ? opt64.BaseOfCode : opt32.BaseOfCode) },
 		{ L"OS Version", std::format(L"{}.{}", is64 ? opt64.MajorOperatingSystemVersion : opt32.MajorOperatingSystemVersion,

@@ -31,7 +31,7 @@ public:
 private:
 	CString GetTitle() const override;
 
-	struct Exception : libpe::PEException {
+	struct Exception : PEException {
 		std::wstring FuncName;
 		std::wstring UndecoratedName;
 		long Disp;
