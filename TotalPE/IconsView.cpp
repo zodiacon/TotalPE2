@@ -2,7 +2,7 @@
 #include "resource.h"
 #include "IconsView.h"
 #include "IconWriter.h"
-#include <ThemeHelper.h>
+#include <WTLHelper.h>
 
 void CIconsView::SetGroupIconData(std::span<const std::byte> data) {
 #pragma pack(push, 1)
@@ -80,7 +80,7 @@ LRESULT CIconsView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
 			CMenu menu;
 			menu.LoadMenu(IDR_CONTEXT);
 			m_SelectedIcon = i;
-			Frame()->TrackPopupMenu(menu.GetSubMenu(2), 0, pt2.x, pt2.y);
+			Frame()->ShowContextMenu(menu.GetSubMenu(2), 0, pt2.x, pt2.y);
 			break;
 		}
 		i++;
@@ -105,14 +105,14 @@ LRESULT CIconsView::OnExportIcon(WORD, WORD, HWND, BOOL&) {
 	ATLASSERT(m_SelectedIcon >= 0);
 	CSimpleFileDialog dlg(FALSE, L"ico", nullptr, OFN_EXPLORER | OFN_ENABLESIZING | OFN_OVERWRITEPROMPT,
 		L"Icon Files (*.ico)\0*.ico\0All Files\0*.*\0", m_hWnd);
-	ThemeHelper::Suspend();
+	WTLHelper::SuspendHook();
 	if (IDOK == dlg.DoModal()) {
 		auto const& icon = m_Icons[m_SelectedIcon];
 		if (!IconWriter::Save(dlg.m_szFileName, icon.Icon.m_hIcon, icon.Colors)) {
 			AtlMessageBox(m_hWnd, L"Failed to save icon", IDR_MAINFRAME, MB_ICONERROR);
 		}
 	}
-	ThemeHelper::Resume();
+	WTLHelper::ResumeHook();
 
 	return 0;
 }

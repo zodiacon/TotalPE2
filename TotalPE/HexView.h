@@ -40,6 +40,7 @@ public:
 		NOTIFY_CODE_HANDLER(NM_RCLICK, OnRightClick)
 		COMMAND_ID_HANDLER(ID_EXPORT, OnSave)
 		MESSAGE_HANDLER(::RegisterWindowMessage(L"WTLHelperUpdateTheme"), OnUpdateTheme)
+		MESSAGE_HANDLER(WM_UPDATE_DARKMODE, OnUpdateTheme)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
 		MESSAGE_HANDLER(WM_DESTROY, OnDestroy)
 		CHAIN_MSG_MAP(CViewBase<CHexView>)

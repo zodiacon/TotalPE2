@@ -4,9 +4,9 @@
 #include "pch.h"
 #include "resource.h"
 #include "MainFrm.h"
-#include <ThemeHelper.h>
 #include "Helpers.h"
 #include "AppSettings.h"
+#include <WTLHelper.h>
 
 CAppModule _Module;
 AppSettings g_Settings;
@@ -43,9 +43,10 @@ int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPTSTR lp
 	HRESULT hRes = ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
 	ATLASSERT(SUCCEEDED(hRes));
 
-//	ThemeHelper::SetNativeDarkMode(true);
-
 	AtlInitCommonControls(ICC_BAR_CLASSES | ICC_LISTVIEW_CLASSES);
+
+	auto& settings = AppSettings::Get();
+	settings.LoadFromKey(L"SOFTWARE\\ScorpioSoftware\\TotalPE");
 
 	hRes = _Module.Init(nullptr, hInstance);
 	ATLASSERT(SUCCEEDED(hRes));
@@ -54,9 +55,10 @@ int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPTSTR lp
 
 	Scintilla_RegisterClasses(hInstance);
 
-	ThemeHelper::Init();
+	WTLHelper::InitDarkMode(settings.DarkMode() ? DarkModeKind::Dark : DarkModeKind::Light);
 
 	int nRet = Run(lpstrCmdLine, nCmdShow);
+	settings.Save();
 
 	_Module.Term();
 	::CoUninitialize();

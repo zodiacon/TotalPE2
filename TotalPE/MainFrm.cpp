@@ -12,6 +12,7 @@
 #include "PEStrings.h"
 #include "AppSettings.h"
 #include <thread>
+#include <WTLHelper.h>
 
 const int WindowMenuPosition = 5;
 
@@ -63,11 +64,7 @@ int CMainFrame::GetResourceIconIndex(WORD resType) const {
 }
 
 void CMainFrame::InitMenu(HMENU hMenu) {
-	struct {
-		int id;
-		UINT icon;
-		HICON hIcon{ nullptr };
-	} const commands[] = {
+	MenuItemData commands[] {
 		{ ID_EDIT_COPY, IDI_COPY },
 		{ ID_EDIT_PASTE, IDI_PASTE },
 		{ ID_FILE_OPEN, IDI_OPEN },
@@ -92,12 +89,7 @@ void CMainFrame::InitMenu(HMENU hMenu) {
 		{ ID_WINDOW_CLOSE_ALL, IDI_WIN_CLOSEALL },
 
 	};
-	for (auto& cmd : commands) {
-		if (cmd.icon)
-			AddCommand(cmd.id, cmd.icon);
-		else
-			AddCommand(cmd.id, cmd.hIcon);
-	}
+	WTLHelper::InitMenu(hMenu, commands, _countof(commands));
 }
 
 TreeItemType CMainFrame::GetIndex(TreeItemType value) {
@@ -137,11 +129,6 @@ bool CMainFrame::DeleteTreeItem(HTREEITEM hItem) {
 LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/) {
 	DragAcceptFiles();
 	auto& settings = AppSettings::Get();
-	s_Frames++;
-	if (s_Frames == 1) {
-		InitDarkTheme();
-		settings.LoadFromKey(L"SOFTWARE\\ScorpioSoftware\\TotalPE");
-	}
 	m_RecentFiles.Set(settings.RecentFiles());
 	UpdateRecentFilesMenu();
 
@@ -197,26 +184,17 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 		GetWindowText(text);
 		SetWindowText(text + L" (Administrator)");
 	}
-
-	SetCheckIcon(IDI_CHECK, IDI_RADIO);
-	InitMenu(hMenu);
-	AddMenu(hMenu);
-	UIAddMenu(hMenu);
-	AddMenu(IDR_CONTEXT);
-	UIAddMenu(IDR_CONTEXT);
-
-	if (settings.DarkMode()) {
-		ThemeHelper::SetCurrentTheme(s_DarkTheme, m_hWnd);
-		ThemeHelper::UpdateMenuColors(*this, true);
-		UpdateMenu(GetMenu(), true);
-		DrawMenuBar();
-		UISetCheck(ID_OPTIONS_DARKMODE, true);
-	}
-
 	auto hWinMenu = menuMain.GetSubMenu(WindowMenuPosition);
 	//m_Tabs.m_bWindowsMenuItem = true;
 	m_Tabs.SetWindowMenu(hWinMenu);
-	AddSubMenu(hWinMenu);
+
+	InitMenu(hMenu);
+	UIAddMenu(hMenu);
+	UIAddMenu(IDR_CONTEXT);
+
+	if (settings.DarkMode()) {
+		UISetCheck(ID_OPTIONS_DARKMODE, true);
+	}
 
 	UISetCheck(ID_VIEW_STATUS_BAR, settings.ViewStatusBar());
 	SetAlwaysOnTop(settings.AlwaysOnTop());
@@ -271,13 +249,7 @@ LRESULT CMainFrame::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*
 		auto& settings = AppSettings::Get();
 		settings.MainWindowPlacement(wp);
 		settings.AlwaysOnTop(GetExStyle() & WS_EX_TOPMOST);
-		settings.Save();
 
-		// unregister message filtering and idle updates
-		CMessageLoop* pLoop = _Module.GetMessageLoop();
-		ATLASSERT(pLoop != nullptr);
-		pLoop->RemoveMessageFilter(this);
-		pLoop->RemoveIdleHandler(this);
 		bHandled = FALSE;
 	}
 
@@ -352,7 +324,6 @@ LRESULT CMainFrame::OnWindowCloseAll(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*
 LRESULT CMainFrame::OnWindowActivate(WORD /*wNotifyCode*/, WORD wID, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
 	int nPage = wID - ID_WINDOW_TABFIRST;
 	m_Tabs.SetActivePage(nPage);
-	AddSubMenu(::GetSubMenu(GetMenu(), WindowMenuPosition));
 
 	return 0;
 }
@@ -580,8 +551,9 @@ HWND CMainFrame::GetHwnd() const {
 	return m_hWnd;
 }
 
-BOOL CMainFrame::TrackPopupMenu(HMENU hMenu, DWORD flags, int x, int y, HWND hWnd) {
-	return ShowContextMenu(hMenu, flags, x, y, hWnd);
+BOOL CMainFrame::ShowContextMenu(HMENU hMenu, DWORD flags, int x, int y, HWND hWnd) {
+	InitMenu(hMenu);
+	return TrackPopupMenu(hMenu, flags, x, y, 0, hWnd ? hWnd : m_hWnd, nullptr);
 }
 
 CUpdateUIBase& CMainFrame::GetUI() {
@@ -635,9 +607,9 @@ LRESULT CMainFrame::OnFileOpenNewWindow(WORD, WORD, HWND, BOOL&) {
 CString CMainFrame::DoFileOpen() const {
 	CSimpleFileDialog dlg(TRUE, nullptr, nullptr, OFN_EXPLORER | OFN_ENABLESIZING,
 		L"All PE Files\0*.exe;*.dll;*.efi;*.ocx;*.cpl;*.sys;*.mui;*.mun;*.scr\0All Files\0*.*\0");
-	ThemeHelper::Suspend();
+	WTLHelper::SuspendHook();
 	auto path = IDOK == dlg.DoModal() ? dlg.m_szFileName : L"";
-	ThemeHelper::Resume();
+	WTLHelper::ResumeHook();
 	return path;
 }
 
@@ -736,7 +708,6 @@ void CMainFrame::UpdateRecentFilesMenu() {
 	for (auto& file : m_RecentFiles.Files()) {
 		menu.AppendMenu(MF_BYPOSITION, ATL_IDS_MRU_FILE + i++, file.c_str());
 	}
-	AddSubMenu(menu);
 }
 
 std::vector<FlatResource> const& CMainFrame::GetFlatResources() const {
@@ -879,14 +850,14 @@ void CMainFrame::InitDarkTheme() const {
 
 LRESULT CMainFrame::OnUpdateDarkMode(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/) {
 	auto& settings = AppSettings::Get();
-	if (settings.DarkMode())
-		ThemeHelper::SetCurrentTheme(s_DarkTheme, m_hWnd);
-	else
-		ThemeHelper::SetDefaultTheme(m_hWnd);
-	ThemeHelper::UpdateMenuColors(*this, settings.DarkMode());
-	UpdateMenuBase(GetMenu(), true);
-	DrawMenuBar();
+
+	WTLHelper::SwitchToMode(settings.DarkMode() ? DarkModeKind::Dark : DarkModeKind::Light, m_hWnd);
 	UISetCheck(ID_OPTIONS_DARKMODE, settings.DarkMode());
+	InitMenu(GetMenu());
+	DrawMenuBar();
+	SendMessageToDescendants(WM_UPDATE_DARKMODE);
+	SendMessageToDescendants(::RegisterWindowMessage(L"WTLHelperUpdateTheme"));
+
 	return 0;
 }
 
@@ -903,7 +874,6 @@ LRESULT CMainFrame::OnToggleDarkMode(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*
 }
 
 LRESULT CMainFrame::OnPageActivated(int /*idCtrl*/, LPNMHDR /*pnmh*/, BOOL& /*bHandled*/) {
-	AddSubMenu(::GetSubMenu(GetMenu(), WindowMenuPosition));
 	return 0;
 }
 

@@ -3,6 +3,8 @@
 #include <DiaHelper.h>
 #include <PEFile.h>
 
+static const UINT WM_UPDATE_DARKMODE = WM_APP + 56;
+
 constexpr uint32_t ItemShift = 8;
 
 enum class TreeItemType : int64_t {
@@ -66,7 +68,7 @@ struct FlatResource : PEResFlat {
 
 struct IMainFrame abstract {
 	virtual HWND GetHwnd() const = 0;
-	virtual BOOL TrackPopupMenu(HMENU hMenu, DWORD flags, int x, int y, HWND hWnd = nullptr) = 0;
+	virtual BOOL ShowContextMenu(HMENU hMenu, DWORD flags, int x, int y, HWND hWnd = nullptr) = 0;
 	virtual CUpdateUIBase& GetUI() = 0;
 	virtual HIMAGELIST GetImageList() const = 0;
 	virtual int GetIconIndex(UINT id) const = 0;

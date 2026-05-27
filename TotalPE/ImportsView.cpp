@@ -200,5 +200,5 @@ LRESULT CImportsView::OnGotoFileLocation(WORD, WORD, HWND, BOOL&) const {
 bool CImportsView::OnRightClickList(HWND h, int row, int col, POINT const& pt) const {
 	CMenu menu;
 	menu.LoadMenu(IDR_CONTEXT);
-	return Frame()->TrackPopupMenu(menu.GetSubMenu(h == m_ModList ? 4 : 0), 0, pt.x, pt.y);
+	return Frame()->ShowContextMenu(menu.GetSubMenu(h == m_ModList ? 4 : 0), 0, pt.x, pt.y);
 }

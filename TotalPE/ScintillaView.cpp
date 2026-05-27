@@ -6,8 +6,7 @@
 #include "resource.h"
 #include "ScintillaView.h"
 #include <LexerModule.h>
-#include <ThemeHelper.h>
-#include <Theme.h>
+#include <WTLHelper.h>
 #include "PEStrings.h"
 #include "PEFile.h"
 
@@ -172,11 +171,10 @@ void CScintillaView::SetLanguage(LexLanguage lang) {
 
 void CScintillaView::UpdateColors() {
 	// TEMPORARY
-	auto dark = !ThemeHelper::IsDefault();
-	auto theme = ThemeHelper::GetCurrentTheme();
+	auto dark = WTLHelper::IsDarkMode();
 
-	m_Sci.StyleSetFore(STYLE_DEFAULT, theme->TextColor);
-	m_Sci.StyleSetBack(STYLE_DEFAULT, theme->BackColor);
+	m_Sci.StyleSetFore(STYLE_DEFAULT, ::GetSysColor(COLOR_WINDOWTEXT));
+	m_Sci.StyleSetBack(STYLE_DEFAULT, ::GetSysColor(COLOR_WINDOW));
 	m_Sci.StyleClearAll();
 
 	switch (m_Language) {
@@ -222,7 +220,7 @@ LRESULT CScintillaView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
 	UpdateUI();
 	CMenu menu;
 	menu.LoadMenuW(IDR_CONTEXT);
-	return Frame()->TrackPopupMenu(menu.GetSubMenu(m_Language == LexLanguage::Xml ? 0 : 6), 0, 
+	return Frame()->ShowContextMenu(menu.GetSubMenu(m_Language == LexLanguage::Xml ? 0 : 6), 0, 
 		GET_X_LPARAM(lp), GET_Y_LPARAM(lp));
 }
 

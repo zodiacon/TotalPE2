@@ -32,7 +32,7 @@ LRESULT CStructView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
     m_TL.GetTreeControl().SetImageList(Frame()->GetImageList(), TVSIL_NORMAL);
     HDITEM hdi{ HDI_TEXT | HDI_FORMAT | HDI_WIDTH };
     hdi.fmt = LVCFMT_LEFT;
-    hdi.cxy = 200;
+    hdi.cxy = 250;
     hdi.pszText = (PWSTR)L"Member";
     m_TL.GetHeaderControl().AddItem(&hdi);
 

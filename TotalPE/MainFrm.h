@@ -4,12 +4,11 @@
 
 #pragma once
 
-#include <CustomTabView.h>
+#include <NativeCustomTabView.h>
 #include <TabViewHelper.h>
 #include <CustomSplitterWindow.h>
 #include <TreeViewHelper.h>
 #include <PEFile.h>
-#include <OwnerDrawnMenu.h>
 #include "Interfaces.h"
 #include "RecentFilesManager.h"
 #include <Theme.h>
@@ -18,14 +17,11 @@ class CMainFrame :
 	public CFrameWindowImpl<CMainFrame>,
 	public CAutoUpdateUI<CMainFrame>,
 	public CTreeViewHelper<CMainFrame>,
-	public COwnerDrawnMenu<CMainFrame>,
 	public IMainFrame,
 	public CMessageFilter, 
 	public CIdleHandler {
 public:
 	DECLARE_FRAME_WND_CLASS(L"TotalPEMainWndClass", IDR_MAINFRAME)
-
-	static const UINT WM_UPDATE_DARKMODE = WM_APP + 56;
 
 	BOOL PreTranslateMessage(MSG* pMsg) override;
 	BOOL OnIdle() override;
@@ -72,7 +68,6 @@ public:
 		COMMAND_RANGE_HANDLER(ATL_IDS_MRU_FILE, ATL_IDS_MRU_FILE + 29, OnRecentFile)
 		COMMAND_ID_HANDLER(ID_APP_EXIT, OnFileExit)
 		CHAIN_MSG_MAP(CTreeViewHelper<CMainFrame>)
-		CHAIN_MSG_MAP(COwnerDrawnMenu<CMainFrame>)
 		CHAIN_MSG_MAP(CAutoUpdateUI<CMainFrame>)
 		CHAIN_MSG_MAP(CFrameWindowImpl<CMainFrame>)
 		REFLECT_NOTIFICATIONS_EX()
@@ -81,7 +76,7 @@ public:
 private:
 	// IMainFrame
 	HWND GetHwnd() const override;
-	BOOL TrackPopupMenu(HMENU hMenu, DWORD flags, int x, int y, HWND hWnd) override;
+	BOOL ShowContextMenu(HMENU hMenu, DWORD flags, int x, int y, HWND hWnd) override;
 	CUpdateUIBase& GetUI() override;
 	HIMAGELIST GetImageList() const override;
 	int GetDataDirectoryIconIndex(int index) const override;
@@ -166,7 +161,7 @@ private:
 		int SubMenu;
 	};
 
-	CCustomTabView m_Tabs;
+	CNativeCustomTabView m_Tabs;
 	CCustomSplitterWindow m_Splitter;
 	CTreeViewCtrl m_Tree;
 	CMultiPaneStatusBarCtrl m_StatusBar;
@@ -184,6 +179,6 @@ private:
 	std::unordered_map<TreeItemType, ContextMenuInfo> m_ContextMenus;
 	mutable std::unordered_map<std::wstring, DiaSession> m_SymbolsForModules;
 	inline static std::unordered_map<UINT, int> s_ImageIndices;
-	inline static int s_Frames{ 0 };
+	inline static int s_Frames{ 1 };
 	inline static Theme s_DarkTheme;
 };
