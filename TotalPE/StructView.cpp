@@ -26,7 +26,7 @@ void CStructView::ShowObject(PVOID address) {
 LRESULT CStructView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
     m_hWndClient = m_Splitter.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN);
 
-    m_TL.Create(m_Splitter, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS
+    m_TL.Create(m_Splitter, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | TLVIF_FORMAT
         | TVS_HASBUTTONS | TVS_LINESATROOT | TVS_HASLINES);
 
     m_TL.GetTreeControl().SetImageList(Frame()->GetImageList(), TVSIL_NORMAL);

@@ -5,10 +5,13 @@
 #include "pch.h"
 #include "resource.h"
 #include "ScintillaView.h"
-#include <LexerModule.h>
+#include <lexilla/Lexilla.h>
+#include <lexilla/SciLexer.h>
+#include <lexilla/lexlib/LexerModule.h>
 #include <WTLHelper.h>
 #include "PEStrings.h"
 #include "PEFile.h"
+
 
 using namespace Lexilla;
 using namespace Scintilla;
@@ -145,9 +148,8 @@ void CScintillaView::SetText(PCSTR text) {
 }
 
 void CScintillaView::SetLanguage(LexLanguage lang) {
-	extern LexerModule lmAs;
-	extern LexerModule lmXML;
 	extern LexerModule lmAsm;
+	extern LexerModule lmXML;
 
 	m_Language = lang;
 

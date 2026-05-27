@@ -8,6 +8,7 @@
 // Generated from the TEXTINCLUDE 2 resource.
 //
 #include "winres.h"
+#include "atlres.h"
 
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
@@ -111,7 +112,6 @@ END
 
 #endif    // APSTUDIO_INVOKED
 
-#include <atlres.h>
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -435,8 +435,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,6,5,1
- PRODUCTVERSION 0,6,5,1
+ FILEVERSION 0,7,0,0
+ PRODUCTVERSION 0,7,0,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -453,12 +453,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Pavel Yosifovich"
             VALUE "FileDescription", "Total PE - PE Viewer"
-            VALUE "FileVersion", "0.6.5.1"
+            VALUE "FileVersion", "0.7.0.0"
             VALUE "InternalName", "TotalPE"
             VALUE "LegalCopyright", "©2022-2026 Pavel Yosifovich"
             VALUE "OriginalFilename", "TotalPE.exe"
             VALUE "ProductName", "Total PE"
-            VALUE "ProductVersion", "0.6.5.1"
+            VALUE "ProductVersion", "0.7.0.0"
         END
     END
     BLOCK "VarFileInfo"

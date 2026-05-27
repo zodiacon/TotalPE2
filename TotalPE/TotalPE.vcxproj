@@ -144,7 +144,7 @@
       <PreprocessorDefinitions>_WINDOWS;STRICT;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\WTLHelper\WTLHelper;..\PECore;..\HexControl;..\DiaHelper;..\Lexilla\lexers;..\Lexilla\Include;..\Lexilla\lexlib;..\Scintilla\Include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\WTLHelper\WTLHelper;..\PECore;..\HexControl;..\DiaHelper</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -286,7 +286,7 @@
       <PreprocessorDefinitions>_WINDOWS;STRICT;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\WTLHelper\WTLHelper;..\PECore;..\HexControl;..\DiaHelper;..\Lexilla\lexers;..\Lexilla\Include;..\Lexilla\lexlib;..\Scintilla\Include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\WTLHelper\WTLHelper;..\PECore;..\HexControl;..\DiaHelper</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -330,7 +330,7 @@
       <PreprocessorDefinitions>_WINDOWS;STRICT;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\WTLHelper\WTLHelper;..\PECore;..\HexControl;..\DiaHelper;..\Lexilla\lexers;..\Lexilla\Include;..\Lexilla\lexlib;..\Scintilla\Include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\WTLHelper\WTLHelper;..\PECore;..\HexControl;..\DiaHelper</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -377,6 +377,8 @@
     <ClCompile Include="IconsView.cpp" />
     <ClCompile Include="IconWriter.cpp" />
     <ClCompile Include="ImportsView.cpp" />
+    <ClCompile Include="LexAsm.cxx" />
+    <ClCompile Include="LexHTML.cxx" />
     <ClCompile Include="LoadConfigView.cpp" />
     <ClCompile Include="MainFrm.cpp" />
     <ClCompile Include="pch.cpp">
@@ -526,9 +528,6 @@
     </ProjectReference>
     <ProjectReference Include="..\HexControl\HexControl.vcxproj">
       <Project>{ef5c2f6b-5fcd-446c-be8d-1485407cd65a}</Project>
-    </ProjectReference>
-    <ProjectReference Include="..\lexilla\src\Lexilla.vcxproj">
-      <Project>{e541c9be-13bc-4ce6-a0a4-31145f51a2c1}</Project>
     </ProjectReference>
     <ProjectReference Include="..\PECore\PECore.vcxproj">
       <Project>{03a66844-1884-41c0-899d-f01c8a601c8e}</Project>

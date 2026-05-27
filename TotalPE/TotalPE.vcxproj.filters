@@ -34,6 +34,9 @@
     <Filter Include="Controls">
       <UniqueIdentifier>{74de7a63-6ef4-4ccb-a115-224d2a35d493}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Lexers">
+      <UniqueIdentifier>{b8ac8fea-89f6-491b-bd86-f77584003461}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -140,6 +143,12 @@
     </ClCompile>
     <ClCompile Include="StringsView.cpp">
       <Filter>Views</Filter>
+    </ClCompile>
+    <ClCompile Include="LexAsm.cxx">
+      <Filter>Lexers</Filter>
+    </ClCompile>
+    <ClCompile Include="LexHTML.cxx">
+      <Filter>Lexers</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
