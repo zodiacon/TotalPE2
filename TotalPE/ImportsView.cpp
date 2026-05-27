@@ -146,9 +146,9 @@ LRESULT CImportsView::OnCopy(WORD, WORD, HWND, BOOL&) const {
 }
 
 void CImportsView::BuildItems() {
-	m_Modules = *m_PE->GetImport();
+	m_Modules = *m_PE.GetImport();
 	m_ModList.SetItemCount((int)m_Modules.size());
-	m_Is64 = m_PE->GetFileInfo()->IsPE64;
+	m_Is64 = m_PE.GetFileInfo()->IsPE64;
 }
 
 LRESULT CImportsView::OnFind(UINT, WPARAM, LPARAM, BOOL&) {

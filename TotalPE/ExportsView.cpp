@@ -79,11 +79,11 @@ CString CExportsView::GetTitle() const {
 }
 
 void CExportsView::BuildItems() {
-	if (m_PE->GetExport()) {
-		m_Exports.reserve(m_PE->GetExport()->Funcs.size());
+	if (m_PE.GetExport()) {
+		m_Exports.reserve(m_PE.GetExport()->Funcs.size());
 
 		auto const& symbols = Frame()->GetSymbols();
-		for (auto const& exp : m_PE->GetExport()->Funcs) {
+		for (auto const& exp : m_PE.GetExport()->Funcs) {
 			Export e(exp);
 			if (!exp.FuncName.empty())
 				e.Name = (PCWSTR)CString(exp.FuncName.c_str());
@@ -147,13 +147,13 @@ LRESULT CExportsView::OnDissassemble(WORD, WORD, HWND, BOOL&) const {
 	ATLASSERT(m_List.GetSelectedCount() == 1);
 	auto& exp = m_Exports[m_List.GetNextItem(-1, LVNI_SELECTED)];
 
-	auto offset = m_PE->GetOffsetFromRVA(exp.FuncRVA);
+	auto offset = m_PE.GetOffsetFromRVA(exp.FuncRVA);
 	uint32_t size = 0x1000;
 	if (size + offset > m_PE.GetFileSize())
 		size = m_PE.GetFileSize() - offset;
 	auto code = m_PE.GetSpan(offset, size);
 
-	ULONGLONG imageBase = m_PE->GetFileInfo()->IsPE64 ? m_PE->GetNTHeader()->NTHdr64.OptionalHeader.ImageBase : m_PE->GetNTHeader()->NTHdr32.OptionalHeader.ImageBase;
+	ULONGLONG imageBase = m_PE.GetFileInfo()->IsPE64 ? m_PE.GetNTHeader()->NTHdr64.OptionalHeader.ImageBase : m_PE.GetNTHeader()->NTHdr32.OptionalHeader.ImageBase;
 	Frame()->CreateAssemblyView(code, exp.FuncRVA + imageBase, exp.FuncRVA,
 		exp.Name.c_str(), TreeItemType::DirectoryExports);
 

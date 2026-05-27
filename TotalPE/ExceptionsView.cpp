@@ -47,9 +47,9 @@ CString CExceptionsView::GetTitle() const {
 }
 
 void CExceptionsView::BuildItems() {
-	m_Items.reserve(m_PE->GetExceptions()->size());
+	m_Items.reserve(m_PE.GetExceptions()->size());
 	auto& symbols = Frame()->GetSymbols();
-	for (auto const& ex : *m_PE->GetExceptions()) {
+	for (auto const& ex : *m_PE.GetExceptions()) {
 		Exception e(ex);
 		if (symbols) {
 			auto sym = symbols.GetSymbolByRVA(ex.RuntimeFuncEntry.BeginAddress, SymbolTag::Null, &e.Disp);

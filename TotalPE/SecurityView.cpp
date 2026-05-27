@@ -51,13 +51,15 @@ LRESULT CSecurityView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 }
 
 void CSecurityView::BuildItems() {
-	m_Items = *m_PE->GetSecurity();
+	m_Items = *m_PE.GetSecurity();
 	m_List.SetItemCount((int)m_Items.size());
 }
 
 void CSecurityView::OnStateChanged(HWND h, int from, int to, DWORD oldState, DWORD newState) {
 	if (newState & LVIS_SELECTED) {
-		m_HexView.SetData(m_Items[from].WinCert.bCertificate, m_Items[from].WinCert.dwLength);
+		auto const& item = m_Items[from];
+		m_HexView.SetData(
+			std::span<const std::byte>((const std::byte*)item.CertData.data(), item.CertData.size()));
 	}
 	UpdateUI();
 }

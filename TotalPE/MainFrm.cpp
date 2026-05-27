@@ -39,7 +39,7 @@ bool CMainFrame::OnTreeDoubleClick(HWND, HTREEITEM hItem) {
 }
 
 void CMainFrame::UpdateUI() {
-	auto const fi = m_PE ? m_PE->GetFileInfo() : nullptr;
+	auto const fi = m_PE ? m_PE.GetFileInfo() : nullptr;
 	UIEnable(ID_PE_DISASSEMBLEENTRYPOINT, fi != nullptr);
 	UIEnable(ID_VIEW_EXPORTS, fi && fi->HasExport);
 	UIEnable(ID_VIEW_IMPORTS, fi && fi->HasImport);
@@ -110,7 +110,7 @@ DiaSymbol CMainFrame::GetSymbolForName(PCWSTR mod, PCWSTR name) const {
 	if (it == symbols.end()) {
 		DiaSession session;
 		WCHAR path[MAX_PATH];
-		if (m_PE->GetFileInfo()->IsPE32)
+		if (m_PE.GetFileInfo()->IsPE32)
 			::GetSystemWow64Directory(path, _countof(path));
 		else
 			::GetSystemDirectory(path, _countof(path));
@@ -434,7 +434,7 @@ LRESULT CMainFrame::OnDropFiles(UINT /*uMsg*/, WPARAM wParam, LPARAM /*lParam*/,
 
 bool CMainFrame::OpenPE(PCWSTR path) {
 	CWaitCursor wait;
-	int bitness = (m_PE && m_PE->GetFileInfo()->IsPE64) * 2 + (m_PE && m_PE->GetFileInfo()->IsPE32);
+	int bitness = (m_PE && m_PE.GetFileInfo()->IsPE64) * 2 + (m_PE && m_PE.GetFileInfo()->IsPE32);
 
 	m_PE.Close();
 	if (!m_PE.Open(path)) {
@@ -445,7 +445,7 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	//
 	// clear symbol cache if bitness of old PE and new PE differ
 	//
-	if (bitness == 1 && m_PE->GetFileInfo()->IsPE64 || bitness == 2 && m_PE->GetFileInfo()->IsPE32)
+	if (bitness == 1 && m_PE.GetFileInfo()->IsPE64 || bitness == 2 && m_PE.GetFileInfo()->IsPE32)
 		m_SymbolsForModules.clear();
 
 	m_Symbols.Close();
@@ -493,25 +493,25 @@ void CMainFrame::BuildTree(int iconSize) {
 	auto headers = InsertTreeItem(m_Tree, L"Headers", GetTreeIcon(IDI_HEADERS), TreeItemType::Headers, root);
 	InsertTreeItem(m_Tree, L"DOS Header", GetTreeIcon(IDI_MSDOS), TreeItemType::DOSHeader, headers);
 	InsertTreeItem(m_Tree, L"NT Header", GetTreeIcon(IDI_FILE_HEADER), TreeItemType::NTHeader, headers);
-	if (m_PE->GetFileInfo()->HasRichHdr)
+	if (m_PE.GetFileInfo()->HasRichHdr)
 		InsertTreeItem(m_Tree, L"Rich Header", GetTreeIcon(IDI_RICH_HEADER), TreeItemType::RichHeader, headers);
 	m_Tree.Expand(headers, TVE_EXPAND);
 
 	auto sections = InsertTreeItem(m_Tree, L"Sections", GetTreeIcon(IDI_SECTIONS), TreeItemType::Sections, root);
 	int i = 0;
-	for (auto const& sec : *m_PE->GetSecHeaders()) {
+	for (auto const& sec : *m_PE.GetSecHeaders()) {
 		CString name = sec.SectionName.c_str();
 		if (name.IsEmpty())
 			name = CString((PCSTR)sec.SecHdr.Name, 8);
 		InsertTreeItem(m_Tree, name, GetTreeIcon(IDI_SECTION), TreeItemWithIndex(TreeItemType::Section, (i + 1) << ItemShift), sections);
 		i++;
 	}
-	if (m_PE->GetSecHeaders()->size() < 15)
+	if (m_PE.GetSecHeaders()->size() < 15)
 		m_Tree.Expand(sections, TVE_EXPAND);
 
 	auto directories = InsertTreeItem(m_Tree, L"Data Directories", GetTreeIcon(IDI_DIRS), TreeItemType::Directories, root);
 	i = 0;
-	for (auto const& dir : *m_PE->GetDataDirs()) {
+	for (auto const& dir : *m_PE.GetDataDirs()) {
 		if (dir.DataDir.Size) {
 			InsertTreeItem(m_Tree, PEStrings::GetDataDirectoryName(i), DirectoryIndexToIcon(i),
 				TreeItemWithIndex(TreeItemType::Directory, i), directories);
@@ -520,10 +520,10 @@ void CMainFrame::BuildTree(int iconSize) {
 	}
 	m_Tree.Expand(directories, TVE_EXPAND);
 
-	if (m_PE->GetFileInfo()->HasResource) {
+	if (m_PE.GetFileInfo()->HasResource) {
 		auto resources = InsertTreeItem(m_Tree, L"Resources", GetTreeIcon(IDI_RESOURCE), TreeItemType::Resources, root);
 		std::unordered_map<std::wstring, HTREEITEM> typeItems;
-		auto fresources = libpe::Ilibpe::FlatResources(*m_PE->GetResources());
+		auto const& fresources = m_PE.GetFlatResources();
 		i = 0;
 		m_hResVersion = m_hResManifest = nullptr;
 		m_FlatResources.clear();
@@ -560,7 +560,7 @@ void CMainFrame::BuildTree(int iconSize) {
 	}
 
 	if (m_Symbols) {
-		m_Symbols.LoadAddress(m_PE->GetImageBase());
+		m_Symbols.LoadAddress(m_PE.GetImageBase());
 		//auto symbols = InsertTreeItem(m_Tree, L"Symbols", GetTreeIcon(IDI_SYMBOLS), TreeItemType::Symbols, root);
 		//InsertTreeItem(m_Tree, L"Functions", GetTreeIcon(IDI_FUNCTION), TreeItemType::SymbolsFunctions, symbols, TVI_SORT);
 		//InsertTreeItem(m_Tree, L"Global Data", GetTreeIcon(IDI_DATA), TreeItemType::SymbolsGlobalData, symbols, TVI_SORT);

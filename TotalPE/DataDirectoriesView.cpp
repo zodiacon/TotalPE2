@@ -49,7 +49,7 @@ void CDataDirectoriesView::OnStateChanged(HWND, int from, int to, DWORD oldState
 		int selected = m_List.GetSelectedCount();
 		if (selected == 1) {
 			auto const& dir = m_Directories[m_List.GetNextItem(-1, LVNI_SELECTED)];
-			auto offset = m_PE->GetOffsetFromRVA(dir.DataDir.VirtualAddress);
+			auto offset = m_PE.GetOffsetFromRVA(dir.DataDir.VirtualAddress);
 			m_HexView.SetData(m_PE, offset, dir.DataDir.Size);
 		}
 		else {
@@ -61,7 +61,7 @@ void CDataDirectoriesView::OnStateChanged(HWND, int from, int to, DWORD oldState
 
 void CDataDirectoriesView::BuildItems() {
 	int i = 0;
-	for (auto& dir : *m_PE->GetDataDirs()) {
+	for (auto& dir : *m_PE.GetDataDirs()) {
 		if (dir.DataDir.Size) {
 			DataDirectory dd(dir);
 			dd.Index = i;

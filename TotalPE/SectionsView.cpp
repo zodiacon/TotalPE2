@@ -65,7 +65,7 @@ void CSectionsView::OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD
 }
 
 void CSectionsView::BuildItems() {
-	m_Sections = *m_PE->GetSecHeaders();
+	m_Sections = *m_PE.GetSecHeaders();
 	m_List.SetItemCount((int)m_Sections.size());
 }
 

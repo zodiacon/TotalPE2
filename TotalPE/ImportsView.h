@@ -54,8 +54,8 @@ private:
 
 	CListViewCtrl m_ModList, m_FuncList;
 	CCustomHorSplitterWindow m_Splitter;
-	std::vector<libpe::PEImportFunction> m_Functions;
-	std::vector<libpe::PEImport> m_Modules;
+	std::vector<PEImportFunction> m_Functions;
+	std::vector<PEImport> m_Modules;
 	int m_SelectedModule{ -1 };
 	PEFile const& m_PE;
 	bool m_Is64;

@@ -15,12 +15,12 @@ CString CDebugView::GetTitle() const {
 CString CDebugView::GetColumnText(HWND, int row, int col) const {
 	auto& item = m_Items[row];
 	switch (col) {
-		case 0: return PEStrings::DebugTypeToString(item.DebugDir.Type);
-		case 1: return std::format(L"0x{:08X}", item.DebugDir.TimeDateStamp).c_str();
-		case 2: return std::format(L"{}.{}", item.DebugDir.MajorVersion, item.DebugDir.MinorVersion).c_str();
-		case 3: return std::format(L"0x{:X}", item.DebugDir.AddressOfRawData).c_str();
-		case 4: return PEStrings::ToMemorySize(item.DebugDir.SizeOfData).c_str();
-		case 5: return std::format(L"0x{:X}", item.DebugDir.PointerToRawData).c_str();
+		case 0: return PEStrings::DebugTypeToString(item.Directory.Type);
+		case 1: return std::format(L"0x{:08X}", item.Directory.TimeDateStamp).c_str();
+		case 2: return std::format(L"{}.{}", item.Directory.MajorVersion, item.Directory.MinorVersion).c_str();
+		case 3: return std::format(L"0x{:X}", item.Directory.AddressOfRawData).c_str();
+		case 4: return PEStrings::ToMemorySize(item.Directory.SizeOfData).c_str();
+		case 5: return std::format(L"0x{:X}", item.Directory.PointerToRawData).c_str();
 		case 6: return GetDetails(row).c_str();
 	}
 	return CString();
@@ -33,12 +33,12 @@ void CDebugView::DoSort(SortInfo const* si) {
 	auto asc = si->SortAscending;
 	auto compare = [&](auto& d1, auto& d2) {
 		switch (si->SortColumn) {
-			case 0: return SortHelper::Sort(PEStrings::DebugTypeToString(d1.DebugDir.Type), PEStrings::DebugTypeToString(d2.DebugDir.Type), asc);
-			case 1: return SortHelper::Sort(d1.DebugDir.TimeDateStamp, d2.DebugDir.TimeDateStamp, asc);
-			case 2: return SortHelper::Sort((d1.DebugDir.MajorVersion << 16) | d1.DebugDir.MinorVersion, (d2.DebugDir.MajorVersion << 16) | d2.DebugDir.MinorVersion, asc);
-			case 3: return SortHelper::Sort(d1.DebugDir.AddressOfRawData, d2.DebugDir.AddressOfRawData, asc);
-			case 4: return SortHelper::Sort(d1.DebugDir.SizeOfData, d2.DebugDir.SizeOfData, asc);
-			case 5: return SortHelper::Sort(d1.DebugDir.PointerToRawData, d2.DebugDir.PointerToRawData, asc);
+			case 0: return SortHelper::Sort(PEStrings::DebugTypeToString(d1.Directory.Type), PEStrings::DebugTypeToString(d2.Directory.Type), asc);
+			case 1: return SortHelper::Sort(d1.Directory.TimeDateStamp, d2.Directory.TimeDateStamp, asc);
+			case 2: return SortHelper::Sort((d1.Directory.MajorVersion << 16) | d1.Directory.MinorVersion, (d2.Directory.MajorVersion << 16) | d2.Directory.MinorVersion, asc);
+			case 3: return SortHelper::Sort(d1.Directory.AddressOfRawData, d2.Directory.AddressOfRawData, asc);
+			case 4: return SortHelper::Sort(d1.Directory.SizeOfData, d2.Directory.SizeOfData, asc);
+			case 5: return SortHelper::Sort(d1.Directory.PointerToRawData, d2.Directory.PointerToRawData, asc);
 		}
 		return false;
 	};
@@ -51,7 +51,7 @@ void CDebugView::OnStateChanged(HWND h, int from, int to, DWORD oldState, DWORD 
 		ATLASSERT(index == from);
 		if (index >= 0) {
 			auto const& item = m_Items[index];
-			m_HexView.SetData(m_PE, item.DebugDir.PointerToRawData, item.DebugDir.SizeOfData);
+			m_HexView.SetData(m_PE, item.Directory.PointerToRawData, item.Directory.SizeOfData);
 		}
 		else {
 			m_HexView.ClearData();
@@ -67,9 +67,9 @@ std::wstring CDebugView::GetDetails(int row) const {
 		char pdb[64];
 	};
 	auto& item = m_Items[row];
-	switch (item.DebugDir.Type) {
+	switch (item.Directory.Type) {
 		case IMAGE_DEBUG_TYPE_CODEVIEW:
-			auto data = (CodeView const*)(m_PE.GetData() + item.DebugDir.PointerToRawData);
+			auto data = (CodeView const*)(m_PE.GetData() + item.Directory.PointerToRawData);
 			return std::format(L"Format: {}{}{}{} GUID: {} Pdb: {}",
 				data->format[0], data->format[1], data->format[2], data->format[3],
 				PEStrings::GuidToString(data->guid), (PCWSTR)CString(data->pdb));
@@ -103,7 +103,7 @@ LRESULT CDebugView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 }
 
 void CDebugView::BuildItems() {
-	m_Items = *m_PE->GetDebug();
+	m_Items = *m_PE.GetDebug();
 	m_List.SetItemCount((int)m_Items.size());
 }
 

@@ -13,12 +13,12 @@ CString CDelayImportView::GetColumnText(HWND h, int row, int colIndex) const {
 		switch (col) {
 			case ColumnType::Module: return item.ModuleName.c_str();
 			case ColumnType::Functions: return std::to_wstring(item.DelayImpFunc.size()).c_str();
-			case ColumnType::DllName: return std::format(L"0x{:X}", item.DelayImpDesc.DllNameRVA).c_str();
-			case ColumnType::IAT: return std::format(L"0x{:X}", item.DelayImpDesc.ImportAddressTableRVA).c_str();
-			case ColumnType::ImportNameTable: return std::format(L"0x{:X}", item.DelayImpDesc.ImportNameTableRVA).c_str();
-			case ColumnType::ModuleHandle: return std::format(L"0x{:X}", item.DelayImpDesc.ModuleHandleRVA).c_str();
-			case ColumnType::TimeStamp: return std::format(L"0x{:X}", item.DelayImpDesc.TimeDateStamp).c_str();
-			case ColumnType::Attributes: return std::format(L"0x{:X}", item.DelayImpDesc.Attributes.AllAttributes).c_str();
+			case ColumnType::DllName: return std::format(L"0x{:X}", item.DelayImpDesc.rvaDLLName).c_str();
+			case ColumnType::IAT: return std::format(L"0x{:X}", item.DelayImpDesc.rvaIAT).c_str();
+			case ColumnType::ImportNameTable: return std::format(L"0x{:X}", item.DelayImpDesc.rvaINT).c_str();
+			case ColumnType::ModuleHandle: return std::format(L"0x{:X}", item.DelayImpDesc.rvaHmod).c_str();
+			case ColumnType::TimeStamp: return std::format(L"0x{:X}", item.DelayImpDesc.dwTimeStamp).c_str();
+			case ColumnType::Attributes: return std::format(L"0x{:X}", item.DelayImpDesc.grAttrs).c_str();
 		}
 	}
 	else {
@@ -26,10 +26,10 @@ CString CDelayImportView::GetColumnText(HWND h, int row, int colIndex) const {
 		switch (col) {
 			case ColumnType::Name: return func.FuncName.c_str();
 			case ColumnType::Hint: return std::to_wstring(func.ImpByName.Hint).c_str();
-			case ColumnType::IAT: return std::format(L"0x{:X}", m_PE->GetFileInfo()->IsPE64 ? func.unThunk.st64.ImportAddressTable.u1.Function : func.unThunk.st32.ImportAddressTable.u1.Function).c_str();
-			case ColumnType::ImportNameTable: return std::format(L"0x{:X}", m_PE->GetFileInfo()->IsPE64 ? func.unThunk.st64.ImportNameTable.u1.Function : func.unThunk.st32.ImportNameTable.u1.Function).c_str();
-			case ColumnType::BoundImport: return std::format(L"0x{:X}", m_PE->GetFileInfo()->IsPE64 ? func.unThunk.st64.BoundImportAddressTable.u1.Function : func.unThunk.st32.BoundImportAddressTable.u1.Function).c_str();
-			case ColumnType::UnloadInfo: return std::format(L"0x{:X}", m_PE->GetFileInfo()->IsPE64 ? func.unThunk.st64.UnloadInformationTable.u1.Function : func.unThunk.st32.UnloadInformationTable.u1.Function).c_str();
+			case ColumnType::IAT: return std::format(L"0x{:X}", m_PE.GetFileInfo()->IsPE64 ? func.unThunk.st64.ImportAddressTable.u1.Function : func.unThunk.st32.ImportAddressTable.u1.Function).c_str();
+			case ColumnType::ImportNameTable: return std::format(L"0x{:X}", m_PE.GetFileInfo()->IsPE64 ? func.unThunk.st64.ImportNameTable.u1.Function : func.unThunk.st32.ImportNameTable.u1.Function).c_str();
+			case ColumnType::BoundImport: return std::format(L"0x{:X}", m_PE.GetFileInfo()->IsPE64 ? func.unThunk.st64.BoundImportAddressTable.u1.Function : func.unThunk.st32.BoundImportAddressTable.u1.Function).c_str();
+			case ColumnType::UnloadInfo: return std::format(L"0x{:X}", m_PE.GetFileInfo()->IsPE64 ? func.unThunk.st64.UnloadInformationTable.u1.Function : func.unThunk.st32.UnloadInformationTable.u1.Function).c_str();
 		}
 	}
 	return CString();
@@ -60,11 +60,11 @@ void CDelayImportView::DoSort(SortInfo const* si) {
 			switch (col) {
 				case ColumnType::Module: return SortHelper::Sort(i1.ModuleName, i2.ModuleName, asc);
 				case ColumnType::Functions: return SortHelper::Sort(i1.DelayImpFunc.size(), i2.DelayImpFunc.size(), asc);
-				case ColumnType::IAT: return SortHelper::Sort(i1.DelayImpDesc.ImportAddressTableRVA, i2.DelayImpDesc.ImportAddressTableRVA, asc);
-				case ColumnType::ImportNameTable: return SortHelper::Sort(i1.DelayImpDesc.ImportNameTableRVA, i2.DelayImpDesc.ImportNameTableRVA, asc);
-				case ColumnType::ModuleHandle: return SortHelper::Sort(i1.DelayImpDesc.ModuleHandleRVA, i2.DelayImpDesc.ModuleHandleRVA, asc);
-				case ColumnType::TimeStamp: return SortHelper::Sort(i1.DelayImpDesc.TimeDateStamp, i2.DelayImpDesc.TimeDateStamp, asc);
-				case ColumnType::Attributes: return SortHelper::Sort(i1.DelayImpDesc.Attributes.AllAttributes, i2.DelayImpDesc.Attributes.AllAttributes, asc);
+				case ColumnType::IAT: return SortHelper::Sort(i1.DelayImpDesc.rvaIAT, i2.DelayImpDesc.rvaIAT, asc);
+				case ColumnType::ImportNameTable: return SortHelper::Sort(i1.DelayImpDesc.rvaINT, i2.DelayImpDesc.rvaINT, asc);
+				case ColumnType::ModuleHandle: return SortHelper::Sort(i1.DelayImpDesc.rvaHmod, i2.DelayImpDesc.rvaHmod, asc);
+				case ColumnType::TimeStamp: return SortHelper::Sort(i1.DelayImpDesc.dwTimeStamp, i2.DelayImpDesc.dwTimeStamp, asc);
+				case ColumnType::Attributes: return SortHelper::Sort(i1.DelayImpDesc.grAttrs, i2.DelayImpDesc.grAttrs, asc);
 			}
 			return false;
 			};
@@ -77,7 +77,7 @@ CString CDelayImportView::GetTitle() const {
 }
 
 void CDelayImportView::BuildItems() {
-	m_Items = *m_PE->GetDelayImport();
+	m_Items = *m_PE.GetDelayImport();
 
 	m_List.SetItemCount((int)m_Items.size());
 }

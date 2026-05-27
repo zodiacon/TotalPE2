@@ -61,19 +61,20 @@ LRESULT CTlsView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 }
 
 void CTlsView::BuildItems() {
-	auto tls = m_PE->GetTLS();
+	auto tls = m_PE.GetTLS();
 
-	m_Items = tls->TLSCallbacks;
+	for (auto cb : tls->TLSCallbacks)
+		m_Items.push_back((DWORD)cb);
 	m_List.SetItemCount((int)m_Items.size());
 	auto& tls32 = tls->unTLS.TLSDir32;
 	auto& tls64 = tls->unTLS.TLSDir64;
-	auto is64 = m_PE->GetFileInfo()->IsPE64;
+	auto is64 = m_PE.GetFileInfo()->IsPE64;
 
 	m_Data = std::vector<DataItem>{
 		{ L"Start Address of Raw Data", std::format(L"0x{:X}", is64 ? tls64.StartAddressOfRawData : tls32.StartAddressOfRawData) },
 		{ L"End Address of Raw Data", std::format(L"0x{:X}", is64 ? tls64.EndAddressOfRawData : tls32.EndAddressOfRawData) },
 		{ L"Address of Callbacks", std::format(L"0x{:X}", is64 ? tls64.AddressOfCallBacks : tls32.AddressOfCallBacks) },
-		{ L"Address of Index", std::format(L"0x{:X}", is64 ? tls64.AddressOfIndex: tls32.AddressOfIndex) },
+		{ L"Address of Index", std::format(L"0x{:X}", is64 ? tls64.AddressOfIndex : tls32.AddressOfIndex) },
 		{ L"Characteristics", std::format(L"0x{:X}", is64 ? tls64.Characteristics : tls32.Characteristics) },
 		{ L"Alignment", std::format(L"{}", is64 ? tls64.Alignment : tls32.Alignment) },
 	};

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <DiaHelper.h>
-#include <libpe.h>
+#include <PEFile.h>
 
 constexpr uint32_t ItemShift = 8;
 
@@ -60,7 +60,7 @@ enum class SymViewType {
 	None, Function, Data, UDT, Enum,
 };
 
-struct FlatResource : libpe::PEResFlat {
+struct FlatResource : PEResFlat {
 	std::wstring Name, Type, Language;
 };
 

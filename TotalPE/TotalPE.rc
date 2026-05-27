@@ -122,14 +122,6 @@ END
 // remains consistent on all systems.
 IDR_MAINFRAME           ICON                    "res\\TotalPE.ico"
 
-IDI_COLLAPSED           ICON                    "res\\Collapsed.ico"
-
-IDI_COLLAPSED2          ICON                    "res\\Collapsed2.ico"
-
-IDI_EXPANDED            ICON                    "res\\Expanded.ico"
-
-IDI_EXPANDED2           ICON                    "res\\Expanded2.ico"
-
 IDI_CHECK               ICON                    "res\\check.ico"
 
 IDI_RADIO               ICON                    "res\\circle.ico"

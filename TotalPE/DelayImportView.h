@@ -44,8 +44,8 @@ private:
 
 	CListViewCtrl m_List, m_FuncList;
 	CCustomHorSplitterWindow m_Splitter;
-	std::vector<libpe::PEDelayImport> m_Items;
-	std::vector<libpe::PEDelayImportFunc> m_Functions;
+	std::vector<PEDelayImport> m_Items;
+	std::vector<PEDelayImportFunc> m_Functions;
 	PEFile const& m_PE;
 };
 
