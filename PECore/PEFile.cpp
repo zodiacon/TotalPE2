@@ -53,18 +53,22 @@ bool PEFile::Open(std::wstring_view path) {
     Close();
 
     // Read raw bytes ourselves so GetData() always works
-    HANDLE hFile = ::CreateFileW(path.data(), GENERIC_READ, FILE_SHARE_READ,
-                                 nullptr, OPEN_EXISTING, 0, nullptr);
-    if (hFile == INVALID_HANDLE_VALUE) return false;
+    wil::unique_hfile hFile(::CreateFileW(path.data(), GENERIC_READ, FILE_SHARE_READ,
+                                 nullptr, OPEN_EXISTING, 0, nullptr));
+    if (!hFile) 
+        return false;
 
     LARGE_INTEGER sz{};
-    ::GetFileSizeEx(hFile, &sz);
-    m_raw.resize((size_t)sz.QuadPart);
+    ::GetFileSizeEx(hFile.get(), &sz);
+    if (sz.QuadPart > 1LL << 32)
+        return false;
 
-    DWORD read{};
-    BOOL ok = ::ReadFile(hFile, m_raw.data(), (DWORD)m_raw.size(), &read, nullptr);
-    ::CloseHandle(hFile);
-    if (!ok || read != m_raw.size()) return false;
+    m_fileSize = sz.LowPart;
+    auto hMap = ::CreateFileMapping(hFile.get(), nullptr, PAGE_READONLY, 0, 0, nullptr);
+    if (!hMap)
+        return false;
+
+    m_raw.reset((uint8_t*)::MapViewOfFile(hMap, FILE_MAP_READ, 0, 0, 0));
 
     // Let LIEF parse (enable exception parsing for .pdata)
     LIEF::PE::ParserConfig cfg;
@@ -82,7 +86,7 @@ bool PEFile::Open(std::wstring_view path) {
 
 void PEFile::Close() {
     m_impl.reset();
-    m_raw.clear();
+    m_raw.reset();
     m_path.clear();
     m_info = {};
     m_ntHeader = {};
@@ -103,21 +107,21 @@ void PEFile::Close() {
 }
 
 std::wstring const& PEFile::GetPath()     const { return m_path; }
-uint32_t            PEFile::GetFileSize() const { return (uint32_t)m_raw.size(); }
+uint32_t            PEFile::GetFileSize() const { return (uint32_t)m_fileSize; }
 PEFile::operator bool()                   const { return !m_path.empty(); }
 
 bool PEFile::Read(uint32_t offset, uint32_t size, void* buffer) const {
-    if (offset + (size_t)size > m_raw.size()) return false;
-    memcpy(buffer, m_raw.data() + offset, size);
+    if (offset + (size_t)size > m_fileSize) return false;
+    memcpy(buffer, m_raw.get() + offset, size);
     return true;
 }
 
 const BYTE* PEFile::GetData() const {
-    return m_raw.data();
+    return m_raw.get();
 }
 
 std::span<const std::byte> PEFile::GetSpan(uint32_t offset, uint32_t size) const {
-    return std::span(reinterpret_cast<const std::byte*>(m_raw.data()) + offset, size);
+    return std::span(reinterpret_cast<const std::byte*>(m_raw.get()) + offset, size);
 }
 
 PEFileInfo const*        PEFile::GetFileInfo()    const { return &m_info; }
@@ -138,35 +142,7 @@ PEDELAYIMPORT_VEC const* PEFile::GetDelayImport() const { return &m_delayImports
 PERESFLAT_VEC const& PEFile::GetFlatResources() const { return m_flatResources; }
 
 uint32_t PEFile::GetOffsetFromRVA(ULONGLONG rva) const {
-    // Walk section headers in raw buffer for accurate conversion
-    if (m_raw.size() < sizeof(IMAGE_DOS_HEADER)) return 0;
-    auto* dos = (IMAGE_DOS_HEADER*)m_raw.data();
-    bool is64 = m_info.IsPE64;
-    WORD  numSections = 0;
-    DWORD sectionTableOffset = 0;
-
-    if (is64) {
-        auto* nt = (IMAGE_NT_HEADERS64*)(m_raw.data() + dos->e_lfanew);
-        numSections = nt->FileHeader.NumberOfSections;
-        sectionTableOffset = dos->e_lfanew + offsetof(IMAGE_NT_HEADERS64, OptionalHeader)
-                           + nt->FileHeader.SizeOfOptionalHeader;
-    }
-    else {
-        auto* nt = (IMAGE_NT_HEADERS32*)(m_raw.data() + dos->e_lfanew);
-        numSections = nt->FileHeader.NumberOfSections;
-        sectionTableOffset = dos->e_lfanew + offsetof(IMAGE_NT_HEADERS32, OptionalHeader)
-                           + nt->FileHeader.SizeOfOptionalHeader;
-    }
-
-    auto* sects = (IMAGE_SECTION_HEADER*)(m_raw.data() + sectionTableOffset);
-    for (WORD i = 0; i < numSections; ++i) {
-        auto& s = sects[i];
-        if (rva >= s.VirtualAddress && rva < s.VirtualAddress + s.Misc.VirtualSize) {
-            return s.PointerToRawData + (DWORD)(rva - s.VirtualAddress);
-        }
-    }
-    // In headers area
-    return (uint32_t)rva;
+    return m_impl->binary->rva_to_offset(rva);
 }
 
 ULONGLONG PEFile::GetImageBase() const {
@@ -203,19 +179,19 @@ void PEFile::BuildCaches() {
         m_info.HasCOMDescr = false;
 
     // DOS header
-    if (m_raw.size() >= sizeof(IMAGE_DOS_HEADER))
-        memcpy(&m_dosHeader, m_raw.data(), sizeof(IMAGE_DOS_HEADER));
+    if (m_fileSize >= sizeof(IMAGE_DOS_HEADER))
+        memcpy(&m_dosHeader, m_raw.get(), sizeof(IMAGE_DOS_HEADER));
 
     // NT header — cast raw bytes (LIEF already validated the signature)
     DWORD e_lfanew = m_dosHeader.e_lfanew;
     m_ntHeader.dwOffset = e_lfanew;
     if (m_info.IsPE64) {
-        if (e_lfanew + sizeof(IMAGE_NT_HEADERS64) <= m_raw.size())
-            memcpy(&m_ntHeader.NTHdr64, m_raw.data() + e_lfanew, sizeof(IMAGE_NT_HEADERS64));
+        if (e_lfanew + sizeof(IMAGE_NT_HEADERS64) <= m_fileSize)
+            memcpy(&m_ntHeader.NTHdr64, m_raw.get() + e_lfanew, sizeof(IMAGE_NT_HEADERS64));
     }
     else {
-        if (e_lfanew + sizeof(IMAGE_NT_HEADERS32) <= m_raw.size())
-            memcpy(&m_ntHeader.NTHdr32, m_raw.data() + e_lfanew, sizeof(IMAGE_NT_HEADERS32));
+        if (e_lfanew + sizeof(IMAGE_NT_HEADERS32) <= m_fileSize)
+            memcpy(&m_ntHeader.NTHdr32, m_raw.get() + e_lfanew, sizeof(IMAGE_NT_HEADERS32));
     }
 
     // Sections
@@ -313,8 +289,8 @@ void PEFile::BuildCaches() {
         if ((size_t)CERT_DIR < m_dataDirs.size()) {
             uint32_t offset = m_dataDirs[CERT_DIR].DataDir.VirtualAddress; // file offset for this dir
             uint32_t limit  = offset + m_dataDirs[CERT_DIR].DataDir.Size;
-            while (offset + sizeof(WIN_CERTIFICATE) <= limit && offset + sizeof(WIN_CERTIFICATE) <= m_raw.size()) {
-                auto* wc = (WIN_CERTIFICATE*)(m_raw.data() + offset);
+            while (offset + sizeof(WIN_CERTIFICATE) <= limit && offset + sizeof(WIN_CERTIFICATE) <= m_fileSize) {
+                auto* wc = (WIN_CERTIFICATE*)(m_raw.get() + offset);
                 if (wc->dwLength < sizeof(WIN_CERTIFICATE)) break;
 
                 PESecurity sec{};
@@ -324,9 +300,9 @@ void PEFile::BuildCaches() {
                 sec.WinCert.wCertificateType = wc->wCertificateType;
 
                 uint32_t dataLen = wc->dwLength - (uint32_t)sizeof(WIN_CERTIFICATE);
-                if (offset + sizeof(WIN_CERTIFICATE) + dataLen <= m_raw.size()) {
-                    sec.CertData.assign(m_raw.data() + offset + sizeof(WIN_CERTIFICATE),
-                                       m_raw.data() + offset + sizeof(WIN_CERTIFICATE) + dataLen);
+                if (offset + sizeof(WIN_CERTIFICATE) + dataLen <= m_fileSize) {
+                    sec.CertData.assign(m_raw.get() + offset + sizeof(WIN_CERTIFICATE),
+                                       m_raw.get() + offset + sizeof(WIN_CERTIFICATE) + dataLen);
                 }
                 m_security.push_back(std::move(sec));
 
@@ -368,13 +344,13 @@ void PEFile::BuildCaches() {
             m_loadConfig.dwOffset = off;
             if (m_info.IsPE64) {
                 uint32_t copySize = std::min((uint32_t)sizeof(IMAGE_LOAD_CONFIG_DIRECTORY64),
-                                            (uint32_t)(m_raw.size() - off));
-                memcpy(&m_loadConfig.LCD64, m_raw.data() + off, copySize);
+                                            (uint32_t)(m_fileSize - off));
+                memcpy(&m_loadConfig.LCD64, m_raw.get() + off, copySize);
             }
             else {
                 uint32_t copySize = std::min((uint32_t)sizeof(IMAGE_LOAD_CONFIG_DIRECTORY32),
-                                            (uint32_t)(m_raw.size() - off));
-                memcpy(&m_loadConfig.LCD32, m_raw.data() + off, copySize);
+                                            (uint32_t)(m_fileSize - off));
+                memcpy(&m_loadConfig.LCD32, m_raw.get() + off, copySize);
             }
         }
     }

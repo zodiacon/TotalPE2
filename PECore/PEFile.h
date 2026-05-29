@@ -286,12 +286,13 @@ private:
     struct LiefImpl;
     std::unique_ptr<LiefImpl> m_impl;
 
-    std::vector<uint8_t> m_raw;
+    wil::unique_mapview_ptr<uint8_t> m_raw;
     std::wstring         m_path;
 
     PEFileInfo       m_info{};
     PENtHeader       m_ntHeader{};
     IMAGE_DOS_HEADER m_dosHeader{};
+    DWORD           m_fileSize;
 
     PESECHDR_VEC      m_sections;
     PEDATADIR_VEC     m_dataDirs;
