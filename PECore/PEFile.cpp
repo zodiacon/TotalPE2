@@ -138,6 +138,7 @@ PELoadConfig const*      PEFile::GetLoadConfig()  const { return m_info.HasLoadC
 PERELOC_VEC const*       PEFile::GetRelocations() const { return &m_relocations; }
 PEEXCEPTION_VEC const*   PEFile::GetExceptions()  const { return &m_exceptions; }
 PEDELAYIMPORT_VEC const* PEFile::GetDelayImport() const { return &m_delayImports; }
+PERichHeader const*      PEFile::GetRichHeader()  const { return m_info.HasRichHdr ? &m_richHeader : nullptr; }
 
 PERESFLAT_VEC const& PEFile::GetFlatResources() const { return m_flatResources; }
 
@@ -412,6 +413,34 @@ void PEFile::BuildCaches() {
             dim.DelayImpFunc.push_back(std::move(fn));
         }
         m_delayImports.push_back(std::move(dim));
+    }
+
+    // Rich Header
+    if (auto const* rh = pe.rich_header()) {
+        m_richHeader.Key = rh->key();
+
+        // Scan raw bytes for the "Rich" signature to find the file offset
+        DWORD scanLimit = std::min<DWORD>(m_dosHeader.e_lfanew, m_fileSize);
+        auto* p = m_raw.get();
+        for (DWORD i = 0; i + 8 <= scanLimit; i += 4) {
+            if (*reinterpret_cast<const DWORD*>(p + i) == 0x68636952u /*'hciR'*/)
+            {
+                // Walk backwards to find "DanS" XOR key
+                for (DWORD j = i; j >= 4; j -= 4) {
+                    DWORD v = *reinterpret_cast<const DWORD*>(p + j - 4) ^ rh->key();
+                    if (v == 0x536E6144u /*'SnaD'*/) { m_richHeader.Offset = j - 4; break; }
+                }
+                break;
+            }
+        }
+
+        for (auto const& e : rh->entries()) {
+            PERichEntry entry;
+            entry.ProductId = (WORD)e.id();
+            entry.BuildId   = (WORD)e.build_id();
+            entry.Count     = e.count();
+            m_richHeader.Entries.push_back(entry);
+        }
     }
 
     // Resources

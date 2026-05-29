@@ -223,6 +223,18 @@ struct PELoadConfig {
     IMAGE_LOAD_CONFIG_DIRECTORY64 LCD64{};
 };
 
+struct PERichEntry {
+    WORD  ProductId{};
+    WORD  BuildId{};
+    DWORD Count{};
+};
+
+struct PERichHeader {
+    DWORD                    Key{};
+    DWORD                    Offset{};   // file offset of the "DanS" marker
+    std::vector<PERichEntry> Entries;
+};
+
 // ── PEFile ─────────────────────────────────────────────────────────────────
 
 class PEFile {
@@ -270,6 +282,7 @@ public:
     PERELOC_VEC const*             GetRelocations() const;
     PEEXCEPTION_VEC const*         GetExceptions()  const;
     PEDELAYIMPORT_VEC const*       GetDelayImport() const;
+    PERichHeader const*            GetRichHeader()  const;
 
     uint32_t  GetOffsetFromRVA(ULONGLONG rva) const;
     ULONGLONG GetImageBase()                  const;
@@ -306,5 +319,6 @@ private:
     PEEXCEPTION_VEC   m_exceptions;
     PEDELAYIMPORT_VEC m_delayImports;
     PERESFLAT_VEC     m_flatResources;
+    PERichHeader      m_richHeader{};
     std::vector<std::byte> m_resRawData; // backing store for PEResFlat::Data spans
 };

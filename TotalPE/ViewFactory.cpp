@@ -25,6 +25,7 @@
 #include "PEImageView.h"
 #include "TlsView.h"
 #include "DelayImportView.h"
+#include "RichHeaderView.h"
 
 std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 	CWaitCursor wait;
@@ -96,6 +97,16 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 				symType = SymViewType::Data;
 		{
 			auto view = new CSymbolsView(this, m_Symbols, symType);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::RichHeader:
+		{
+			auto view = new CRichHeaderView(this, m_PE);
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};
