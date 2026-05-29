@@ -63,12 +63,12 @@ bool PEFile::Open(std::wstring_view path) {
     if (sz.QuadPart > 1LL << 32)
         return false;
 
-    m_fileSize = sz.LowPart;
+    m_FileSize = sz.LowPart;
     auto hMap = ::CreateFileMapping(hFile.get(), nullptr, PAGE_READONLY, 0, 0, nullptr);
     if (!hMap)
         return false;
 
-    m_raw.reset((uint8_t*)::MapViewOfFile(hMap, FILE_MAP_READ, 0, 0, 0));
+    m_Raw.reset((uint8_t*)::MapViewOfFile(hMap, FILE_MAP_READ, 0, 0, 0));
 
     // Let LIEF parse (enable exception parsing for .pdata)
     LIEF::PE::ParserConfig cfg;
@@ -76,123 +76,123 @@ bool PEFile::Open(std::wstring_view path) {
     auto binary = LIEF::PE::Parser::parse(WideToUtf8(path), cfg);
     if (!binary) return false;
 
-    m_impl = std::make_unique<LiefImpl>();
-    m_impl->binary = std::move(binary);
-    m_path = path;
+    m_Impl = std::make_unique<LiefImpl>();
+    m_Impl->binary = std::move(binary);
+    m_Path = path;
 
     BuildCaches();
     return true;
 }
 
 void PEFile::Close() {
-    m_impl.reset();
-    m_raw.reset();
-    m_path.clear();
-    m_info = {};
-    m_ntHeader = {};
-    m_dosHeader = {};
-    m_sections.clear();
-    m_dataDirs.clear();
-    m_imports.clear();
-    m_exports = {};
-    m_debug.clear();
-    m_security.clear();
-    m_tls = {};
-    m_loadConfig = {};
-    m_relocations.clear();
-    m_exceptions.clear();
-    m_delayImports.clear();
-    m_flatResources.clear();
-    m_resRawData.clear();
+    m_Impl.reset();
+    m_Raw.reset();
+    m_Path.clear();
+    m_Info = {};
+    m_NtHeader = {};
+    m_DosHeader = {};
+    m_Sections.clear();
+    m_DataDirs.clear();
+    m_Imports.clear();
+    m_Exports = {};
+    m_Debug.clear();
+    m_Security.clear();
+    m_Tls = {};
+    m_LoadConfig = {};
+    m_Relocations.clear();
+    m_Exceptions.clear();
+    m_DelayImports.clear();
+    m_FlatResources.clear();
+    m_ResRawData.clear();
 }
 
-std::wstring const& PEFile::GetPath()     const { return m_path; }
-uint32_t            PEFile::GetFileSize() const { return (uint32_t)m_fileSize; }
-PEFile::operator bool()                   const { return !m_path.empty(); }
+std::wstring const& PEFile::GetPath()     const { return m_Path; }
+uint32_t            PEFile::GetFileSize() const { return (uint32_t)m_FileSize; }
+PEFile::operator bool()                   const { return !m_Path.empty(); }
 
 bool PEFile::Read(uint32_t offset, uint32_t size, void* buffer) const {
-    if (offset + (size_t)size > m_fileSize) return false;
-    memcpy(buffer, m_raw.get() + offset, size);
+    if (offset + (size_t)size > m_FileSize) return false;
+    memcpy(buffer, m_Raw.get() + offset, size);
     return true;
 }
 
 const BYTE* PEFile::GetData() const {
-    return m_raw.get();
+    return m_Raw.get();
 }
 
 std::span<const std::byte> PEFile::GetSpan(uint32_t offset, uint32_t size) const {
-    return std::span(reinterpret_cast<const std::byte*>(m_raw.get()) + offset, size);
+    return std::span(reinterpret_cast<const std::byte*>(m_Raw.get()) + offset, size);
 }
 
-PEFileInfo const*        PEFile::GetFileInfo()    const { return &m_info; }
-PENtHeader const*        PEFile::GetNTHeader()    const { return &m_ntHeader; }
-IMAGE_DOS_HEADER const*  PEFile::GetMSDOSHeader() const { return &m_dosHeader; }
-PESECHDR_VEC const*      PEFile::GetSecHeaders()  const { return &m_sections; }
-PEDATADIR_VEC const*     PEFile::GetDataDirs()    const { return &m_dataDirs; }
-PEIMPORT_VEC const*      PEFile::GetImport()      const { return &m_imports; }
-PEExport const*          PEFile::GetExport()      const { return m_info.HasExport ? &m_exports : nullptr; }
-PEDEBUG_VEC const*       PEFile::GetDebug()       const { return &m_debug; }
-PESECURITY_VEC const*    PEFile::GetSecurity()    const { return &m_security; }
-PETls const*             PEFile::GetTLS()         const { return m_info.HasTLS ? &m_tls : nullptr; }
-PELoadConfig const*      PEFile::GetLoadConfig()  const { return m_info.HasLoadConfig ? &m_loadConfig : nullptr; }
-PERELOC_VEC const*       PEFile::GetRelocations() const { return &m_relocations; }
-PEEXCEPTION_VEC const*   PEFile::GetExceptions()  const { return &m_exceptions; }
-PEDELAYIMPORT_VEC const* PEFile::GetDelayImport() const { return &m_delayImports; }
-PERichHeader const*      PEFile::GetRichHeader()  const { return m_info.HasRichHdr ? &m_richHeader : nullptr; }
+PEFileInfo const*        PEFile::GetFileInfo()    const { return &m_Info; }
+PENtHeader const*        PEFile::GetNTHeader()    const { return &m_NtHeader; }
+IMAGE_DOS_HEADER const*  PEFile::GetMSDOSHeader() const { return &m_DosHeader; }
+PESECHDR_VEC const*      PEFile::GetSecHeaders()  const { return &m_Sections; }
+PEDATADIR_VEC const*     PEFile::GetDataDirs()    const { return &m_DataDirs; }
+PEIMPORT_VEC const*      PEFile::GetImport()      const { return &m_Imports; }
+PEExport const*          PEFile::GetExport()      const { return m_Info.HasExport ? &m_Exports : nullptr; }
+PEDEBUG_VEC const*       PEFile::GetDebug()       const { return &m_Debug; }
+PESECURITY_VEC const*    PEFile::GetSecurity()    const { return &m_Security; }
+PETls const*             PEFile::GetTLS()         const { return m_Info.HasTLS ? &m_Tls : nullptr; }
+PELoadConfig const*      PEFile::GetLoadConfig()  const { return m_Info.HasLoadConfig ? &m_LoadConfig : nullptr; }
+PERELOC_VEC const*       PEFile::GetRelocations() const { return &m_Relocations; }
+PEEXCEPTION_VEC const*   PEFile::GetExceptions()  const { return &m_Exceptions; }
+PEDELAYIMPORT_VEC const* PEFile::GetDelayImport() const { return &m_DelayImports; }
+PERichHeader const*      PEFile::GetRichHeader()  const { return m_Info.HasRichHdr ? &m_RichHeader : nullptr; }
 
-PERESFLAT_VEC const& PEFile::GetFlatResources() const { return m_flatResources; }
+PERESFLAT_VEC const& PEFile::GetFlatResources() const { return m_FlatResources; }
 
 uint32_t PEFile::GetOffsetFromRVA(ULONGLONG rva) const {
-    return m_impl->binary->rva_to_offset(rva);
+    return m_Impl->binary->rva_to_offset(rva);
 }
 
 ULONGLONG PEFile::GetImageBase() const {
-    if (m_info.IsPE64) return m_ntHeader.NTHdr64.OptionalHeader.ImageBase;
-    return m_ntHeader.NTHdr32.OptionalHeader.ImageBase;
+    if (m_Info.IsPE64) return m_NtHeader.NTHdr64.OptionalHeader.ImageBase;
+    return m_NtHeader.NTHdr32.OptionalHeader.ImageBase;
 }
 
 // ── cache population ──────────────────────────────────────────────────────
 
 void PEFile::BuildCaches() {
-    auto& pe = *m_impl->binary;
+    auto& pe = *m_Impl->binary;
 
     // FileInfo
     auto magic = pe.optional_header().magic();
-    m_info.IsPE32        = (magic == LIEF::PE::PE_TYPE::PE32);
-    m_info.IsPE64        = (magic == LIEF::PE::PE_TYPE::PE32_PLUS);
-    m_info.HasRichHdr    = pe.rich_header() != nullptr;
-    m_info.HasResource   = pe.resources() != nullptr;
-    m_info.HasImport     = !pe.imports().empty();
-    m_info.HasExport     = pe.has_exports();
-    m_info.HasDebug      = !pe.debug().empty();
-    m_info.HasReloc      = !pe.relocations().empty();
-    m_info.HasException  = pe.has_exceptions();
-    m_info.HasSecurity   = !pe.signatures().empty();
-    m_info.HasTLS        = pe.has_tls();
-    m_info.HasLoadConfig = pe.has_configuration();
-    m_info.HasDelayImport= !pe.delay_imports().empty();
-    m_info.HasSections   = !pe.sections().empty();
-    m_info.HasDataDirs   = !pe.data_directories().empty();
+    m_Info.IsPE32        = (magic == LIEF::PE::PE_TYPE::PE32);
+    m_Info.IsPE64        = (magic == LIEF::PE::PE_TYPE::PE32_PLUS);
+    m_Info.HasRichHdr    = pe.rich_header() != nullptr;
+    m_Info.HasResource   = pe.resources() != nullptr;
+    m_Info.HasImport     = !pe.imports().empty();
+    m_Info.HasExport     = pe.has_exports();
+    m_Info.HasDebug      = !pe.debug().empty();
+    m_Info.HasReloc      = !pe.relocations().empty();
+    m_Info.HasException  = pe.has_exceptions();
+    m_Info.HasSecurity   = !pe.signatures().empty();
+    m_Info.HasTLS        = pe.has_tls();
+    m_Info.HasLoadConfig = pe.has_configuration();
+    m_Info.HasDelayImport= !pe.delay_imports().empty();
+    m_Info.HasSections   = !pe.sections().empty();
+    m_Info.HasDataDirs   = !pe.data_directories().empty();
     // COM descriptor = CLR runtime header data directory has non-zero size
     if (auto* clrDir = pe.data_directory(LIEF::PE::DataDirectory::TYPES::CLR_RUNTIME_HEADER))
-        m_info.HasCOMDescr = (clrDir->size() > 0);
+        m_Info.HasCOMDescr = (clrDir->size() > 0);
     else
-        m_info.HasCOMDescr = false;
+        m_Info.HasCOMDescr = false;
 
     // DOS header
-    if (m_fileSize >= sizeof(IMAGE_DOS_HEADER))
-        memcpy(&m_dosHeader, m_raw.get(), sizeof(IMAGE_DOS_HEADER));
+    if (m_FileSize >= sizeof(IMAGE_DOS_HEADER))
+        memcpy(&m_DosHeader, m_Raw.get(), sizeof(IMAGE_DOS_HEADER));
 
     // NT header — cast raw bytes (LIEF already validated the signature)
-    DWORD e_lfanew = m_dosHeader.e_lfanew;
-    m_ntHeader.dwOffset = e_lfanew;
-    if (m_info.IsPE64) {
-        if (e_lfanew + sizeof(IMAGE_NT_HEADERS64) <= m_fileSize)
-            memcpy(&m_ntHeader.NTHdr64, m_raw.get() + e_lfanew, sizeof(IMAGE_NT_HEADERS64));
+    DWORD e_lfanew = m_DosHeader.e_lfanew;
+    m_NtHeader.dwOffset = e_lfanew;
+    if (m_Info.IsPE64) {
+        if (e_lfanew + sizeof(IMAGE_NT_HEADERS64) <= m_FileSize)
+            memcpy(&m_NtHeader.NTHdr64, m_Raw.get() + e_lfanew, sizeof(IMAGE_NT_HEADERS64));
     }
     else {
-        if (e_lfanew + sizeof(IMAGE_NT_HEADERS32) <= m_fileSize)
-            memcpy(&m_ntHeader.NTHdr32, m_raw.get() + e_lfanew, sizeof(IMAGE_NT_HEADERS32));
+        if (e_lfanew + sizeof(IMAGE_NT_HEADERS32) <= m_FileSize)
+            memcpy(&m_NtHeader.NTHdr32, m_Raw.get() + e_lfanew, sizeof(IMAGE_NT_HEADERS32));
     }
 
     // Sections
@@ -208,7 +208,7 @@ void PEFile::BuildCaches() {
         sec.SecHdr.NumberOfLinenumbers = s.numberof_line_numbers();
         sec.SecHdr.NumberOfRelocations = s.numberof_relocations();
         sec.SectionName = nameStr;
-        m_sections.push_back(std::move(sec));
+        m_Sections.push_back(std::move(sec));
     }
 
     // Data directories (LIEF always gives exactly 16 entries)
@@ -218,7 +218,7 @@ void PEFile::BuildCaches() {
         dir.DataDir.Size           = d.size();
         if (d.has_section())
             dir.Section = d.section()->name();
-        m_dataDirs.push_back(std::move(dir));
+        m_DataDirs.push_back(std::move(dir));
     }
 
     // Imports
@@ -239,20 +239,20 @@ void PEFile::BuildCaches() {
             if (e.is_ordinal()) {
                 // Signal ordinal-only by leaving Name[0] == 0
                 fn.ImpByName.Name[0] = 0;
-                if (m_info.IsPE64)
+                if (m_Info.IsPE64)
                     fn.unThunk.Thunk64.u1.Ordinal = (ULONGLONG)e.ordinal() | IMAGE_ORDINAL_FLAG64;
                 else
                     fn.unThunk.Thunk32.u1.Ordinal = (ULONG)e.ordinal() | IMAGE_ORDINAL_FLAG32;
             }
             imp.ImportFunc.push_back(std::move(fn));
         }
-        m_imports.push_back(std::move(imp));
+        m_Imports.push_back(std::move(imp));
     }
 
     // Exports
     if (auto const* expPtr = pe.get_export()) {
-        m_exports.ModuleName = expPtr->name();
-        m_exports.ExportDesc.Base = expPtr->ordinal_base();
+        m_Exports.ModuleName = expPtr->name();
+        m_Exports.ExportDesc.Base = expPtr->ordinal_base();
 
         for (auto const& e : expPtr->entries()) {
             PEExportFunction fn{};
@@ -262,7 +262,7 @@ void PEFile::BuildCaches() {
             fn.NameRVA   = 0; // LIEF doesn't expose individual name RVAs easily
             if (e.is_forwarded())
                 fn.ForwarderName = e.forward_information().function;
-            m_exports.Funcs.push_back(std::move(fn));
+            m_Exports.Funcs.push_back(std::move(fn));
         }
     }
 
@@ -279,19 +279,19 @@ void PEFile::BuildCaches() {
         d.Directory.PointerToRawData = dbg.pointerto_rawdata();
         if (auto const* cv = dbg.as<LIEF::PE::CodeViewPDB>())
             d.PdbPath = cv->filename();
-        m_debug.push_back(std::move(d));
+        m_Debug.push_back(std::move(d));
     }
 
     // Security — the certificate table uses raw file offsets, not RVAs.
     // Walk the raw bytes directly to reconstruct WIN_CERTIFICATE records.
-    if (m_info.HasSecurity) {
+    if (m_Info.HasSecurity) {
         // DATA_DIRECTORY[4] (certificate table) holds a file offset, not RVA
         constexpr int CERT_DIR = 4;
-        if ((size_t)CERT_DIR < m_dataDirs.size()) {
-            uint32_t offset = m_dataDirs[CERT_DIR].DataDir.VirtualAddress; // file offset for this dir
-            uint32_t limit  = offset + m_dataDirs[CERT_DIR].DataDir.Size;
-            while (offset + sizeof(WIN_CERTIFICATE) <= limit && offset + sizeof(WIN_CERTIFICATE) <= m_fileSize) {
-                auto* wc = (WIN_CERTIFICATE*)(m_raw.get() + offset);
+        if ((size_t)CERT_DIR < m_DataDirs.size()) {
+            uint32_t offset = m_DataDirs[CERT_DIR].DataDir.VirtualAddress; // file offset for this dir
+            uint32_t limit  = offset + m_DataDirs[CERT_DIR].DataDir.Size;
+            while (offset + sizeof(WIN_CERTIFICATE) <= limit && offset + sizeof(WIN_CERTIFICATE) <= m_FileSize) {
+                auto* wc = (WIN_CERTIFICATE*)(m_Raw.get() + offset);
                 if (wc->dwLength < sizeof(WIN_CERTIFICATE)) break;
 
                 PESecurity sec{};
@@ -301,11 +301,11 @@ void PEFile::BuildCaches() {
                 sec.WinCert.wCertificateType = wc->wCertificateType;
 
                 uint32_t dataLen = wc->dwLength - (uint32_t)sizeof(WIN_CERTIFICATE);
-                if (offset + sizeof(WIN_CERTIFICATE) + dataLen <= m_fileSize) {
-                    sec.CertData.assign(m_raw.get() + offset + sizeof(WIN_CERTIFICATE),
-                                       m_raw.get() + offset + sizeof(WIN_CERTIFICATE) + dataLen);
+                if (offset + sizeof(WIN_CERTIFICATE) + dataLen <= m_FileSize) {
+                    sec.CertData.assign(m_Raw.get() + offset + sizeof(WIN_CERTIFICATE),
+                                       m_Raw.get() + offset + sizeof(WIN_CERTIFICATE) + dataLen);
                 }
-                m_security.push_back(std::move(sec));
+                m_Security.push_back(std::move(sec));
 
                 // Entries are DWORD-aligned
                 offset += (wc->dwLength + 7) & ~7u;
@@ -318,40 +318,40 @@ void PEFile::BuildCaches() {
         auto const& t = *tlsPtr;
         auto [rawStart, rawEnd] = t.addressof_raw_data();
         auto* tlsDir = pe.data_directory(LIEF::PE::DataDirectory::TYPES::TLS_TABLE);
-        m_tls.dwOffset = tlsDir ? GetOffsetFromRVA(tlsDir->RVA()) : 0;
+        m_Tls.dwOffset = tlsDir ? GetOffsetFromRVA(tlsDir->RVA()) : 0;
 
-        if (m_info.IsPE64) {
-            m_tls.unTLS.TLSDir64.StartAddressOfRawData = rawStart;
-            m_tls.unTLS.TLSDir64.EndAddressOfRawData   = rawEnd;
-            m_tls.unTLS.TLSDir64.AddressOfCallBacks    = t.addressof_callbacks();
-            m_tls.unTLS.TLSDir64.AddressOfIndex        = t.addressof_index();
-            m_tls.unTLS.TLSDir64.Characteristics       = t.characteristics();
+        if (m_Info.IsPE64) {
+            m_Tls.unTLS.TLSDir64.StartAddressOfRawData = rawStart;
+            m_Tls.unTLS.TLSDir64.EndAddressOfRawData   = rawEnd;
+            m_Tls.unTLS.TLSDir64.AddressOfCallBacks    = t.addressof_callbacks();
+            m_Tls.unTLS.TLSDir64.AddressOfIndex        = t.addressof_index();
+            m_Tls.unTLS.TLSDir64.Characteristics       = t.characteristics();
         }
         else {
-            m_tls.unTLS.TLSDir32.StartAddressOfRawData = (DWORD)rawStart;
-            m_tls.unTLS.TLSDir32.EndAddressOfRawData   = (DWORD)rawEnd;
-            m_tls.unTLS.TLSDir32.AddressOfCallBacks    = (DWORD)t.addressof_callbacks();
-            m_tls.unTLS.TLSDir32.AddressOfIndex        = (DWORD)t.addressof_index();
-            m_tls.unTLS.TLSDir32.Characteristics       = t.characteristics();
+            m_Tls.unTLS.TLSDir32.StartAddressOfRawData = (DWORD)rawStart;
+            m_Tls.unTLS.TLSDir32.EndAddressOfRawData   = (DWORD)rawEnd;
+            m_Tls.unTLS.TLSDir32.AddressOfCallBacks    = (DWORD)t.addressof_callbacks();
+            m_Tls.unTLS.TLSDir32.AddressOfIndex        = (DWORD)t.addressof_index();
+            m_Tls.unTLS.TLSDir32.Characteristics       = t.characteristics();
         }
         for (uint64_t cb : t.callbacks())
-            m_tls.TLSCallbacks.push_back(cb);
+            m_Tls.TLSCallbacks.push_back(cb);
     }
 
     // Load Configuration — cast raw bytes (field set varies with OS/SDK version)
     if (pe.has_configuration()) {
         if (auto* lcDir = pe.data_directory(LIEF::PE::DataDirectory::TYPES::LOAD_CONFIG_TABLE)) {
             uint32_t off = GetOffsetFromRVA(lcDir->RVA());
-            m_loadConfig.dwOffset = off;
-            if (m_info.IsPE64) {
+            m_LoadConfig.dwOffset = off;
+            if (m_Info.IsPE64) {
                 uint32_t copySize = std::min((uint32_t)sizeof(IMAGE_LOAD_CONFIG_DIRECTORY64),
-                                            (uint32_t)(m_fileSize - off));
-                memcpy(&m_loadConfig.LCD64, m_raw.get() + off, copySize);
+                                            (uint32_t)(m_FileSize - off));
+                memcpy(&m_LoadConfig.LCD64, m_Raw.get() + off, copySize);
             }
             else {
                 uint32_t copySize = std::min((uint32_t)sizeof(IMAGE_LOAD_CONFIG_DIRECTORY32),
-                                            (uint32_t)(m_fileSize - off));
-                memcpy(&m_loadConfig.LCD32, m_raw.get() + off, copySize);
+                                            (uint32_t)(m_FileSize - off));
+                memcpy(&m_LoadConfig.LCD32, m_Raw.get() + off, copySize);
             }
         }
     }
@@ -367,7 +367,7 @@ void PEFile::BuildCaches() {
             rel.RelocData.push_back(rd);
         }
         rel.BaseReloc.SizeOfBlock = (DWORD)(sizeof(IMAGE_BASE_RELOCATION) + rel.RelocData.size() * sizeof(WORD));
-        m_relocations.push_back(std::move(rel));
+        m_Relocations.push_back(std::move(rel));
     }
 
     // Exceptions
@@ -378,7 +378,7 @@ void PEFile::BuildCaches() {
             e.RuntimeFuncEntry.EndAddress        = x64->rva_end();
             e.RuntimeFuncEntry.UnwindInfoAddress = x64->unwind_rva();
         }
-        m_exceptions.push_back(e);
+        m_Exceptions.push_back(e);
     }
 
     // Delay Imports
@@ -402,7 +402,7 @@ void PEFile::BuildCaches() {
             memcpy(fn.ImpByName.Name, e.name().c_str(), nameLen);
             if (e.is_ordinal()) fn.ImpByName.Name[0] = 0;
 
-            if (m_info.IsPE64) {
+            if (m_Info.IsPE64) {
                 fn.unThunk.st64.ImportAddressTable.u1.Function = e.value();
                 fn.unThunk.st64.ImportNameTable.u1.Function    = e.iat_value();
             }
@@ -412,23 +412,23 @@ void PEFile::BuildCaches() {
             }
             dim.DelayImpFunc.push_back(std::move(fn));
         }
-        m_delayImports.push_back(std::move(dim));
+        m_DelayImports.push_back(std::move(dim));
     }
 
     // Rich Header
     if (auto const* rh = pe.rich_header()) {
-        m_richHeader.Key = rh->key();
+        m_RichHeader.Key = rh->key();
 
         // Scan raw bytes for the "Rich" signature to find the file offset
-        DWORD scanLimit = std::min<DWORD>(m_dosHeader.e_lfanew, m_fileSize);
-        auto* p = m_raw.get();
+        DWORD scanLimit = std::min<DWORD>(m_DosHeader.e_lfanew, m_FileSize);
+        auto* p = m_Raw.get();
         for (DWORD i = 0; i + 8 <= scanLimit; i += 4) {
             if (*reinterpret_cast<const DWORD*>(p + i) == 0x68636952u /*'hciR'*/)
             {
                 // Walk backwards to find "DanS" XOR key
                 for (DWORD j = i; j >= 4; j -= 4) {
                     DWORD v = *reinterpret_cast<const DWORD*>(p + j - 4) ^ rh->key();
-                    if (v == 0x536E6144u /*'SnaD'*/) { m_richHeader.Offset = j - 4; break; }
+                    if (v == 0x536E6144u /*'SnaD'*/) { m_RichHeader.Offset = j - 4; break; }
                 }
                 break;
             }
@@ -439,7 +439,7 @@ void PEFile::BuildCaches() {
             entry.ProductId = (WORD)e.id();
             entry.BuildId   = (WORD)e.build_id();
             entry.Count     = e.count();
-            m_richHeader.Entries.push_back(entry);
+            m_RichHeader.Entries.push_back(entry);
         }
     }
 
@@ -450,10 +450,10 @@ void PEFile::BuildCaches() {
 // ── Resource tree flattener ───────────────────────────────────────────────
 
 void PEFile::BuildResources() {
-    auto const* root = m_impl->binary->resources();
+    auto const* root = m_Impl->binary->resources();
     if (!root) return;
 
-    m_resRawData.reserve(4 * 1024 * 1024);
+    m_ResRawData.reserve(4 * 1024 * 1024);
 
     for (auto const& typeNode : root->childs()) {
         std::wstring typeStr;
@@ -483,11 +483,11 @@ void PEFile::BuildResources() {
                 flat.LangID  = (WORD)langNode.id();
 
                 auto const content = data->content(); // span<const uint8_t>
-                size_t base = m_resRawData.size();
+                size_t base = m_ResRawData.size();
                 auto const* src = reinterpret_cast<const std::byte*>(content.data());
-                m_resRawData.insert(m_resRawData.end(), src, src + content.size());
-                flat.Data = std::span<const std::byte>(m_resRawData.data() + base, content.size());
-                m_flatResources.push_back(std::move(flat));
+                m_ResRawData.insert(m_ResRawData.end(), src, src + content.size());
+                flat.Data = std::span<const std::byte>(m_ResRawData.data() + base, content.size());
+                m_FlatResources.push_back(std::move(flat));
             }
         }
     }

@@ -297,28 +297,28 @@ private:
     // LIEF binary stored as opaque pointer to avoid pulling LIEF headers into
     // every TU that includes PEFile.h.
     struct LiefImpl;
-    std::unique_ptr<LiefImpl> m_impl;
+    std::unique_ptr<LiefImpl> m_Impl;
 
-    wil::unique_mapview_ptr<uint8_t> m_raw;
-    std::wstring         m_path;
+    wil::unique_mapview_ptr<uint8_t> m_Raw;
+    std::wstring         m_Path;
 
-    PEFileInfo       m_info{};
-    PENtHeader       m_ntHeader{};
-    IMAGE_DOS_HEADER m_dosHeader{};
-    DWORD           m_fileSize;
+    PEFileInfo       m_Info{};
+    PENtHeader       m_NtHeader{};
+    IMAGE_DOS_HEADER m_DosHeader{};
+    DWORD            m_FileSize;
 
-    PESECHDR_VEC      m_sections;
-    PEDATADIR_VEC     m_dataDirs;
-    PEIMPORT_VEC      m_imports;
-    PEExport          m_exports{};
-    PEDEBUG_VEC       m_debug;
-    PESECURITY_VEC    m_security;
-    PETls             m_tls{};
-    PELoadConfig      m_loadConfig{};
-    PERELOC_VEC       m_relocations;
-    PEEXCEPTION_VEC   m_exceptions;
-    PEDELAYIMPORT_VEC m_delayImports;
-    PERESFLAT_VEC     m_flatResources;
-    PERichHeader      m_richHeader{};
-    std::vector<std::byte> m_resRawData; // backing store for PEResFlat::Data spans
+    PESECHDR_VEC      m_Sections;
+    PEDATADIR_VEC     m_DataDirs;
+    PEIMPORT_VEC      m_Imports;
+    PEExport          m_Exports{};
+    PEDEBUG_VEC       m_Debug;
+    PESECURITY_VEC    m_Security;
+    PETls             m_Tls{};
+    PELoadConfig      m_LoadConfig{};
+    PERELOC_VEC       m_Relocations;
+    PEEXCEPTION_VEC   m_Exceptions;
+    PEDELAYIMPORT_VEC m_DelayImports;
+    PERESFLAT_VEC     m_FlatResources;
+    PERichHeader      m_RichHeader{};
+    std::vector<std::byte> m_ResRawData; // backing store for PEResFlat::Data spans
 };
