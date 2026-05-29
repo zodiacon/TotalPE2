@@ -391,6 +391,7 @@
     </ClCompile>
     <ClCompile Include="PEStrings.cpp" />
     <ClCompile Include="RecentFilesManager.cpp" />
+    <ClCompile Include="IATView.cpp" />
     <ClCompile Include="RelocationsView.cpp" />
     <ClCompile Include="RichHeaderView.cpp" />
     <ClCompile Include="ResourcesView.cpp" />
@@ -423,6 +424,7 @@
     <ClInclude Include="HexView.h" />
     <ClInclude Include="IconsView.h" />
     <ClInclude Include="IconWriter.h" />
+    <ClInclude Include="IATView.h" />
     <ClInclude Include="ImportsView.h" />
     <ClInclude Include="Interfaces.h" />
     <ClInclude Include="LoadConfigView.h" />
