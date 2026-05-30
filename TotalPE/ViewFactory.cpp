@@ -2,7 +2,6 @@
 #include "resource.h"
 #include "MainFrm.h"
 #include "Interfaces.h"
-#include "PEStrings.h"
 #include "DebugView.h"
 #include "BitmapView.h"
 #include "SecurityView.h"
@@ -20,7 +19,6 @@
 #include "ResourcesView.h"
 #include "StructView.h"
 #include "IconsView.h"
-#include "TextView.h"
 #include "StringMessageTableView.h"
 #include "PEImageView.h"
 #include "TlsView.h"
@@ -51,7 +49,7 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 			ULONGLONG imageBase = m_PE.GetImageBase();
 			auto offset = m_PE.GetOffsetFromRVA(entry);
 			uint32_t size = 0x500;		// hard coded for now
-			view->SetAsmCode(m_PE.GetSpan(offset, size), offset + imageBase, is32Bit);
+			view->SetAsmCode(m_PE.GetSpan((uint32_t)offset, size), offset + imageBase, is32Bit);
 			view->GetCtrl().SetReadOnly(true);
 			auto hItem = InsertTreeItem(m_Tree, view->GetTitle(), GetIconIndex(IDI_BINARY), type, m_Views.at(TreeItemType::Image)->GetHTreeItem(), TVI_SORT);
 			view->SetDeleteFromTree(true);

@@ -97,15 +97,16 @@ void CSecurityView::UpdateUI(bool) {
 
 LRESULT CSecurityView::OnCopy(WORD, WORD, HWND, BOOL&) const {
 	auto hFocus = ::GetFocus();
-	if (hFocus == m_List || hFocus == m_DetailList)
+	if (hFocus == m_List || hFocus == m_DetailList) {
 		ClipboardHelper::CopyText(m_hWnd, ListViewHelper::GetSelectedRowsAsString(hFocus, L"\t"));
+	}
 	return 0;
 }
 
 LRESULT CSecurityView::OnViewCertificate(WORD, WORD, HWND, BOOL&) const {
 	if (m_CurrentCert) {
 		WTLHelper::SuspendHook();
-		CryptUIDlgViewContext(CERT_STORE_CERTIFICATE_CONTEXT, m_CurrentCert, m_hWnd, nullptr, 0, nullptr);
+		::CryptUIDlgViewContext(CERT_STORE_CERTIFICATE_CONTEXT, m_CurrentCert, m_hWnd, nullptr, 0, nullptr);
 		WTLHelper::ResumeHook();
 	}
 	return 0;

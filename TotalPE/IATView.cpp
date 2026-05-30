@@ -150,7 +150,7 @@ void CIATView::BuildItems() {
 		mi.ModuleName  = imp.ModuleName;
 		mi.IatBaseRVA  = imp.ImportDesc.Name;  // stored as import_address_table_rva() in BuildCaches
 		mi.Count       = (uint32_t)imp.ImportFunc.size();
-		mi.FileOffset  = mi.IatBaseRVA ? m_PE.GetOffsetFromRVA(mi.IatBaseRVA) : 0;
+		mi.FileOffset  = mi.IatBaseRVA ? (DWORD)m_PE.GetOffsetFromRVA(mi.IatBaseRVA) : 0;
 		mi.ImportIndex = idx++;
 		m_Modules.push_back(mi);
 	}
@@ -189,7 +189,7 @@ void CIATView::PopulateFunctions(int importIndex) {
 				: (DWORD)(fn.unThunk.Thunk32.u1.Ordinal & ~IMAGE_ORDINAL_FLAG32);
 
 		fi.SlotRVA    = iatBase + (DWORD)(fi.Index * ptrSize);
-		fi.SlotOffset = fi.SlotRVA ? m_PE.GetOffsetFromRVA(fi.SlotRVA) : 0;
+		fi.SlotOffset = fi.SlotRVA ? (DWORD)m_PE.GetOffsetFromRVA(fi.SlotRVA) : 0;
 
 		if (fi.SlotOffset && fi.SlotOffset + ptrSize <= fileSize) {
 			if (m_Is64)

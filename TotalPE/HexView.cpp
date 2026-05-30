@@ -78,6 +78,7 @@ LRESULT CHexView::OnRightClick(int /*idCtrl*/, LPNMHDR hdr, BOOL& /*bHandled*/) 
 	menu.LoadMenu(IDR_CONTEXT);
 	CPoint pt;
 	::GetCursorPos(&pt);
+	UpdateUI();
 	return Frame()->ShowContextMenu(menu.GetSubMenu(5), 0, pt.x, pt.y);
 }
 

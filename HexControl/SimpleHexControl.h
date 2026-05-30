@@ -106,6 +106,8 @@ private:
 	void InitFontMetrics();
 	CPoint GetPointFromOffset(int64_t offset) const;
 	int64_t GetOffsetFromPoint(const POINT& pt) const;
+	int GetAsciiStartX() const;
+	int64_t GetAsciiOffsetFromPoint(const POINT& pt) const;
 	void DrawNumber(CDCHandle dc, int64_t offset, uint64_t value, uint32_t editDigits);
 	CString FormatNumber(ULONGLONG number, int size = 0) const;
 
@@ -138,5 +140,6 @@ private:
 	NMHexControlNotify m_Notify;
 	bool m_InsertMode{ false };
 	bool m_ReadOnly{ true };
+	bool m_SelectionFromAscii{ false };
 };
 
