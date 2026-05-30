@@ -8,6 +8,7 @@
 #include <ListViewHelper.h>
 #include <wincrypt.h>
 #include <cryptuiapi.h>
+#include <WTLHelper.h>
 
 #pragma comment(lib, "Crypt32")
 #pragma comment(lib, "Cryptui")
@@ -102,8 +103,11 @@ LRESULT CSecurityView::OnCopy(WORD, WORD, HWND, BOOL&) const {
 }
 
 LRESULT CSecurityView::OnViewCertificate(WORD, WORD, HWND, BOOL&) const {
-	if (m_CurrentCert)
+	if (m_CurrentCert) {
+		WTLHelper::SuspendHook();
 		CryptUIDlgViewContext(CERT_STORE_CERTIFICATE_CONTEXT, m_CurrentCert, m_hWnd, nullptr, 0, nullptr);
+		WTLHelper::ResumeHook();
+	}
 	return 0;
 }
 
