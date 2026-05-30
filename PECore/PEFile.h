@@ -284,8 +284,8 @@ public:
     PEDELAYIMPORT_VEC const*       GetDelayImport() const;
     PERichHeader const*            GetRichHeader()  const;
 
-    uint32_t  GetOffsetFromRVA(ULONGLONG rva) const;
-    ULONGLONG GetImageBase()                  const;
+    uint64_t  GetOffsetFromRVA(ULONGLONG rva) const noexcept;
+    ULONGLONG GetImageBase()                  const noexcept;
 
     // Flat resource list (replaces libpe::Ilibpe::FlatResources)
     PERESFLAT_VEC const& GetFlatResources() const;

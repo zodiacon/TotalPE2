@@ -142,11 +142,11 @@ PERichHeader const*      PEFile::GetRichHeader()  const { return m_Info.HasRichH
 
 PERESFLAT_VEC const& PEFile::GetFlatResources() const { return m_FlatResources; }
 
-uint32_t PEFile::GetOffsetFromRVA(ULONGLONG rva) const {
+uint64_t PEFile::GetOffsetFromRVA(ULONGLONG rva) const noexcept {
     return m_Impl->binary->rva_to_offset(rva);
 }
 
-ULONGLONG PEFile::GetImageBase() const {
+ULONGLONG PEFile::GetImageBase() const noexcept {
     if (m_Info.IsPE64) return m_NtHeader.NTHdr64.OptionalHeader.ImageBase;
     return m_NtHeader.NTHdr32.OptionalHeader.ImageBase;
 }
@@ -201,9 +201,9 @@ void PEFile::BuildCaches() {
         auto nameStr = s.name();
         memcpy(sec.SecHdr.Name, nameStr.c_str(), std::min(nameStr.size(), (size_t)8));
         sec.SecHdr.Misc.VirtualSize    = s.virtual_size();
-        sec.SecHdr.VirtualAddress      = s.virtual_address();
+        sec.SecHdr.VirtualAddress      = (DWORD)s.virtual_address();
         sec.SecHdr.SizeOfRawData       = (DWORD)s.size();
-        sec.SecHdr.PointerToRawData    = s.offset();
+        sec.SecHdr.PointerToRawData    = (DWORD)s.offset();
         sec.SecHdr.Characteristics     = s.characteristics();
         sec.SecHdr.NumberOfLinenumbers = s.numberof_line_numbers();
         sec.SecHdr.NumberOfRelocations = s.numberof_relocations();
@@ -257,7 +257,7 @@ void PEFile::BuildCaches() {
         for (auto const& e : expPtr->entries()) {
             PEExportFunction fn{};
             fn.FuncName  = e.name();
-            fn.FuncRVA   = e.value();
+            fn.FuncRVA   = (DWORD)e.value();
             fn.Ordinal   = (DWORD)e.ordinal();
             fn.NameRVA   = 0; // LIEF doesn't expose individual name RVAs easily
             if (e.is_forwarded())
@@ -288,22 +288,25 @@ void PEFile::BuildCaches() {
         // DATA_DIRECTORY[4] (certificate table) holds a file offset, not RVA
         constexpr int CERT_DIR = 4;
         if ((size_t)CERT_DIR < m_DataDirs.size()) {
+            // offsetof gives the true header size (8); sizeof(WIN_CERTIFICATE) is 12
+            // because BYTE bCertificate[ANYSIZE_ARRAY] pads the struct to 12.
+            constexpr uint32_t CertHdrSize = offsetof(WIN_CERTIFICATE, bCertificate);
             uint32_t offset = m_DataDirs[CERT_DIR].DataDir.VirtualAddress; // file offset for this dir
             uint32_t limit  = offset + m_DataDirs[CERT_DIR].DataDir.Size;
-            while (offset + sizeof(WIN_CERTIFICATE) <= limit && offset + sizeof(WIN_CERTIFICATE) <= m_FileSize) {
+            while (offset + CertHdrSize <= limit && offset + CertHdrSize <= m_FileSize) {
                 auto* wc = (WIN_CERTIFICATE*)(m_Raw.get() + offset);
-                if (wc->dwLength < sizeof(WIN_CERTIFICATE)) break;
+                if (wc->dwLength < CertHdrSize) break;
 
                 PESecurity sec{};
-                sec.Offset              = offset;
-                sec.WinCert.dwLength    = wc->dwLength;
-                sec.WinCert.wRevision   = wc->wRevision;
+                sec.Offset                   = offset;
+                sec.WinCert.dwLength         = wc->dwLength;
+                sec.WinCert.wRevision        = wc->wRevision;
                 sec.WinCert.wCertificateType = wc->wCertificateType;
 
-                uint32_t dataLen = wc->dwLength - (uint32_t)sizeof(WIN_CERTIFICATE);
-                if (offset + sizeof(WIN_CERTIFICATE) + dataLen <= m_FileSize) {
-                    sec.CertData.assign(m_Raw.get() + offset + sizeof(WIN_CERTIFICATE),
-                                       m_Raw.get() + offset + sizeof(WIN_CERTIFICATE) + dataLen);
+                uint32_t dataLen = wc->dwLength - CertHdrSize;
+                if (dataLen && offset + CertHdrSize + dataLen <= m_FileSize) {
+                    sec.CertData.assign(m_Raw.get() + offset + CertHdrSize,
+                                       m_Raw.get() + offset + CertHdrSize + dataLen);
                 }
                 m_Security.push_back(std::move(sec));
 
@@ -318,7 +321,7 @@ void PEFile::BuildCaches() {
         auto const& t = *tlsPtr;
         auto [rawStart, rawEnd] = t.addressof_raw_data();
         auto* tlsDir = pe.data_directory(LIEF::PE::DataDirectory::TYPES::TLS_TABLE);
-        m_Tls.dwOffset = tlsDir ? GetOffsetFromRVA(tlsDir->RVA()) : 0;
+        m_Tls.dwOffset = tlsDir ? (DWORD)GetOffsetFromRVA(tlsDir->RVA()) : 0;
 
         if (m_Info.IsPE64) {
             m_Tls.unTLS.TLSDir64.StartAddressOfRawData = rawStart;
@@ -341,8 +344,8 @@ void PEFile::BuildCaches() {
     // Load Configuration — cast raw bytes (field set varies with OS/SDK version)
     if (pe.has_configuration()) {
         if (auto* lcDir = pe.data_directory(LIEF::PE::DataDirectory::TYPES::LOAD_CONFIG_TABLE)) {
-            uint32_t off = GetOffsetFromRVA(lcDir->RVA());
-            m_LoadConfig.dwOffset = off;
+            auto off = GetOffsetFromRVA(lcDir->RVA());
+            m_LoadConfig.dwOffset = (DWORD)off;
             if (m_Info.IsPE64) {
                 uint32_t copySize = std::min((uint32_t)sizeof(IMAGE_LOAD_CONFIG_DIRECTORY64),
                                             (uint32_t)(m_FileSize - off));

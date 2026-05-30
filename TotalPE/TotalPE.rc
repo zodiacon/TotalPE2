@@ -362,6 +362,12 @@ BEGIN
         MENUITEM "Disassemble at the End",      ID_ASSEMBLY_DISASSEMBLEATTHEEND
         MENUITEM "Go to Address",               ID_ASSEMBLY_GOTOADDRESS
     END
+    POPUP "security"
+    BEGIN
+        MENUITEM "View Certificate...",         ID_SECURITY_VIEWCERTIFICATE
+        MENUITEM SEPARATOR
+        MENUITEM "&Copy\tCtrl+C",               ID_EDIT_COPY
+    END
 END
 
 
@@ -455,7 +461,7 @@ BEGIN
             VALUE "FileDescription", "Total PE - PE Viewer"
             VALUE "FileVersion", "0.7.0.0"
             VALUE "InternalName", "TotalPE"
-            VALUE "LegalCopyright", "©2022-2026 Pavel Yosifovich"
+            VALUE "LegalCopyright", "ï¿½2022-2026 Pavel Yosifovich"
             VALUE "OriginalFilename", "TotalPE.exe"
             VALUE "ProductName", "Total PE"
             VALUE "ProductVersion", "0.7.0.0"
