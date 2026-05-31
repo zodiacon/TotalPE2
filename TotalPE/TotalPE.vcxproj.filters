@@ -150,11 +150,11 @@
     <ClCompile Include="LexHTML.cxx">
       <Filter>Lexers</Filter>
     </ClCompile>
-    <ClCompile Include="RichHeaderView.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="IATView.cpp">
       <Filter>Views\DataDirectories</Filter>
+    </ClCompile>
+    <ClCompile Include="RichHeaderView.cpp">
+      <Filter>Views</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -272,11 +272,11 @@
     <ClInclude Include="StringsView.h">
       <Filter>Views</Filter>
     </ClInclude>
-    <ClInclude Include="RichHeaderView.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="IATView.h">
       <Filter>Views\DataDirectories</Filter>
+    </ClInclude>
+    <ClInclude Include="RichHeaderView.h">
+      <Filter>Views</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

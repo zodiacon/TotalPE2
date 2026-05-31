@@ -32,6 +32,9 @@ constexpr auto NMHX_VALUE_CHANGED      = 0x2002;
 constexpr auto NMHX_DATA_SIZE_CHANGED  = 0x2003;
 constexpr auto NMHX_BPL_CHANGED        = 0x2004;
 constexpr auto NMHX_BUFFER_CHANGED     = 0x2005;
+constexpr auto NMHX_UNDO               = 0x2006;
+constexpr auto NMHX_REDO               = 0x2007;
+constexpr auto NMHX_FIND_NOT_FOUND     = 0x2008;
 
 struct NMHexControlNotify : NMHDR {
 };
@@ -58,6 +61,16 @@ struct NMHexControlBytesPerLineChanged : NMHDR {
 	int32_t NewBytesPerLine;
 };
 
+struct UndoRecord {
+	enum class Type { Overwrite, Insert, Delete, Compound };
+	Type                     type;
+	int64_t                  offset{ 0 };
+	std::vector<uint8_t>     oldData;
+	std::vector<uint8_t>     newData;
+	std::vector<bool>        oldModified;
+	std::vector<UndoRecord>  children;   // used by Compound type only
+};
+
 class CHexControl :
 	public CBufferedPaintWindowImpl<CHexControl> {
 public:
@@ -82,6 +95,15 @@ public:
 	bool Delete();
 	bool CanCut() const;
 	bool CanDelete() const;
+	int64_t GetCaretOffset() const;
+	int64_t GetSelectionOffset() const;
+	int64_t GetSelectionLength() const;
+	SelectionType GetSelectionType() const;
+	void SetSelection(int64_t offset, int64_t length);
+	void SetBoxSelection(int64_t offset, int width, int height);
+	int64_t Find(const uint8_t* pattern, uint32_t patternSize, int64_t startOffset = 0, bool forward = true);
+	int64_t FindNext();
+	int64_t FindPrev();
 	int64_t SetBiasOffset(int64_t offset);
 	int64_t GetBiasOffset() const;
 	HexControlColors& GetColors();
@@ -98,6 +120,14 @@ public:
 	uint32_t Fill(int64_t offset, const uint8_t* pattern, uint32_t patternSize, uint32_t count);
 	uint32_t FillSelection(const uint8_t* pattern, uint32_t patternSize);
 	bool SetHexControlClient(IHexControlClient* client);
+	void SetOptions(HexControlOptions options);
+	HexControlOptions GetOptions() const;
+	bool Undo();
+	bool Redo();
+	bool CanUndo() const;
+	bool CanRedo() const;
+	void ClearUndoHistory();
+	bool IsUndoRedoEnabled() const noexcept;
 
 	BEGIN_MSG_MAP(CHexControl)
 		MESSAGE_HANDLER(WM_CHAR, OnChar)
@@ -159,6 +189,11 @@ private:
 	void ResetInput();
 	int64_t NormalizeOffset(int64_t offset) const;
 	void RedrawCaretLine();
+	void PushUndo(UndoRecord record);
+	std::vector<uint8_t> ReadBytes(int64_t offset, int64_t count) const;
+	std::vector<bool>    ReadModified(int64_t offset, int64_t count) const;
+	void ApplyUndo(const UndoRecord& record);
+	void ApplyRedo(const UndoRecord& record);
 
 private:
 	HexControlColors m_Colors;
@@ -178,9 +213,14 @@ private:
 	uint64_t m_CurrentInput{ 0 }, m_OldValue;
 	std::vector<bool> m_Modified;
 	IHexControlClient* m_pClient{ nullptr };
+	HexControlOptions  m_Options{ HexControlOptions::None };
 	bool m_InsertMode{ false };
 	bool m_ReadOnly{ true };
 	bool m_SelectionFromAscii{ false };
 	bool m_ShowRuler{ true };
+	std::vector<UndoRecord>  m_UndoStack;
+	std::vector<UndoRecord>  m_RedoStack;
+	std::vector<uint8_t>     m_FindPattern;
+	bool                     m_FindForward{ true };
 };
 

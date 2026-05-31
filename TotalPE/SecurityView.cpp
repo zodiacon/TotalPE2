@@ -12,6 +12,7 @@
 
 #pragma comment(lib, "Crypt32")
 #pragma comment(lib, "Cryptui")
+#pragma comment(lib, "Bcrypt")
 
 // OID strings are ASCII; convert to wide for display
 static std::wstring OidToWide(const char* s) {

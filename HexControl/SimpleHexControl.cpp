@@ -355,6 +355,34 @@ LRESULT CHexControl::OnKeyDown(UINT, WPARAM wParam, LPARAM, BOOL&) {
 			if (ctrl)
 				Copy();
 			break;
+
+		case 'V':
+			if (ctrl) {
+				Paste();
+				return 0;
+			}
+			break;
+
+		case 'X':
+			if (ctrl) {
+				Cut();
+				return 0;
+			}
+			break;
+
+		case 'Z':
+			if (ctrl) {
+				Undo();
+				return 0;
+			}
+			break;
+
+		case 'Y':
+			if (ctrl) {
+				Redo();
+				return 0;
+			}
+			break;
 	}
 	if (shift && m_CaretOffset != current) {
 		if (ctrl || alt) {
@@ -698,15 +726,106 @@ void CHexControl::ClearSelection() {
 void CHexControl::CommitValue(int64_t offset, uint64_t value) {
 	if (m_ReadOnly || !m_Buffer)
 		return;
-	if (m_InsertMode)
+
+	UndoRecord rec;
+	rec.offset = offset;
+	rec.oldData = ReadBytes(offset, m_InsertMode ? 0 : m_DataSize);
+	rec.oldModified = ReadModified(offset, m_InsertMode ? 0 : m_DataSize);
+	rec.newData.resize(m_DataSize);
+	memcpy(rec.newData.data(), &value, m_DataSize);
+
+	if (m_InsertMode) {
+		rec.type = UndoRecord::Type::Insert;
 		m_Buffer->Insert(offset, (uint8_t*)&value, m_DataSize);
-	else
+		m_Modified.insert(m_Modified.begin() + offset, m_DataSize, true);
+	}
+	else {
+		rec.type = UndoRecord::Type::Overwrite;
 		m_Buffer->SetData(offset, (uint8_t*)&value, m_DataSize);
-	if ((int64_t)m_Modified.size() < m_Buffer->GetSize())
-		m_Modified.resize((size_t)m_Buffer->GetSize(), false);
-	for (uint32_t i = 0; i < m_DataSize; i++)
-		m_Modified[offset + i] = true;
+		if ((int64_t)m_Modified.size() < m_Buffer->GetSize())
+			m_Modified.resize((size_t)m_Buffer->GetSize(), false);
+		for (uint32_t i = 0; i < m_DataSize; i++)
+			m_Modified[offset + i] = true;
+	}
+	PushUndo(std::move(rec));
 	ResetInput();
+}
+
+std::vector<uint8_t> CHexControl::ReadBytes(int64_t offset, int64_t count) const {
+	std::vector<uint8_t> buf(count);
+	if (count > 0 && m_Buffer)
+		m_Buffer->GetData(offset, buf.data(), (uint32_t)count);
+	return buf;
+}
+
+std::vector<bool> CHexControl::ReadModified(int64_t offset, int64_t count) const {
+	std::vector<bool> bits(count, false);
+	for (int64_t i = 0; i < count; i++) {
+		auto idx = offset + i;
+		if (idx < (int64_t)m_Modified.size())
+			bits[i] = m_Modified[idx];
+	}
+	return bits;
+}
+
+void CHexControl::PushUndo(UndoRecord record) {
+	if (!IsUndoRedoEnabled())
+		return;
+	m_RedoStack.clear();
+	m_UndoStack.push_back(std::move(record));
+}
+
+void CHexControl::ApplyUndo(const UndoRecord& rec) {
+	switch (rec.type) {
+		case UndoRecord::Type::Overwrite:
+			m_Buffer->SetData(rec.offset, rec.oldData.data(), (uint32_t)rec.oldData.size());
+			for (size_t i = 0; i < rec.oldModified.size(); i++)
+				if (rec.offset + (int64_t)i < (int64_t)m_Modified.size())
+					m_Modified[rec.offset + i] = rec.oldModified[i];
+			break;
+		case UndoRecord::Type::Insert:
+			m_Buffer->Delete(rec.offset, rec.newData.size());
+			m_Modified.erase(m_Modified.begin() + rec.offset,
+			                 m_Modified.begin() + rec.offset + rec.newData.size());
+			RecalcLayout();
+			break;
+		case UndoRecord::Type::Delete:
+			m_Buffer->Insert(rec.offset, rec.oldData.data(), (uint32_t)rec.oldData.size());
+			m_Modified.insert(m_Modified.begin() + rec.offset, rec.oldModified.begin(), rec.oldModified.end());
+			RecalcLayout();
+			break;
+		case UndoRecord::Type::Compound:
+			for (auto it = rec.children.rbegin(); it != rec.children.rend(); ++it)
+				ApplyUndo(*it);
+			break;
+	}
+}
+
+void CHexControl::ApplyRedo(const UndoRecord& rec) {
+	switch (rec.type) {
+		case UndoRecord::Type::Overwrite:
+			m_Buffer->SetData(rec.offset, rec.newData.data(), (uint32_t)rec.newData.size());
+			if ((int64_t)m_Modified.size() < rec.offset + (int64_t)rec.newData.size())
+				m_Modified.resize((size_t)(rec.offset + rec.newData.size()), false);
+			for (size_t i = 0; i < rec.newData.size(); i++)
+				m_Modified[rec.offset + i] = true;
+			break;
+		case UndoRecord::Type::Insert:
+			m_Buffer->Insert(rec.offset, rec.newData.data(), (uint32_t)rec.newData.size());
+			m_Modified.insert(m_Modified.begin() + rec.offset, rec.newData.size(), true);
+			RecalcLayout();
+			break;
+		case UndoRecord::Type::Delete:
+			m_Buffer->Delete(rec.offset, rec.oldData.size());
+			m_Modified.erase(m_Modified.begin() + rec.offset,
+			                 m_Modified.begin() + rec.offset + rec.oldData.size());
+			RecalcLayout();
+			break;
+		case UndoRecord::Type::Compound:
+			for (auto& child : rec.children)
+				ApplyRedo(child);
+			break;
+	}
 }
 
 LRESULT CHexControl::OnMouseMove(UINT, WPARAM wp, LPARAM lParam, BOOL&) {
@@ -927,6 +1046,7 @@ HWND CHexControl::GetHwnd() const {
 void CHexControl::SetBufferManager(IBufferManager* mgr) {
 	m_Buffer = mgr;
 	m_Modified.assign(mgr ? (size_t)mgr->GetSize() : 0, false);
+	ClearUndoHistory();
 	ClearSelection();
 	RecalcLayout();
 	Invalidate();
@@ -1076,19 +1196,28 @@ bool CHexControl::Paste(int64_t offset) {
 
 			if (!bytes.empty()) {
 				auto bufSize = m_Buffer->GetSize();
+				UndoRecord rec;
+				rec.offset = offset;
 				if (m_InsertMode) {
+					rec.type = UndoRecord::Type::Insert;
+					rec.newData = bytes;
 					m_Buffer->Insert(offset, bytes.data(), (uint32_t)bytes.size());
 					m_Modified.insert(m_Modified.begin() + offset, bytes.size(), true);
 					RecalcLayout();
 				}
 				else {
 					auto count = (uint32_t)std::min((int64_t)bytes.size(), bufSize - offset);
+					rec.type = UndoRecord::Type::Overwrite;
+					rec.oldData = ReadBytes(offset, count);
+					rec.oldModified = ReadModified(offset, count);
+					rec.newData.assign(bytes.begin(), bytes.begin() + count);
 					m_Buffer->SetData(offset, bytes.data(), count);
 					if ((int64_t)m_Modified.size() < bufSize)
 						m_Modified.resize((size_t)bufSize, false);
 					for (uint32_t i = 0; i < count; i++)
 						m_Modified[offset + i] = true;
 				}
+				PushUndo(std::move(rec));
 				RedrawWindow();
 				result = true;
 			}
@@ -1107,11 +1236,77 @@ bool CHexControl::CanPaste() const {
 }
 
 bool CHexControl::Cut() {
-	return false;
+	if (!CanCut())
+		return false;
+	if (!Copy())
+		return false;
+	return Delete();
 }
 
 bool CHexControl::Delete() {
-	return false;
+	if (!CanDelete())
+		return false;
+
+	if (m_Selection.GetSelectionType() == SelectionType::Box) {
+		int width  = m_Selection.GetWidth();
+		int height = m_Selection.GetHeight();
+		int bpl    = m_Selection.GetBytesPerLine();
+		auto base  = m_Selection.GetOffset();
+
+		if (m_InsertMode) {
+			// Remove each row's bytes; iterate bottom-up so offsets stay valid
+			UndoRecord compound;
+			compound.type = UndoRecord::Type::Compound;
+			for (int row = height - 1; row >= 0; row--) {
+				int64_t rowOffset = base + row * bpl;
+				UndoRecord rowRec;
+				rowRec.type = UndoRecord::Type::Delete;
+				rowRec.offset = rowOffset;
+				rowRec.oldData = ReadBytes(rowOffset, width);
+				rowRec.oldModified = ReadModified(rowOffset, width);
+				m_Buffer->Delete(rowOffset, width);
+				m_Modified.erase(m_Modified.begin() + rowOffset,
+				                 m_Modified.begin() + rowOffset + width);
+				compound.children.insert(compound.children.begin(), std::move(rowRec));
+			}
+			PushUndo(std::move(compound));
+			RecalcLayout();
+		}
+		else {
+			// Overwrite mode: zero the selected columns in each row
+			uint8_t zero = 0;
+			FillSelection(&zero, 1);
+			// FillSelection already pushed undo
+		}
+	}
+	else {
+		int64_t selOffset = m_Selection.GetOffset();
+		int64_t selLength = m_Selection.GetLength();
+
+		if (m_InsertMode) {
+			UndoRecord rec;
+			rec.type = UndoRecord::Type::Delete;
+			rec.offset = selOffset;
+			rec.oldData = ReadBytes(selOffset, selLength);
+			rec.oldModified = ReadModified(selOffset, selLength);
+			m_Buffer->Delete(selOffset, (size_t)selLength);
+			m_Modified.erase(m_Modified.begin() + selOffset,
+			                 m_Modified.begin() + selOffset + selLength);
+			PushUndo(std::move(rec));
+			m_CaretOffset = std::min(m_CaretOffset, m_Buffer->GetSize() - m_DataSize);
+			RecalcLayout();
+		}
+		else {
+			// Overwrite mode: zero the selected range
+			uint8_t zero = 0;
+			Fill(selOffset, &zero, 1, (uint32_t)selLength);
+			// Fill already pushed undo
+		}
+	}
+
+	ClearSelection();
+	RedrawWindow();
+	return true;
 }
 
 bool CHexControl::CanCut() const {
@@ -1120,6 +1315,43 @@ bool CHexControl::CanCut() const {
 
 bool CHexControl::CanDelete() const {
 	return !IsReadOnly() && !m_Selection.IsEmpty();
+}
+
+int64_t CHexControl::GetCaretOffset() const {
+	return m_CaretOffset;
+}
+
+int64_t CHexControl::GetSelectionOffset() const {
+	return m_Selection.GetOffset();
+}
+
+int64_t CHexControl::GetSelectionLength() const {
+	return m_Selection.GetLength();
+}
+
+SelectionType CHexControl::GetSelectionType() const {
+	return m_Selection.GetSelectionType();
+}
+
+void CHexControl::SetSelection(int64_t offset, int64_t length) {
+	if (!m_Buffer || offset < 0 || length < 0)
+		return;
+	offset = std::min(offset, m_Buffer->GetSize() - 1);
+	length = std::min(length, m_Buffer->GetSize() - offset);
+	m_Selection.SetSimple(offset, length);
+	if (length > 0)
+		m_CaretOffset = NormalizeOffset(offset + length - 1);
+	SendSelectionChanged();
+	RedrawWindow();
+}
+
+void CHexControl::SetBoxSelection(int64_t offset, int width, int height) {
+	if (!m_Buffer || offset < 0 || width <= 0 || height <= 0)
+		return;
+	m_Selection.SetBox(offset, m_BytesPerLine, width, height);
+	m_CaretOffset = NormalizeOffset(offset);
+	SendSelectionChanged();
+	RedrawWindow();
 }
 
 uint32_t CHexControl::FillSelection(const uint8_t* pattern, uint32_t patternSize) {
@@ -1131,15 +1363,30 @@ uint32_t CHexControl::FillSelection(const uint8_t* pattern, uint32_t patternSize
 		int height = m_Selection.GetHeight();
 		int bpl    = m_Selection.GetBytesPerLine();
 		auto base  = m_Selection.GetOffset();
-		std::vector<uint8_t> rowBuf(width);
+
+		UndoRecord compound;
+		compound.type = UndoRecord::Type::Compound;
 		uint32_t patPos = 0;
 		uint32_t total = 0;
 		for (int row = 0; row < height; row++) {
+			int64_t rowOffset = base + row * bpl;
+			UndoRecord rowRec;
+			rowRec.type = UndoRecord::Type::Overwrite;
+			rowRec.offset = rowOffset;
+			rowRec.oldData = ReadBytes(rowOffset, width);
+			rowRec.oldModified = ReadModified(rowOffset, width);
+			rowRec.newData.resize(width);
 			for (int col = 0; col < width; col++)
-				rowBuf[col] = pattern[patPos++ % patternSize];
-			m_Buffer->SetData(base + row * bpl, rowBuf.data(), width);
+				rowRec.newData[col] = pattern[patPos++ % patternSize];
+			m_Buffer->SetData(rowOffset, rowRec.newData.data(), width);
+			if ((int64_t)m_Modified.size() < rowOffset + width)
+				m_Modified.resize((size_t)(rowOffset + width), false);
+			for (int col = 0; col < width; col++)
+				m_Modified[rowOffset + col] = true;
+			compound.children.push_back(std::move(rowRec));
 			total += width;
 		}
+		PushUndo(std::move(compound));
 		RedrawWindow();
 		return total;
 	}
@@ -1154,10 +1401,23 @@ uint32_t CHexControl::Fill(int64_t offset, const uint8_t* pattern, uint32_t patt
 	if (offset < 0 || offset >= bufSize)
 		return 0;
 	count = (uint32_t)std::min((int64_t)count, bufSize - offset);
-	std::vector<uint8_t> buf(count);
+
+	UndoRecord rec;
+	rec.type = UndoRecord::Type::Overwrite;
+	rec.offset = offset;
+	rec.oldData = ReadBytes(offset, count);
+	rec.oldModified = ReadModified(offset, count);
+	rec.newData.resize(count);
 	for (uint32_t i = 0; i < count; i++)
-		buf[i] = pattern[i % patternSize];
-	m_Buffer->SetData(offset, buf.data(), count);
+		rec.newData[i] = pattern[i % patternSize];
+
+	m_Buffer->SetData(offset, rec.newData.data(), count);
+	if ((int64_t)m_Modified.size() < bufSize)
+		m_Modified.resize((size_t)bufSize, false);
+	for (uint32_t i = 0; i < count; i++)
+		m_Modified[offset + i] = true;
+
+	PushUndo(std::move(rec));
 	RedrawWindow();
 	return count;
 }
@@ -1248,6 +1508,131 @@ bool CHexControl::DeleteState(int64_t offset) {
 bool CHexControl::SetHexControlClient(IHexControlClient* client) {
 	m_pClient = client;
 	return m_pClient != nullptr;
+}
+
+void CHexControl::SetOptions(HexControlOptions options) {
+	m_Options = options;
+}
+
+HexControlOptions CHexControl::GetOptions() const {
+	return m_Options;
+}
+
+bool CHexControl::CanUndo() const {
+	return IsUndoRedoEnabled() && !m_UndoStack.empty();
+}
+
+bool CHexControl::CanRedo() const {
+	return IsUndoRedoEnabled() && !m_RedoStack.empty();
+}
+
+void CHexControl::ClearUndoHistory() {
+	m_UndoStack.clear();
+	m_RedoStack.clear();
+}
+
+bool CHexControl::IsUndoRedoEnabled() const noexcept {
+	return (m_Options & HexControlOptions::DisableUndoRedo) == HexControlOptions::None;
+}
+
+int64_t CHexControl::Find(const uint8_t* pattern, uint32_t patternSize, int64_t startOffset, bool forward) {
+	if (!m_Buffer || !pattern || patternSize == 0)
+		return -1;
+
+	m_FindPattern.assign(pattern, pattern + patternSize);
+	m_FindForward = forward;
+
+	auto bufSize = m_Buffer->GetSize();
+	if (bufSize < patternSize)
+		return -1;
+
+	constexpr uint32_t chunkSize = 4096;
+	std::vector<uint8_t> chunk(chunkSize + patternSize - 1);
+
+	auto searchForward = [&](int64_t from) -> int64_t {
+		int64_t limit = bufSize - patternSize;
+		for (int64_t base = from; base <= limit; ) {
+			uint32_t read = m_Buffer->GetData(base, chunk.data(), (uint32_t)std::min((int64_t)chunk.size(), bufSize - base));
+			if (read == 0) break;
+			for (uint32_t i = 0; i + patternSize <= read && base + i <= limit; i++) {
+				if (memcmp(chunk.data() + i, pattern, patternSize) == 0)
+					return base + i;
+			}
+			base += std::max((int64_t)1, (int64_t)(read - patternSize + 1));
+		}
+		return -1;
+	};
+
+	auto searchBackward = [&](int64_t from) -> int64_t {
+		int64_t limit = bufSize - patternSize;
+		from = std::min(from, limit);
+		for (int64_t base = from; base >= 0; ) {
+			int64_t chunkStart = std::max((int64_t)0, base - (int64_t)chunkSize + 1);
+			uint32_t read = m_Buffer->GetData(chunkStart, chunk.data(), (uint32_t)(base - chunkStart + patternSize));
+			if (read == 0) break;
+			for (int64_t i = (int64_t)read - patternSize; i >= 0; i--) {
+				if (memcmp(chunk.data() + i, pattern, patternSize) == 0)
+					return chunkStart + i;
+			}
+			base = chunkStart - 1;
+		}
+		return -1;
+	};
+
+	int64_t found = forward ? searchForward(startOffset) : searchBackward(startOffset);
+	if (found < 0) {
+		NMHexControlNotify n{};
+		SendNotify(n, NMHX_FIND_NOT_FOUND);
+		return -1;
+	}
+
+	SetSelection(found, patternSize);
+	GotoOffset(found);
+	return found;
+}
+
+int64_t CHexControl::FindNext() {
+	if (m_FindPattern.empty())
+		return -1;
+	int64_t start = m_FindForward
+		? m_Selection.GetOffset() + 1
+		: m_Selection.GetOffset() - 1;
+	return Find(m_FindPattern.data(), (uint32_t)m_FindPattern.size(), start, m_FindForward);
+}
+
+int64_t CHexControl::FindPrev() {
+	if (m_FindPattern.empty())
+		return -1;
+	int64_t start = m_FindForward
+		? m_Selection.GetOffset() - 1
+		: m_Selection.GetOffset() + 1;
+	return Find(m_FindPattern.data(), (uint32_t)m_FindPattern.size(), start, !m_FindForward);
+}
+
+bool CHexControl::Undo() {
+	if (!CanUndo())
+		return false;
+	auto rec = std::move(m_UndoStack.back());
+	m_UndoStack.pop_back();
+	ApplyUndo(rec);
+	m_RedoStack.push_back(std::move(rec));
+	RedrawWindow();
+	NMHexControlNotify n{};
+	SendNotify(n, NMHX_UNDO);
+	return true;
+}
+
+bool CHexControl::Redo() {
+	if (!CanRedo())
+		return false;
+	auto rec = std::move(m_RedoStack.back());
+	m_RedoStack.pop_back();
+	ApplyRedo(rec);
+	m_UndoStack.push_back(std::move(rec));
+	RedrawWindow();
+	NMHexControlNotify n{};
+	SendNotify(n, NMHX_REDO);
+	return true;
 }
 
 bool CHexControl::CopyText(PCWSTR text) const {
