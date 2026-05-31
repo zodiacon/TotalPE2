@@ -17,21 +17,20 @@ void CHexControl::DoPaint(CDCHandle dc, RECT& rect) {
 	GetScrollInfo(SB_HORZ, &si);
 	int xstart = -si.nPos * m_CharWidth;
 
-	si.nPos = m_Buffer->GetSize() == 0 ? 0 : int(m_Buffer->GetSize() * ((float)m_StartOffset / m_Buffer->GetSize()) / m_BytesPerLine);
+	si.nPos = (int)(m_StartOffset / m_BytesPerLine);
 	SetScrollInfo(SB_VERT, &si);
 
 	dc.SelectFont(m_Font);
 	dc.SetBkMode(OPAQUE);
 	dc.SetBkColor(m_Colors.Background);
 
-	WCHAR str[17];
+	WCHAR str[21];
 	int i = 0;
 	uint8_t data[512];
 	std::vector<POLYTEXT> poly(m_Lines + 2);
 
-	int addrLength = m_Buffer->GetSize() < 1LL << 32 ? 8 : 16;
-	const std::wstring addrFormat = L"%0" + std::to_wstring(addrLength) + L"X";
-	int x = (addrLength + 1) * m_CharWidth;
+	const std::wstring addrFormat = L"%0" + std::to_wstring(m_AddressDigits) + (m_DecimalAddresses ? L"llu" : L"X");
+	int x = (m_AddressDigits + 1) * m_CharWidth;
 	int factor = m_CharWidth * (m_DataSize * 2 + 1);
 	int rulerHeight = GetRulerHeight();
 
@@ -425,7 +424,7 @@ LRESULT CHexControl::OnKeyDown(UINT, WPARAM wParam, LPARAM, BOOL&) {
 		if (ctrl || alt) {
 			auto anchor = m_Selection.GetAnchor();
 			int anchorRow = (int)(anchor / m_BytesPerLine), anchorCol = (int)(anchor % m_BytesPerLine);
-			int caretRow  = (int)(m_CaretOffset / m_BytesPerLine), caretCol = (int)(m_CaretOffset % m_BytesPerLine);
+			int caretRow = (int)(m_CaretOffset / m_BytesPerLine), caretCol = (int)(m_CaretOffset % m_BytesPerLine);
 			m_Selection.SetBox(
 				(int64_t)std::min(anchorRow, caretRow) * m_BytesPerLine + std::min(anchorCol, caretCol),
 				m_BytesPerLine,
@@ -574,8 +573,8 @@ LRESULT CHexControl::OnVScroll(UINT, WPARAM wParam, LPARAM, BOOL&) {
 
 void CHexControl::SendNotify(NMHDR& hdr, UINT code) {
 	hdr.hwndFrom = m_hWnd;
-	hdr.idFrom   = static_cast<UINT_PTR>(GetWindowLongPtr(GWLP_ID));
-	hdr.code     = code;
+	hdr.idFrom = static_cast<UINT_PTR>(GetWindowLongPtr(GWLP_ID));
+	hdr.code = code;
 	GetParent().SendMessage(WM_NOTIFY, hdr.idFrom, reinterpret_cast<LPARAM>(&hdr));
 }
 
@@ -594,12 +593,24 @@ void CHexControl::SendCaretChanged(int64_t oldOffset) {
 }
 
 void CHexControl::RecalcLayout() {
-	if (m_Buffer == nullptr) {
+	if (!m_hWnd)
 		return;
-	}
 
 	CRect rc;
 	GetClientRect(&rc);
+
+	SCROLLINFO si;
+	si.cbSize = sizeof(si);
+
+	if (m_Buffer == nullptr) {
+		si.fMask = SIF_PAGE | SIF_RANGE | SIF_POS;
+		si.nMin = si.nMax = si.nPos = 0;
+		si.nPage = 1;
+		SetScrollInfo(SB_VERT, &si);
+		SetScrollInfo(SB_HORZ, &si);
+		m_Lines = 0;
+		return;
+	}
 
 	auto lines = int((m_Buffer->GetSize() + (m_BytesPerLine - 1)) / m_BytesPerLine);
 	int totalLines = int((m_Buffer->GetSize() + m_BytesPerLine - 1) / m_BytesPerLine);
@@ -609,16 +620,17 @@ void CHexControl::RecalcLayout() {
 		m_Lines++;
 	}
 
-	SCROLLINFO si;
-	si.cbSize = sizeof(si);
 	si.fMask = SIF_PAGE | SIF_RANGE;
 	si.nMin = 0;
 	si.nMax = lines - 1;
 	si.nPage = (rc.bottom - GetRulerHeight()) / m_CharHeight;
 	SetScrollInfo(SB_VERT, &si);
 
-	m_AddressDigits = m_Buffer->GetSize() >= 1LL << 32 ? 16 : 8;
-	m_Chars = m_AddressDigits + 1 + m_BytesPerLine / m_DataSize * (1 + 2 * m_DataSize) + 1 + m_BytesPerLine;
+	bool big = m_Buffer->GetSize() >= 1LL << 32;
+	m_AddressDigits = m_DecimalAddresses ? (big ? 20 : 10) : (big ? 16 : 8);
+	// base chars + extra half-chars for column separators
+	int sepExtra = (m_ColSeparator > 0) ? (int)(m_BytesPerLine / m_ColSeparator) : 0;
+	m_Chars = m_AddressDigits + 1 + m_BytesPerLine / m_DataSize * (1 + 2 * m_DataSize) + 1 + m_BytesPerLine + (sepExtra + 1) / 2;
 
 	si.nMax = static_cast<int>(m_Chars) - 1;
 	si.nPage = rc.right / m_CharWidth;
@@ -722,7 +734,7 @@ CPoint CHexControl::GetAsciiPointFromOffset(int64_t offset) const {
 		return CPoint(-1, -1);
 
 	int line = int((offset - m_StartOffset) / m_BytesPerLine);
-	int col  = int((offset - m_StartOffset) % m_BytesPerLine);
+	int col = int((offset - m_StartOffset) % m_BytesPerLine);
 
 	CPoint pt;
 	pt.y = GetRulerHeight() + line * m_CharHeight;
@@ -846,7 +858,7 @@ void CHexControl::ApplyUndo(const UndoRecord& rec) {
 		case UndoRecord::Type::Insert:
 			m_Buffer->Delete(rec.Offset, rec.NewData.size());
 			m_Modified.erase(m_Modified.begin() + rec.Offset,
-			                 m_Modified.begin() + rec.Offset + rec.NewData.size());
+				m_Modified.begin() + rec.Offset + rec.NewData.size());
 			RecalcLayout();
 			break;
 		case UndoRecord::Type::Delete:
@@ -878,7 +890,7 @@ void CHexControl::ApplyRedo(const UndoRecord& rec) {
 		case UndoRecord::Type::Delete:
 			m_Buffer->Delete(rec.Offset, rec.OldData.size());
 			m_Modified.erase(m_Modified.begin() + rec.Offset,
-			                 m_Modified.begin() + rec.Offset + rec.OldData.size());
+				m_Modified.begin() + rec.Offset + rec.OldData.size());
 			RecalcLayout();
 			break;
 		case UndoRecord::Type::Compound:
@@ -903,7 +915,7 @@ LRESULT CHexControl::OnMouseMove(UINT, WPARAM wp, LPARAM lParam, BOOL&) {
 		offset = std::max((int64_t)0, std::min(offset, m_Buffer->GetSize() - 1));
 		if (boxSelect) {
 			int anchorRow = (int)(m_CaretOffset / m_BytesPerLine), anchorCol = (int)(m_CaretOffset % m_BytesPerLine);
-			int curRow    = (int)(offset / m_BytesPerLine),         curCol    = (int)(offset % m_BytesPerLine);
+			int curRow = (int)(offset / m_BytesPerLine), curCol = (int)(offset % m_BytesPerLine);
 			m_Selection.SetBox(
 				(int64_t)std::min(anchorRow, curRow) * m_BytesPerLine + std::min(anchorCol, curCol),
 				m_BytesPerLine,
@@ -923,7 +935,7 @@ LRESULT CHexControl::OnMouseMove(UINT, WPARAM wp, LPARAM lParam, BOOL&) {
 
 		if (boxSelect) {
 			int anchorRow = (int)(m_CaretOffset / m_BytesPerLine), anchorCol = (int)(m_CaretOffset % m_BytesPerLine);
-			int curRow    = (int)(offset / m_BytesPerLine),         curCol    = (int)(offset % m_BytesPerLine);
+			int curRow = (int)(offset / m_BytesPerLine), curCol = (int)(offset % m_BytesPerLine);
 			m_Selection.SetBox(
 				(int64_t)std::min(anchorRow, curRow) * m_BytesPerLine + std::min(anchorCol, curCol),
 				m_BytesPerLine,
@@ -1043,7 +1055,7 @@ LRESULT CHexControl::OnChar(UINT, WPARAM wParam, LPARAM, BOOL&) {
 		uint64_t newVal = (m_OldValue & ~0xFFULL) | (uint8_t)wParam;
 		CommitValue(m_CaretOffset, newVal);
 		NMHexControlValueChanged nv{};
-		nv.Offset   = m_CaretOffset;
+		nv.Offset = m_CaretOffset;
 		nv.OldValue = m_OldValue;
 		nv.NewValue = newVal;
 		nv.DataSize = m_DataSize;
@@ -1088,7 +1100,7 @@ LRESULT CHexControl::OnChar(UINT, WPARAM wParam, LPARAM, BOOL&) {
 		CommitValue(m_CaretOffset, m_CurrentInput);	// also calls ResetInput()
 
 		NMHexControlValueChanged nv{};
-		nv.Offset   = m_CaretOffset;
+		nv.Offset = m_CaretOffset;
 		nv.OldValue = m_OldValue;
 		nv.NewValue = oldInput;
 		nv.DataSize = m_DataSize;
@@ -1177,8 +1189,7 @@ bool CHexControl::GetInsertMode() const {
 	return m_InsertMode;
 }
 
-void CHexControl::SetSize(int64_t size) {
-}
+void CHexControl::SetSize(int64_t size) {}
 
 bool CHexControl::SetDataSize(int32_t size) {
 	if (size == 0 || (size & (size - 1)) != 0 || size > 8)
@@ -1348,10 +1359,10 @@ bool CHexControl::Delete() {
 		return false;
 
 	if (m_Selection.GetSelectionType() == SelectionType::Box) {
-		int width  = m_Selection.GetWidth();
+		int width = m_Selection.GetWidth();
 		int height = m_Selection.GetHeight();
-		int bpl    = m_Selection.GetBytesPerLine();
-		auto base  = m_Selection.GetOffset();
+		int bpl = m_Selection.GetBytesPerLine();
+		auto base = m_Selection.GetOffset();
 
 		if (m_InsertMode) {
 			// Remove each row's bytes; iterate bottom-up so offsets stay valid
@@ -1366,7 +1377,7 @@ bool CHexControl::Delete() {
 				rowRec.OldModified = ReadModified(rowOffset, width);
 				m_Buffer->Delete(rowOffset, width);
 				m_Modified.erase(m_Modified.begin() + rowOffset,
-				                 m_Modified.begin() + rowOffset + width);
+					m_Modified.begin() + rowOffset + width);
 				compound.Children.insert(compound.Children.begin(), std::move(rowRec));
 			}
 			PushUndo(std::move(compound));
@@ -1391,7 +1402,7 @@ bool CHexControl::Delete() {
 			rec.OldModified = ReadModified(selOffset, selLength);
 			m_Buffer->Delete(selOffset, (size_t)selLength);
 			m_Modified.erase(m_Modified.begin() + selOffset,
-			                 m_Modified.begin() + selOffset + selLength);
+				m_Modified.begin() + selOffset + selLength);
 			PushUndo(std::move(rec));
 			m_CaretOffset = std::min(m_CaretOffset, m_Buffer->GetSize() - m_DataSize);
 			RecalcLayout();
@@ -1459,10 +1470,10 @@ uint32_t CHexControl::FillSelection(const uint8_t* pattern, uint32_t patternSize
 		return 0;
 
 	if (m_Selection.GetSelectionType() == SelectionType::Box) {
-		int width  = m_Selection.GetWidth();
+		int width = m_Selection.GetWidth();
 		int height = m_Selection.GetHeight();
-		int bpl    = m_Selection.GetBytesPerLine();
-		auto base  = m_Selection.GetOffset();
+		int bpl = m_Selection.GetBytesPerLine();
+		auto base = m_Selection.GetOffset();
 
 		UndoRecord compound;
 		compound.Op = UndoRecord::Type::Compound;
@@ -1586,7 +1597,20 @@ size_t CHexControl::GetMaxUndoLevels() const {
 
 void CHexControl::SetColumnSeparator(uint32_t everyNBytes) {
 	m_ColSeparator = everyNBytes;
+	RecalcLayout();
 	RedrawWindow();
+}
+
+void CHexControl::SetAddressDecimal(bool decimal) {
+	if (m_DecimalAddresses == decimal)
+		return;
+	m_DecimalAddresses = decimal;
+	RecalcLayout();
+	RedrawWindow();
+}
+
+bool CHexControl::GetAddressDecimal() const {
+	return m_DecimalAddresses;
 }
 
 int CHexControl::AddHighlight(int64_t offset, int64_t length, COLORREF textColor, COLORREF bkColor) {
@@ -1830,6 +1854,65 @@ bool CHexControl::CopyText(PCWSTR text) const {
 	return false;
 }
 
+LRESULT CHexControl::OnCopy(UINT, WPARAM, LPARAM, BOOL&) {
+	Copy();
+	return 0;
+}
+
+LRESULT CHexControl::OnCut(UINT, WPARAM, LPARAM, BOOL&) {
+	Cut();
+	return 0;
+}
+
+LRESULT CHexControl::OnPaste(UINT, WPARAM, LPARAM, BOOL&) {
+	Paste();
+	return 0;
+}
+
+std::vector<uint8_t> CHexControl::GetSelectedBytes() const {
+	if (!m_Buffer || m_Selection.IsEmpty())
+		return {};
+
+	if (m_Selection.GetSelectionType() == SelectionType::Box) {
+		auto offset = m_Selection.GetOffset();
+		auto width  = m_Selection.GetWidth();
+		auto height = m_Selection.GetHeight();
+		std::vector<uint8_t> result;
+		result.reserve((size_t)width * height);
+		for (int row = 0; row < height; ++row) {
+			auto rowOffset = offset + (int64_t)row * m_BytesPerLine;
+			uint8_t buf[512];
+			uint32_t got = m_Buffer->GetData(rowOffset, buf, (uint32_t)std::min((int64_t)width, (int64_t)sizeof(buf)));
+			result.insert(result.end(), buf, buf + got);
+		}
+		return result;
+	}
+
+	auto offset = m_Selection.GetOffset();
+	auto length = m_Selection.GetLength();
+	std::vector<uint8_t> result((size_t)length);
+	m_Buffer->GetData(offset, result.data(), (uint32_t)length);
+	return result;
+}
+
+std::vector<std::pair<int64_t, int64_t>> CHexControl::GetModifiedRanges() const {
+	std::vector<std::pair<int64_t, int64_t>> ranges;
+	int64_t start = -1;
+	for (int64_t i = 0; i < (int64_t)m_Modified.size(); ++i) {
+		if (m_Modified[i]) {
+			if (start < 0)
+				start = i;
+		}
+		else if (start >= 0) {
+			ranges.emplace_back(start, i - start);
+			start = -1;
+		}
+	}
+	if (start >= 0)
+		ranges.emplace_back(start, (int64_t)m_Modified.size() - start);
+	return ranges;
+}
+
 bool CHexControl::CopyAsText(int64_t offset, int64_t size) const {
 	if (!m_Buffer)
 		return false;
@@ -1840,7 +1923,7 @@ bool CHexControl::CopyAsText(int64_t offset, int64_t size) const {
 		offset = m_Selection.GetOffset();
 		if (m_Selection.GetSelectionType() == SelectionType::Box) {
 			// build text row by row, rows separated by newlines
-			auto width  = m_Selection.GetWidth();
+			auto width = m_Selection.GetWidth();
 			auto height = m_Selection.GetHeight();
 			std::wstring result;
 			result.reserve((size_t)(width + 2) * height);

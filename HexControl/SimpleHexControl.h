@@ -121,6 +121,8 @@ public:
 	void SetMaxUndoLevels(size_t maxLevels);
 	size_t GetMaxUndoLevels() const;
 	void SetColumnSeparator(uint32_t everyNBytes);
+	void SetAddressDecimal(bool decimal);
+	bool GetAddressDecimal() const;
 	int  AddHighlight(int64_t offset, int64_t length, COLORREF textColor, COLORREF bkColor);
 	bool RemoveHighlight(int id);
 	void ClearHighlights();
@@ -129,6 +131,8 @@ public:
 	std::wstring GetText(int64_t offset, int64_t size) const;
 	bool CopyAsText(int64_t offset = -1, int64_t size = 0) const;
 	uint64_t GetValueAt(int64_t offset, int32_t size) const;
+	std::vector<uint8_t> GetSelectedBytes() const;
+	std::vector<std::pair<int64_t, int64_t>> GetModifiedRanges() const;
 	void Refresh();
 	bool IsModified(int64_t offset) const;
 	bool IsModified() const;
@@ -160,6 +164,9 @@ public:
 		MESSAGE_HANDLER(WM_KILLFOCUS, OnKillFocus)
 		MESSAGE_HANDLER(WM_GETDLGCODE, OnGetDialogCode)
 		MESSAGE_HANDLER(WM_CONTEXTMENU, OnContextMenu)
+		MESSAGE_HANDLER(WM_COPY, OnCopy)
+		MESSAGE_HANDLER(WM_CUT, OnCut)
+		MESSAGE_HANDLER(WM_PASTE, OnPaste)
 		CHAIN_MSG_MAP(CBufferedPaintWindowImpl<CHexControl>)
 	END_MSG_MAP()
 
@@ -181,6 +188,9 @@ private:
 	LRESULT OnChar(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnMouseMove(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnLeftButtonUp(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
+	LRESULT OnCopy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
+	LRESULT OnCut(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
+	LRESULT OnPaste(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 
 private:
 	bool CopyText(PCWSTR text) const;
@@ -240,6 +250,7 @@ private:
 	bool     m_BigEndian{ false };
 	size_t   m_MaxUndoLevels{ 1000 };
 	uint32_t m_ColSeparator{ 0 };   // 0 = disabled
+	bool     m_DecimalAddresses{ false };
 	std::vector<UndoRecord>   m_UndoStack;
 	std::vector<UndoRecord>   m_RedoStack;
 	std::vector<uint8_t>      m_FindPattern;
