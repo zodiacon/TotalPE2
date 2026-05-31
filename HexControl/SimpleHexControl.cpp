@@ -1227,7 +1227,50 @@ int32_t CHexControl::GetBytesPerLine() const {
 	return m_BytesPerLine;
 }
 
-bool CHexControl::Copy(int64_t offset, int64_t size) const {
+static int ValueDigits(int dataSize, int base) {
+	switch (base) {
+		case 2:  return dataSize * 8;
+		case 8:  return (dataSize * 8 + 2) / 3;
+		case 10:
+			switch (dataSize) { case 1: return 3; case 2: return 5; case 4: return 10; default: return 20; }
+		default: return dataSize * 2;
+	}
+}
+
+static std::wstring FormatValueInBase(uint64_t value, int dataSize, int base) {
+	WCHAR buf[65]{};
+	int width = ValueDigits(dataSize, base);
+	switch (base) {
+		case 2:
+			for (int i = 0; i < width; ++i)
+				buf[width - 1 - i] = (value >> i) & 1 ? L'1' : L'0';
+			break;
+		case 8:
+			::StringCchPrintf(buf, _countof(buf), L"%0*llo", width, value);
+			break;
+		case 10:
+			::StringCchPrintf(buf, _countof(buf), L"%0*llu", width, value);
+			break;
+		default:
+			::StringCchPrintf(buf, _countof(buf), L"%0*llX", width, value);
+			break;
+	}
+	return buf;
+}
+
+bool CHexControl::Copy(int64_t offset, int64_t size, int base) const {
+	auto readValue = [&](int64_t pos) {
+		uint64_t value = 0;
+		m_Buffer->GetData(pos, (uint8_t*)&value, m_DataSize);
+		if (m_BigEndian && m_DataSize > 1) {
+			uint64_t swapped = 0;
+			for (uint32_t s = 0; s < m_DataSize; s++)
+				((uint8_t*)&swapped)[m_DataSize - 1 - s] = ((uint8_t*)&value)[s];
+			value = swapped;
+		}
+		return value;
+	};
+
 	if (m_Selection.GetSelectionType() == SelectionType::Box && offset < 0) {
 		auto boxOffset = m_Selection.GetOffset();
 		if (boxOffset < 0)
@@ -1235,16 +1278,11 @@ bool CHexControl::Copy(int64_t offset, int64_t size) const {
 		int width = m_Selection.GetWidth();
 		int height = m_Selection.GetHeight();
 		int bpl = m_Selection.GetBytesPerLine();
-		CString fmt;
-		fmt.Format(L"%%0%dX ", m_DataSize * 2);
 		std::wstring text;
-		uint64_t value = 0;
-		CString item;
 		for (int row = 0; row < height; row++) {
 			for (int col = 0; col < width; col += m_DataSize) {
-				m_Buffer->GetData(boxOffset + row * bpl + col, (uint8_t*)&value, m_DataSize);
-				item.Format(fmt, value);
-				text += (PCWSTR)item;
+				text += FormatValueInBase(readValue(boxOffset + row * bpl + col), m_DataSize, base);
+				text += L' ';
 			}
 			if (!text.empty() && text.back() == L' ')
 				text.back() = L'\n';
@@ -1260,15 +1298,12 @@ bool CHexControl::Copy(int64_t offset, int64_t size) const {
 		return false;
 
 	std::wstring text;
-	CString fmt;
-	fmt.Format(L"%%0%dX ", m_DataSize * 2);
-	uint64_t value = 0;
-	CString item;
 	for (int64_t i = 0; i < size; i += m_DataSize) {
-		m_Buffer->GetData(offset + i, (uint8_t*)&value, m_DataSize);
-		item.Format(fmt, value);
-		text += (PCWSTR)item;
+		text += FormatValueInBase(readValue(offset + i), m_DataSize, base);
+		text += L' ';
 	}
+	if (!text.empty())
+		text.pop_back();
 	return CopyText(text.c_str());
 }
 

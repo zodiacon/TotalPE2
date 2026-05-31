@@ -21,19 +21,18 @@ enum class HexControlOptions {
 };
 DEFINE_ENUM_FLAG_OPERATORS(HexControlOptions);
 
-constexpr auto NMHX_SELECTION_CHANGED  = 0x2000;
-constexpr auto NMHX_CARET_CHANGED      = 0x2001;
-constexpr auto NMHX_VALUE_CHANGED      = 0x2002;
-constexpr auto NMHX_DATA_SIZE_CHANGED  = 0x2003;
-constexpr auto NMHX_BPL_CHANGED        = 0x2004;
-constexpr auto NMHX_BUFFER_CHANGED     = 0x2005;
-constexpr auto NMHX_UNDO               = 0x2006;
-constexpr auto NMHX_REDO               = 0x2007;
-constexpr auto NMHX_FIND_NOT_FOUND     = 0x2008;
-constexpr auto NMHX_GOTO_REQUESTED     = 0x2009;
+constexpr auto NMHX_SELECTION_CHANGED = 0x2000;
+constexpr auto NMHX_CARET_CHANGED = 0x2001;
+constexpr auto NMHX_VALUE_CHANGED = 0x2002;
+constexpr auto NMHX_DATA_SIZE_CHANGED = 0x2003;
+constexpr auto NMHX_BPL_CHANGED = 0x2004;
+constexpr auto NMHX_BUFFER_CHANGED = 0x2005;
+constexpr auto NMHX_UNDO = 0x2006;
+constexpr auto NMHX_REDO = 0x2007;
+constexpr auto NMHX_FIND_NOT_FOUND = 0x2008;
+constexpr auto NMHX_GOTO_REQUESTED = 0x2009;
 
-struct NMHexControlNotify : NMHDR {
-};
+struct NMHexControlNotify : NMHDR {};
 
 struct NMHexControlCaretChanged : NMHDR {
 	int64_t OldOffset;
@@ -90,7 +89,7 @@ public:
 	int32_t GetDataSize() const;
 	bool SetBytesPerLine(int32_t bytesPerLine);
 	int32_t GetBytesPerLine() const;
-	bool Copy(int64_t offset = -1, int64_t size = 0) const;
+	bool Copy(int64_t offset = -1, int64_t size = 0, int base = 16) const;
 	bool Paste(int64_t offset = -1);
 	bool HasSelection() const;
 	bool CanCopy() const;
@@ -243,19 +242,19 @@ private:
 	uint64_t m_CurrentInput{ 0 }, m_OldValue;
 	std::vector<bool> m_Modified;
 	HexControlOptions  m_Options{ HexControlOptions::None };
-	bool     m_InsertMode{ false };
-	bool     m_ReadOnly{ true };
-	bool     m_SelectionFromAscii{ false };
-	bool     m_ShowRuler{ true };
-	bool     m_BigEndian{ false };
 	size_t   m_MaxUndoLevels{ 1000 };
 	uint32_t m_ColSeparator{ 0 };   // 0 = disabled
-	bool     m_DecimalAddresses{ false };
 	std::vector<UndoRecord>   m_UndoStack;
 	std::vector<UndoRecord>   m_RedoStack;
 	std::vector<uint8_t>      m_FindPattern;
-	bool                      m_FindForward{ true };
 	std::vector<HexHighlight> m_Highlights;
 	int                       m_NextHighlightId{ 1 };
+	bool	 m_FindForward : 1{ true };
+	bool     m_InsertMode : 1{ false };
+	bool     m_ReadOnly : 1{ true };
+	bool     m_SelectionFromAscii : 1{ false };
+	bool     m_ShowRuler : 1 { true };
+	bool     m_BigEndian : 1 { false };
+	bool     m_DecimalAddresses : 1{ false };
 };
 
