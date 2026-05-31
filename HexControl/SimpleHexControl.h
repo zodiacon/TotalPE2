@@ -30,6 +30,7 @@ constexpr auto NMHX_BUFFER_CHANGED     = 0x2005;
 constexpr auto NMHX_UNDO               = 0x2006;
 constexpr auto NMHX_REDO               = 0x2007;
 constexpr auto NMHX_FIND_NOT_FOUND     = 0x2008;
+constexpr auto NMHX_GOTO_REQUESTED     = 0x2009;
 
 struct NMHexControlNotify : NMHDR {
 };
@@ -57,21 +58,21 @@ struct NMHexControlBytesPerLineChanged : NMHDR {
 };
 
 struct HexHighlight {
-	int64_t  offset;
-	int64_t  length;
-	COLORREF textColor;
-	COLORREF bkColor;
-	int      id;
+	int64_t  Offset;
+	int64_t  Length;
+	COLORREF TextColor;
+	COLORREF BkColor;
+	int      Id;
 };
 
 struct UndoRecord {
 	enum class Type { Overwrite, Insert, Delete, Compound };
-	Type                     type;
-	int64_t                  offset{ 0 };
-	std::vector<uint8_t>     oldData;
-	std::vector<uint8_t>     newData;
-	std::vector<bool>        oldModified;
-	std::vector<UndoRecord>  children;   // used by Compound type only
+	Type                     Op{};
+	int64_t                  Offset{ 0 };
+	std::vector<uint8_t>     OldData;
+	std::vector<uint8_t>     NewData;
+	std::vector<bool>        OldModified;
+	std::vector<UndoRecord>  Children;
 };
 
 class CHexControl :
@@ -126,6 +127,8 @@ public:
 	const std::vector<HexHighlight>& GetHighlights() const;
 	void GotoOffset(int64_t offset, bool scrollIntoView = true);
 	std::wstring GetText(int64_t offset, int64_t size) const;
+	bool CopyAsText(int64_t offset = -1, int64_t size = 0) const;
+	uint64_t GetValueAt(int64_t offset, int32_t size) const;
 	void Refresh();
 	bool IsModified(int64_t offset) const;
 	bool IsModified() const;

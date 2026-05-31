@@ -85,7 +85,7 @@ void CHexControl::DoPaint(CDCHandle dc, RECT& rect) {
 			memcpy(&value, data + j, step);
 			if (m_BigEndian && step > 1) {
 				DWORD64 swapped = 0;
-				for (int s = 0; s < step; s++)
+				for (uint32_t s = 0; s < step; s++)
 					((uint8_t*)&swapped)[step - 1 - s] = ((uint8_t*)&value)[s];
 				value = swapped;
 			}
@@ -96,8 +96,8 @@ void CHexControl::DoPaint(CDCHandle dc, RECT& rect) {
 				dc.SetBkColor(m_Colors.SelectionBackground);
 			}
 			else if (auto* hl = GetHighlightAt(offset + j)) {
-				dc.SetTextColor(hl->textColor);
-				dc.SetBkColor(hl->bkColor);
+				dc.SetTextColor(hl->TextColor);
+				dc.SetBkColor(hl->BkColor);
 			}
 			else if ((int64_t)m_Modified.size() > offset + j && m_Modified[offset + j]) {
 				dc.SetTextColor(m_Colors.Modified);
@@ -166,8 +166,8 @@ void CHexControl::DoPaint(CDCHandle dc, RECT& rect) {
 				dc.SetBkColor(m_Colors.SelectionBackground);
 			}
 			else if (auto* hl = GetHighlightAt(offset + j)) {
-				dc.SetTextColor(hl->textColor);
-				dc.SetBkColor(hl->bkColor);
+				dc.SetTextColor(hl->TextColor);
+				dc.SetBkColor(hl->BkColor);
 			}
 			else if ((int64_t)m_Modified.size() > offset + j && m_Modified[offset + j]) {
 				dc.SetTextColor(m_Colors.Modified);
@@ -409,6 +409,14 @@ LRESULT CHexControl::OnKeyDown(UINT, WPARAM wParam, LPARAM, BOOL&) {
 		case 'Y':
 			if (ctrl) {
 				Redo();
+				return 0;
+			}
+			break;
+
+		case 'G':
+			if (ctrl) {
+				NMHexControlNotify n{};
+				SendNotify(n, NMHX_GOTO_REQUESTED);
 				return 0;
 			}
 			break;
@@ -778,19 +786,19 @@ void CHexControl::CommitValue(int64_t offset, uint64_t value) {
 		return;
 
 	UndoRecord rec;
-	rec.offset = offset;
-	rec.oldData = ReadBytes(offset, m_InsertMode ? 0 : m_DataSize);
-	rec.oldModified = ReadModified(offset, m_InsertMode ? 0 : m_DataSize);
-	rec.newData.resize(m_DataSize);
-	memcpy(rec.newData.data(), &value, m_DataSize);
+	rec.Offset = offset;
+	rec.OldData = ReadBytes(offset, m_InsertMode ? 0 : m_DataSize);
+	rec.OldModified = ReadModified(offset, m_InsertMode ? 0 : m_DataSize);
+	rec.NewData.resize(m_DataSize);
+	memcpy(rec.NewData.data(), &value, m_DataSize);
 
 	if (m_InsertMode) {
-		rec.type = UndoRecord::Type::Insert;
+		rec.Op = UndoRecord::Type::Insert;
 		m_Buffer->Insert(offset, (uint8_t*)&value, m_DataSize);
 		m_Modified.insert(m_Modified.begin() + offset, m_DataSize, true);
 	}
 	else {
-		rec.type = UndoRecord::Type::Overwrite;
+		rec.Op = UndoRecord::Type::Overwrite;
 		m_Buffer->SetData(offset, (uint8_t*)&value, m_DataSize);
 		if ((int64_t)m_Modified.size() < m_Buffer->GetSize())
 			m_Modified.resize((size_t)m_Buffer->GetSize(), false);
@@ -828,53 +836,53 @@ void CHexControl::PushUndo(UndoRecord record) {
 }
 
 void CHexControl::ApplyUndo(const UndoRecord& rec) {
-	switch (rec.type) {
+	switch (rec.Op) {
 		case UndoRecord::Type::Overwrite:
-			m_Buffer->SetData(rec.offset, rec.oldData.data(), (uint32_t)rec.oldData.size());
-			for (size_t i = 0; i < rec.oldModified.size(); i++)
-				if (rec.offset + (int64_t)i < (int64_t)m_Modified.size())
-					m_Modified[rec.offset + i] = rec.oldModified[i];
+			m_Buffer->SetData(rec.Offset, rec.OldData.data(), (uint32_t)rec.OldData.size());
+			for (size_t i = 0; i < rec.OldModified.size(); i++)
+				if (rec.Offset + (int64_t)i < (int64_t)m_Modified.size())
+					m_Modified[rec.Offset + i] = rec.OldModified[i];
 			break;
 		case UndoRecord::Type::Insert:
-			m_Buffer->Delete(rec.offset, rec.newData.size());
-			m_Modified.erase(m_Modified.begin() + rec.offset,
-			                 m_Modified.begin() + rec.offset + rec.newData.size());
+			m_Buffer->Delete(rec.Offset, rec.NewData.size());
+			m_Modified.erase(m_Modified.begin() + rec.Offset,
+			                 m_Modified.begin() + rec.Offset + rec.NewData.size());
 			RecalcLayout();
 			break;
 		case UndoRecord::Type::Delete:
-			m_Buffer->Insert(rec.offset, rec.oldData.data(), (uint32_t)rec.oldData.size());
-			m_Modified.insert(m_Modified.begin() + rec.offset, rec.oldModified.begin(), rec.oldModified.end());
+			m_Buffer->Insert(rec.Offset, rec.OldData.data(), (uint32_t)rec.OldData.size());
+			m_Modified.insert(m_Modified.begin() + rec.Offset, rec.OldModified.begin(), rec.OldModified.end());
 			RecalcLayout();
 			break;
 		case UndoRecord::Type::Compound:
-			for (auto it = rec.children.rbegin(); it != rec.children.rend(); ++it)
+			for (auto it = rec.Children.rbegin(); it != rec.Children.rend(); ++it)
 				ApplyUndo(*it);
 			break;
 	}
 }
 
 void CHexControl::ApplyRedo(const UndoRecord& rec) {
-	switch (rec.type) {
+	switch (rec.Op) {
 		case UndoRecord::Type::Overwrite:
-			m_Buffer->SetData(rec.offset, rec.newData.data(), (uint32_t)rec.newData.size());
-			if ((int64_t)m_Modified.size() < rec.offset + (int64_t)rec.newData.size())
-				m_Modified.resize((size_t)(rec.offset + rec.newData.size()), false);
-			for (size_t i = 0; i < rec.newData.size(); i++)
-				m_Modified[rec.offset + i] = true;
+			m_Buffer->SetData(rec.Offset, rec.NewData.data(), (uint32_t)rec.NewData.size());
+			if ((int64_t)m_Modified.size() < rec.Offset + (int64_t)rec.NewData.size())
+				m_Modified.resize((size_t)(rec.Offset + rec.NewData.size()), false);
+			for (size_t i = 0; i < rec.NewData.size(); i++)
+				m_Modified[rec.Offset + i] = true;
 			break;
 		case UndoRecord::Type::Insert:
-			m_Buffer->Insert(rec.offset, rec.newData.data(), (uint32_t)rec.newData.size());
-			m_Modified.insert(m_Modified.begin() + rec.offset, rec.newData.size(), true);
+			m_Buffer->Insert(rec.Offset, rec.NewData.data(), (uint32_t)rec.NewData.size());
+			m_Modified.insert(m_Modified.begin() + rec.Offset, rec.NewData.size(), true);
 			RecalcLayout();
 			break;
 		case UndoRecord::Type::Delete:
-			m_Buffer->Delete(rec.offset, rec.oldData.size());
-			m_Modified.erase(m_Modified.begin() + rec.offset,
-			                 m_Modified.begin() + rec.offset + rec.oldData.size());
+			m_Buffer->Delete(rec.Offset, rec.OldData.size());
+			m_Modified.erase(m_Modified.begin() + rec.Offset,
+			                 m_Modified.begin() + rec.Offset + rec.OldData.size());
 			RecalcLayout();
 			break;
 		case UndoRecord::Type::Compound:
-			for (auto& child : rec.children)
+			for (auto& child : rec.Children)
 				ApplyRedo(child);
 			break;
 	}
@@ -1289,20 +1297,20 @@ bool CHexControl::Paste(int64_t offset) {
 			if (!bytes.empty()) {
 				auto bufSize = m_Buffer->GetSize();
 				UndoRecord rec;
-				rec.offset = offset;
+				rec.Offset = offset;
 				if (m_InsertMode) {
-					rec.type = UndoRecord::Type::Insert;
-					rec.newData = bytes;
+					rec.Op = UndoRecord::Type::Insert;
+					rec.NewData = bytes;
 					m_Buffer->Insert(offset, bytes.data(), (uint32_t)bytes.size());
 					m_Modified.insert(m_Modified.begin() + offset, bytes.size(), true);
 					RecalcLayout();
 				}
 				else {
 					auto count = (uint32_t)std::min((int64_t)bytes.size(), bufSize - offset);
-					rec.type = UndoRecord::Type::Overwrite;
-					rec.oldData = ReadBytes(offset, count);
-					rec.oldModified = ReadModified(offset, count);
-					rec.newData.assign(bytes.begin(), bytes.begin() + count);
+					rec.Op = UndoRecord::Type::Overwrite;
+					rec.OldData = ReadBytes(offset, count);
+					rec.OldModified = ReadModified(offset, count);
+					rec.NewData.assign(bytes.begin(), bytes.begin() + count);
 					m_Buffer->SetData(offset, bytes.data(), count);
 					if ((int64_t)m_Modified.size() < bufSize)
 						m_Modified.resize((size_t)bufSize, false);
@@ -1348,18 +1356,18 @@ bool CHexControl::Delete() {
 		if (m_InsertMode) {
 			// Remove each row's bytes; iterate bottom-up so offsets stay valid
 			UndoRecord compound;
-			compound.type = UndoRecord::Type::Compound;
+			compound.Op = UndoRecord::Type::Compound;
 			for (int row = height - 1; row >= 0; row--) {
 				int64_t rowOffset = base + row * bpl;
 				UndoRecord rowRec;
-				rowRec.type = UndoRecord::Type::Delete;
-				rowRec.offset = rowOffset;
-				rowRec.oldData = ReadBytes(rowOffset, width);
-				rowRec.oldModified = ReadModified(rowOffset, width);
+				rowRec.Op = UndoRecord::Type::Delete;
+				rowRec.Offset = rowOffset;
+				rowRec.OldData = ReadBytes(rowOffset, width);
+				rowRec.OldModified = ReadModified(rowOffset, width);
 				m_Buffer->Delete(rowOffset, width);
 				m_Modified.erase(m_Modified.begin() + rowOffset,
 				                 m_Modified.begin() + rowOffset + width);
-				compound.children.insert(compound.children.begin(), std::move(rowRec));
+				compound.Children.insert(compound.Children.begin(), std::move(rowRec));
 			}
 			PushUndo(std::move(compound));
 			RecalcLayout();
@@ -1377,10 +1385,10 @@ bool CHexControl::Delete() {
 
 		if (m_InsertMode) {
 			UndoRecord rec;
-			rec.type = UndoRecord::Type::Delete;
-			rec.offset = selOffset;
-			rec.oldData = ReadBytes(selOffset, selLength);
-			rec.oldModified = ReadModified(selOffset, selLength);
+			rec.Op = UndoRecord::Type::Delete;
+			rec.Offset = selOffset;
+			rec.OldData = ReadBytes(selOffset, selLength);
+			rec.OldModified = ReadModified(selOffset, selLength);
 			m_Buffer->Delete(selOffset, (size_t)selLength);
 			m_Modified.erase(m_Modified.begin() + selOffset,
 			                 m_Modified.begin() + selOffset + selLength);
@@ -1457,25 +1465,25 @@ uint32_t CHexControl::FillSelection(const uint8_t* pattern, uint32_t patternSize
 		auto base  = m_Selection.GetOffset();
 
 		UndoRecord compound;
-		compound.type = UndoRecord::Type::Compound;
+		compound.Op = UndoRecord::Type::Compound;
 		uint32_t patPos = 0;
 		uint32_t total = 0;
 		for (int row = 0; row < height; row++) {
 			int64_t rowOffset = base + row * bpl;
 			UndoRecord rowRec;
-			rowRec.type = UndoRecord::Type::Overwrite;
-			rowRec.offset = rowOffset;
-			rowRec.oldData = ReadBytes(rowOffset, width);
-			rowRec.oldModified = ReadModified(rowOffset, width);
-			rowRec.newData.resize(width);
+			rowRec.Op = UndoRecord::Type::Overwrite;
+			rowRec.Offset = rowOffset;
+			rowRec.OldData = ReadBytes(rowOffset, width);
+			rowRec.OldModified = ReadModified(rowOffset, width);
+			rowRec.NewData.resize(width);
 			for (int col = 0; col < width; col++)
-				rowRec.newData[col] = pattern[patPos++ % patternSize];
-			m_Buffer->SetData(rowOffset, rowRec.newData.data(), width);
+				rowRec.NewData[col] = pattern[patPos++ % patternSize];
+			m_Buffer->SetData(rowOffset, rowRec.NewData.data(), width);
 			if ((int64_t)m_Modified.size() < rowOffset + width)
 				m_Modified.resize((size_t)(rowOffset + width), false);
 			for (int col = 0; col < width; col++)
 				m_Modified[rowOffset + col] = true;
-			compound.children.push_back(std::move(rowRec));
+			compound.Children.push_back(std::move(rowRec));
 			total += width;
 		}
 		PushUndo(std::move(compound));
@@ -1495,15 +1503,15 @@ uint32_t CHexControl::Fill(int64_t offset, const uint8_t* pattern, uint32_t patt
 	count = (uint32_t)std::min((int64_t)count, bufSize - offset);
 
 	UndoRecord rec;
-	rec.type = UndoRecord::Type::Overwrite;
-	rec.offset = offset;
-	rec.oldData = ReadBytes(offset, count);
-	rec.oldModified = ReadModified(offset, count);
-	rec.newData.resize(count);
+	rec.Op = UndoRecord::Type::Overwrite;
+	rec.Offset = offset;
+	rec.OldData = ReadBytes(offset, count);
+	rec.OldModified = ReadModified(offset, count);
+	rec.NewData.resize(count);
 	for (uint32_t i = 0; i < count; i++)
-		rec.newData[i] = pattern[i % patternSize];
+		rec.NewData[i] = pattern[i % patternSize];
 
-	m_Buffer->SetData(offset, rec.newData.data(), count);
+	m_Buffer->SetData(offset, rec.NewData.data(), count);
 	if ((int64_t)m_Modified.size() < bufSize)
 		m_Modified.resize((size_t)bufSize, false);
 	for (uint32_t i = 0; i < count; i++)
@@ -1585,14 +1593,17 @@ int CHexControl::AddHighlight(int64_t offset, int64_t length, COLORREF textColor
 	if (length <= 0)
 		return -1;
 	int id = m_NextHighlightId++;
-	m_Highlights.push_back({ offset, length, textColor, bkColor, id });
+	HexHighlight hl{};
+	hl.Offset = offset; hl.Length = length;
+	hl.TextColor = textColor; hl.BkColor = bkColor; hl.Id = id;
+	m_Highlights.push_back(hl);
 	RedrawWindow();
 	return id;
 }
 
 bool CHexControl::RemoveHighlight(int id) {
 	auto it = std::find_if(m_Highlights.begin(), m_Highlights.end(),
-		[id](const HexHighlight& h) { return h.id == id; });
+		[id](const HexHighlight& h) { return h.Id == id; });
 	if (it == m_Highlights.end())
 		return false;
 	m_Highlights.erase(it);
@@ -1613,7 +1624,7 @@ const std::vector<HexHighlight>& CHexControl::GetHighlights() const {
 
 const HexHighlight* CHexControl::GetHighlightAt(int64_t offset) const {
 	for (auto& h : m_Highlights)
-		if (offset >= h.offset && offset < h.offset + h.length)
+		if (offset >= h.Offset && offset < h.Offset + h.Length)
 			return &h;
 	return nullptr;
 }
@@ -1817,4 +1828,66 @@ bool CHexControl::CopyText(PCWSTR text) const {
 			return true;
 	}
 	return false;
+}
+
+bool CHexControl::CopyAsText(int64_t offset, int64_t size) const {
+	if (!m_Buffer)
+		return false;
+
+	if (offset < 0) {
+		if (m_Selection.IsEmpty())
+			return false;
+		offset = m_Selection.GetOffset();
+		if (m_Selection.GetSelectionType() == SelectionType::Box) {
+			// build text row by row, rows separated by newlines
+			auto width  = m_Selection.GetWidth();
+			auto height = m_Selection.GetHeight();
+			std::wstring result;
+			result.reserve((size_t)(width + 2) * height);
+			for (int row = 0; row < height; ++row) {
+				int64_t rowOffset = offset + (int64_t)row * m_BytesPerLine;
+				uint8_t buf[512];
+				uint32_t got = m_Buffer->GetData(rowOffset, buf, (uint32_t)std::min((int64_t)width, (int64_t)sizeof(buf)));
+				for (uint32_t i = 0; i < got; ++i)
+					result += (buf[i] >= 0x20 && buf[i] <= 0x7E) ? (WCHAR)buf[i] : L'.';
+				if (row + 1 < height)
+					result += L'\n';
+			}
+			return CopyText(result.c_str());
+		}
+		size = m_Selection.GetLength();
+	}
+
+	if (size <= 0)
+		return false;
+
+	std::wstring result;
+	result.reserve((size_t)size);
+	int64_t remaining = size;
+	int64_t pos = offset;
+	while (remaining > 0) {
+		uint8_t buf[4096];
+		uint32_t chunk = (uint32_t)std::min(remaining, (int64_t)sizeof(buf));
+		uint32_t got = m_Buffer->GetData(pos, buf, chunk);
+		if (got == 0) break;
+		for (uint32_t i = 0; i < got; ++i)
+			result += (buf[i] >= 0x20 && buf[i] <= 0x7E) ? (WCHAR)buf[i] : L'.';
+		pos += got;
+		remaining -= got;
+	}
+	return CopyText(result.c_str());
+}
+
+uint64_t CHexControl::GetValueAt(int64_t offset, int32_t size) const {
+	if (!m_Buffer || size <= 0 || size > 8)
+		return 0;
+	uint8_t buf[8]{};
+	m_Buffer->GetData(offset, buf, (uint32_t)size);
+	if (m_BigEndian) {
+		for (int i = 0, j = size - 1; i < j; ++i, --j)
+			std::swap(buf[i], buf[j]);
+	}
+	uint64_t value = 0;
+	memcpy(&value, buf, size);
+	return value;
 }
