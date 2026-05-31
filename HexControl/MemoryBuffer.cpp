@@ -25,7 +25,7 @@ void MemoryBuffer::Clear() {
 
 uint32_t MemoryBuffer::GetData(int64_t offset, uint8_t* buffer, uint32_t count) {
     if (count + offset > GetSize())
-        count = max(0, int32_t(GetSize() - offset));
+        count = std::max(0, int32_t(GetSize() - offset));
     if (count)
         ::memcpy(buffer, m_ptr + offset, count);
     return count;

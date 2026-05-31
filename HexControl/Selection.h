@@ -17,6 +17,9 @@ public:
 	bool IsEmpty() const;
 	SelectionType GetSelectionType() const;
 	int64_t GetLength() const;
+	int GetWidth() const;
+	int GetHeight() const;
+	int GetBytesPerLine() const;
 
 	void Clear();
 

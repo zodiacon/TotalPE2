@@ -11,6 +11,7 @@ struct HexControlColors {
 	COLORREF SelectionText{ ::GetSysColor(COLOR_HIGHLIGHTTEXT) };
 	COLORREF SelectionBackground{ ::GetSysColor(COLOR_HIGHLIGHT) };
 	COLORREF Modified{ RGB(255, 0, 0) };
+	COLORREF Ruler{ RGB(0, 0, 192) };
 };
 
 enum class HexControlOptions {
@@ -25,9 +26,36 @@ struct IHexControlClient {
 	virtual void OnSizeChanged(int64_t newSize) = 0;
 };
 
-constexpr auto NMHX_SELECTION_CHANGED = 0x2000;
+constexpr auto NMHX_SELECTION_CHANGED  = 0x2000;
+constexpr auto NMHX_CARET_CHANGED      = 0x2001;
+constexpr auto NMHX_VALUE_CHANGED      = 0x2002;
+constexpr auto NMHX_DATA_SIZE_CHANGED  = 0x2003;
+constexpr auto NMHX_BPL_CHANGED        = 0x2004;
+constexpr auto NMHX_BUFFER_CHANGED     = 0x2005;
 
 struct NMHexControlNotify : NMHDR {
+};
+
+struct NMHexControlCaretChanged : NMHDR {
+	int64_t OldOffset;
+	int64_t NewOffset;
+};
+
+struct NMHexControlValueChanged : NMHDR {
+	int64_t  Offset;
+	uint64_t OldValue;
+	uint64_t NewValue;
+	int32_t  DataSize;
+};
+
+struct NMHexControlDataSizeChanged : NMHDR {
+	int32_t OldDataSize;
+	int32_t NewDataSize;
+};
+
+struct NMHexControlBytesPerLineChanged : NMHDR {
+	int32_t OldBytesPerLine;
+	int32_t NewBytesPerLine;
 };
 
 class CHexControl :
@@ -50,17 +78,25 @@ public:
 	bool HasSelection() const;
 	bool CanCopy() const;
 	bool CanPaste() const;
-	bool Cut(int64_t offset = -1, int64_t size = 0);
-	bool Delete(int64_t offset = -1, int64_t size = 0);
+	bool Cut();
+	bool Delete();
 	bool CanCut() const;
 	bool CanDelete() const;
 	int64_t SetBiasOffset(int64_t offset);
 	int64_t GetBiasOffset() const;
 	HexControlColors& GetColors();
+	void SetRuler(bool show);
+	bool GetRuler() const;
+	void SetInsertMode(bool insert);
+	bool GetInsertMode() const;
+	void GotoOffset(int64_t offset, bool scrollIntoView = true);
 	std::wstring GetText(int64_t offset, int64_t size) const;
 	void Refresh();
+	bool IsModified(int64_t offset) const;
+	bool IsModified() const;
 	bool DeleteState(int64_t offset);
-	uint32_t Fill(int64_t offset, uint8_t value, uint32_t count);
+	uint32_t Fill(int64_t offset, const uint8_t* pattern, uint32_t patternSize, uint32_t count);
+	uint32_t FillSelection(const uint8_t* pattern, uint32_t patternSize);
 	bool SetHexControlClient(IHexControlClient* client);
 
 	BEGIN_MSG_MAP(CHexControl)
@@ -101,7 +137,9 @@ private:
 
 private:
 	bool CopyText(PCWSTR text) const;
+	void SendNotify(NMHDR& hdr, UINT code);
 	void SendSelectionChanged();
+	void SendCaretChanged(int64_t oldOffset);
 	void RecalcLayout();
 	void InitFontMetrics();
 	CPoint GetPointFromOffset(int64_t offset) const;
@@ -109,6 +147,7 @@ private:
 	int64_t GetOffsetFromPoint(const POINT& pt) const;
 	int GetAsciiStartX() const;
 	int GetHScrollX() const;
+	int GetRulerHeight() const;
 	int64_t GetAsciiOffsetFromPoint(const POINT& pt) const;
 	void DrawNumber(CDCHandle dc, int64_t offset, uint64_t value, uint32_t editDigits);
 	CString FormatNumber(ULONGLONG number, int size = 0) const;
@@ -139,9 +178,9 @@ private:
 	uint64_t m_CurrentInput{ 0 }, m_OldValue;
 	std::vector<bool> m_Modified;
 	IHexControlClient* m_pClient{ nullptr };
-	NMHexControlNotify m_Notify;
 	bool m_InsertMode{ false };
 	bool m_ReadOnly{ true };
 	bool m_SelectionFromAscii{ false };
+	bool m_ShowRuler{ true };
 };
 

@@ -152,6 +152,7 @@ void CHexView::UpdateColors() {
 	HexControlColors colors;
 	colors.Offset = WTLHelper::IsDarkMode() ? RGB(0, 128, 255) : RGB(0, 0, 128);
 	colors.Ascii = WTLHelper::IsDarkMode() ? RGB(255, 192, 0) : RGB(128, 0, 0);
+	colors.Ruler = WTLHelper::IsDarkMode() ? RGB(0, 128, 255) : RGB(0, 0, 192);
 	m_Hex.GetColors() = colors;
 	m_Hex.Invalidate();
 }

@@ -53,6 +53,18 @@ int64_t Selection::GetLength() const {
 	return _length;
 }
 
+int Selection::GetWidth() const {
+	return _width;
+}
+
+int Selection::GetHeight() const {
+	return _height;
+}
+
+int Selection::GetBytesPerLine() const {
+	return _bytesPerLine;
+}
+
 void Selection::Clear() {
 	_type = SelectionType::Simple;
 	_offset = _anchor = -1;
