@@ -41,7 +41,7 @@ void CHexControl::DoPaint(CDCHandle dc, RECT& rect) {
 		dc.SetBkColor(m_Colors.Background);
 		for (int j = 0; j < (int)m_BytesPerLine; j += m_DataSize) {
 			CString col = FormatNumber(j, m_DataSize);
-			dc.TextOut(x + xstart + (j / m_DataSize) * factor, 0, col + L" ", -1);
+			dc.TextOut(x + xstart + (j / m_DataSize) * factor + GetSeparatorExtraX(j), 0, col + L" ", -1);
 		}
 		int ax = GetAsciiStartX();
 		for (int j = 0; j < (int)m_BytesPerLine; j++) {
@@ -83,12 +83,33 @@ void CHexControl::DoPaint(CDCHandle dc, RECT& rect) {
 			//}
 			DWORD64 value = 0;
 			memcpy(&value, data + j, step);
+			if (m_BigEndian && step > 1) {
+				DWORD64 swapped = 0;
+				for (int s = 0; s < step; s++)
+					((uint8_t*)&swapped)[step - 1 - s] = ((uint8_t*)&value)[s];
+				value = swapped;
+			}
 			number = FormatNumber(value, step);
 			bool selected = m_Selection.IsSelected(offset + j);
-			dc.SetTextColor(selected ? m_Colors.SelectionText : ((int64_t)m_Modified.size() > offset + j && m_Modified[offset + j] ? m_Colors.Modified : (value ? m_Colors.Text : RGB(128, 128, 128))));
-			dc.SetBkColor(selected ? m_Colors.SelectionBackground : m_Colors.Background);
+			if (selected) {
+				dc.SetTextColor(m_Colors.SelectionText);
+				dc.SetBkColor(m_Colors.SelectionBackground);
+			}
+			else if (auto* hl = GetHighlightAt(offset + j)) {
+				dc.SetTextColor(hl->textColor);
+				dc.SetBkColor(hl->bkColor);
+			}
+			else if ((int64_t)m_Modified.size() > offset + j && m_Modified[offset + j]) {
+				dc.SetTextColor(m_Colors.Modified);
+				dc.SetBkColor(m_Colors.Background);
+			}
+			else {
+				dc.SetTextColor(value ? m_Colors.Text : RGB(128, 128, 128));
+				dc.SetBkColor(m_Colors.Background);
+			}
 
-			dc.TextOut(x + xstart + j / m_DataSize * factor + x2, rulerHeight + y * m_CharHeight, number + L" ", -1);
+			int sepX = GetSeparatorExtraX(j);
+			dc.TextOut(x + xstart + j / m_DataSize * factor + x2 + sepX, rulerHeight + y * m_CharHeight, number + L" ", -1);
 			if (step < m_DataSize)
 				x2 += m_CharWidth * 3;
 
@@ -144,8 +165,16 @@ void CHexControl::DoPaint(CDCHandle dc, RECT& rect) {
 				dc.SetTextColor(m_Colors.SelectionText);
 				dc.SetBkColor(m_Colors.SelectionBackground);
 			}
+			else if (auto* hl = GetHighlightAt(offset + j)) {
+				dc.SetTextColor(hl->textColor);
+				dc.SetBkColor(hl->bkColor);
+			}
+			else if ((int64_t)m_Modified.size() > offset + j && m_Modified[offset + j]) {
+				dc.SetTextColor(m_Colors.Modified);
+				dc.SetBkColor(m_Colors.Background);
+			}
 			else {
-				dc.SetTextColor((int64_t)m_Modified.size() > offset + j && m_Modified[offset + j] ? m_Colors.Modified : m_Colors.Ascii);
+				dc.SetTextColor(m_Colors.Ascii);
 				dc.SetBkColor(m_Colors.Background);
 			}
 			dc.TextOut(x + xstart + j * m_CharWidth, rulerHeight + y * m_CharHeight, text, 1);
@@ -605,7 +634,7 @@ void CHexControl::RecalcLayout() {
 void CHexControl::InitFontMetrics() {
 	if (m_Font)
 		m_Font.DeleteObject();
-	m_Font.CreatePointFont(m_FontPointSize, L"Consolas");
+	m_Font.CreatePointFont(m_FontPointSize, m_FontFaceName);
 	CClientDC dc(*this);
 	dc.SelectFont(m_Font);
 	TEXTMETRIC tm;
@@ -623,7 +652,7 @@ CPoint CHexControl::GetPointFromOffset(int64_t offset) const {
 
 	CPoint pt;
 	pt.y = GetRulerHeight() + line * m_CharHeight;
-	pt.x = (b * (m_DataSize * 2 + 1) + m_AddressDigits + 1) * m_CharWidth - GetHScrollX();
+	pt.x = (b * (m_DataSize * 2 + 1) + m_AddressDigits + 1) * m_CharWidth + GetSeparatorExtraX(b * m_DataSize) - GetHScrollX();
 	ATLTRACE(L"GetPointFromOffset %llX: (%d,%d)\n", offset, pt.x, pt.y);
 
 	return pt;
@@ -634,10 +663,21 @@ int64_t CHexControl::GetOffsetFromPoint(const POINT& pt) const {
 	if (pt.y < rulerHeight)
 		return -1;
 	uint32_t line = (pt.y - rulerHeight) / m_CharHeight;
-	int32_t b = (pt.x + GetHScrollX()) / m_CharWidth - (m_AddressDigits + 1);
+	int px = pt.x + GetHScrollX() - (m_AddressDigits + 1) * m_CharWidth;
+	if (px < 0)
+		return -1;
 
-	b /= m_DataSize * 2 + 1;
-	if (b < 0 || b >= (int)m_BytesPerLine)
+	int hexCols = m_BytesPerLine / m_DataSize;
+	int cellW = m_DataSize * 2 + 1;
+	int b = -1;
+	for (int col = 0; col < hexCols; col++) {
+		int colX = col * cellW * m_CharWidth + GetSeparatorExtraX(col * m_DataSize);
+		if (px >= colX && px < colX + cellW * m_CharWidth) {
+			b = col;
+			break;
+		}
+	}
+	if (b < 0)
 		return -1;
 
 	return m_StartOffset + line * m_BytesPerLine + b * m_DataSize;
@@ -655,8 +695,18 @@ int CHexControl::GetRulerHeight() const {
 	return m_ShowRuler ? m_CharHeight + 4 : 0;
 }
 
+int CHexControl::GetSeparatorExtraX(int byteCol) const {
+	if (m_ColSeparator == 0 || byteCol == 0)
+		return 0;
+	// number of separator gaps before this byte column (not counting col 0)
+	return (int)(byteCol / m_ColSeparator) * (m_CharWidth / 2);
+}
+
 int CHexControl::GetAsciiStartX() const {
-	return (m_AddressDigits + 2 + m_BytesPerLine / m_DataSize * (m_DataSize * 2 + 1)) * m_CharWidth;
+	int hexCols = m_BytesPerLine / m_DataSize;
+	int base = (m_AddressDigits + 2 + hexCols * (m_DataSize * 2 + 1)) * m_CharWidth;
+	// add all separator gaps within the hex area
+	return base + GetSeparatorExtraX(m_BytesPerLine);
 }
 
 CPoint CHexControl::GetAsciiPointFromOffset(int64_t offset) const {
@@ -773,6 +823,8 @@ void CHexControl::PushUndo(UndoRecord record) {
 		return;
 	m_RedoStack.clear();
 	m_UndoStack.push_back(std::move(record));
+	if (m_MaxUndoLevels > 0 && m_UndoStack.size() > m_MaxUndoLevels)
+		m_UndoStack.erase(m_UndoStack.begin());
 }
 
 void CHexControl::ApplyUndo(const UndoRecord& rec) {
@@ -884,6 +936,46 @@ LRESULT CHexControl::OnMouseMove(UINT, WPARAM wp, LPARAM lParam, BOOL&) {
 
 LRESULT CHexControl::OnLeftButtonUp(UINT, WPARAM, LPARAM, BOOL&) {
 	ReleaseCapture();
+	return 0;
+}
+
+LRESULT CHexControl::OnLeftButtonDblClk(UINT, WPARAM, LPARAM lParam, BOOL&) {
+	if (!m_Buffer)
+		return 0;
+
+	POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+
+	if (m_SelectionFromAscii) {
+		// In ASCII region: select a run of printable characters (word boundary)
+		int64_t offset = GetAsciiOffsetFromPoint(pt);
+		if (offset < 0)
+			return 0;
+		uint8_t ch;
+		m_Buffer->GetData(offset, &ch, 1);
+		bool isPrint = ch >= 0x20 && ch <= 0x7e;
+
+		int64_t start = offset, end = offset;
+		if (isPrint) {
+			while (start > 0) {
+				m_Buffer->GetData(start - 1, &ch, 1);
+				if (ch < 0x20 || ch > 0x7e) break;
+				start--;
+			}
+			while (end + 1 < m_Buffer->GetSize()) {
+				m_Buffer->GetData(end + 1, &ch, 1);
+				if (ch < 0x20 || ch > 0x7e) break;
+				end++;
+			}
+		}
+		SetSelection(start, end - start + 1);
+	}
+	else {
+		// In hex region: select the data-size unit under the cursor
+		int64_t offset = GetOffsetFromPoint(pt);
+		if (offset < 0)
+			return 0;
+		SetSelection(offset, m_DataSize);
+	}
 	return 0;
 }
 
@@ -1449,6 +1541,83 @@ bool CHexControl::GetRuler() const {
 	return m_ShowRuler;
 }
 
+void CHexControl::SetFont(PCWSTR faceName, int pointSizeTenths) {
+	if (faceName)
+		::StringCchCopy(m_FontFaceName, LF_FACESIZE, faceName);
+	if (pointSizeTenths > 0)
+		m_FontPointSize = pointSizeTenths;
+	if (m_hWnd) {
+		InitFontMetrics();
+		DestroyCaret();
+		CreateSolidCaret(m_InsertMode ? 2 : m_CharWidth, m_CharHeight);
+		RecalcLayout();
+		RedrawWindow();
+	}
+}
+
+void CHexControl::SetBigEndian(bool bigEndian) {
+	if (m_BigEndian == bigEndian)
+		return;
+	m_BigEndian = bigEndian;
+	RedrawWindow();
+}
+
+bool CHexControl::GetBigEndian() const {
+	return m_BigEndian;
+}
+
+void CHexControl::SetMaxUndoLevels(size_t maxLevels) {
+	m_MaxUndoLevels = maxLevels;
+	if (m_UndoStack.size() > maxLevels)
+		m_UndoStack.erase(m_UndoStack.begin(), m_UndoStack.begin() + (m_UndoStack.size() - maxLevels));
+}
+
+size_t CHexControl::GetMaxUndoLevels() const {
+	return m_MaxUndoLevels;
+}
+
+void CHexControl::SetColumnSeparator(uint32_t everyNBytes) {
+	m_ColSeparator = everyNBytes;
+	RedrawWindow();
+}
+
+int CHexControl::AddHighlight(int64_t offset, int64_t length, COLORREF textColor, COLORREF bkColor) {
+	if (length <= 0)
+		return -1;
+	int id = m_NextHighlightId++;
+	m_Highlights.push_back({ offset, length, textColor, bkColor, id });
+	RedrawWindow();
+	return id;
+}
+
+bool CHexControl::RemoveHighlight(int id) {
+	auto it = std::find_if(m_Highlights.begin(), m_Highlights.end(),
+		[id](const HexHighlight& h) { return h.id == id; });
+	if (it == m_Highlights.end())
+		return false;
+	m_Highlights.erase(it);
+	RedrawWindow();
+	return true;
+}
+
+void CHexControl::ClearHighlights() {
+	if (m_Highlights.empty())
+		return;
+	m_Highlights.clear();
+	RedrawWindow();
+}
+
+const std::vector<HexHighlight>& CHexControl::GetHighlights() const {
+	return m_Highlights;
+}
+
+const HexHighlight* CHexControl::GetHighlightAt(int64_t offset) const {
+	for (auto& h : m_Highlights)
+		if (offset >= h.offset && offset < h.offset + h.length)
+			return &h;
+	return nullptr;
+}
+
 void CHexControl::GotoOffset(int64_t offset, bool scrollIntoView) {
 	if (!m_Buffer || m_Buffer->GetSize() == 0)
 		return;
@@ -1503,11 +1672,6 @@ bool CHexControl::DeleteState(int64_t offset) {
 	if (offset < 0 || offset >= (int64_t)m_Modified.size())
 		return false;
 	return m_Modified[offset] = false;
-}
-
-bool CHexControl::SetHexControlClient(IHexControlClient* client) {
-	m_pClient = client;
-	return m_pClient != nullptr;
 }
 
 void CHexControl::SetOptions(HexControlOptions options) {

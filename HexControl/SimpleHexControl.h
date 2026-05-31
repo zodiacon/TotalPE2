@@ -21,11 +21,6 @@ enum class HexControlOptions {
 };
 DEFINE_ENUM_FLAG_OPERATORS(HexControlOptions);
 
-struct IHexControlClient {
-	virtual void OnContextMenu(POINT const& pt) = 0;
-	virtual void OnSizeChanged(int64_t newSize) = 0;
-};
-
 constexpr auto NMHX_SELECTION_CHANGED  = 0x2000;
 constexpr auto NMHX_CARET_CHANGED      = 0x2001;
 constexpr auto NMHX_VALUE_CHANGED      = 0x2002;
@@ -59,6 +54,14 @@ struct NMHexControlDataSizeChanged : NMHDR {
 struct NMHexControlBytesPerLineChanged : NMHDR {
 	int32_t OldBytesPerLine;
 	int32_t NewBytesPerLine;
+};
+
+struct HexHighlight {
+	int64_t  offset;
+	int64_t  length;
+	COLORREF textColor;
+	COLORREF bkColor;
+	int      id;
 };
 
 struct UndoRecord {
@@ -111,6 +114,16 @@ public:
 	bool GetRuler() const;
 	void SetInsertMode(bool insert);
 	bool GetInsertMode() const;
+	void SetFont(PCWSTR faceName, int pointSizeTenths);
+	void SetBigEndian(bool bigEndian);
+	bool GetBigEndian() const;
+	void SetMaxUndoLevels(size_t maxLevels);
+	size_t GetMaxUndoLevels() const;
+	void SetColumnSeparator(uint32_t everyNBytes);
+	int  AddHighlight(int64_t offset, int64_t length, COLORREF textColor, COLORREF bkColor);
+	bool RemoveHighlight(int id);
+	void ClearHighlights();
+	const std::vector<HexHighlight>& GetHighlights() const;
 	void GotoOffset(int64_t offset, bool scrollIntoView = true);
 	std::wstring GetText(int64_t offset, int64_t size) const;
 	void Refresh();
@@ -119,7 +132,6 @@ public:
 	bool DeleteState(int64_t offset);
 	uint32_t Fill(int64_t offset, const uint8_t* pattern, uint32_t patternSize, uint32_t count);
 	uint32_t FillSelection(const uint8_t* pattern, uint32_t patternSize);
-	bool SetHexControlClient(IHexControlClient* client);
 	void SetOptions(HexControlOptions options);
 	HexControlOptions GetOptions() const;
 	bool Undo();
@@ -138,6 +150,7 @@ public:
 		MESSAGE_HANDLER(WM_MOUSEMOVE, OnMouseMove)
 		MESSAGE_HANDLER(WM_LBUTTONUP, OnLeftButtonUp)
 		MESSAGE_HANDLER(WM_LBUTTONDOWN, OnLeftButtonDown)
+		MESSAGE_HANDLER(WM_LBUTTONDBLCLK, OnLeftButtonDblClk)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
 		MESSAGE_HANDLER(WM_MOUSEWHEEL, OnMouseWheel)
 		MESSAGE_HANDLER(WM_SETFOCUS, OnSetFocus)
@@ -159,6 +172,7 @@ private:
 	LRESULT OnSetFocus(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnKillFocus(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnLeftButtonDown(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
+	LRESULT OnLeftButtonDblClk(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnGetDialogCode(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnKeyDown(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnChar(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
@@ -178,6 +192,7 @@ private:
 	int GetAsciiStartX() const;
 	int GetHScrollX() const;
 	int GetRulerHeight() const;
+	int GetSeparatorExtraX(int byteCol) const;
 	int64_t GetAsciiOffsetFromPoint(const POINT& pt) const;
 	void DrawNumber(CDCHandle dc, int64_t offset, uint64_t value, uint32_t editDigits);
 	CString FormatNumber(ULONGLONG number, int size = 0) const;
@@ -194,10 +209,12 @@ private:
 	std::vector<bool>    ReadModified(int64_t offset, int64_t count) const;
 	void ApplyUndo(const UndoRecord& record);
 	void ApplyRedo(const UndoRecord& record);
+	const HexHighlight* GetHighlightAt(int64_t offset) const;
 
 private:
 	HexControlColors m_Colors;
 	CFont m_Font;
+	WCHAR m_FontFaceName[LF_FACESIZE]{ L"Consolas" };
 	int m_FontPointSize{ 110 };
 	int m_Lines{ 1 };
 	int m_Chars{ 0 };
@@ -212,15 +229,19 @@ private:
 	Selection m_Selection;
 	uint64_t m_CurrentInput{ 0 }, m_OldValue;
 	std::vector<bool> m_Modified;
-	IHexControlClient* m_pClient{ nullptr };
 	HexControlOptions  m_Options{ HexControlOptions::None };
-	bool m_InsertMode{ false };
-	bool m_ReadOnly{ true };
-	bool m_SelectionFromAscii{ false };
-	bool m_ShowRuler{ true };
-	std::vector<UndoRecord>  m_UndoStack;
-	std::vector<UndoRecord>  m_RedoStack;
-	std::vector<uint8_t>     m_FindPattern;
-	bool                     m_FindForward{ true };
+	bool     m_InsertMode{ false };
+	bool     m_ReadOnly{ true };
+	bool     m_SelectionFromAscii{ false };
+	bool     m_ShowRuler{ true };
+	bool     m_BigEndian{ false };
+	size_t   m_MaxUndoLevels{ 1000 };
+	uint32_t m_ColSeparator{ 0 };   // 0 = disabled
+	std::vector<UndoRecord>   m_UndoStack;
+	std::vector<UndoRecord>   m_RedoStack;
+	std::vector<uint8_t>      m_FindPattern;
+	bool                      m_FindForward{ true };
+	std::vector<HexHighlight> m_Highlights;
+	int                       m_NextHighlightId{ 1 };
 };
 
