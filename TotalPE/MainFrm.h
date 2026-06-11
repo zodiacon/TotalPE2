@@ -9,6 +9,7 @@
 #include <CustomSplitterWindow.h>
 #include <TreeViewHelper.h>
 #include <PEFile.h>
+#include <ELFFile.h>
 #include "Interfaces.h"
 #include "RecentFilesManager.h"
 #include <Theme.h>
@@ -101,7 +102,9 @@ private:
 	void UpdateUI();
 	void InitMenu(HMENU hMenu);
 	void BuildTree(int iconSize = 16);
-	bool OpenPE(PCWSTR path);
+	void BuildPETree(HTREEITEM root);
+	void BuildELFTree(HTREEITEM root);
+	bool OpenBinary(PCWSTR path);
 	CString DoFileOpen() const;
 	bool BuildTreeImageList(int iconSize = 16);
 	void ParseCommandLine();
@@ -166,6 +169,8 @@ private:
 	CTreeViewCtrl m_Tree;
 	CMultiPaneStatusBarCtrl m_StatusBar;
 	PEFile m_PE;
+	ELFFile m_ELF;
+	BinaryFile* m_Binary{ nullptr };
 	std::vector<FlatResource> m_FlatResources;
 	CImageList m_TreeImages;
 	std::unordered_map<TreeItemType, IView*> m_Views;

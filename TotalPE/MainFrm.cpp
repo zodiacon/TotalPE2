@@ -40,23 +40,26 @@ bool CMainFrame::OnTreeDoubleClick(HWND, HTREEITEM hItem) {
 }
 
 void CMainFrame::UpdateUI() {
-	auto const fi = m_PE ? m_PE.GetFileInfo() : nullptr;
+	bool hasFile = m_Binary != nullptr && bool(*m_Binary);
+	bool isPE    = hasFile && m_Binary->GetFormat() == BinaryFormat::PE;
+	auto const fi = (isPE && m_PE) ? m_PE.GetFileInfo() : nullptr;
+
 	UIEnable(ID_PE_DISASSEMBLEENTRYPOINT, fi != nullptr);
-	UIEnable(ID_VIEW_EXPORTS, fi && fi->HasExport);
-	UIEnable(ID_VIEW_IMPORTS, fi && fi->HasImport);
-	UIEnable(ID_VIEW_RESOURCES, fi && fi->HasResource);
-	UIEnable(ID_VIEW_DEBUG, fi && fi->HasDebug);
+	UIEnable(ID_VIEW_EXPORTS,  fi && fi->HasExport);
+	UIEnable(ID_VIEW_IMPORTS,  fi && fi->HasImport);
+	UIEnable(ID_VIEW_RESOURCES,fi && fi->HasResource);
+	UIEnable(ID_VIEW_DEBUG,    fi && fi->HasDebug);
 	UIEnable(ID_VIEW_DIRECTORIES, fi && fi->HasDataDirs);
 	UIEnable(ID_VIEW_SECTIONS, fi && fi->HasSections);
-	UIEnable(ID_PE_SECURITY, fi && fi->HasSecurity);
-	UIEnable(ID_FILE_CLOSE, fi != nullptr);
-	UIEnable(ID_FILE_SAVE, fi != nullptr);
+	UIEnable(ID_PE_SECURITY,   fi && fi->HasSecurity);
+	UIEnable(ID_FILE_CLOSE,    hasFile);
+	UIEnable(ID_FILE_SAVE,     hasFile);
 	UIEnable(ID_VIEW_MANIFEST, fi && m_hResManifest != nullptr);
-	UIEnable(ID_VIEW_VERSION, fi && m_hResVersion != nullptr);
-	UIEnable(ID_FILE_OPENINANEWWINDOW, fi != nullptr);
+	UIEnable(ID_VIEW_VERSION,  fi && m_hResVersion != nullptr);
+	UIEnable(ID_FILE_OPENINANEWWINDOW, hasFile);
 	UIEnable(ID_EDIT_COPY, FALSE);
-	UIEnable(ID_EDIT_FIND, fi && m_Tabs.GetActivePage() >= 0);
-	UIEnable(ID_PE_ENTIREFILEINHEX, fi != nullptr);
+	UIEnable(ID_EDIT_FIND, hasFile && m_Tabs.GetActivePage() >= 0);
+	UIEnable(ID_PE_ENTIREFILEINHEX, hasFile);
 }
 
 int CMainFrame::GetResourceIconIndex(WORD resType) const {
@@ -329,7 +332,7 @@ LRESULT CMainFrame::OnWindowActivate(WORD /*wNotifyCode*/, WORD wID, HWND /*hWnd
 }
 
 LRESULT CMainFrame::OnRunAsAdmin(WORD, WORD, HWND, BOOL&) {
-	if (SecurityHelper::RunElevated(m_PE.GetPath().c_str(), true)) {
+	if (m_Binary && SecurityHelper::RunElevated(m_Binary->GetPath().c_str(), true)) {
 		s_Frames = 1;
 		PostMessage(WM_CLOSE);
 	}
@@ -398,29 +401,48 @@ LRESULT CMainFrame::OnDropFiles(UINT /*uMsg*/, WPARAM wParam, LPARAM /*lParam*/,
 	auto hDrop = (HDROP)wParam;
 	WCHAR path[MAX_PATH];
 	if (::DragQueryFile(hDrop, 0, path, _countof(path)))
-		OpenPE(path);
+		OpenBinary(path);
 	::DragFinish(hDrop);
 	return 0;
 }
 
-bool CMainFrame::OpenPE(PCWSTR path) {
+bool CMainFrame::OpenBinary(PCWSTR path) {
 	CWaitCursor wait;
-	int bitness = (m_PE && m_PE.GetFileInfo()->IsPE64) * 2 + (m_PE && m_PE.GetFileInfo()->IsPE32);
 
-	m_PE.Close();
-	if (!m_PE.Open(path)) {
-		AtlMessageBox(m_hWnd, L"Error parsing file", IDR_MAINFRAME, MB_ICONERROR);
+	auto fmt = DetectBinaryFormat(path);
+	if (fmt == BinaryFormat::Unknown) {
+		AtlMessageBox(m_hWnd, L"Unknown or unsupported file format", IDR_MAINFRAME, MB_ICONERROR);
 		return false;
 	}
 
-	//
-	// clear symbol cache if bitness of old PE and new PE differ
-	//
-	if (bitness == 1 && m_PE.GetFileInfo()->IsPE64 || bitness == 2 && m_PE.GetFileInfo()->IsPE32)
-		m_SymbolsForModules.clear();
+	if (fmt == BinaryFormat::PE) {
+		int oldBitness = (m_PE && m_PE.GetFileInfo()->IsPE64) * 2 + (m_PE && m_PE.GetFileInfo()->IsPE32);
+		m_PE.Close();
+		m_ELF.Close();
+		if (!m_PE.Open(path)) {
+			AtlMessageBox(m_hWnd, L"Error parsing PE file", IDR_MAINFRAME, MB_ICONERROR);
+			return false;
+		}
+		m_Binary = &m_PE;
 
-	m_Symbols.Close();
-	m_Symbols.OpenImage(path);
+		if (oldBitness == 1 && m_PE.GetFileInfo()->IsPE64 || oldBitness == 2 && m_PE.GetFileInfo()->IsPE32)
+			m_SymbolsForModules.clear();
+
+		m_Symbols.Close();
+		m_Symbols.OpenImage(path);
+	}
+	else {
+		m_PE.Close();
+		m_ELF.Close();
+		if (!m_ELF.Open(path)) {
+			AtlMessageBox(m_hWnd, L"Error parsing ELF file", IDR_MAINFRAME, MB_ICONERROR);
+			return false;
+		}
+		m_Binary = &m_ELF;
+		m_Symbols.Close();
+		m_SymbolsForModules.clear();
+	}
+
 	m_Views.clear();
 	m_Views2.clear();
 	m_Tabs.RemoveAllPages();
@@ -458,9 +480,22 @@ void CMainFrame::BuildTree(int iconSize) {
 		m_Tabs.SetImageList(m_TreeImages);
 	}
 
-	auto& path = m_PE.GetPath();
-
+	auto& path = m_Binary->GetPath();
 	auto root = InsertTreeItem(m_Tree, path.substr(path.rfind(L'\\') + 1).c_str(), 0, TreeItemType::Image);
+
+	if (m_Binary->GetFormat() == BinaryFormat::PE)
+		BuildPETree(root);
+	else
+		BuildELFTree(root);
+
+	m_hRoot = root;
+	m_Tree.Expand(root, TVE_EXPAND);
+	m_Tree.SelectItem(root);
+	m_Tree.SetRedraw();
+	m_Tree.SetFocus();
+}
+
+void CMainFrame::BuildPETree(HTREEITEM root) {
 	auto headers = InsertTreeItem(m_Tree, L"Headers", GetTreeIcon(IDI_HEADERS), TreeItemType::Headers, root);
 	InsertTreeItem(m_Tree, L"DOS Header", GetTreeIcon(IDI_MSDOS), TreeItemType::DOSHeader, headers);
 	InsertTreeItem(m_Tree, L"NT Header", GetTreeIcon(IDI_FILE_HEADER), TreeItemType::NTHeader, headers);
@@ -532,19 +567,49 @@ void CMainFrame::BuildTree(int iconSize) {
 
 	if (m_Symbols) {
 		m_Symbols.LoadAddress(m_PE.GetImageBase());
-		//auto symbols = InsertTreeItem(m_Tree, L"Symbols", GetTreeIcon(IDI_SYMBOLS), TreeItemType::Symbols, root);
-		//InsertTreeItem(m_Tree, L"Functions", GetTreeIcon(IDI_FUNCTION), TreeItemType::SymbolsFunctions, symbols, TVI_SORT);
-		//InsertTreeItem(m_Tree, L"Global Data", GetTreeIcon(IDI_DATA), TreeItemType::SymbolsGlobalData, symbols, TVI_SORT);
-		//InsertTreeItem(m_Tree, L"Types", GetTreeIcon(IDI_TYPE), TreeItemType::SymbolsTypes, symbols, TVI_SORT);
-		//InsertTreeItem(m_Tree, L"Enums", GetTreeIcon(IDI_ENUM), TreeItemType::SymbolsEnums, symbols, TVI_SORT);
+	}
+}
+
+void CMainFrame::BuildELFTree(HTREEITEM root) {
+	int i = 0;
+
+	auto const& elfSecs = m_ELF.GetELFSections();
+	if (!elfSecs.empty()) {
+		auto hSections = InsertTreeItem(m_Tree, L"Sections", GetTreeIcon(IDI_SECTIONS), TreeItemType::ELFSections, root);
+		for (i = 0; i < (int)elfSecs.size(); i++) {
+			auto const& sec = elfSecs[i];
+			auto name = sec.Name.empty() ? std::wstring(L"(unnamed)") : sec.Name;
+			InsertTreeItem(m_Tree, name.c_str(), GetTreeIcon(IDI_SECTION),
+				TreeItemWithIndex(TreeItemType::ELFSection, (i + 1) << ItemShift), hSections);
+		}
+		if (elfSecs.size() < 24)
+			m_Tree.Expand(hSections, TVE_EXPAND);
 	}
 
-	m_hRoot = root;
+	auto const& segs = m_ELF.GetSegments();
+	if (!segs.empty()) {
+		auto hSegments = InsertTreeItem(m_Tree, L"Segments", GetTreeIcon(IDI_DIRS), TreeItemType::ELFSegments, root);
+		for (i = 0; i < (int)segs.size(); i++) {
+			InsertTreeItem(m_Tree, segs[i].TypeStr.c_str(), GetTreeIcon(IDI_DIR_OPEN),
+				TreeItemWithIndex(TreeItemType::ELFSegment, (i + 1) << ItemShift), hSegments);
+		}
+		if (segs.size() < 24)
+			m_Tree.Expand(hSegments, TVE_EXPAND);
+	}
 
-	m_Tree.Expand(root, TVE_EXPAND);
-	m_Tree.SelectItem(root);
-	m_Tree.SetRedraw();
-	m_Tree.SetFocus();
+	if (!m_ELF.GetAllSymbols().empty())
+		InsertTreeItem(m_Tree, L"Symbols", GetTreeIcon(IDI_SYMBOLS), TreeItemType::ELFSymbols, root);
+
+	if (!m_ELF.GetDynamicEntries().empty())
+		InsertTreeItem(m_Tree, L"Dynamic", GetTreeIcon(IDI_DELAY_IMPORT), TreeItemType::ELFDynamic, root);
+
+	if (!m_ELF.GetRelocations().empty())
+		InsertTreeItem(m_Tree, L"Relocations", GetTreeIcon(IDI_RELOC), TreeItemType::ELFRelocations, root);
+
+	if (!m_ELF.GetNotes().empty())
+		InsertTreeItem(m_Tree, L"Notes", GetTreeIcon(IDI_DEBUG), TreeItemType::ELFNotes, root);
+
+	InsertTreeItem(m_Tree, L"File in Hex", GetTreeIcon(IDI_BINARY), TreeItemType::FileInHex, root);
 }
 
 HWND CMainFrame::GetHwnd() const {
@@ -565,6 +630,8 @@ LRESULT CMainFrame::OnFileClose(WORD, WORD, HWND, BOOL&) {
 	m_Views.clear();
 	m_Views2.clear();
 	m_PE.Close();
+	m_ELF.Close();
+	m_Binary = nullptr;
 	m_Symbols.Close();
 	m_Tree.DeleteAllItems();
 	UpdateUI();
@@ -586,7 +653,7 @@ LRESULT CMainFrame::OnFileOpen(WORD, WORD, HWND, BOOL&) {
 	if (path.IsEmpty())
 		return 0;
 
-	OpenPE(path);
+	OpenBinary(path);
 	return 0;
 }
 
@@ -596,7 +663,7 @@ LRESULT CMainFrame::OnFileOpenNewWindow(WORD, WORD, HWND, BOOL&) {
 		auto frame = new CMainFrame;
 		frame->CreateEx();
 		frame->ShowWindow(SW_SHOWDEFAULT);
-		if (frame->OpenPE(file))
+		if (frame->OpenBinary(file))
 			frame->ShowWindow(SW_SHOWDEFAULT);
 		else
 			frame->SendMessage(WM_CLOSE);
@@ -606,7 +673,7 @@ LRESULT CMainFrame::OnFileOpenNewWindow(WORD, WORD, HWND, BOOL&) {
 
 CString CMainFrame::DoFileOpen() const {
 	CSimpleFileDialog dlg(TRUE, nullptr, nullptr, OFN_EXPLORER | OFN_ENABLESIZING,
-		L"All PE Files\0*.exe;*.dll;*.efi;*.ocx;*.cpl;*.sys;*.mui;*.mun;*.scr\0All Files\0*.*\0");
+		L"All Binary Files\0*.exe;*.dll;*.efi;*.ocx;*.cpl;*.sys;*.mui;*.mun;*.scr;*.so;*.elf;*.o;*.ko\0PE Files\0*.exe;*.dll;*.efi;*.sys\0ELF Files\0*.so;*.elf;*.o;*.ko\0All Files\0*.*\0");
 	WTLHelper::SuspendHook();
 	auto path = IDOK == dlg.DoModal() ? dlg.m_szFileName : L"";
 	WTLHelper::ResumeHook();
@@ -627,7 +694,7 @@ bool CMainFrame::BuildTreeImageList(int iconSize) {
 		m_TreeImages.Create(iconSize, iconSize, ILC_COLOR32, 32, 16);
 
 	WORD icon = 0;
-	CString path = m_PE.GetPath().c_str();
+	CString path = m_Binary ? m_Binary->GetPath().c_str() : L"";
 	auto hIcon = ::ExtractAssociatedIcon(_Module.GetModuleInstance(), path.GetBuffer(), &icon);
 	if (!hIcon)
 		hIcon = AtlLoadSysIcon(IDI_APPLICATION);
@@ -716,8 +783,8 @@ std::vector<FlatResource> const& CMainFrame::GetFlatResources() const {
 
 LRESULT CMainFrame::OnRecentFile(WORD, WORD id, HWND, BOOL&) {
 	auto& path = m_RecentFiles.Files()[id - ATL_IDS_MRU_FILE];
-	if (path != m_PE.GetPath())
-		OpenPE(path.c_str());
+	if (!m_Binary || path != m_Binary->GetPath())
+		OpenBinary(path.c_str());
 	return 0;
 }
 
@@ -725,7 +792,7 @@ void CMainFrame::ParseCommandLine() {
 	int count;
 	auto args = ::CommandLineToArgvW(::GetCommandLine(), &count);
 	if (args && count > 1) {
-		OpenPE(args[1]);
+		OpenBinary(args[1]);
 	}
 	if (args)
 		::LocalFree(args);

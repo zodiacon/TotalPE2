@@ -4,7 +4,7 @@
 #include <SimpleHexControl.h>
 #include "resource.h"
 
-class PEFile;
+class BinaryFile;
 
 class CHexView : public CViewBase<CHexView> {
 public:
@@ -18,7 +18,7 @@ public:
 
 	CHexControl& Hex();
 
-	bool SetData(PEFile const& pe, uint32_t offset, uint32_t size);
+	bool SetData(BinaryFile const& bf, uint32_t offset, uint32_t size);
 	bool SetData(std::span<const std::byte> data);
 	bool SetData(PVOID address, uint32_t size, bool copy = false);
 

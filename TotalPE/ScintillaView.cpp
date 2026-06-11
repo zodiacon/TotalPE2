@@ -10,7 +10,7 @@
 #include <lexilla/lexlib/LexerModule.h>
 #include <WTLHelper.h>
 #include "PEStrings.h"
-#include "PEFile.h"
+#include <BinaryFile.h>
 
 
 using namespace Lexilla;
@@ -97,7 +97,7 @@ const char* KeyWords_ASM[] = {
 	"ucomisd ucomiss unpckhpd unpckhps unpcklpd unpcklps xorpd xorps",
 };
 
-CScintillaView::CScintillaView(IMainFrame* frame, PEFile const& pe, PCWSTR title) : CViewBase(frame), m_PE(pe), m_Title(title) {
+CScintillaView::CScintillaView(IMainFrame* frame, BinaryFile const& binary, PCWSTR title) : CViewBase(frame), m_Binary(binary), m_Title(title) {
 }
 
 CString CScintillaView::GetTitle() const {
@@ -251,7 +251,7 @@ LRESULT CScintillaView::OnDisassembleAtEnd(WORD, WORD, HWND, BOOL&) {
 	if (cs_open(CS_ARCH_X86, m_Is32Bit ? CS_MODE_32 : CS_MODE_64, &handle) != CS_ERR_OK)
 		return false;
 
-	auto bytes = (const uint8_t*)m_PE.GetData() + address - m_PE.GetImageBase();
+	auto bytes = (const uint8_t*)m_Binary.GetData() + address - m_Binary.GetImageBase();
 	size_t size = 0x1000;
 	cs_insn inst{};
 	CStringA text;

@@ -25,6 +25,13 @@
 #include "DelayImportView.h"
 #include "RichHeaderView.h"
 #include "IATView.h"
+#include "ELFImageView.h"
+#include "ELFSectionsView.h"
+#include "ELFSegmentsView.h"
+#include "ELFSymbolsView.h"
+#include "ELFDynamicView.h"
+#include "ELFRelocationsView.h"
+#include "ELFNotesView.h"
 
 std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 	CWaitCursor wait;
@@ -60,12 +67,12 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 
 		case TreeItemType::FileInHex:
 		{
-			auto view = new CHexView(this, L"PE in Hex");
+			auto view = new CHexView(this, L"File in Hex");
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};
 			}
-			view->SetData(m_PE.GetSpan(0, m_PE.GetFileSize()));
+			view->SetData(m_Binary->GetSpan(0, m_Binary->GetFileSize()));
 			auto hItem = InsertTreeItem(m_Tree, view->GetTitle(), GetIconIndex(IDI_BINARY), type, m_Views.at(TreeItemType::Image)->GetHTreeItem(), TVI_SORT);
 			view->SetDeleteFromTree(true);
 			view->SetHTreeItem(hItem);
@@ -75,6 +82,14 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 
 		case TreeItemType::Image:
 		{
+			if (m_Binary->GetFormat() == BinaryFormat::ELF) {
+				auto view = new CELFImageView(this, m_ELF);
+				if (nullptr == view->DoCreate(m_Tabs)) {
+					ATLASSERT(false);
+					return {};
+				}
+				return { view, view };
+			}
 			auto view = new CPEImageView(this, m_PE);
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
@@ -309,6 +324,91 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 
 		case TreeItemType::Resource:
 			return CreateResourceView(type);
+
+		case TreeItemType::ELFSections:
+		{
+			auto view = new CELFSectionsView(this, m_ELF);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::ELFSection:
+		{
+			auto idx = ((size_t)type >> ItemShift) - 1;
+			auto const& secs = m_ELF.GetELFSections();
+			if (idx >= secs.size()) return {};
+			auto const& sec = secs[idx];
+			auto view = new CHexView(this, CString(sec.Name.c_str()) + L" (Section)");
+			if (!view->DoCreate(m_Tabs)) return {};
+			view->SetData(m_ELF, (uint32_t)sec.FileOffset, (uint32_t)sec.Size);
+			return { view, view };
+		}
+
+		case TreeItemType::ELFSegments:
+		{
+			auto view = new CELFSegmentsView(this, m_ELF);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::ELFSegment:
+		{
+			auto idx = ((size_t)type >> ItemShift) - 1;
+			auto const& segs = m_ELF.GetSegments();
+			if (idx >= segs.size()) return {};
+			auto const& seg = segs[idx];
+			auto title = std::format(L"Segment {} ({})", idx, seg.TypeStr);
+			auto view = new CHexView(this, title.c_str());
+			if (!view->DoCreate(m_Tabs)) return {};
+			view->SetData(m_ELF, (uint32_t)seg.FileOffset, (uint32_t)seg.FileSize);
+			return { view, view };
+		}
+
+		case TreeItemType::ELFSymbols:
+		{
+			auto view = new CELFSymbolsView(this, m_ELF);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::ELFDynamic:
+		{
+			auto view = new CELFDynamicView(this, m_ELF);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::ELFRelocations:
+		{
+			auto view = new CELFRelocationsView(this, m_ELF);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::ELFNotes:
+		{
+			auto view = new CELFNotesView(this, m_ELF);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
 	}
 	return {};
 }

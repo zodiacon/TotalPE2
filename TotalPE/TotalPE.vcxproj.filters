@@ -13,9 +13,6 @@
       <UniqueIdentifier>{36604984-7ed1-4571-b9d8-c1acd954e572}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;jpg;jpeg;jpe;manifest</Extensions>
     </Filter>
-    <Filter Include="Views">
-      <UniqueIdentifier>{b8b22a39-2c0a-4246-8048-26f32e5cb518}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Dialogs">
       <UniqueIdentifier>{90e18280-764c-47c1-90eb-f09a81540cbe}</UniqueIdentifier>
     </Filter>
@@ -25,17 +22,23 @@
     <Filter Include="Helpers">
       <UniqueIdentifier>{e285b05c-1fe0-4040-8b82-0e98d874aea9}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Views\DataDirectories">
-      <UniqueIdentifier>{9f2376cb-ffd2-459f-918d-cdd128472822}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Views\Resources">
-      <UniqueIdentifier>{74c5c796-e3d7-4acf-b0e4-0b470f1c5a27}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Controls">
       <UniqueIdentifier>{74de7a63-6ef4-4ccb-a115-224d2a35d493}</UniqueIdentifier>
     </Filter>
     <Filter Include="Lexers">
       <UniqueIdentifier>{b8ac8fea-89f6-491b-bd86-f77584003461}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Views %28PE%29">
+      <UniqueIdentifier>{b8b22a39-2c0a-4246-8048-26f32e5cb518}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Views %28PE%29\DataDirectories">
+      <UniqueIdentifier>{9f2376cb-ffd2-459f-918d-cdd128472822}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Views %28PE%29\Resources">
+      <UniqueIdentifier>{74c5c796-e3d7-4acf-b0e4-0b470f1c5a27}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Views %28ELF%29">
+      <UniqueIdentifier>{04a1eae4-4080-4572-8a0a-b8afe9a93b6d}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -58,22 +61,22 @@
       <Filter>Helpers</Filter>
     </ClCompile>
     <ClCompile Include="PEImageView.cpp">
-      <Filter>Views</Filter>
+      <Filter>Views %28PE%29</Filter>
     </ClCompile>
     <ClCompile Include="SectionsView.cpp">
-      <Filter>Views</Filter>
+      <Filter>Views %28PE%29</Filter>
     </ClCompile>
     <ClCompile Include="HexView.cpp">
-      <Filter>Views</Filter>
+      <Filter>Views %28PE%29</Filter>
     </ClCompile>
     <ClCompile Include="DataDirectoriesView.cpp">
-      <Filter>Views</Filter>
+      <Filter>Views %28PE%29</Filter>
     </ClCompile>
     <ClCompile Include="ExportsView.cpp">
-      <Filter>Views\DataDirectories</Filter>
+      <Filter>Views %28PE%29\DataDirectories</Filter>
     </ClCompile>
     <ClCompile Include="ImportsView.cpp">
-      <Filter>Views\DataDirectories</Filter>
+      <Filter>Views %28PE%29\DataDirectories</Filter>
     </ClCompile>
     <ClCompile Include="RecentFilesManager.cpp">
       <Filter>Helpers</Filter>
@@ -82,67 +85,67 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="ResourcesView.cpp">
-      <Filter>Views\DataDirectories</Filter>
+      <Filter>Views %28PE%29\DataDirectories</Filter>
     </ClCompile>
     <ClCompile Include="StructView.cpp">
-      <Filter>Views</Filter>
+      <Filter>Views %28PE%29</Filter>
     </ClCompile>
     <ClCompile Include="Helpers.cpp">
       <Filter>Helpers</Filter>
     </ClCompile>
     <ClCompile Include="IconsView.cpp">
-      <Filter>Views\Resources</Filter>
+      <Filter>Views %28PE%29\Resources</Filter>
     </ClCompile>
     <ClCompile Include="IconWriter.cpp">
       <Filter>Helpers</Filter>
     </ClCompile>
     <ClCompile Include="TextView.cpp">
-      <Filter>Views</Filter>
+      <Filter>Views %28PE%29</Filter>
     </ClCompile>
     <ClCompile Include="StringMessageTableView.cpp">
-      <Filter>Views\Resources</Filter>
+      <Filter>Views %28PE%29\Resources</Filter>
     </ClCompile>
     <ClCompile Include="VersionView.cpp">
-      <Filter>Views\Resources</Filter>
+      <Filter>Views %28PE%29\Resources</Filter>
     </ClCompile>
     <ClCompile Include="AcceleratorTableView.cpp">
-      <Filter>Views\Resources</Filter>
+      <Filter>Views %28PE%29\Resources</Filter>
     </ClCompile>
     <ClCompile Include="ExceptionsView.cpp">
-      <Filter>Views\DataDirectories</Filter>
+      <Filter>Views %28PE%29\DataDirectories</Filter>
     </ClCompile>
     <ClCompile Include="DebugView.cpp">
-      <Filter>Views\DataDirectories</Filter>
+      <Filter>Views %28PE%29\DataDirectories</Filter>
     </ClCompile>
     <ClCompile Include="BitmapView.cpp">
-      <Filter>Views\Resources</Filter>
+      <Filter>Views %28PE%29\Resources</Filter>
     </ClCompile>
     <ClCompile Include="SecurityView.cpp">
-      <Filter>Views\DataDirectories</Filter>
+      <Filter>Views %28PE%29\DataDirectories</Filter>
     </ClCompile>
     <ClCompile Include="ScintillaView.cpp">
-      <Filter>Views</Filter>
+      <Filter>Views %28PE%29</Filter>
     </ClCompile>
     <ClCompile Include="LoadConfigView.cpp">
-      <Filter>Views\DataDirectories</Filter>
+      <Filter>Views %28PE%29\DataDirectories</Filter>
     </ClCompile>
     <ClCompile Include="RelocationsView.cpp">
-      <Filter>Views\DataDirectories</Filter>
+      <Filter>Views %28PE%29\DataDirectories</Filter>
     </ClCompile>
     <ClCompile Include="SymbolsView.cpp">
-      <Filter>Views</Filter>
+      <Filter>Views %28PE%29</Filter>
     </ClCompile>
     <ClCompile Include="ViewFactory.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="TlsView.cpp">
-      <Filter>Views\DataDirectories</Filter>
+      <Filter>Views %28PE%29\DataDirectories</Filter>
     </ClCompile>
     <ClCompile Include="DelayImportView.cpp">
-      <Filter>Views\DataDirectories</Filter>
+      <Filter>Views %28PE%29\DataDirectories</Filter>
     </ClCompile>
     <ClCompile Include="StringsView.cpp">
-      <Filter>Views</Filter>
+      <Filter>Views %28PE%29</Filter>
     </ClCompile>
     <ClCompile Include="LexAsm.cxx">
       <Filter>Lexers</Filter>
@@ -151,10 +154,31 @@
       <Filter>Lexers</Filter>
     </ClCompile>
     <ClCompile Include="IATView.cpp">
-      <Filter>Views\DataDirectories</Filter>
+      <Filter>Views %28PE%29\DataDirectories</Filter>
     </ClCompile>
     <ClCompile Include="RichHeaderView.cpp">
-      <Filter>Views</Filter>
+      <Filter>Views %28PE%29</Filter>
+    </ClCompile>
+    <ClCompile Include="ELFDynamicView.cpp">
+      <Filter>Views %28ELF%29</Filter>
+    </ClCompile>
+    <ClCompile Include="ELFImageView.cpp">
+      <Filter>Views %28ELF%29</Filter>
+    </ClCompile>
+    <ClCompile Include="ELFNotesView.cpp">
+      <Filter>Views %28ELF%29</Filter>
+    </ClCompile>
+    <ClCompile Include="ELFRelocationsView.cpp">
+      <Filter>Views %28ELF%29</Filter>
+    </ClCompile>
+    <ClCompile Include="ELFSectionsView.cpp">
+      <Filter>Views %28ELF%29</Filter>
+    </ClCompile>
+    <ClCompile Include="ELFSegmentsView.cpp">
+      <Filter>Views %28ELF%29</Filter>
+    </ClCompile>
+    <ClCompile Include="ELFSymbolsView.cpp">
+      <Filter>Views %28ELF%29</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -180,25 +204,25 @@
       <Filter>Helpers</Filter>
     </ClInclude>
     <ClInclude Include="PEImageView.h">
-      <Filter>Views</Filter>
+      <Filter>Views %28PE%29</Filter>
     </ClInclude>
     <ClInclude Include="SectionsView.h">
-      <Filter>Views</Filter>
+      <Filter>Views %28PE%29</Filter>
     </ClInclude>
     <ClInclude Include="HexView.h">
-      <Filter>Views</Filter>
+      <Filter>Views %28PE%29</Filter>
     </ClInclude>
     <ClInclude Include="ViewBase.h">
-      <Filter>Views</Filter>
+      <Filter>Views %28PE%29</Filter>
     </ClInclude>
     <ClInclude Include="DataDirectoriesView.h">
-      <Filter>Views</Filter>
+      <Filter>Views %28PE%29</Filter>
     </ClInclude>
     <ClInclude Include="ExportsView.h">
-      <Filter>Views\DataDirectories</Filter>
+      <Filter>Views %28PE%29\DataDirectories</Filter>
     </ClInclude>
     <ClInclude Include="ImportsView.h">
-      <Filter>Views\DataDirectories</Filter>
+      <Filter>Views %28PE%29\DataDirectories</Filter>
     </ClInclude>
     <ClInclude Include="RecentFilesManager.h">
       <Filter>Helpers</Filter>
@@ -207,76 +231,97 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ResourcesView.h">
-      <Filter>Views\DataDirectories</Filter>
+      <Filter>Views %28PE%29\DataDirectories</Filter>
     </ClInclude>
     <ClInclude Include="TreeListView.h">
       <Filter>Controls</Filter>
     </ClInclude>
     <ClInclude Include="StructView.h">
-      <Filter>Views</Filter>
+      <Filter>Views %28PE%29</Filter>
     </ClInclude>
     <ClInclude Include="Helpers.h">
       <Filter>Helpers</Filter>
     </ClInclude>
     <ClInclude Include="IconsView.h">
-      <Filter>Views\Resources</Filter>
+      <Filter>Views %28PE%29\Resources</Filter>
     </ClInclude>
     <ClInclude Include="IconWriter.h">
       <Filter>Helpers</Filter>
     </ClInclude>
     <ClInclude Include="TextView.h">
-      <Filter>Views</Filter>
+      <Filter>Views %28PE%29</Filter>
     </ClInclude>
     <ClInclude Include="StringMessageTableView.h">
-      <Filter>Views\Resources</Filter>
+      <Filter>Views %28PE%29\Resources</Filter>
     </ClInclude>
     <ClInclude Include="VersionView.h">
-      <Filter>Views\Resources</Filter>
+      <Filter>Views %28PE%29\Resources</Filter>
     </ClInclude>
     <ClInclude Include="AcceleratorTableView.h">
-      <Filter>Views\Resources</Filter>
+      <Filter>Views %28PE%29\Resources</Filter>
     </ClInclude>
     <ClInclude Include="ExceptionsView.h">
-      <Filter>Views\DataDirectories</Filter>
+      <Filter>Views %28PE%29\DataDirectories</Filter>
     </ClInclude>
     <ClInclude Include="DebugView.h">
-      <Filter>Views\DataDirectories</Filter>
+      <Filter>Views %28PE%29\DataDirectories</Filter>
     </ClInclude>
     <ClInclude Include="BitmapView.h">
-      <Filter>Views\Resources</Filter>
+      <Filter>Views %28PE%29\Resources</Filter>
     </ClInclude>
     <ClInclude Include="SecurityView.h">
-      <Filter>Views\DataDirectories</Filter>
+      <Filter>Views %28PE%29\DataDirectories</Filter>
     </ClInclude>
     <ClInclude Include="ScintillaView.h">
-      <Filter>Views</Filter>
+      <Filter>Views %28PE%29</Filter>
     </ClInclude>
     <ClInclude Include="ScintillaCtrl.h">
       <Filter>Controls</Filter>
     </ClInclude>
     <ClInclude Include="LoadConfigView.h">
-      <Filter>Views\DataDirectories</Filter>
+      <Filter>Views %28PE%29\DataDirectories</Filter>
     </ClInclude>
     <ClInclude Include="RelocationsView.h">
-      <Filter>Views\DataDirectories</Filter>
+      <Filter>Views %28PE%29\DataDirectories</Filter>
     </ClInclude>
     <ClInclude Include="SymbolsView.h">
-      <Filter>Views</Filter>
+      <Filter>Views %28PE%29</Filter>
     </ClInclude>
     <ClInclude Include="TlsView.h">
-      <Filter>Views\DataDirectories</Filter>
+      <Filter>Views %28PE%29\DataDirectories</Filter>
     </ClInclude>
     <ClInclude Include="DelayImportView.h">
-      <Filter>Views\DataDirectories</Filter>
+      <Filter>Views %28PE%29\DataDirectories</Filter>
     </ClInclude>
     <ClInclude Include="StringsView.h">
-      <Filter>Views</Filter>
+      <Filter>Views %28PE%29</Filter>
     </ClInclude>
     <ClInclude Include="IATView.h">
-      <Filter>Views\DataDirectories</Filter>
+      <Filter>Views %28PE%29\DataDirectories</Filter>
     </ClInclude>
     <ClInclude Include="RichHeaderView.h">
-      <Filter>Views</Filter>
+      <Filter>Views %28PE%29</Filter>
+    </ClInclude>
+    <ClInclude Include="ELFDynamicView.h">
+      <Filter>Views %28ELF%29</Filter>
+    </ClInclude>
+    <ClInclude Include="ELFImageView.h">
+      <Filter>Views %28ELF%29</Filter>
+    </ClInclude>
+    <ClInclude Include="ELFNotesView.h">
+      <Filter>Views %28ELF%29</Filter>
+    </ClInclude>
+    <ClInclude Include="ELFRelocationsView.h">
+      <Filter>Views %28ELF%29</Filter>
+    </ClInclude>
+    <ClInclude Include="ELFSectionsView.h">
+      <Filter>Views %28ELF%29</Filter>
+    </ClInclude>
+    <ClInclude Include="ELFSegmentsView.h">
+      <Filter>Views %28ELF%29</Filter>
+    </ClInclude>
+    <ClInclude Include="ELFSymbolsView.h">
+      <Filter>Views %28ELF%29</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

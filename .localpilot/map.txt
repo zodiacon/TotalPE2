@@ -1,0 +1,933 @@
+## WORKSPACE EXECUTIVE SUMMARY (YAML)
+# Generated: 2026-06-07T14:32:02.6875093+02:00
+# Root: D:\Dev\TotalPE2
+Architecture:
+  Type: Database Project
+  Scale: 469 relevant source files
+  Components: 0
+  Controllers: 0
+  Models: 0
+  Services: 0
+---
+- File: TotalPE2.sln
+  Preview: " Microsoft Visual Studio Solution File, Format Version 12.00 # Visual Studio Version 18 VisualStudioVersion = 18.6.11819.183 stable MinimumVisualStudi..."
+- File: WTLHelper\WTLHelper.sln
+  Preview: " Microsoft Visual Studio Solution File, Format Version 12.00 # Visual Studio Version 17 VisualStudioVersion = 17.2.32422.2 MinimumVisualStudioVersion ..."
+- File: CLAUDE.md
+  Preview: "# CLAUDE.md This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository. ## Project Overview TotalPE2 is a W..."
+- File: LICENSE.txt
+  Preview: "MIT License Copyright (c) [year] [fullname] Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associat..."
+- File: README.md
+  Preview: "# Total PE (take 2) Yet another PE Viewer. An imporoved version over **Total PE**: * Tabs * Syntax highlighting in assembly and manifest views * Use o..."
+- File: .claude\settings.local.json
+  Preview: "{  'permissions': {   'allow': [    'Bash(findstr /i \'version\' \'D:\\\\Dev\\\\TotalPE2\\\\vcpkg_installed\\\\x64-windows-static\\\\include\\\\LIEF\\..."
+- File: .github\FUNDING.yml
+  Preview: "# These are supported funding model platforms patreon: zodiacon "
+- File: DiaHelper\cvconst.h
+  Preview: "// cvconst.h - codeview constant definitions //----------------------------------------------------------------- // // Copyright Microsoft Corporation..."
+- File: DiaHelper\dia2.h
+  Preview: " /* this ALWAYS GENERATED file contains the definitions for the interfaces */  /* File created by MIDL compiler version 8.01.0626 */ /* @@MIDL_FILE_HE..."
+- File: DiaHelper\diacreate.h
+  Preview: "// diacreate.h - creation helper functions for DIA initialization //----------------------------------------------------------------- // // Copyright ..."
+- File: DiaHelper\DiaHelper.h
+  Preview: "#pragma once enum class AccessMode {   Unknown,   Private = 1,   Protected,   Public }; enum class LocationKind {   Null,   Static,   TLS,   RegRel,  ..."
+- File: DiaHelper\DiaSession.cpp
+  Preview: "// DiaHelper.cpp : Defines the functions for the static library. // #include 'pch.h' #include 'DiaHelper.h' HMODULE g_hDiaDll; bool DiaSession::OpenIm..."
+- File: DiaHelper\DiaSession.h
+  Preview: "#pragma once #include 'dia2.h' #include 'DiaSymbol.h' #include <atlcomcli.h> #include <vector> #include <string> class DiaSession : public IDiaLoadCal..."
+- File: DiaHelper\DiaSymbol.cpp
+  Preview: "#include 'pch.h' #include 'DiaHelper.h' DiaSymbol DiaSymbol::Empty; DiaSymbol::DiaSymbol(IDiaSymbol* sym) : m_spSym(sym) { } DiaSymbol::operator bool(..."
+- File: DiaHelper\DiaSymbol.h
+  Preview: "#pragma once #include <string> #include <vector> #include <atlcomcli.h>  struct IDiaSymbol; class DiaSymbol { 	friend class DiaSession; public:   oper..."
+- File: DiaHelper\pch.cpp
+  Preview: "// pch.cpp: source file corresponding to the pre-compiled header #include 'pch.h' // When you are using pre-compiled headers, this source file is nece..."
+- File: DiaHelper\pch.h
+  Preview: "// pch.h: This is a precompiled header file. // Files listed below are compiled only once, improving build performance for future builds. // This also..."
+- File: HexControl\BufferManager.cpp
+  Preview: "#include 'pch.h' #include 'BufferManager.h' #include 'MemoryBuffer.h' std::unique_ptr<IBufferManager> IBufferManager::CreateFromData(const uint8_t* da..."
+- File: HexControl\BufferManager.h
+  Preview: "#pragma once #include <memory> struct IBufferManager { 	virtual uint32_t GetData(int64_t offset, uint8_t* buffer, uint32_t count) = 0; 	virtual bool I..."
+- File: HexControl\HexControl.h
+  Preview: "// HexControl.h "
+- File: HexControl\MemoryBuffer.cpp
+  Preview: "#include 'pch.h' #include 'MemoryBuffer.h' MemoryBuffer::MemoryBuffer(uint32_t initialSize) : m_buffer(initialSize) { } MemoryBuffer::MemoryBuffer(con..."
+- File: HexControl\MemoryBuffer.h
+  Preview: "#pragma once #include 'BufferManager.h' class MemoryBuffer : public IBufferManager { public: 	explicit MemoryBuffer(uint32_t initialSize = 0); 	Memory..."
+- File: HexControl\pch.cpp
+  Preview: " #include 'pch.h' "
+- File: HexControl\pch.h
+  Preview: "// stdafx.h : include file for standard system include files, // or project specific include files that are used frequently, but // are changed infreq..."
+- File: HexControl\resource.h
+  Preview: "//{{NO_DEPENDENCIES}} // Microsoft Visual C++ generated include file. // Used by HexControl.RC //  #define IDD_ABOUTBOX				100 #define IDR_MAINFRAME		..."
+- File: HexControl\Selection.cpp
+  Preview: "#include 'pch.h' #include 'Selection.h' void Selection::SetSimple(int64_t offset, int64_t len) { 	_type = SelectionType::Simple; 	_offset = offset; 	_..."
+- File: HexControl\Selection.h
+  Preview: "#pragma once enum class SelectionType { 	Simple, 	Box }; class Selection { public: 	void SetSimple(int64_t offset, int64_t len); 	void SetBox(int64_t ..."
+- File: HexControl\SimpleHexControl.cpp
+  Preview: "#include 'pch.h' #include 'SimpleHexControl.h' #include <algorithm> void CHexControl::DoPaint(CDCHandle dc, RECT& rect) { 	dc.FillSolidRect(&rect, m_C..."
+- File: HexControl\SimpleHexControl.h
+  Preview: "#pragma once #include 'Selection.h' #include 'BufferManager.h' struct HexControlColors { 	COLORREF Text{ ::GetSysColor(COLOR_WINDOWTEXT) }; 	COLORREF ..."
+- File: lexilla1\.travis.yml
+  Preview: "# Build Lexilla with gcc and clang on Linux, macOS, and Windows # Test Lexilla with gcc and clang on Linux and macOS # Windows has older versions of l..."
+- File: lexilla1\License.txt
+  Preview: "License for Lexilla, Scintilla, and SciTE Copyright 1998-2021 by Neil Hodgson <neilh@scintilla.org> All Rights Reserved Permission to use, copy, modif..."
+- File: lexilla1\version.txt
+  Preview: "527"
+- File: PECore\BinaryFile.cpp
+  Preview: "#include 'pch.h' #include 'BinaryFile.h' BinaryFile::BinaryFile() = default; BinaryFile::~BinaryFile() = default; BinaryFile::BinaryFile(BinaryFile&&)..."
+- File: PECore\BinaryFile.h
+  Preview: "#pragma once #include <Windows.h> #include <vector> #include <string> #include <string_view> #include <span> #include <memory> #include <cstdint> enum..."
+- File: PECore\ELFFile.cpp
+  Preview: "#include 'pch.h' #include 'ELFFile.h' #include <LIEF/ELF.hpp> #include <LIEF/ELF/DynamicEntryLibrary.hpp> #include <unordered_set> #include <LIEF/ELF/..."
+- File: PECore\ELFFile.h
+  Preview: "#pragma once #include 'BinaryFile.h' struct ELFInfo {   bool     Is32Bit{};   bool     IsLittleEndian{};   std::wstring ClassName;   std::wstring Endi..."
+- File: PECore\libpe.cpp
+  Preview: "/**************************************************************************************** * Copyright © 2018-2022, Jovibor: https://github.com/jovibor..."
+- File: PECore\libpe.h
+  Preview: "/**************************************************************************************** * Copyright © 2018-2022, Jovibor: https://github.com/jovibor..."
+- File: PECore\pch.cpp
+  Preview: "// pch.cpp: source file corresponding to the pre-compiled header #include 'pch.h' // When you are using pre-compiled headers, this source file is nece..."
+- File: PECore\pch.h
+  Preview: "#pragma once #define WIN32_LEAN_AND_MEAN       // Exclude rarely-used stuff from Windows headers #define NOMINMAX            // Prevent Windows min/ma..."
+- File: PECore\PECore.cpp
+  Preview: "// PECore.cpp : Defines the functions for the static library. // #include 'pch.h' "
+- File: PECore\PEFile.cpp
+  Preview: "#include 'pch.h' #include 'PEFile.h' // Pull LIEF only in the .cpp. // WinTrust.h (included via pch.h) defines SPC_INDIRECT_DATA_OBJID as a macro // w..."
+- File: PECore\PEFile.h
+  Preview: "#pragma once #include <Windows.h> #include <WinTrust.h> #include <delayimp.h> #include <vector> #include <string> #include <string_view> #include <spa..."
+- File: scintilla1\.hg_archival.txt
+  Preview: "repo: bdf8c3ef2fb01ea24578e726337888e706d10b92 node: e62da22e94a9bf26ab70a24174b817b3eebb5cba branch: default latesttag: rel-5-3-7 latesttagdistance: ..."
+- File: scintilla1\License.txt
+  Preview: "License for Lexilla, Scintilla, and SciTE Copyright 1998-2021 by Neil Hodgson <neilh@scintilla.org> All Rights Reserved Permission to use, copy, modif..."
+- File: scintilla1\version.txt
+  Preview: "537 "
+- File: TotalPE\AboutDlg.cpp
+  Preview: "// aboutdlg.cpp : implementation of the CAboutDlg class // ///////////////////////////////////////////////////////////////////////////// #include 'pch..."
+- File: TotalPE\AboutDlg.h
+  Preview: "#pragma once #include <DialogHelper.h> class CAboutDlg : 	public CDialogImpl<CAboutDlg>, 	public CDialogHelper<CAboutDlg> { public: 	enum { IDD = IDD_..."
+- File: TotalPE\AcceleratorTableView.cpp
+  Preview: "#include 'pch.h' #include 'AcceleratorTableView.h' #include <SortHelper.h> #include <ClipboardHelper.h> CString CAcceleratorTableView::GetColumnText(H..."
+- File: TotalPE\AcceleratorTableView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <VirtualListView.h> class CAcceleratorTableView : 	public CViewBase<CAcceleratorTableView>, 	public CVirtu..."
+- File: TotalPE\AppSettings.cpp
+  Preview: "#include 'pch.h' #include 'AppSettings.h' "
+- File: TotalPE\AppSettings.h
+  Preview: "#pragma once #include <Settings.h> class AppSettings : public Settings { public: 	BEGIN_SETTINGS(AppSettings) 	SETTING(MainWindowPlacement, WINDOWPLAC..."
+- File: TotalPE\BitmapView.cpp
+  Preview: "#include 'pch.h' #include <wincodec.h> #include 'BitmapView.h' CBitmapView::CBitmapView(IMainFrame* frame, PCWSTR title) : CViewBase(frame), m_Title(t..."
+- File: TotalPE\BitmapView.h
+  Preview: "#pragma once #include 'ViewBase.h' class CBitmapView : 	public CViewBase<CBitmapView>, 	public CZoomScrollImpl<CBitmapView> { public: 	CBitmapView(IMa..."
+- File: TotalPE\DataDirectoriesView.cpp
+  Preview: "#include 'pch.h' #include 'PEStrings.h' #include <SortHelper.h> #include 'resource.h' #include 'DataDirectoriesView.h' #include <ClipboardHelper.h> #i..."
+- File: TotalPE\DataDirectoriesView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <VirtualListView.h> #include <PEFile.h> #include <CustomSplitterWindow.h> #include 'HexView.h' class CData..."
+- File: TotalPE\DebugView.cpp
+  Preview: "#include 'pch.h' #include 'DebugView.h' #include 'PEStrings.h' #include <SortHelper.h> #include <ClipboardHelper.h> #include <PEFile.h> CDebugView::CD..."
+- File: TotalPE\DebugView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <VirtualListView.h> #include 'HexView.h' #include <CustomSplitterWindow.h> class PEFile; class CDebugView ..."
+- File: TotalPE\DelayImportView.cpp
+  Preview: "#include 'pch.h' #include 'DelayImportView.h' #include 'resource.h' #include <SortHelper.h> CDelayImportView::CDelayImportView(IMainFrame* frame, PEFi..."
+- File: TotalPE\DelayImportView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <VirtualListView.h> #include <PEFile.h> #include <CustomSplitterWindow.h> class CDelayImportView : 	public..."
+- File: TotalPE\ELFDynamicView.cpp
+  Preview: "#include 'pch.h' #include 'ELFDynamicView.h' #include <SortHelper.h> #include <ClipboardHelper.h> #include <ListViewhelper.h> #include 'resource.h' CE..."
+- File: TotalPE\ELFDynamicView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <VirtualListView.h> #include <ELFFile.h> class CELFDynamicView :   public CViewBase<CELFDynamicView>,   pu..."
+- File: TotalPE\ELFImageView.cpp
+  Preview: "#include 'pch.h' #include 'ELFImageView.h' #include 'resource.h' CELFImageView::CELFImageView(IMainFrame* frame, ELFFile const& elf)   : CViewBase(fra..."
+- File: TotalPE\ELFImageView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <ELFFile.h> class CELFImageView : public CViewBase<CELFImageView> { public:   CELFImageView(IMainFrame* fr..."
+- File: TotalPE\ELFNotesView.cpp
+  Preview: "#include 'pch.h' #include 'ELFNotesView.h' #include <SortHelper.h> #include <ClipboardHelper.h> #include <ListViewhelper.h> #include 'resource.h' CELF..."
+- File: TotalPE\ELFNotesView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <VirtualListView.h> #include <ELFFile.h> class CELFNotesView :   public CViewBase<CELFNotesView>,   public..."
+- File: TotalPE\ELFRelocationsView.cpp
+  Preview: "#include 'pch.h' #include 'ELFRelocationsView.h' #include <SortHelper.h> #include <ClipboardHelper.h> #include <ListViewhelper.h> #include 'resource.h..."
+- File: TotalPE\ELFRelocationsView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <VirtualListView.h> #include <ELFFile.h> class CELFRelocationsView :   public CViewBase<CELFRelocationsVie..."
+- File: TotalPE\ELFSectionsView.cpp
+  Preview: "#include 'pch.h' #include 'ELFSectionsView.h' #include <SortHelper.h> #include <ClipboardHelper.h> #include <ListViewhelper.h> #include 'resource.h' C..."
+- File: TotalPE\ELFSectionsView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <VirtualListView.h> #include <ELFFile.h> class CELFSectionsView :   public CViewBase<CELFSectionsView>,   ..."
+- File: TotalPE\ELFSegmentsView.cpp
+  Preview: "#include 'pch.h' #include 'ELFSegmentsView.h' #include <SortHelper.h> #include <ClipboardHelper.h> #include <ListViewhelper.h> #include 'resource.h' C..."
+- File: TotalPE\ELFSegmentsView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <VirtualListView.h> #include <ELFFile.h> class CELFSegmentsView :   public CViewBase<CELFSegmentsView>,   ..."
+- File: TotalPE\ELFSymbolsView.cpp
+  Preview: "#include 'pch.h' #include 'ELFSymbolsView.h' #include <SortHelper.h> #include <ClipboardHelper.h> #include <ListViewhelper.h> #include 'resource.h' CE..."
+- File: TotalPE\ELFSymbolsView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <VirtualListView.h> #include <ELFFile.h> class CELFSymbolsView :   public CViewBase<CELFSymbolsView>,   pu..."
+- File: TotalPE\ExceptionsView.cpp
+  Preview: "#include 'pch.h' #include 'ExceptionsView.h' #include <SortHelper.h> #include <ClipboardHelper.h> #include 'PEStrings.h' CExceptionsView::CExceptionsV..."
+- File: TotalPE\ExceptionsView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <VirtualListView.h> #include 'PEFile.h' #include 'resource.h' class CExceptionsView : 	public CViewBase<CE..."
+- File: TotalPE\ExportsView.cpp
+  Preview: "#include 'pch.h' #include 'ExportsView.h' #include <ClipboardHelper.h> #include <ListViewhelper.h> #include 'PEStrings.h' #include <SortHelper.h> #inc..."
+- File: TotalPE\ExportsView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <VirtualListView.h> #include 'PEFile.h' #include 'resource.h' class CExportsView : 	public CViewBase<CExpo..."
+- File: TotalPE\Helpers.cpp
+  Preview: "#include 'pch.h' #include 'Helpers.h' #include 'Resource.h' #include <DiaHelper.h> #include 'Interfaces.h' bool Helpers::ExtractResource(HMODULE hModu..."
+- File: TotalPE\Helpers.h
+  Preview: "#pragma once #include <TreeListView.h> class DiaSymbol; class DiaSession; class CTreeListView; enum class SimpleType; struct IMainFrame; struct Helper..."
+- File: TotalPE\HexView.cpp
+  Preview: "#include 'pch.h' #include 'HexView.h' #include <BinaryFile.h> #include 'MemoryBuffer.h' #include <ToolbarHelper.h> #include <WTLHelper.h> CHexView::CH..."
+- File: TotalPE\HexView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <SimpleHexControl.h> #include 'resource.h' class BinaryFile; class CHexView : public CViewBase<CHexView> {..."
+- File: TotalPE\IATView.cpp
+  Preview: "#include 'pch.h' #include 'IATView.h' #include 'resource.h' #include <SortHelper.h> #include <ClipboardHelper.h> #include <ListViewHelper.h> CIATView:..."
+- File: TotalPE\IATView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <VirtualListView.h> #include <PEFile.h> #include <CustomSplitterWindow.h> class CIATView : 	public CViewBa..."
+- File: TotalPE\IconsView.cpp
+  Preview: "#include 'pch.h' #include 'resource.h' #include 'IconsView.h' #include 'IconWriter.h' #include <WTLHelper.h> void CIconsView::SetGroupIconData(std::sp..."
+- File: TotalPE\IconsView.h
+  Preview: "#pragma once #include 'ViewBase.h' class CIconsView : 	public CViewBase<CIconsView>, 	public CScrollImpl<CIconsView> { public: 	CIconsView(IMainFrame*..."
+- File: TotalPE\IconWriter.cpp
+  Preview: "#include 'pch.h' #include 'IconWriter.h' namespace {   struct ICONDIRENTRY {     BYTE nWidth;     BYTE nHeight;     BYTE nNumColorsInPalette; // 0 if ..."
+- File: TotalPE\IconWriter.h
+  Preview: "#pragma once struct IconWriter final abstract { public: 	static bool Save(PCWSTR path, HICON const hIcon, int colors, bool icon = true); }; "
+- File: TotalPE\ImportsView.cpp
+  Preview: "#include 'pch.h' #include 'ImportsView.h' #include 'PEStrings.h' #include 'resource.h' #include <SortHelper.h> #include <ClipboardHelper.h> CImportsVi..."
+- File: TotalPE\ImportsView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <VirtualListView.h> #include <PEFile.h> #include <CustomSplitterWindow.h> #include 'HexView.h' class CImpo..."
+- File: TotalPE\Interfaces.h
+  Preview: "#pragma once #include <DiaHelper.h> #include <PEFile.h> static const UINT WM_UPDATE_DARKMODE = WM_APP + 56; constexpr uint32_t ItemShift = 8; enum cla..."
+- File: TotalPE\LoadConfigView.cpp
+  Preview: "// View.cpp : implementation of the CView class // ///////////////////////////////////////////////////////////////////////////// #include 'pch.h' #inc..."
+- File: TotalPE\LoadConfigView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <VirtualListView.h> class PEFile; class CLoadConfigView : 	public CViewBase<CLoadConfigView>, 	public CVir..."
+- File: TotalPE\MainFrm.cpp
+  Preview: "// MainFrm.cpp : implmentation of the CMainFrame class // ///////////////////////////////////////////////////////////////////////////// #include 'pch...."
+- File: TotalPE\MainFrm.h
+  Preview: "// MainFrm.h : interface of the CMainFrame class // ///////////////////////////////////////////////////////////////////////////// #pragma once #includ..."
+- File: TotalPE\pch.cpp
+  Preview: "#include 'pch.h' "
+- File: TotalPE\pch.h
+  Preview: "#pragma once // Change these values to use different versions #define WINVER		0x0601 #define _WIN32_WINNT	0x0601 #define _WIN32_IE	0x0700 #define _RIC..."
+- File: TotalPE\PEImageView.cpp
+  Preview: "// View.cpp : implementation of the CView class // ///////////////////////////////////////////////////////////////////////////// #include 'pch.h' #inc..."
+- File: TotalPE\PEImageView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <VirtualListView.h> class PEFile; class CPEImageView : 	public CViewBase<CPEImageView>, 	public CVirtualLi..."
+- File: TotalPE\PEStrings.cpp
+  Preview: "#include 'pch.h' #include 'PEStrings.h' #include <atltime.h> #include <DbgHelp.h> #include <DiaHelper.h> #pragma comment(lib, 'dbghelp') static PCWSTR..."
+- File: TotalPE\PEStrings.h
+  Preview: "#pragma once struct cs_insn; enum class SymbolTag; enum class LocationKind; class DiaSession; enum class DllCharacteristics : unsigned short { 	None =..."
+- File: TotalPE\RecentFilesManager.cpp
+  Preview: "#include 'pch.h' #include 'RecentFilesManager.h' void RecentFilesManager::AddFile(std::wstring const& file) { 	if (auto it = std::find(m_files.begin()..."
+- File: TotalPE\RecentFilesManager.h
+  Preview: "#pragma once class RecentFilesManager { public: 	void AddFile(std::wstring const& file); 	std::vector<std::wstring> const& Files() const; 	bool IsEmpt..."
+- File: TotalPE\RelocationsView.cpp
+  Preview: "#include 'pch.h' #include 'RelocationsView.h' #include 'PEStrings.h' #include <SortHelper.h> #include <ClipboardHelper.h> CRelocationsView::CRelocatio..."
+- File: TotalPE\RelocationsView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <VirtualListView.h> #include 'PEFile.h' #include <CustomSplitterWindow.h> class CRelocationsView : 	public..."
+- File: TotalPE\resource.h
+  Preview: "//{{NO_DEPENDENCIES}} // Microsoft Visual C++ generated include file. // Used by TotalPE.rc // #define IDD_ABOUTBOX          100 #define IDR_MAINFRAME..."
+- File: TotalPE\ResourcesView.cpp
+  Preview: "#include 'pch.h' #include 'ResourcesView.h' #include 'PEStrings.h' #include <SortHelper.h> #include 'resource.h' #include <ClipboardHelper.h> #include..."
+- File: TotalPE\ResourcesView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <VirtualListView.h> #include <PEFile.h> #include <CustomSplitterWindow.h> #include 'HexView.h' class CReso..."
+- File: TotalPE\RichHeaderView.cpp
+  Preview: "#include 'pch.h' #include 'RichHeaderView.h' #include 'resource.h' #include <SortHelper.h> #include <ClipboardHelper.h> #include <ListViewhelper.h> //..."
+- File: TotalPE\RichHeaderView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <VirtualListView.h> #include 'PEFile.h' class CRichHeaderView : 	public CViewBase<CRichHeaderView>, 	publi..."
+- File: TotalPE\ScintillaCtrl.h
+  Preview: "#pragma once namespace Scintilla { 	enum class IndicatorStyle { 		Plain = 0, 		Squiggle = 1, 		TT = 2, 		Diagonal = 3, 		Strike = 4, 		Hidden = 5, 		B..."
+- File: TotalPE\ScintillaView.cpp
+  Preview: "// View.cpp : implementation of the CView class // ///////////////////////////////////////////////////////////////////////////// #include 'pch.h' #inc..."
+- File: TotalPE\ScintillaView.h
+  Preview: "// View.h : interface of the CView class // ///////////////////////////////////////////////////////////////////////////// #pragma once #include 'Scint..."
+- File: TotalPE\SectionsView.cpp
+  Preview: "#include 'pch.h' #include 'SectionsView.h' #include 'PEStrings.h' #include <SortHelper.h> #include <ClipboardHelper.h> #include <ListViewhelper.h> #in..."
+- File: TotalPE\SectionsView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <VirtualListView.h> #include <PEFile.h> #include <CustomSplitterWindow.h> #include 'HexView.h' class CSect..."
+- File: TotalPE\SecurityHelper.cpp
+  Preview: "#include 'pch.h' #include 'SecurityHelper.h' bool SecurityHelper::IsRunningElevated() { 	static bool runningElevated = false; 	static bool runningElev..."
+- File: TotalPE\SecurityHelper.h
+  Preview: "#pragma once struct SecurityHelper abstract final { 	static bool IsRunningElevated(); 	static bool RunElevated(PCWSTR param, bool ui); }; "
+- File: TotalPE\SecurityView.cpp
+  Preview: "#include 'pch.h' #include 'SecurityView.h' #include 'PEStrings.h' #include 'resource.h' #include <PEFile.h> #include <SortHelper.h> #include <Clipboar..."
+- File: TotalPE\SecurityView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include 'resource.h' #include <VirtualListView.h> #include <CustomSplitterWindow.h> class PEFile; class CSecurityV..."
+- File: TotalPE\StringMessageTableView.cpp
+  Preview: "#include 'pch.h' #include 'StringMessageTableView.h' #include <SortHelper.h> #include <ClipboardHelper.h> CStringMessageTableView::CStringMessageTable..."
+- File: TotalPE\StringMessageTableView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <VirtualListView.h> #include <SortedFilteredVector.h> class CStringMessageTableView : 	public CViewBase<CS..."
+- File: TotalPE\StringsView.cpp
+  Preview: "#include 'pch.h' #include 'StringsView.h' "
+- File: TotalPE\StringsView.h
+  Preview: "#pragma once class StringsView { }; "
+- File: TotalPE\StructView.cpp
+  Preview: "#include 'pch.h' #include 'StructView.h' #include 'Helpers.h' #include 'PEFile.h' CStructView::CStructView(IMainFrame* frame, DiaSymbol const& sym, CS..."
+- File: TotalPE\StructView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <CustomSplitterWindow.h> #include 'HexView.h' #include <TreeListView.h> class PEFile; class CStructView : ..."
+- File: TotalPE\SymbolsView.cpp
+  Preview: "#include 'pch.h' #include 'SymbolsView.h' #include <SortHelper.h> #include <ClipboardHelper.h> #include 'resource.h' #include 'PEStrings.h' CSymbolsVi..."
+- File: TotalPE\SymbolsView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <VirtualListView.h> #include <DiaHelper.h> class CSymbolsView : 	public CViewBase<CSymbolsView>, 	public C..."
+- File: TotalPE\TextView.cpp
+  Preview: "#include 'pch.h' #include 'TextView.h' CTextView::CTextView(IMainFrame* frame, PCWSTR title) : CViewBase(frame), m_Title(title) { } void CTextView::Se..."
+- File: TotalPE\TextView.h
+  Preview: "#pragma once #include 'ViewBase.h' class CTextView : 	public CViewBase<CTextView> { public: 	CTextView(IMainFrame* frame, PCWSTR title); 	void SetXmlT..."
+- File: TotalPE\TlsView.cpp
+  Preview: "#include 'pch.h' #include 'TlsView.h' CTlsView::CTlsView(IMainFrame* frame, PEFile const& pe) : CViewBase(frame), m_PE(pe) { } CString CTlsView::GetTi..."
+- File: TotalPE\TlsView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <VirtualListView.h> #include 'PEFile.h' #include <CustomSplitterWindow.h> class CTlsView : 	public CViewBa..."
+- File: TotalPE\TotalPE.cpp
+  Preview: "// TotalPE.cpp : main source file for TotalPE.exe // #include 'pch.h' #include 'resource.h' #include 'MainFrm.h' #include 'Helpers.h' #include 'AppSet..."
+- File: TotalPE\TotalPE.h
+  Preview: "// TotalPE.h "
+- File: TotalPE\TreeListView.h
+  Preview: "#pragma once ///////////////////////////////////////////////////////////////////////////// // CTreeListView - A TreeView with additional columns // //..."
+- File: TotalPE\VersionView.cpp
+  Preview: "#include 'pch.h' #include 'VersionView.h' #include 'PEStrings.h' #include 'SortHelper.h' #include <ClipboardHelper.h> CVersionView::CVersionView(IMain..."
+- File: TotalPE\VersionView.h
+  Preview: "#pragma once #include 'ViewBase.h' #include <VirtualListView.h> class CVersionView : 	public CViewBase<CVersionView>, 	public CVirtualListView<CVersio..."
+- File: TotalPE\ViewBase.h
+  Preview: "#pragma once #include <FrameView.h> #include 'Interfaces.h' template<typename T, typename TBase = CWindow> class CViewBase abstract : 	public CFrameVi..."
+- File: TotalPE\ViewFactory.cpp
+  Preview: "#include 'pch.h' #include 'resource.h' #include 'MainFrm.h' #include 'Interfaces.h' #include 'DebugView.h' #include 'BitmapView.h' #include 'SecurityV..."
+- File: lexilla1\access\LexillaAccess.h
+  Preview: "// SciTE - Scintilla based Text Editor /** @file LexillaAccess.h ** Interface to loadable lexers. ** This does not depend on SciTE code so can be copi..."
+- File: lexilla1\include\Lexilla.h
+  Preview: "// Lexilla lexer library /** @file Lexilla.h ** Lexilla definitions for dynamic and static linking. ** For C++, more features and type safety are avai..."
+- File: lexilla1\include\SciLexer.h
+  Preview: "/* Scintilla source code edit control */ /** @file SciLexer.h ** Interface to the added lexer functions in the SciLexer version of the edit control. *..."
+- File: lexilla1\lexlib\Accessor.h
+  Preview: "// Scintilla source code edit control /** @file Accessor.h ** Interfaces between Scintilla and lexers. **/ // Copyright 1998-2010 by Neil Hodgson <nei..."
+- File: lexilla1\lexlib\CatalogueModules.h
+  Preview: "// Scintilla source code edit control /** @file CatalogueModules.h ** Lexer infrastructure. ** Contains a list of LexerModules which can be searched t..."
+- File: lexilla1\lexlib\CharacterCategory.h
+  Preview: "// Scintilla source code edit control /** @file CharacterCategory.h ** Returns the Unicode general category of a character. **/ // Copyright 2013 by N..."
+- File: lexilla1\lexlib\CharacterSet.h
+  Preview: "// Scintilla source code edit control /** @file CharacterSet.h ** Encapsulates a set of characters. Used to test if a character is within a set. **/ /..."
+- File: lexilla1\lexlib\DefaultLexer.h
+  Preview: "// Scintilla source code edit control /** @file DefaultLexer.h ** A lexer base class with default empty implementations of methods. ** For lexers that..."
+- File: lexilla1\lexlib\LexAccessor.h
+  Preview: "// Scintilla source code edit control /** @file LexAccessor.h ** Interfaces between Scintilla and lexers. **/ // Copyright 1998-2010 by Neil Hodgson <..."
+- File: lexilla1\lexlib\LexerBase.h
+  Preview: "// Scintilla source code edit control /** @file LexerBase.h ** A simple lexer with no state. **/ // Copyright 1998-2010 by Neil Hodgson <neilh@scintil..."
+- File: lexilla1\lexlib\LexerModule.h
+  Preview: "// Scintilla source code edit control /** @file LexerModule.h ** Colourise for particular languages. **/ // Copyright 1998-2001 by Neil Hodgson <neilh..."
+- File: lexilla1\lexlib\LexerNoExceptions.h
+  Preview: "// Scintilla source code edit control /** @file LexerNoExceptions.h ** A simple lexer with no state. **/ // Copyright 1998-2010 by Neil Hodgson <neilh..."
+- File: lexilla1\lexlib\LexerSimple.h
+  Preview: "// Scintilla source code edit control /** @file LexerSimple.h ** A simple lexer with no state. **/ // Copyright 1998-2010 by Neil Hodgson <neilh@scint..."
+- File: lexilla1\lexlib\OptionSet.h
+  Preview: "// Scintilla source code edit control /** @file OptionSet.h ** Manage descriptive information about an options struct for a lexer. ** Hold the names, ..."
+- File: lexilla1\lexlib\PropSetSimple.h
+  Preview: "// Scintilla source code edit control /** @file PropSetSimple.h ** A basic string to string map. **/ // Copyright 1998-2009 by Neil Hodgson <neilh@sci..."
+- File: lexilla1\lexlib\SparseState.h
+  Preview: "// Scintilla source code edit control /** @file SparseState.h ** Hold lexer state that may change rarely. ** This is often per-line state such as whet..."
+- File: lexilla1\lexlib\StringCopy.h
+  Preview: "// Scintilla source code edit control /** @file StringCopy.h ** Safe string copy function which always NUL terminates. ** ELEMENTS macro for determini..."
+- File: lexilla1\lexlib\StyleContext.h
+  Preview: "// Scintilla source code edit control /** @file StyleContext.h ** Lexer infrastructure. **/ // Copyright 1998-2004 by Neil Hodgson <neilh@scintilla.or..."
+- File: lexilla1\lexlib\SubStyles.h
+  Preview: "// Scintilla source code edit control /** @file SubStyles.h ** Manage substyles for a lexer. **/ // Copyright 2012 by Neil Hodgson <neilh@scintilla.or..."
+- File: lexilla1\lexlib\WordList.h
+  Preview: "// Scintilla source code edit control /** @file WordList.h ** Hold a list of words. **/ // Copyright 1998-2010 by Neil Hodgson <neilh@scintilla.org> /..."
+- File: lexilla1\scripts\HeaderOrder.txt
+  Preview: "// Define the standard order in which to include header files // All platform headers should be included before Scintilla headers // and each of these..."
+- File: lexilla1\scripts\LexFacer.py
+  Preview: "#!/usr/bin/env python3 # LexFacer.py - regenerate the SciLexer.h files from the Scintilla.iface interface # definition file. # Implemented 2000 by Nei..."
+- File: lexilla1\scripts\LexillaData.py
+  Preview: "#!/usr/bin/env python3 # ScintillaData.py - implemented 2013 by Neil Hodgson neilh@scintilla.org # Released to the public domain. # Common code used b..."
+- File: lexilla1\scripts\LexillaGen.py
+  Preview: "#!/usr/bin/env python3 # LexillaGen.py - implemented 2019 by Neil Hodgson neilh@scintilla.org # Released to the public domain. # Regenerate the Lexill..."
+- File: lexilla1\scripts\LexillaLogo.py
+  Preview: "# LexillaLogo.py # Requires Python 3.6. # Requires Pillow https://python-pillow.org/, tested with 7.2.0 on Windows 10 import random from PIL import Im..."
+- File: lexilla1\scripts\RunTest.sh
+  Preview: "# Test lexers # build lexilla.so and TestLexers then run TestLexers JOBS='--jobs=$(getconf _NPROCESSORS_ONLN)' ( cd ../src make '$JOBS' DEBUG=1 ) ( cd..."
+- File: lexilla1\src\DepGen.py
+  Preview: "#!/usr/bin/env python3 # DepGen.py - produce a make dependencies file for Scintilla # Copyright 2019 by Neil Hodgson <neilh@scintilla.org> # The Licen..."
+- File: lexilla1\test\TestDocument.h
+  Preview: "// Lexilla lexer library /** @file TestDocument.h ** Lexer testing. **/ // Copyright 2019 by Neil Hodgson <neilh@scintilla.org> // The License.txt fil..."
+- File: scintilla1\cocoa\checkbuildosx.sh
+  Preview: "# Script to build Scintilla for macOS with most supported build files. # Current directory should be scintilla/cocoa before running. cd ../.. # ******..."
+- File: scintilla1\cocoa\InfoBar.h
+  Preview: " /** * Scintilla source code edit control * @file InfoBar.h - Implements special info bar with zoom info, caret position etc. to be used with *       ..."
+- File: scintilla1\cocoa\InfoBarCommunicator.h
+  Preview: "/* * InfoBarCommunicator.h - Definitions of a communication protocol and other data types used for *             the info bar implementation. * * Mike..."
+- File: scintilla1\cocoa\PlatCocoa.h
+  Preview: " /** * Copyright 2009 Sun Microsystems, Inc. All rights reserved. * This file is dual licensed under LGPL v2.1 and the Scintilla license (http://www.s..."
+- File: scintilla1\cocoa\QuartzTextLayout.h
+  Preview: "/* * QuartzTextLayout.h * * Original Code by Evan Jones on Wed Oct 02 2002. * Contributors: * Shane Caraveo, ActiveState * Bernd Paradies, Adobe * */ ..."
+- File: scintilla1\cocoa\QuartzTextStyle.h
+  Preview: "/* * QuartzTextStyle.h * * Created by Evan Jones on Wed Oct 02 2002. * */ #ifndef QUARTZTEXTSTYLE_H #define QUARTZTEXTSTYLE_H #include 'QuartzTextStyl..."
+- File: scintilla1\cocoa\QuartzTextStyleAttribute.h
+  Preview: "/** * QuartzTextStyleAttribute.h * * Original Code by Evan Jones on Wed Oct 02 2002. * Contributors: * Shane Caraveo, ActiveState * Bernd Paradies, Ad..."
+- File: scintilla1\cocoa\ScintillaCocoa.h
+  Preview: "/* * ScintillaCocoa.h * * Mike Lischke <mlischke@sun.com> * * Based on ScintillaMacOSX.h * Original code by Evan Jones on Sun Sep 01 2002. * Contribut..."
+- File: scintilla1\cocoa\ScintillaView.h
+  Preview: " /** * Declaration of the native Cocoa View that serves as container for the scintilla parts. * @file ScintillaView.h * * Created by Mike Lischke. * *..."
+- File: scintilla1\doc\AddSource.txt
+  Preview: "Some of the build files adapt to adding and removing source code files but most must be modified by hand. Here is a list of directories and the build ..."
+- File: scintilla1\doc\Lexer.txt
+  Preview: "How to write a scintilla lexer A lexer for a particular language determines how a specified range of text shall be colored. Writing a lexer is relativ..."
+- File: scintilla1\gtk\Converter.h
+  Preview: "// Scintilla source code edit control // Converter.h - Encapsulation of iconv // Copyright 2004 by Neil Hodgson <neilh@scintilla.org> // The License.t..."
+- File: scintilla1\gtk\DepGen.py
+  Preview: "#!/usr/bin/env python3 # DepGen.py - produce a make dependencies file for Scintilla # Copyright 2019 by Neil Hodgson <neilh@scintilla.org> # The Licen..."
+- File: scintilla1\gtk\scintilla-marshal.h
+  Preview: "/* This file is generated, all changes will be lost */ #ifndef __SCINTILLA_MARSHAL_MARSHAL_H__ #define __SCINTILLA_MARSHAL_MARSHAL_H__ #include <glib-..."
+- File: scintilla1\gtk\ScintillaGTK.h
+  Preview: "// Scintilla source code edit control // ScintillaGTK.h - GTK+ specific subclass of ScintillaBase // Copyright 1998-2004 by Neil Hodgson <neilh@scinti..."
+- File: scintilla1\gtk\ScintillaGTKAccessible.h
+  Preview: "/* Scintilla source code edit control */ /* ScintillaGTKAccessible.h - GTK+ accessibility for ScintillaGTK */ /* Copyright 2016 by Colomban Wendling <..."
+- File: scintilla1\gtk\Wrappers.h
+  Preview: "// Scintilla source code edit control // Wrappers.h - Encapsulation of GLib, GObject, Pango, Cairo, GTK, and GDK types // Copyright 2022 by Neil Hodgs..."
+- File: scintilla1\include\ILexer.h
+  Preview: "// Scintilla source code edit control /** @file ILexer.h ** Interface between Scintilla and lexers. **/ // Copyright 1998-2010 by Neil Hodgson <neilh@..."
+- File: scintilla1\include\ILoader.h
+  Preview: "// Scintilla source code edit control /** @file ILoader.h ** Interface for loading into a Scintilla document from a background thread. **/ // Copyrigh..."
+- File: scintilla1\include\Scintilla.h
+  Preview: "/* Scintilla source code edit control */ /** @file Scintilla.h ** Interface to the edit control. **/ /* Copyright 1998-2003 by Neil Hodgson <neilh@sci..."
+- File: scintilla1\include\ScintillaCall.h
+  Preview: "// SciTE - Scintilla based Text Editor /** @file ScintillaCall.h ** Interface to calling a Scintilla instance. **/ // Copyright 1998-2019 by Neil Hodg..."
+- File: scintilla1\include\ScintillaMessages.h
+  Preview: "// Scintilla source code edit control /** @file ScintillaMessages.h ** Enumerate the messages that can be sent to Scintilla. **/ // Copyright 1998-201..."
+- File: scintilla1\include\ScintillaStructures.h
+  Preview: "// Scintilla source code edit control /** @file ScintillaStructures.h ** Structures used to communicate with Scintilla. ** The same structures are def..."
+- File: scintilla1\include\ScintillaTypes.h
+  Preview: "// Scintilla source code edit control /** @file ScintillaTypes.h ** Types used to communicate with Scintilla. **/ // Copyright 1998-2019 by Neil Hodgs..."
+- File: scintilla1\include\ScintillaWidget.h
+  Preview: "/* Scintilla source code edit control */ /* @file ScintillaWidget.h * Definition of Scintilla widget for GTK+. * Only needed by GTK+ code but is harml..."
+- File: scintilla1\include\Sci_Position.h
+  Preview: "// Scintilla source code edit control /** @file Sci_Position.h ** Define the Sci_Position type used in Scintilla's external interfaces. ** These need ..."
+- File: scintilla1\scripts\archive.sh
+  Preview: "# Up to parent directory of scintilla cd ../.. # Archive Scintilla to scintilla.tgz hg archive --repository scintilla scintilla.tgz "
+- File: scintilla1\scripts\CheckMentioned.py
+  Preview: "#!/usr/bin/env python3 # CheckMentioned.py # Find all the symbols in scintilla/include/Scintilla.h and check if they # are mentioned in scintilla/doc/..."
+- File: scintilla1\scripts\Dependencies.py
+  Preview: "#!/usr/bin/env python3 # Dependencies.py - discover, read, and write dependencies file for make. # The format like the output from 'g++ -MM' which pro..."
+- File: scintilla1\scripts\Face.py
+  Symbols: [sanitiseLine]
+  Preview: "#!/usr/bin/env python3 # Face.py - module for reading and parsing Scintilla.iface file # Implemented 2000 by Neil Hodgson neilh@scintilla.org # Releas..."
+- File: scintilla1\scripts\FileGenerator.py
+  Preview: "#!/usr/bin/env python3 # FileGenerator.py - implemented 2013 by Neil Hodgson neilh@scintilla.org # Released to the public domain. # Generate or regene..."
+- File: scintilla1\scripts\GenerateCaseConvert.py
+  Preview: "#!/usr/bin/env python3 # Script to generate CaseConvert.cxx from Python's Unicode data # Should be run rarely when a Python with a new version of Unic..."
+- File: scintilla1\scripts\GenerateCharacterCategory.py
+  Preview: "#!/usr/bin/env python3 # Script to generate scintilla/src/CharacterCategoryMap.cxx and lexilla/lexlib/CharacterCategory.cxx # from Python's Unicode da..."
+- File: scintilla1\scripts\HeaderCheck.py
+  Symbols: [IsHeader]
+  Preview: "#!/usr/bin/env python3 # Script to check that headers are in a consistent order # Canonical header order is defined in a file, normally scripts/Header..."
+- File: scintilla1\scripts\HeaderOrder.txt
+  Preview: "// Define the standard order in which to include header files // All platform headers should be included before Scintilla headers // and each of these..."
+- File: scintilla1\scripts\HFacer.py
+  Preview: "#!/usr/bin/env python3 # HFacer.py - regenerate the Scintilla.h and SciLexer.h files from the Scintilla.iface interface # definition file. # Implement..."
+- File: scintilla1\scripts\LexGen.py
+  Preview: "#!/usr/bin/env python3 # LexGen.py - implemented 2002 by Neil Hodgson neilh@scintilla.org # Released to the public domain. # Update Scintilla files. #..."
+- File: scintilla1\scripts\ScintillaAPIFacer.py
+  Symbols: [definition]
+  Preview: "#!/usr/bin/env python3 # ScintillaAPIFacer.py - regenerate the ScintillaTypes.h, and ScintillaMessages.h # from the Scintilla.iface interface definiti..."
+- File: scintilla1\scripts\ScintillaData.py
+  Preview: "#!/usr/bin/env python3 # ScintillaData.py - implemented 2013 by Neil Hodgson neilh@scintilla.org # Released to the public domain. # Common code used b..."
+- File: scintilla1\src\AutoComplete.h
+  Preview: "// Scintilla source code edit control /** @file AutoComplete.h ** Defines the auto completion list box. **/ // Copyright 1998-2003 by Neil Hodgson <ne..."
+- File: scintilla1\src\CallTip.h
+  Preview: "// Scintilla source code edit control /** @file CallTip.h ** Interface to the call tip control. **/ // Copyright 1998-2001 by Neil Hodgson <neilh@scin..."
+- File: scintilla1\src\CaseConvert.h
+  Preview: "// Scintilla source code edit control // Encoding: UTF-8 /** @file CaseConvert.h ** Performs Unicode case conversions. ** Does not handle locale-sensi..."
+- File: scintilla1\src\CaseFolder.h
+  Preview: "// Scintilla source code edit control /** @file CaseFolder.h ** Classes for case folding. **/ // Copyright 1998-2013 by Neil Hodgson <neilh@scintilla...."
+- File: scintilla1\src\CellBuffer.h
+  Preview: "// Scintilla source code edit control /** @file CellBuffer.h ** Manages the text of the document. **/ // Copyright 1998-2004 by Neil Hodgson <neilh@sc..."
+- File: scintilla1\src\ChangeHistory.h
+  Preview: "// Scintilla source code edit control /** @file ChangeHistory.h ** Manages a history of changes in a document. **/ // Copyright 2022 by Neil Hodgson <..."
+- File: scintilla1\src\CharacterCategoryMap.h
+  Preview: "// Scintilla source code edit control /** @file CharacterCategoryMap.h ** Returns the Unicode general category of a character. ** Similar code to Lexi..."
+- File: scintilla1\src\CharacterType.h
+  Preview: "// Scintilla source code edit control /** @file CharacterType.h ** Tests for character type and case-insensitive comparisons. **/ // Copyright 2007 by..."
+- File: scintilla1\src\CharClassify.h
+  Preview: "// Scintilla source code edit control /** @file CharClassify.h ** Character classifications used by Document and RESearch. **/ // Copyright 2006-2009 ..."
+- File: scintilla1\src\ContractionState.h
+  Preview: "// Scintilla source code edit control /** @file ContractionState.h ** Manages visibility of lines for folding and wrapping. **/ // Copyright 1998-2007..."
+- File: scintilla1\src\DBCS.h
+  Preview: "// Scintilla source code edit control /** @file DBCS.h ** Functions to handle DBCS double byte encodings like Shift-JIS. **/ // Copyright 2017 by Neil..."
+- File: scintilla1\src\Debugging.h
+  Preview: "// Scintilla source code edit control /** @file Debugging.h ** Assert and debug trace functions. ** Implemented in each platform layer. **/ // Copyrig..."
+- File: scintilla1\src\Decoration.h
+  Preview: "/** @file Decoration.h ** Visual elements added over text. **/ // Copyright 1998-2007 by Neil Hodgson <neilh@scintilla.org> // The License.txt file de..."
+- File: scintilla1\src\Document.h
+  Preview: "// Scintilla source code edit control /** @file Document.h ** Text document that handles notifications, DBCS, styling, words and end of line. **/ // C..."
+- File: scintilla1\src\EditModel.h
+  Preview: "// Scintilla source code edit control /** @file EditModel.h ** Defines the editor state that must be visible to EditorView. **/ // Copyright 1998-2014..."
+- File: scintilla1\src\Editor.h
+  Preview: "// Scintilla source code edit control /** @file Editor.h ** Defines the main editor class. **/ // Copyright 1998-2011 by Neil Hodgson <neilh@scintilla..."
+- File: scintilla1\src\EditView.h
+  Preview: "// Scintilla source code edit control /** @file EditView.h ** Defines the appearance of the main text area of the editor window. **/ // Copyright 1998..."
+- File: scintilla1\src\ElapsedPeriod.h
+  Preview: "// Scintilla source code edit control /** @file ElapsedPeriod.h ** Encapsulate C++ <chrono> to simplify use. **/ // Copyright 2018 by Neil Hodgson <ne..."
+- File: scintilla1\src\Geometry.h
+  Preview: "// Scintilla source code edit control /** @file Geometry.h ** Classes and functions for geometric and colour calculations. **/ // Copyright 2020 by Ne..."
+- File: scintilla1\src\Indicator.h
+  Preview: "// Scintilla source code edit control /** @file Indicator.h ** Defines the style of indicators which are text decorations such as underlining. **/ // ..."
+- File: scintilla1\src\KeyMap.h
+  Preview: "// Scintilla source code edit control /** @file KeyMap.h ** Defines a mapping between keystrokes and commands. **/ // Copyright 1998-2001 by Neil Hodg..."
+- File: scintilla1\src\LineMarker.h
+  Preview: "// Scintilla source code edit control /** @file LineMarker.h ** Defines the look of a line marker in the margin . **/ // Copyright 1998-2011 by Neil H..."
+- File: scintilla1\src\MarginView.h
+  Preview: "// Scintilla source code edit control /** @file MarginView.h ** Defines the appearance of the editor margin. **/ // Copyright 1998-2014 by Neil Hodgso..."
+- File: scintilla1\src\Partitioning.h
+  Preview: "// Scintilla source code edit control /** @file Partitioning.h ** Data structure used to partition an interval. Used for holding line start/end positi..."
+- File: scintilla1\src\PerLine.h
+  Preview: "// Scintilla source code edit control /** @file PerLine.h ** Manages data associated with each line of the document **/ // Copyright 1998-2009 by Neil..."
+- File: scintilla1\src\Platform.h
+  Preview: "// Scintilla source code edit control /** @file Platform.h ** Interface to platform facilities. Also includes some basic utilities. ** Implemented in ..."
+- File: scintilla1\src\Position.h
+  Preview: "// Scintilla source code edit control /** @file Position.h ** Defines global type name Position in the Sci internal namespace. **/ // Copyright 2015 b..."
+- File: scintilla1\src\PositionCache.h
+  Preview: "// Scintilla source code edit control /** @file PositionCache.h ** Classes for caching layout information. **/ // Copyright 1998-2009 by Neil Hodgson ..."
+- File: scintilla1\src\RESearch.h
+  Preview: "// Scintilla source code edit control /** @file RESearch.h ** Interface to the regular expression search library. **/ // Written by Neil Hodgson <neil..."
+- File: scintilla1\src\RunStyles.h
+  Preview: "/** @file RunStyles.h ** Data structure used to store sparse styles. **/ // Copyright 1998-2007 by Neil Hodgson <neilh@scintilla.org> // The License.t..."
+- File: scintilla1\src\ScintillaBase.h
+  Preview: "// Scintilla source code edit control /** @file ScintillaBase.h ** Defines an enhanced subclass of Editor with calltips, autocomplete and context menu..."
+- File: scintilla1\src\Selection.h
+  Preview: "// Scintilla source code edit control /** @file Selection.h ** Classes maintaining the selection. **/ // Copyright 2009 by Neil Hodgson <neilh@scintil..."
+- File: scintilla1\src\SparseVector.h
+  Preview: "// Scintilla source code edit control /** @file SparseVector.h ** Hold data sparsely associated with elements in a range. **/ // Copyright 2016 by Nei..."
+- File: scintilla1\src\SplitVector.h
+  Preview: "// Scintilla source code edit control /** @file SplitVector.h ** Main data structure for holding arrays that handle insertions ** and deletions effici..."
+- File: scintilla1\src\Style.h
+  Preview: "// Scintilla source code edit control /** @file Style.h ** Defines the font and colour style for a class of text. **/ // Copyright 1998-2001 by Neil H..."
+- File: scintilla1\src\UniConversion.h
+  Preview: "// Scintilla source code edit control /** @file UniConversion.h ** Functions to handle UTF-8 and UTF-16 strings. **/ // Copyright 1998-2001 by Neil Ho..."
+- File: scintilla1\src\UniqueString.h
+  Preview: "// Scintilla source code edit control /** @file UniqueString.h ** Define UniqueString, a unique_ptr based string type for storage in containers ** and..."
+- File: scintilla1\src\ViewStyle.h
+  Preview: "// Scintilla source code edit control /** @file ViewStyle.h ** Store information on how the document is to be viewed. **/ // Copyright 1998-2001 by Ne..."
+- File: scintilla1\src\XPM.h
+  Preview: "// Scintilla source code edit control /** @file XPM.h ** Define a classes to hold image data in the X Pixmap (XPM) and RGBA formats. **/ // Copyright ..."
+- File: scintilla1\test\MessageNumbers.py
+  Preview: "# List many windows message numbers msgs = { 'WM_ACTIVATE':6, 'WM_ACTIVATEAPP':28, 'WM_CAPTURECHANGED':533, 'WM_CHAR':258, 'WM_CLOSE':16, 'WM_CREATE':..."
+- File: scintilla1\test\performanceTests.py
+  Preview: "#!/usr/bin/env python3 # -*- coding: utf-8 -*- # Requires Python 2.7 or later from __future__ import with_statement from __future__ import unicode_lit..."
+- File: scintilla1\test\ScintillaCallable.py
+  Symbols: [IsEnumeration]
+  Preview: "# -*- coding: utf-8 -*- from __future__ import unicode_literals import ctypes from ctypes import c_int, c_char_p, c_long, c_ssize_t def IsEnumeration(..."
+- File: scintilla1\test\simpleTests.py
+  Preview: "#!/usr/bin/env python3 # -*- coding: utf-8 -*- # Requires Python 2.7 or later from __future__ import with_statement from __future__ import unicode_lit..."
+- File: scintilla1\test\win32Tests.py
+  Preview: "#!/usr/bin/env python3 # -*- coding: utf-8 -*- # Requires Python 2.7 or later # These are tests that run only on Win32 as they use Win32 SendMessage c..."
+- File: scintilla1\test\xite.py
+  Preview: "#!/usr/bin/env python3 # -*- coding: utf-8 -*- # Requires Python 3.6 or later import XiteWin if __name__ == '__main__': 	XiteWin.main('') "
+- File: scintilla1\test\XiteMenu.py
+  Preview: "# -*- coding: utf-8 -*- from __future__ import unicode_literals ''' Define the menu structure used by the Pentacle applications ''' MenuStructure = [ ..."
+- File: scintilla1\test\XiteWin.py
+  Preview: "#!/usr/bin/env python3 # -*- coding: utf-8 -*- # Requires Python 3.6 or later from __future__ import with_statement from __future__ import unicode_lit..."
+- File: scintilla1\win32\DepGen.py
+  Preview: "#!/usr/bin/env python3 # DepGen.py - produce a make dependencies file for Scintilla # Copyright 2019 by Neil Hodgson <neilh@scintilla.org> # The Licen..."
+- File: scintilla1\win32\HanjaDic.h
+  Preview: "// Scintilla source code edit control /** @file HanjaDic.h ** Korean Hanja Dictionary ** Convert between Korean Hanja and Hangul by COM interface. **/..."
+- File: scintilla1\win32\PlatWin.h
+  Preview: "// Scintilla source code edit control /** @file PlatWin.h ** Implementation of platform facilities on Windows. **/ // Copyright 1998-2011 by Neil Hodg..."
+- File: scintilla1\win32\ScintillaWin.h
+  Preview: "// Scintilla source code edit control /** @file ScintillaWin.h ** Define functions from ScintillaWin.cxx that can be called from ScintillaDLL.cxx. **/..."
+- File: scintilla1\win32\WinTypes.h
+  Preview: "// Scintilla source code edit control /** @file WinTypes.h ** Implement safe release of COM objects and access to functions in DLLs. ** Header contain..."
+- File: WTLHelper\BasicDemo\AboutDlg.cpp
+  Preview: "// aboutdlg.cpp : implementation of the CAboutDlg class // ///////////////////////////////////////////////////////////////////////////// #include 'pch..."
+- File: WTLHelper\BasicDemo\AboutDlg.h
+  Preview: "// aboutdlg.h : interface of the CAboutDlg class // ///////////////////////////////////////////////////////////////////////////// #pragma once class C..."
+- File: WTLHelper\BasicDemo\BasicDemo.cpp
+  Preview: "// BasicDemo.cpp : main source file for BasicDemo.exe // #include 'pch.h' #include 'resource.h' #include 'MainFrm.h' CAppModule _Module; int Run(LPTST..."
+- File: WTLHelper\BasicDemo\BasicDemo.h
+  Preview: "// BasicDemo.h "
+- File: WTLHelper\BasicDemo\MainFrm.cpp
+  Preview: "// MainFrm.cpp : implmentation of the CMainFrame class // ///////////////////////////////////////////////////////////////////////////// #include 'pch...."
+- File: WTLHelper\BasicDemo\MainFrm.h
+  Preview: "// MainFrm.h : interface of the CMainFrame class // ///////////////////////////////////////////////////////////////////////////// #pragma once #includ..."
+- File: WTLHelper\BasicDemo\pch.cpp
+  Preview: "// stdafx.cpp : source file that includes just the standard includes //	BasicDemo.pch will be the pre-compiled header //	stdafx.obj will contain the p..."
+- File: WTLHelper\BasicDemo\pch.h
+  Preview: "// stdafx.h : include file for standard system include files, // or project specific include files that are used frequently, but // are changed infreq..."
+- File: WTLHelper\BasicDemo\ProcessTreeListView.cpp
+  Preview: "// View.cpp : implementation of the CProcessTreeListView class // ///////////////////////////////////////////////////////////////////////////// #inclu..."
+- File: WTLHelper\BasicDemo\ProcessTreeListView.h
+  Preview: "// View.h : interface of the CView class // ///////////////////////////////////////////////////////////////////////////// #pragma once #include 'TreeL..."
+- File: WTLHelper\BasicDemo\resource.h
+  Preview: "//{{NO_DEPENDENCIES}} // Microsoft Visual C++ generated include file. // Used by BasicDemo.rc // #define IDD_ABOUTBOX          100 #define IDR_MAINFRA..."
+- File: WTLHelper\HexTest\AboutDlg.cpp
+  Preview: "// aboutdlg.cpp : implementation of the CAboutDlg class // ///////////////////////////////////////////////////////////////////////////// #include 'std..."
+- File: WTLHelper\HexTest\AboutDlg.h
+  Preview: "// aboutdlg.h : interface of the CAboutDlg class // ///////////////////////////////////////////////////////////////////////////// #pragma once class C..."
+- File: WTLHelper\HexTest\HexTest.cpp
+  Preview: "// HexTest.cpp : main source file for HexTest.exe // #include 'stdafx.h' #include 'resource.h' #include 'View.h' #include 'aboutdlg.h' #include 'MainF..."
+- File: WTLHelper\HexTest\HexTest.h
+  Preview: "// HexTest.h "
+- File: WTLHelper\HexTest\MainFrm.cpp
+  Preview: "// MainFrm.cpp : implmentation of the CMainFrame class // ///////////////////////////////////////////////////////////////////////////// #include 'stda..."
+- File: WTLHelper\HexTest\MainFrm.h
+  Preview: "// MainFrm.h : interface of the CMainFrame class // ///////////////////////////////////////////////////////////////////////////// #pragma once #includ..."
+- File: WTLHelper\HexTest\resource.h
+  Preview: "//{{NO_DEPENDENCIES}} // Microsoft Visual C++ generated include file. // Used by HexTest.RC //  #define IDD_ABOUTBOX				100 #define IDR_MAINFRAME				1..."
+- File: WTLHelper\HexTest\stdafx.cpp
+  Preview: "// stdafx.cpp : source file that includes just the standard includes //	HexTest.pch will be the pre-compiled header //	stdafx.obj will contain the pre..."
+- File: WTLHelper\HexTest\stdafx.h
+  Preview: "// stdafx.h : include file for standard system include files, // or project specific include files that are used frequently, but // are changed infreq..."
+- File: WTLHelper\HexTest\View.cpp
+  Preview: "// View.cpp : implementation of the CView class // ///////////////////////////////////////////////////////////////////////////// #include 'stdafx.h' #..."
+- File: WTLHelper\HexTest\View.h
+  Preview: "// View.h : interface of the CView class // ///////////////////////////////////////////////////////////////////////////// #pragma once #include <HexCo..."
+- File: WTLHelper\WTL\atlapp.h
+  Preview: "// Windows Template Library - WTL version 10.0 // Copyright (C) Microsoft Corporation, WTL Team. All rights reserved. // // This file is a part of the..."
+- File: WTLHelper\WTL\atlcrack.h
+  Preview: "// Windows Template Library - WTL version 10.0 // Copyright (C) Microsoft Corporation, WTL Team. All rights reserved. // // This file is a part of the..."
+- File: WTLHelper\WTL\atlctrls.h
+  Preview: "// Windows Template Library - WTL version 10.0 // Copyright (C) Microsoft Corporation, WTL Team. All rights reserved. // // This file is a part of the..."
+- File: WTLHelper\WTL\atlctrlw.h
+  Preview: "// Windows Template Library - WTL version 10.0 // Copyright (C) Microsoft Corporation, WTL Team. All rights reserved. // // This file is a part of the..."
+- File: WTLHelper\WTL\atlctrlx.h
+  Preview: "// Windows Template Library - WTL version 10.0 // Copyright (C) Microsoft Corporation, WTL Team. All rights reserved. // // This file is a part of the..."
+- File: WTLHelper\WTL\atlddx.h
+  Preview: "// Windows Template Library - WTL version 10.0 // Copyright (C) Microsoft Corporation, WTL Team. All rights reserved. // // This file is a part of the..."
+- File: WTLHelper\WTL\atldlgs.h
+  Preview: "// Windows Template Library - WTL version 10.0 // Copyright (C) Microsoft Corporation, WTL Team. All rights reserved. // // This file is a part of the..."
+- File: WTLHelper\WTL\atldwm.h
+  Preview: "// Windows Template Library - WTL version 10.0 // Copyright (C) Microsoft Corporation, WTL Team. All rights reserved. // // This file is a part of the..."
+- File: WTLHelper\WTL\atlfind.h
+  Preview: "// Windows Template Library - WTL version 10.0 // Copyright (C) Microsoft Corporation, WTL Team. All rights reserved. // // This file is a part of the..."
+- File: WTLHelper\WTL\atlframe.h
+  Preview: "// Windows Template Library - WTL version 10.0 // Copyright (C) Microsoft Corporation, WTL Team. All rights reserved. // // This file is a part of the..."
+- File: WTLHelper\WTL\atlgdi.h
+  Preview: "// Windows Template Library - WTL version 10.0 // Copyright (C) Microsoft Corporation, WTL Team. All rights reserved. // // This file is a part of the..."
+- File: WTLHelper\WTL\atlmisc.h
+  Preview: "// Windows Template Library - WTL version 10.0 // Copyright (C) Microsoft Corporation, WTL Team. All rights reserved. // // This file is a part of the..."
+- File: WTLHelper\WTL\atlprint.h
+  Preview: "// Windows Template Library - WTL version 10.0 // Copyright (C) Microsoft Corporation, WTL Team. All rights reserved. // // This file is a part of the..."
+- File: WTLHelper\WTL\atlres.h
+  Preview: "// Windows Template Library - WTL version 10.0 // Copyright (C) Microsoft Corporation, WTL Team. All rights reserved. // // This file is a part of the..."
+- File: WTLHelper\WTL\atlribbon.h
+  Preview: "// Windows Template Library - WTL version 10.0 // Copyright (C) Microsoft Corporation, WTL Team. All rights reserved. // // This file is a part of the..."
+- File: WTLHelper\WTL\atlscrl.h
+  Preview: "// Windows Template Library - WTL version 10.0 // Copyright (C) Microsoft Corporation, WTL Team. All rights reserved. // // This file is a part of the..."
+- File: WTLHelper\WTL\atlsplit.h
+  Preview: "// Windows Template Library - WTL version 10.0 // Copyright (C) Microsoft Corporation, WTL Team. All rights reserved. // // This file is a part of the..."
+- File: WTLHelper\WTL\atltheme.h
+  Preview: "// Windows Template Library - WTL version 10.0 // Copyright (C) Microsoft Corporation, WTL Team. All rights reserved. // // This file is a part of the..."
+- File: WTLHelper\WTL\atluser.h
+  Preview: "// Windows Template Library - WTL version 10.0 // Copyright (C) Microsoft Corporation, WTL Team. All rights reserved. // // This file is a part of the..."
+- File: WTLHelper\WTL\atlwinx.h
+  Preview: "// Windows Template Library - WTL version 10.0 // Copyright (C) Microsoft Corporation, WTL Team. All rights reserved. // // This file is a part of the..."
+- File: WTLHelper\WTLHelper\ClipboardHelper.cpp
+  Preview: "#include 'pch.h' #include 'ClipboardHelper.h' bool ClipboardHelper::CopyText(HWND hWnd, PCWSTR text) { 	if (::OpenClipboard(hWnd)) { 		::EmptyClipboar..."
+- File: WTLHelper\WTLHelper\ClipboardHelper.h
+  Preview: "#pragma once struct ClipboardHelper abstract final { 	static bool CopyText(HWND hWnd, PCWSTR text); }; "
+- File: WTLHelper\WTLHelper\ColorHelper.cpp
+  Preview: "#include 'pch.h' #include 'ColorHelper.h' COLORREF ColorHelper::Lighten(COLORREF color, int amount) {   return RGB(     (BYTE)std::min(255, GetRValue(..."
+- File: WTLHelper\WTLHelper\ColorHelper.h
+  Preview: "#pragma once struct ColorHelper abstract final { 	static COLORREF Lighten(COLORREF color, int amount); 	static COLORREF Darken(COLORREF color, int amo..."
+- File: WTLHelper\WTLHelper\ColumnManager.cpp
+  Preview: "#include 'pch.h' #include 'ColumnManager.h' #include <atlctrls.h> class ListCtrlHelper { public: 	template<typename T = int> 	static T FindColumn(CHea..."
+- File: WTLHelper\WTLHelper\ColumnManager.h
+  Preview: "#pragma once #include <map> #include <vector> enum class ColumnFlags { 	None = 0, 	Visible = 1, 	Fixed = 2, 	Const = 4,		// currently unused 	Mandator..."
+- File: WTLHelper\WTLHelper\CompoundFile.cpp
+  Preview: "#include 'pch.h' #include 'CompoundFile.h' using namespace std; using namespace StructuredStorage; CompoundFile CompoundFile::Create(const std::wstrin..."
+- File: WTLHelper\WTLHelper\CompoundFile.h
+  Preview: "#pragma once #include <objbase.h> #include <string> #include <memory> namespace StructuredStorage { 	enum class CompoundFileMode { 		Read, 		ReadWrite..."
+- File: WTLHelper\WTLHelper\CompoundFileReaderWriter.cpp
+  Preview: "#include 'pch.h' #include 'CompoundFileReaderWriter.h' using namespace StructuredStorage; CompoundFileWriter::CompoundFileWriter(StructuredFile& file)..."
+- File: WTLHelper\WTLHelper\CompoundFileReaderWriter.h
+  Preview: "#pragma once #include <vector> #include <map> #include <unordered_map> #include 'CompoundFile.h' namespace StructuredStorage { 	class CompoundFileWrit..."
+- File: WTLHelper\WTLHelper\CustomButton.h
+  Preview: "#pragma once #pragma once #include 'ThemeHelper.h' class CCustomButtonParent : 	public CWindowImpl<CCustomButtonParent>, 	public CCustomDraw<CCustomBu..."
+- File: WTLHelper\WTLHelper\CustomComboBox.h
+  Preview: "#pragma once #include 'ThemeHelper.h' class CCustomComboBox : public CWindowImpl<CCustomComboBox, CComboBox> { public: 	void OnFinalMessage(HWND) over..."
+- File: WTLHelper\WTLHelper\CustomDateTimePicker.h
+  Preview: "#pragma once #include 'DarkMode/DarkModeSubclass.h' // // DateTimePicker (SysDateTimePick32) has no DarkMode_* visual style. // Killing the theme with..."
+- File: WTLHelper\WTLHelper\CustomDialog.h
+  Preview: "#pragma once #include 'ThemeHelper.h' class CCustomDialog : public CWindowImpl<CCustomDialog> { public: 	BEGIN_MSG_MAP(CCustomDialog) 		MESSAGE_HANDLE..."
+- File: WTLHelper\WTLHelper\CustomEdit.h
+  Preview: "#pragma once #include 'ThemeHelper.h' class CCustomEdit : public CWindowImpl<CCustomEdit, CEdit> { public: 	void OnFinalMessage(HWND) override { 		del..."
+- File: WTLHelper\WTLHelper\CustomHeader.h
+  Preview: "#pragma once #include 'Theme.h' #include 'ThemeHelper.h' class CCustomHeader : 	public CWindowImpl<CCustomHeader, CHeaderCtrl> { public: 	BEGIN_MSG_MA..."
+- File: WTLHelper\WTLHelper\CustomHeader2.h
+  Preview: "#pragma once #include 'WTLHelper.h' #include 'DarkMode/DarkModeSubclass.h' class CCustomHeader2 : 	public CWindowImpl<CCustomHeader2, CHeaderCtrl> { p..."
+- File: WTLHelper\WTLHelper\CustomListView.h
+  Preview: "#pragma once #include 'Theme.h' class CCustomListView : public CWindowImpl<CCustomListView, CListViewCtrl> { public: 	BEGIN_MSG_MAP(CCustomListView) 	..."
+- File: WTLHelper\WTLHelper\CustomMonthCalendar.h
+  Preview: "#pragma once #include 'DarkMode/DarkModeSubclass.h' // // MonthCalendar (SysMonthCal32) does not have a DarkMode_* visual style. // Killing the theme ..."
+- File: WTLHelper\WTLHelper\CustomRebar.h
+  Preview: "#pragma once #include 'ThemeHelper.h' class CCustomRebar : public CWindowImpl<CCustomRebar, CReBarCtrl> { public: 	void OnFinalMessage(HWND) override ..."
+- File: WTLHelper\WTLHelper\CustomSplitterWindow.h
+  Preview: "#pragma once #include 'ThemeHelper.h' #include 'Theme.h' #include <atlsplit.h> template <bool t_bVertical> class CCustomSplitterWindowT : public CSpli..."
+- File: WTLHelper\WTLHelper\CustomStatusBar.h
+  Preview: "#pragma once #include 'ThemeHelper.h' #include 'SizeGrip.h' class CCustomStatusBar : 	public CWindowImpl<CCustomStatusBar, CStatusBarCtrl>, 	public CO..."
+- File: WTLHelper\WTLHelper\CustomTabControl.h
+  Preview: "#pragma once class CCustomTabControl : public CWindowImpl<CCustomTabControl, CTabCtrl> { public: 	BEGIN_MSG_MAP(CCustomTabContro) 		MESSAGE_HANDLER(WM..."
+- File: WTLHelper\WTLHelper\CustomTabView.cpp
+  Preview: "#include 'pch.h' #include 'CustomTabView.h' #include 'ThemeHelper.h' #include 'Theme.h' LRESULT CCustomTabView::OnEraseBkgnd(UINT, WPARAM wp, LPARAM, ..."
+- File: WTLHelper\WTLHelper\CustomTabView.h
+  Preview: "#pragma once #define WM_WINDOW_MENU_BUILT (WM_APP+111) class CCustomTabView : public CTabViewImpl<CCustomTabView> { public: 	DECLARE_WND_CLASS_EX(L'WT..."
+- File: WTLHelper\WTLHelper\CustomToolBar.h
+  Preview: "#pragma once class CCustomToolBar : public CWindowImpl<CCustomToolBar, CToolBarCtrl> { public: 	void OnFinalMessage(HWND) override { 	} 	BEGIN_MSG_MAP..."
+- File: WTLHelper\WTLHelper\CustomTreeView.h
+  Preview: "#pragma once #include 'Theme.h' struct CCustomTreeView : CWindowImpl<CWindow, CTreeViewCtrl> { 	BEGIN_MSG_MAP(CCustomTreeView) 		MESSAGE_HANDLER(::Reg..."
+- File: WTLHelper\WTLHelper\DialogHelper.h
+  Preview: "#pragma once template<typename T> class CDialogHelper { public: 	template<typename S, int N, typename U> 	void InitCombo(UINT id, S (&data)[N], U cons..."
+- File: WTLHelper\WTLHelper\FrameView.h
+  Preview: "#pragma once template<typename T, typename TFrame, typename TBase = CWindow> class CFrameView : 	public CFrameWindowImpl<T, TBase, CControlWinTraits> ..."
+- File: WTLHelper\WTLHelper\HexControl.cpp
+  Preview: "#include 'pch.h' #include 'HexControl.h' #include <algorithm> void CHexControl::DoPaint(CDCHandle dc, RECT& rect) { 	dc.FillSolidRect(&rect, m_Colors...."
+- File: WTLHelper\WTLHelper\HexControl.h
+  Preview: "#pragma once #include 'Selection.h' #include <span> #include <unordered_set> #include <atltheme.h> #include <atltypes.h> struct HexControlColors { 	CO..."
+- File: WTLHelper\WTLHelper\IBufferManager.h
+  Preview: "#pragma once struct IBufferManager { 	virtual ~IBufferManager() = default; 	virtual uint32_t GetData(int64_t offset, uint8_t* buffer, uint32_t count) ..."
+- File: WTLHelper\WTLHelper\IconHelper.cpp
+  Preview: "#include 'pch.h' #include 'IconHelper.h' HICON IconHelper::GetShieldIcon() { 	return GetStockIcon(SIID_SHIELD); } CComPtr<IImageList2> IconHelper::Cre..."
+- File: WTLHelper\WTLHelper\IconHelper.h
+  Preview: "#pragma once struct IImageList2; struct IconHelper { 	static HICON GetStockIcon(SHSTOCKICONID id, bool big = false); 	static HICON GetShieldIcon(); 	s..."
+- File: WTLHelper\WTLHelper\IListView.cpp
+  Preview: "#include 'pch.h' #include 'IListView.h' int IListView::GetSelectedIndex() const {   int selected = -1;   GetSelectedCount(&selected);   if (selected !..."
+- File: WTLHelper\WTLHelper\IListView.h
+  Preview: "#pragma once #define LVM_QUERYINTERFACE (LVM_FIRST + 189) const IID IID_IListViewFooterCallback = { 0x88EB9442, 0x913B, 0x4AB4, 			 {0xA7, 0x41, 0xDD,..."
+- File: WTLHelper\WTLHelper\IniFile.cpp
+  Preview: "#include 'pch.h' #include 'IniFile.h' #include <sstream> IniFile::IniFile(PCWSTR path) : _path(path) { } bool IniFile::IsValid() const {   return ::Ge..."
+- File: WTLHelper\WTLHelper\IniFile.h
+  Preview: "#pragma once #include <vector> #include <atlstr.h> class IniFile { public: 	IniFile(PCWSTR path); 	bool IsValid() const; 	CString ReadString(PCWSTR se..."
+- File: WTLHelper\WTLHelper\ListViewhelper.cpp
+  Preview: "#include 'pch.h' #include 'ListViewHelper.h' #include 'IListView.h' #include <wil\resource.h> #include 'VirtualListView.h' bool ListViewHelper::SaveAl..."
+- File: WTLHelper\WTLHelper\ListViewhelper.h
+  Preview: "#pragma once struct IListView; struct ColumnsState; struct ListViewHelper final { 	static bool SaveAll(PCWSTR path, CListViewCtrl& lv, PCWSTR separato..."
+- File: WTLHelper\WTLHelper\NativeCustomTabView.h
+  Preview: "#pragma once template <class T, class TBase = ATL::CWindow, class TWinTraits = ATL::CControlWinTraits> class ATL_NO_VTABLE CNativeCustomTabViewImpl : ..."
+- File: WTLHelper\WTLHelper\OwnerDrawnMenu.cpp
+  Preview: "#include 'pch.h' #include 'OwnerDrawnMenu.h' void COwnerDrawnMenuBase::SetTextColor(COLORREF color) { 	m_TextColor = color; } void COwnerDrawnMenuBase..."
+- File: WTLHelper\WTLHelper\OwnerDrawnMenu.h
+  Preview: "#pragma once #include <unordered_map> #include <atltypes.h> #include 'DarkMode/DarkModeSubclass.h' struct COwnerDrawnMenuBase { 	void SetTextColor(COL..."
+- File: WTLHelper\WTLHelper\pch.cpp
+  Preview: "// pch.cpp: source file corresponding to the pre-compiled header #include 'pch.h' // When you are using pre-compiled headers, this source file is nece..."
+- File: WTLHelper\WTLHelper\pch.h
+  Preview: "#pragma once #define NOMINMAX #include <Windows.h> #include <atlbase.h> #include <atlapp.h> #include <atlstr.h> #include <atlctrls.h> #include <atlctr..."
+- File: WTLHelper\WTLHelper\QuickFindEdit.h
+  Preview: "#pragma once const UINT EN_DELAYCHANGE = EN_CHANGE + 1; class CQuickFindEdit : public CWindowImpl<CQuickFindEdit, CEdit> { public: 	BEGIN_MSG_MAP(CQui..."
+- File: WTLHelper\WTLHelper\README.md
+  Preview: "# WTLHelper WTL helper library Something I use in my own tools (or working to port common parts to use WTLHelper). "
+- File: WTLHelper\WTLHelper\Selection.cpp
+  Preview: "#include 'pch.h' #include 'Selection.h' void Selection::SetSimple(int64_t offset, int64_t len) { 	m_Type = SelectionType::Simple; 	m_Offset = offset; ..."
+- File: WTLHelper\WTLHelper\Selection.h
+  Preview: "#pragma once enum class SelectionType { 	Simple, 	Box }; class Selection { public: 	void SetSimple(int64_t offset, int64_t len); 	void SetBox(int64_t ..."
+- File: WTLHelper\WTLHelper\Settings.cpp
+  Preview: "#include 'pch.h' #include 'Settings.h' #include 'IniFile.h' bool Settings::LoadFromKey(PCWSTR registryPath) { 	if (registryPath == nullptr) 		registry..."
+- File: WTLHelper\WTLHelper\Settings.h
+  Preview: "#pragma once #include <map> #include <string> #include <algorithm> enum class SettingType { 	String = REG_SZ, 	Int32 = REG_DWORD, 	Int64 = REG_QWORD, ..."
+- File: WTLHelper\WTLHelper\SizeGrip.h
+  Preview: "#pragma once #include 'ThemeHelper.h' class CSizeGrip : public CWindowImpl<CSizeGrip, CScrollBar> { public: 	BEGIN_MSG_MAP(CSizeGrip) 		MESSAGE_HANDLE..."
+- File: WTLHelper\WTLHelper\SortedFilteredVector.h
+  Preview: "#pragma once #include <vector> #include <algorithm> #include <functional> template<typename T> class SortedFilteredVector { public: 	SortedFilteredVec..."
+- File: WTLHelper\WTLHelper\SortHelper.cpp
+  Preview: "#include 'pch.h' #include 'SortHelper.h' bool SortHelper::Sort(const CString& s1, const CString& s2, bool ascending) noexcept { 	if (s1.IsEmpty() && s..."
+- File: WTLHelper\WTLHelper\SortHelper.h
+  Preview: "#pragma once #include <string> #include <atlstr.h> struct SortHelper final abstract { 	static bool Sort(const ATL::CString& s1, const ATL::CString& s2..."
+- File: WTLHelper\WTLHelper\StandardColors.h
+  Preview: "#pragma once struct StandardColors { 	inline static const COLORREF Transparent{ RGB(255, 255, 255) }; 	inline static const COLORREF AliceBlue{ RGB(240..."
+- File: WTLHelper\WTLHelper\StringHelper.cpp
+  Preview: "#include 'pch.h' #include 'StringHelper.h' CString StringHelper::Format(PCWSTR format, ...) { 	va_list argList; 	va_start(argList, format); 	CString t..."
+- File: WTLHelper\WTLHelper\StringHelper.h
+  Preview: "#pragma once #include <atlstr.h> struct StringHelper { 	static CString Format(PCWSTR format, ...); 	static CString& Format(CString& text, PCWSTR forma..."
+- File: WTLHelper\WTLHelper\TabViewHelper.h
+  Preview: "#pragma once #define COMMAND_TABVIEW_HANDLER(tabs, msgMapId)	\ 	if(uMsg == WM_COMMAND) {	\ 		int page = tabs.GetActivePage();	\ 		if(page >= 0) {		\ 	..."
+- File: WTLHelper\WTLHelper\Theme.cpp
+  Preview: "#include 'pch.h' #include 'Theme.h' Theme::Theme(bool def) : _default(def) { 	for (auto& c : SysColors) 		c = CLR_INVALID; } bool Theme::IsDefault() c..."
+- File: WTLHelper\WTLHelper\Theme.h
+  Preview: "#pragma once struct Theme { 	explicit Theme(bool def = false); 	bool IsDefault() const; 	CString Name{ L'Default' }; 	COLORREF BackColor{ ::GetSysColo..."
+- File: WTLHelper\WTLHelper\ThemeHelper.cpp
+  Preview: "#include 'pch.h' #include <unordered_map> #include <detours/detours.h> #include 'ThemeHelper.h' #include 'Theme.h' #include 'CustomEdit.h' #include 'S..."
+- File: WTLHelper\WTLHelper\ThemeHelper.h
+  Preview: "#pragma once struct Theme; enum class DCOperation { 	None, 	SetTextColor = 1, }; DEFINE_ENUM_FLAG_OPERATORS(DCOperation); struct COwnerDrawnMenuBase; ..."
+- File: WTLHelper\WTLHelper\ToolbarHelper.cpp
+  Preview: "#include 'pch.h' #include 'ToolbarHelper.h' HWND ToolbarHelper::CreateAndInitToolBar(HWND hWnd, const ToolBarButtonInfo* buttons, int count, int size)..."
+- File: WTLHelper\WTLHelper\ToolbarHelper.h
+  Preview: "#pragma once struct ToolBarButtonInfo { 	UINT id; 	int image; 	BYTE style = BTNS_BUTTON; 	PCWSTR text = nullptr; };  struct ToolbarHelper { 	static HW..."
+- File: WTLHelper\WTLHelper\TreeListView.h
+  Preview: "#pragma once ///////////////////////////////////////////////////////////////////////////// // CTreeListView - A TreeView with additional columns // //..."
+- File: WTLHelper\WTLHelper\TreeViewHelper.h
+  Preview: "#pragma once template<typename T> struct CTreeViewHelper { 	template<typename TData, typename TIcon> 	HTREEITEM InsertTreeItem(CTreeViewCtrl& tree, PC..."
+- File: WTLHelper\WTLHelper\VersionResourceHelper.cpp
+  Preview: "#include 'pch.h' #include <strsafe.h> #include 'VersionResourceHelper.h' #pragma comment(lib, 'version') VersionResourceHelper::VersionResourceHelper(..."
+- File: WTLHelper\WTLHelper\VersionResourceHelper.h
+  Preview: "#pragma once #include <memory> #include <string> class VersionResourceHelper { public: 	explicit VersionResourceHelper(PCWSTR path = nullptr); 	explic..."
+- File: WTLHelper\WTLHelper\VirtualListView.h
+  Preview: "#pragma once #include 'ColumnManager.h' #include 'ListViewhelper.h' #include <memory> #include <strsafe.h> enum class ListViewRowCheck { 	None, 	Unche..."
+- File: WTLHelper\WTLHelper\WTLHelper.cpp
+  Preview: "// WTLHelper.cpp : Defines the functions for the static library. // #include 'pch.h' #include 'WTLHelper.h' #include <detours/detours.h> #include 'Dar..."
+- File: WTLHelper\WTLHelper\WTLHelper.h
+  Preview: "#pragma once enum class DarkModeKind { 	Light, Dark, System, Classic, 	Unknown = 0xff }; struct MenuItemData { 	int id, icon; 	HICON hIcon { nullptr }..."
+- File: WTLHelper\WTLHelper\WTLx.h
+  Preview: "#pragma once enum class WindowStyles : uint32_t { 	None = 0, 	Child = WS_CHILD, 	Visible = WS_VISIBLE, 	Overlapped = WS_OVERLAPPED, 	MinimizeBox = WS_..."
+- File: lexilla1\.github\workflows\build-check-macos.yml
+  Preview: "name: 'Build and check Lexilla on macOS' on: [push] jobs:   build:     runs-on: macos-11     strategy:       matrix:         cpp_compiler: [clang++]  ..."
+- File: lexilla1\.github\workflows\build-check-win32.yml
+  Preview: "name: 'Build and check Lexilla on Win32 with Visual C++' on: [push] jobs:   build:     runs-on: windows-latest     steps:     - uses: actions/checkout..."
+- File: lexilla1\.github\workflows\build-check.yml
+  Preview: "name: 'Build and check Lexilla on Linux' on: [push] jobs:   build:     runs-on: ubuntu-latest     strategy:       matrix:         cpp_compiler: [g++, ..."
+- File: lexilla1\test\unit\catch.hpp
+  Preview: "/* * Catch v2.13.7 * Generated: 2021-07-28 20:29:27.753164 * ---------------------------------------------------------- * This file has been merged fr..."
+- File: lexilla1\test\unit\LICENSE_1_0.txt
+  Preview: "Boost Software License - Version 1.0 - August 17th, 2003 Permission is hereby granted, free of charge, to any person or organization obtaining a copy ..."
+- File: scintilla1\cocoa\ScintillaTest\AppController.h
+  Preview: "/** * AppController.h * SciTest * * Created by Mike Lischke on 01.04.09. * Copyright 2009 Sun Microsystems, Inc. All rights reserved. * This file is d..."
+- File: scintilla1\cocoa\ScintillaTest\TestData.sql
+  Preview: "-- MySQL Administrator dump 1.4 -- -- ------------------------------------------------------ -- Server version	5.0.45  /*!40101 SET @OLD_CHARACTER_SET..."
+- File: scintilla1\qt\ScintillaEdit\ScintillaDocument.cpp
+  Preview: "// @file ScintillaDocument.cpp // Wrapper for Scintilla document object so it can be manipulated independently. // Copyright (c) 2011 Archaeopteryx So..."
+- File: scintilla1\qt\ScintillaEdit\ScintillaDocument.h
+  Preview: "// @file ScintillaDocument.h // Wrapper for Scintilla document object so it can be manipulated independently. // Copyright (c) 2011 Archaeopteryx Soft..."
+- File: scintilla1\qt\ScintillaEdit\WidgetGen.py
+  Preview: "#!/usr/bin/env python3 # WidgetGen.py - regenerate the ScintillaEdit.cpp and ScintillaEdit.h files # Check that API includes all gtkscintilla2 functio..."
+- File: scintilla1\qt\ScintillaEditBase\Notes.txt
+  Preview: " Issues with Scintilla for Qt Qt reports character descenders are 1 pixel shorter than they really are. There is a tweak in the code to add a pixel in..."
+- File: scintilla1\qt\ScintillaEditBase\PlatQt.cpp
+  Preview: "// @file PlatQt.cpp //     Copyright (c) 1990-2011, Scientific Toolworks, Inc. // // The License.txt file describes the conditions under which this so..."
+- File: scintilla1\qt\ScintillaEditBase\PlatQt.h
+  Preview: "// @file PlatQt.h //     Copyright (c) 1990-2011, Scientific Toolworks, Inc. // // The License.txt file describes the conditions under which this soft..."
+- File: scintilla1\qt\ScintillaEditBase\ScintillaEditBase.cpp
+  Preview: "// //     Copyright (c) 1990-2011, Scientific Toolworks, Inc. // // The License.txt file describes the conditions under which this software may be dis..."
+- File: scintilla1\qt\ScintillaEditBase\ScintillaEditBase.h
+  Preview: "// //     Copyright (c) 1990-2011, Scientific Toolworks, Inc. // // The License.txt file describes the conditions under which this software may be dis..."
+- File: scintilla1\qt\ScintillaEditBase\ScintillaQt.cpp
+  Preview: "// //     Copyright (c) 1990-2011, Scientific Toolworks, Inc. // // The License.txt file describes the conditions under which this software may be dis..."
+- File: scintilla1\qt\ScintillaEditBase\ScintillaQt.h
+  Preview: "// //     Copyright (c) 1990-2011, Scientific Toolworks, Inc. // // The License.txt file describes the conditions under which this software may be dis..."
+- File: scintilla1\test\gi\filter-scintilla-h.py
+  Symbols: [main]
+  Preview: "#!/usr/bin/env python # Filters Scintilla.h to not contain generated stuff or deprecated defines import sys import fileinput def main():   inhibit = 0..."
+- File: scintilla1\test\gi\gi-test.py
+  Preview: "#!/usr/bin/python import gi gi.require_version('Scintilla', '0.1') # Scintilla is imported before because it loads Gtk with a specified version # this..."
+- File: scintilla1\test\unit\catch.hpp
+  Preview: "/* * Catch v2.13.7 * Generated: 2021-07-28 20:29:27.753164 * ---------------------------------------------------------- * This file has been merged fr..."
+- File: scintilla1\test\unit\LICENSE_1_0.txt
+  Preview: "Boost Software License - Version 1.0 - August 17th, 2003 Permission is hereby granted, free of charge, to any person or organization obtaining a copy ..."
+- File: WTLHelper\WTLHelper\DarkMode\DarkModeSubclass.cpp
+  Preview: "// SPDX-License-Identifier: MPL-2.0 /* * Copyright (c) 2025 ozone10 * This Source Code Form is subject to the terms of the Mozilla Public * License, v..."
+- File: WTLHelper\WTLHelper\DarkMode\DarkModeSubclass.h
+  Preview: "// SPDX-License-Identifier: MPL-2.0 /* * Copyright (c) 2025 ozone10 * This Source Code Form is subject to the terms of the Mozilla Public * License, v..."
+- File: WTLHelper\WTLHelper\DarkMode\DmlibColor.cpp
+  Preview: "// SPDX-License-Identifier: MPL-2.0 /* * Copyright (c) 2025 ozone10 * This Source Code Form is subject to the terms of the Mozilla Public * License, v..."
+- File: WTLHelper\WTLHelper\DarkMode\DmlibColor.h
+  Preview: "// SPDX-License-Identifier: MPL-2.0 /* * Copyright (c) 2025 ozone10 * This Source Code Form is subject to the terms of the Mozilla Public * License, v..."
+- File: WTLHelper\WTLHelper\DarkMode\DmlibDpi.cpp
+  Preview: "// SPDX-License-Identifier: MPL-2.0 /* * Copyright (c) 2025 ozone10 * This Source Code Form is subject to the terms of the Mozilla Public * License, v..."
+- File: WTLHelper\WTLHelper\DarkMode\DmlibDpi.h
+  Preview: "// SPDX-License-Identifier: MPL-2.0 /* * Copyright (c) 2025 ozone10 * This Source Code Form is subject to the terms of the Mozilla Public * License, v..."
+- File: WTLHelper\WTLHelper\DarkMode\DmlibGlyph.h
+  Preview: "// SPDX-License-Identifier: MPL-2.0 /* * Copyright (c) 2025 ozone10 * This Source Code Form is subject to the terms of the Mozilla Public * License, v..."
+- File: WTLHelper\WTLHelper\DarkMode\DmlibHook.cpp
+  Preview: "// SPDX-License-Identifier: MPL-2.0 /* * Copyright (c) 2025 ozone10 * This Source Code Form is subject to the terms of the Mozilla Public * License, v..."
+- File: WTLHelper\WTLHelper\DarkMode\DmlibHook.h
+  Preview: "// SPDX-License-Identifier: MPL-2.0 /* * Copyright (c) 2025 ozone10 * This Source Code Form is subject to the terms of the Mozilla Public * License, v..."
+- File: WTLHelper\WTLHelper\DarkMode\DmlibIni.cpp
+  Preview: "// SPDX-License-Identifier: MPL-2.0 /* * Copyright (c) 2025 ozone10 * This Source Code Form is subject to the terms of the Mozilla Public * License, v..."
+- File: WTLHelper\WTLHelper\DarkMode\DmlibIni.h
+  Preview: "// SPDX-License-Identifier: MPL-2.0 /* * Copyright (c) 2025 ozone10 * This Source Code Form is subject to the terms of the Mozilla Public * License, v..."
+- File: WTLHelper\WTLHelper\DarkMode\DmlibPaintHelper.cpp
+  Preview: "// SPDX-License-Identifier: MPL-2.0 /* * Copyright (c) 2025 ozone10 * This Source Code Form is subject to the terms of the Mozilla Public * License, v..."
+- File: WTLHelper\WTLHelper\DarkMode\DmlibPaintHelper.h
+  Preview: "// SPDX-License-Identifier: MPL-2.0 /* * Copyright (c) 2025 ozone10 * This Source Code Form is subject to the terms of the Mozilla Public * License, v..."
+- File: WTLHelper\WTLHelper\DarkMode\DmlibSubclass.cpp
+  Preview: "// SPDX-License-Identifier: MPL-2.0 /* * Copyright (c) 2025 ozone10 * This Source Code Form is subject to the terms of the Mozilla Public * License, v..."
+- File: WTLHelper\WTLHelper\DarkMode\DmlibSubclass.h
+  Preview: "// SPDX-License-Identifier: MPL-2.0 /* * Copyright (c) 2025 ozone10 * This Source Code Form is subject to the terms of the Mozilla Public * License, v..."
+- File: WTLHelper\WTLHelper\DarkMode\DmlibSubclassControl.cpp
+  Preview: "// SPDX-License-Identifier: MPL-2.0 /* * Copyright (c) 2025 ozone10 * This Source Code Form is subject to the terms of the Mozilla Public * License, v..."
+- File: WTLHelper\WTLHelper\DarkMode\DmlibSubclassControl.h
+  Preview: "// SPDX-License-Identifier: MPL-2.0 /* * Copyright (c) 2025 ozone10 * This Source Code Form is subject to the terms of the Mozilla Public * License, v..."
+- File: WTLHelper\WTLHelper\DarkMode\DmlibSubclassWindow.cpp
+  Preview: "// SPDX-License-Identifier: MPL-2.0 /* * Copyright (c) 2025 ozone10 * This Source Code Form is subject to the terms of the Mozilla Public * License, v..."
+- File: WTLHelper\WTLHelper\DarkMode\DmlibSubclassWindow.h
+  Preview: "// SPDX-License-Identifier: MPL-2.0 /* * Copyright (c) 2025 ozone10 * This Source Code Form is subject to the terms of the Mozilla Public * License, v..."
+- File: WTLHelper\WTLHelper\DarkMode\DmlibWinApi.cpp
+  Preview: "// SPDX-License-Identifier: MPL-2.0 /* * Copyright (c) 2025 ozone10 * This Source Code Form is subject to the terms of the Mozilla Public * License, v..."
+- File: WTLHelper\WTLHelper\DarkMode\DmlibWinApi.h
+  Preview: "// SPDX-License-Identifier: MPL-2.0 /* * Copyright (c) 2025 ozone10 * This Source Code Form is subject to the terms of the Mozilla Public * License, v..."
+- File: WTLHelper\WTLHelper\DarkMode\IatHook.h
+  Preview: "// SPDX-License-Identifier: MIT // Copyright (c) 2025 ozone10 // Licensed under the MIT license. // This file is part of darkmodelib library. // This ..."
+- File: WTLHelper\WTLHelper\DarkMode\ModuleHelper.h
+  Preview: "// SPDX-License-Identifier: MPL-2.0 /* * Copyright (c) 2025 ozone10 * This Source Code Form is subject to the terms of the Mozilla Public * License, v..."
+- File: WTLHelper\WTLHelper\DarkMode\UAHMenuBar.h
+  Preview: "// SPDX-License-Identifier: MIT // Copyright (c) 2021 adzm / Adam D. Walling // MIT license, see LICENSE-UAHMenuBar #pragma once #include <windows.h> ..."
+- File: WTLHelper\WTLHelper\DarkMode\Version.h
+  Preview: "// SPDX-License-Identifier: MPL-2.0 /* * Copyright (c) 2025 ozone10 * This Source Code Form is subject to the terms of the Mozilla Public * License, v..."
+- File: lexilla1\test\examples\hypertext\apostophe.php
+  Preview: "<?php # Test that currently fails as comment style not started in a number. # line-comment // line-comment /* comment */ $foo = 0#comment $foo = 0//co..."
+- File: lexilla1\test\examples\hypertext\Issue19.php
+  Preview: "<?php $number = 1_234; $var = 'variable value'; $test = [ 	<<<EOTEST 	string $var string EOTEST 	EOTEST_NOT 	EOTEST, 	0b00_01, 	<<<'EOTEST' 	'string' ..."
+- File: lexilla1\test\examples\hypertext\Issue20Numbers.php
+  Preview: "<?php 123456; 123_456; // + 1234z6; 123456_; 123__456; // - 0x89Ab; 0x89_aB; // + 0x89zB; 0x89AB_; 0x_89AB; 0_x89AB; 0x89__AB; // - 1234.; 1234.e-0; 1..."
+- File: lexilla1\test\examples\hypertext\x.php
+  Preview: "<head> <!-- About to script --> <?php echo __FILE__.__LINE__; echo '<!-- -->\n'; /* ?> */ ?> <strong>for</strong><b>if</b> <script> 	alert('<?php echo..."
+- File: lexilla1\test\examples\json\AllStyles.json
+  Preview: "// Enumerate all styles: 0 to 13 // default=0   // number=1 1 // string=2 '2' // stringeol=3 '3 // propertyname=4 '4': // escapesequence=5 '\n' // lin..."
+- File: lexilla1\test\examples\markdown\AllStyles.md
+  Preview: "Text=0 Line end characters=1 **Strong Emphasis (bold) 1=2** __Strong Emphasis (bold) 2=3__ *Emphasis (italic) 1=4* _Emphasis (italic) 2=5_ # Heading l..."
+- File: lexilla1\test\examples\markdown\Bug1216.md
+  Preview: "# Checking resolution of bug 1216 *This line is not emphasized This is plain text with *inline emphasis* _This, too, is not emphasized And this is pla..."
+- File: lexilla1\test\examples\markdown\Bug2235.md
+  Preview: "Po spuštění modulu je zobrazen hlavní dialog modulu: ![](media\image21.png)V tomto dialogu lze nastavit různé parametry vykreslení výsledného schématu..."
+- File: lexilla1\test\examples\markdown\Bug2247.md
+  Preview: "# Checking resolution of bug 2247 ~~~sql SELECT datetime() AS `date`; ~~~ ```sql SELECT datetime() AS `date`; ``` List of examples: -  example *one* -..."
+- File: lexilla1\test\examples\markdown\HeaderEOLFill_0.md
+  Preview: "H1 == H2 -- # H1 ## H2 H1 == H2 -- # H1 ## H2 ### H3 #### H4 ##### H5 ###### H6 "
+- File: lexilla1\test\examples\markdown\HeaderEOLFill_1.md
+  Preview: "H1 == H2 -- # H1 ## H2 H1 == H2 -- # H1 ## H2 ### H3 #### H4 ##### H5 ###### H6 "
+- File: lexilla1\test\examples\markdown\Issue117.md
+  Preview: "The number: 338269006135764734700913562171 is prime. Therefore:  1. the only factors of 338269006135764734700913562171 are:   1   33826900613576473470..."
+- File: lexilla1\test\examples\powershell\AllStyles.ps1
+  Preview: "# Enumerate all styles: 0 to 16 # line comment = 1 # more comment # whitespace = 0   # spaces # string = 2 'a string' # character = 3 'c' # number = 4..."
+- File: lexilla1\test\examples\powershell\CharacterTruncation.ps1
+  Preview: "# -*- coding: utf-8 -*- # Show problem with character value truncation causing U+0121 'ġ' (LATIN SMALL LETTER G WITH DOT ABOVE) # to be styled as an o..."
+- File: lexilla1\test\examples\powershell\NumericLiterals.ps1
+  Preview: "# Treat any leading [-+] as default to reduce match complexity # https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/a..."
+- File: lexilla1\test\examples\powershell\Pull92.ps1
+  Preview: "<# Tests for PowerShell #> <# Backticks should escape in double quoted strings #> $double_quote_str_esc_1 = '`'XXX`'' $double_quote_str_esc_2 = 'This ..."
+- File: lexilla1\test\examples\powershell\Pull99Comment.ps1
+  Preview: "# End comment before \r carriage return. "
+- File: lexilla1\test\examples\python\AllStyles.py
+  Preview: "# Enumerate all styles: 0 to 19 # comment=1 # whitespace=0 	# w # number=2 37 # double-quoted-string=3 'str' # single-quoted-string=4 'str' # keyword=..."
+- File: lexilla1\test\examples\python\matchcase.py
+  Symbols: [match]
+  Preview: "# Match and case as keywords match (x):   case +1:     pass   case -1:     pass   case []:     pass   # Match and case as identifiers match = 1 def ma..."
+- File: lexilla1\test\examples\python\x.py
+  Symbols: [depunctuate]
+  Preview: "# Convert all punctuation characters except '_', '*', and '.' into spaces. def depunctuate(s): 	'''A docstring''' 	'''Docstring 2''' 	d = '' 	for ch i..."
+- File: lexilla1\test\examples\ruby\AllStyles.rb
+  Preview: "# Enumerate all styles where possible: 0..31,40..45 # 30,31,40,45 are never set and 1 switches rest of file to error state #0 whitespace   # 	# #1:err..."
+- File: lexilla1\test\examples\ruby\Issue132.rb
+  Preview: "# Bad folding when single character ')' in SCE_RB_STRING_QW #132 %W(#{1 + 1}) "
+- File: lexilla1\test\examples\ruby\Issue135.rb
+  Preview: "a = <<XXX # :nodoc: heredoc XXX puts(<<-ONE, <<-TWO) content for heredoc one ONE content for heredoc two TWO "
+- File: lexilla1\test\examples\ruby\Issue136.rb
+  Preview: "a = {r: /\w+/, h: <<EOF heredoc EOF } puts a def b # :nodoc: <<EOF heredoc EOF end def c # :nodoc: /\w+/ end puts b puts c $stdout . puts <<EOF heredo..."
+- File: lexilla1\test\examples\ruby\Issue140.rb
+  Preview: "'#{1}'# '#@a'# '#@@a'# '#$a'# '#$?'# '#$-a1'# '#$_a1'# '#$123'# '#$\'# '#$''# a = /#$//# "
+- File: lexilla1\test\examples\ruby\Issue65.rb
+  Symbols: [A, dbg_args]
+  Preview: "def dbg_args(a, b=1, c:, d: 6, &block) = puts('Args passed: #{[a, b, c, d, block.call]}') dbg_args(0, c: 5) { 7 } class A 	def attr = @attr 	def attr=..."
+- File: lexilla1\test\examples\ruby\Issue66.rb
+  Preview: "# Test that final \n in indented heredoc (2nd example) is styled as SCE_RB_HERE_Q not SCE_RB_HERE_DELIM <<T X T <<-T X T "
+- File: lexilla1\test\examples\ruby\Issue67.rb
+  Preview: "# heredoc method call, other argument puts <<~EOT.chomp 	squiggly heredoc EOT puts <<ONE, __FILE__, __LINE__ content for heredoc one ONE # heredoc pre..."
+- File: lexilla1\test\examples\ruby\Issue69.rb
+  Preview: "# -*- coding: utf-8 -*- # single character strings puts ?a puts ?\n puts ?\s puts ?\\# puts ?\u{41} puts ?\C-a puts ?\M-a puts ?\M-\C-a puts ?\C-\M-a ..."
+- File: lexilla1\test\examples\ruby\PercentEquals124.rb
+  Preview: "# Issue 124, disambiguating %= which may be a quote or modulo assignment # %-quoting with '=' as the quote s = %=3= puts s x = 7 # Modulo assignment, ..."
+- File: lexilla1\test\examples\ruby\x.rb
+  Symbols: [Demo]
+  Preview: "class Demo 	def test # A test 		i = 1 		puts 'Example' 	end end"
+- File: lexilla1\test\examples\rust\Issue33.rs
+  Symbols: [main]
+  Preview: "fn main() {   let a: i128 = 42i128;   let b: u128 = 1337u128;   println!('{} + {} = {}', a, b, (a as u128) + b); } "
+- File: lexilla1\test\examples\rust\Issue34.rs
+  Symbols: [main]
+  Preview: "/** * SCE_RUST_COMMENTBLOCKDOC */ fn main() {   /// SCE_RUST_COMMENTLINEDOC   println!('Hello, World!'); } // SCE_RUST_COMMENTLINE /* * SCE_RUST_COMME..."
+- File: lexilla1\test\examples\rust\Issue35.rs
+  Symbols: [main]
+  Preview: "/// GitHub Issue #35 fn main() {} /*"
+- File: lexilla1\test\examples\yaml\longline.yaml
+  Preview: "# makefile lexer previously used fixed 1024-byte line buffer that would treat text after that as new line # Long line with 1025 bytes last 2 bytes col..."
+- File: lexilla1\test\examples\yaml\x.yaml
+  Preview: "# comment key: value # comment colon:in:key: value hanging_value:  value 1: 1 true: true "
+- File: lexilla1\test\examples\python\attributes\attributes.py
+  Preview: "# attributes=20 s = 'thing thing'.findall('thing') a.very.complicated.expression.findall('test') # fake out. b.very.complicated.expression.   findall(..."

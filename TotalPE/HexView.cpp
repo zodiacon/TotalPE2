@@ -1,6 +1,6 @@
 #include "pch.h"
 #include "HexView.h"
-#include "PEFile.h"
+#include <BinaryFile.h>
 #include "MemoryBuffer.h"
 #include <ToolbarHelper.h>
 #include <WTLHelper.h>
@@ -18,8 +18,8 @@ CHexControl& CHexView::Hex() {
 	return m_Hex;
 }
 
-bool CHexView::SetData(PEFile const& pe, uint32_t offset, uint32_t size) {
-	m_Buffer = std::make_unique<MemoryBuffer>(pe.GetData() + offset, size, false);
+bool CHexView::SetData(BinaryFile const& bf, uint32_t offset, uint32_t size) {
+	m_Buffer = std::make_unique<MemoryBuffer>(bf.GetData() + offset, size, false);
 	m_Hex.SetBufferManager(m_Buffer.get());
 	m_Hex.SetBiasOffset(offset);
 

@@ -7,7 +7,7 @@
 #include "ScintillaCtrl.h"
 #include "ViewBase.h"
 
-class PEFile;
+class BinaryFile;
 
 enum class LexLanguage {
 	Xml,
@@ -17,7 +17,7 @@ enum class LexLanguage {
 class CScintillaView :
 	public CViewBase<CScintillaView> {
 public:
-	CScintillaView(IMainFrame* frame, PEFile const& pe, PCWSTR title);
+	CScintillaView(IMainFrame* frame, BinaryFile const& binary, PCWSTR title);
 
 	CString GetTitle() const override;
 	CScintillaCtrl& GetCtrl();
@@ -64,6 +64,6 @@ private:
 	CString m_Title;
 	CScintillaCtrl m_Sci;
 	LexLanguage m_Language;
-	PEFile const& m_PE;
+	BinaryFile const& m_Binary;
 	bool m_Is32Bit;
 };

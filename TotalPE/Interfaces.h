@@ -54,6 +54,16 @@ enum class TreeItemType : int64_t {
 	AsmEntryPoint,
 	FileInHex,
 
+	// ELF-specific items (50–58, within ItemMask=255)
+	ELFSections     = 50,
+	ELFSection      = 51,
+	ELFSegments     = 52,
+	ELFSegment      = 53,
+	ELFSymbols      = 54,
+	ELFDynamic      = 55,
+	ELFRelocations  = 56,
+	ELFNotes        = 57,
+
 	ItemMask = 255,
 };
 DEFINE_ENUM_FLAG_OPERATORS(TreeItemType);

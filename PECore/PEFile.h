@@ -9,6 +9,7 @@
 #include <span>
 #include <memory>
 #include <cstdint>
+#include "BinaryFile.h"
 
 // ── Lookup maps (drop-in replacement for libpe::Map* used in PEImageView) ──
 
@@ -237,37 +238,20 @@ struct PERichHeader {
 
 // ── PEFile ─────────────────────────────────────────────────────────────────
 
-class PEFile {
+class PEFile : public BinaryFile {
 public:
     PEFile();
     ~PEFile();
 
-    // Non-copyable, movable
     PEFile(const PEFile&)            = delete;
     PEFile& operator=(const PEFile&) = delete;
     PEFile(PEFile&&)                 noexcept;
     PEFile& operator=(PEFile&&)      noexcept;
 
-    bool Open(std::wstring_view path);
-    void Close();
+    bool Open(std::wstring_view path) override;
+    void Close() override;
 
-    std::wstring const& GetPath()     const;
-    uint32_t            GetFileSize() const;
-
-    bool Read(uint32_t offset, uint32_t size, void* buffer) const;
-    template<typename T>
-    T Read(uint32_t offset) const {
-        T value{};
-        Read(offset, sizeof(T), &value);
-        return value;
-    }
-
-    const BYTE*                GetData()                              const;
-    std::span<const std::byte> GetSpan(uint32_t offset, uint32_t size) const;
-
-    explicit operator bool() const;
-
-    // PE accessors (formerly reached through operator->() on libpe::Ilibpe*)
+    // PE-specific accessors
     PEFileInfo const*              GetFileInfo()    const;
     PENtHeader const*              GetNTHeader()    const;
     IMAGE_DOS_HEADER const*        GetMSDOSHeader() const;
@@ -284,28 +268,20 @@ public:
     PEDELAYIMPORT_VEC const*       GetDelayImport() const;
     PERichHeader const*            GetRichHeader()  const;
 
-    uint64_t  GetOffsetFromRVA(ULONGLONG rva) const noexcept;
-    ULONGLONG GetImageBase()                  const noexcept;
+    uint64_t GetOffsetFromRVA(ULONGLONG rva) const noexcept;
 
-    // Flat resource list (replaces libpe::Ilibpe::FlatResources)
     PERESFLAT_VEC const& GetFlatResources() const;
 
 private:
     void BuildCaches();
     void BuildResources();
 
-    // LIEF binary stored as opaque pointer to avoid pulling LIEF headers into
-    // every TU that includes PEFile.h.
     struct LiefImpl;
     std::unique_ptr<LiefImpl> m_Impl;
-
-    wil::unique_mapview_ptr<uint8_t> m_Raw;
-    std::wstring         m_Path;
 
     PEFileInfo       m_Info{};
     PENtHeader       m_NtHeader{};
     IMAGE_DOS_HEADER m_DosHeader{};
-    DWORD            m_FileSize;
 
     PESECHDR_VEC      m_Sections;
     PEDATADIR_VEC     m_DataDirs;
@@ -320,5 +296,5 @@ private:
     PEDELAYIMPORT_VEC m_DelayImports;
     PERESFLAT_VEC     m_FlatResources;
     PERichHeader      m_RichHeader{};
-    std::vector<std::byte> m_ResRawData; // backing store for PEResFlat::Data spans
+    std::vector<std::byte> m_ResRawData;
 };

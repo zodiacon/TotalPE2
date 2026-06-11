@@ -52,42 +52,28 @@ PEFile& PEFile::operator=(PEFile&&) noexcept = default;
 bool PEFile::Open(std::wstring_view path) {
     Close();
 
-    // Read raw bytes ourselves so GetData() always works
-    wil::unique_hfile hFile(::CreateFileW(path.data(), GENERIC_READ, FILE_SHARE_READ,
-                                 nullptr, OPEN_EXISTING, 0, nullptr));
-    if (!hFile) 
+    if (!OpenRaw(path))
         return false;
 
-    LARGE_INTEGER sz{};
-    ::GetFileSizeEx(hFile.get(), &sz);
-    if (sz.QuadPart > 1LL << 32)
-        return false;
-
-    m_FileSize = sz.LowPart;
-    auto hMap = ::CreateFileMapping(hFile.get(), nullptr, PAGE_READONLY, 0, 0, nullptr);
-    if (!hMap)
-        return false;
-
-    m_Raw.reset((uint8_t*)::MapViewOfFile(hMap, FILE_MAP_READ, 0, 0, 0));
-
-    // Let LIEF parse (enable exception parsing for .pdata)
     LIEF::PE::ParserConfig cfg;
     cfg.parse_exceptions = true;
     auto binary = LIEF::PE::Parser::parse(WideToUtf8(path), cfg);
-    if (!binary) return false;
+    if (!binary) {
+        BinaryFile::Close();
+        return false;
+    }
 
     m_Impl = std::make_unique<LiefImpl>();
     m_Impl->binary = std::move(binary);
-    m_Path = path;
+    m_Format = BinaryFormat::PE;
 
     BuildCaches();
     return true;
 }
 
 void PEFile::Close() {
+    BinaryFile::Close();
     m_Impl.reset();
-    m_Raw.reset();
-    m_Path.clear();
     m_Info = {};
     m_NtHeader = {};
     m_DosHeader = {};
@@ -104,24 +90,6 @@ void PEFile::Close() {
     m_DelayImports.clear();
     m_FlatResources.clear();
     m_ResRawData.clear();
-}
-
-std::wstring const& PEFile::GetPath()     const { return m_Path; }
-uint32_t            PEFile::GetFileSize() const { return (uint32_t)m_FileSize; }
-PEFile::operator bool()                   const { return !m_Path.empty(); }
-
-bool PEFile::Read(uint32_t offset, uint32_t size, void* buffer) const {
-    if (offset + (size_t)size > m_FileSize) return false;
-    memcpy(buffer, m_Raw.get() + offset, size);
-    return true;
-}
-
-const BYTE* PEFile::GetData() const {
-    return m_Raw.get();
-}
-
-std::span<const std::byte> PEFile::GetSpan(uint32_t offset, uint32_t size) const {
-    return std::span(reinterpret_cast<const std::byte*>(m_Raw.get()) + offset, size);
 }
 
 PEFileInfo const*        PEFile::GetFileInfo()    const { return &m_Info; }
@@ -144,11 +112,6 @@ PERESFLAT_VEC const& PEFile::GetFlatResources() const { return m_FlatResources; 
 
 uint64_t PEFile::GetOffsetFromRVA(ULONGLONG rva) const noexcept {
     return m_Impl->binary->rva_to_offset(rva);
-}
-
-ULONGLONG PEFile::GetImageBase() const noexcept {
-    if (m_Info.IsPE64) return m_NtHeader.NTHdr64.OptionalHeader.ImageBase;
-    return m_NtHeader.NTHdr32.OptionalHeader.ImageBase;
 }
 
 // ── cache population ──────────────────────────────────────────────────────
@@ -193,6 +156,16 @@ void PEFile::BuildCaches() {
     else {
         if (e_lfanew + sizeof(IMAGE_NT_HEADERS32) <= m_FileSize)
             memcpy(&m_NtHeader.NTHdr32, m_Raw.get() + e_lfanew, sizeof(IMAGE_NT_HEADERS32));
+    }
+
+    // Populate BinaryFile base fields
+    m_Is32Bit   = m_Info.IsPE32;
+    m_ImageBase = m_Info.IsPE64 ? m_NtHeader.NTHdr64.OptionalHeader.ImageBase
+                                : (uint64_t)m_NtHeader.NTHdr32.OptionalHeader.ImageBase;
+    {
+        uint32_t entryRva = m_Info.IsPE64 ? m_NtHeader.NTHdr64.OptionalHeader.AddressOfEntryPoint
+                                           : m_NtHeader.NTHdr32.OptionalHeader.AddressOfEntryPoint;
+        m_EntryPoint = m_ImageBase + entryRva;
     }
 
     // Sections
@@ -445,6 +418,25 @@ void PEFile::BuildCaches() {
             m_RichHeader.Entries.push_back(entry);
         }
     }
+
+    // Generic collections for BinaryFile base
+    for (auto const& sec : m_Sections)
+        m_GenSections.push_back({ Utf8ToWide(sec.SectionName), sec.SecHdr.VirtualAddress,
+                                   sec.SecHdr.PointerToRawData, sec.SecHdr.SizeOfRawData,
+                                   sec.SecHdr.Characteristics });
+
+    for (auto const& imp : m_Imports) {
+        GenericImport gi;
+        gi.Library = Utf8ToWide(imp.ModuleName);
+        for (auto const& fn : imp.ImportFunc)
+            if (fn.ImpByName.Name[0])
+                gi.Functions.push_back(Utf8ToWide(fn.FuncName));
+        m_GenImports.push_back(std::move(gi));
+    }
+
+    if (m_Info.HasExport)
+        for (auto const& fn : m_Exports.Funcs)
+            m_GenExports.push_back({ Utf8ToWide(fn.FuncName), m_ImageBase + fn.FuncRVA });
 
     // Resources
     BuildResources();
