@@ -123,15 +123,17 @@ bool CScintillaView::SetAsmCode(std::span<const std::byte> code, uint64_t addres
 	csh handle;
 	if (cs_open(CS_ARCH_X86, is32Bit ? CS_MODE_32 : CS_MODE_64, &handle) != CS_ERR_OK)
 		return false;
+	cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);	// operand details are needed to resolve symbols
 	auto bytes = (const uint8_t*)code.data();
 	auto size = code.size();
-	cs_insn inst{};
+	auto inst = cs_malloc(handle);
 	CStringA text;
-	while (cs_disasm_iter(handle, &bytes, &size, &address, &inst)) {
-		text += PEStrings::FormatInstruction(inst, Frame()->GetSymbols()) + L"\r\n";
-		if (_strcmpi(inst.mnemonic, "ret") == 0)
+	while (cs_disasm_iter(handle, &bytes, &size, &address, inst)) {
+		text += PEStrings::FormatInstruction(*inst, Frame()) + "\r\n";
+		if (_strcmpi(inst->mnemonic, "ret") == 0)
 			break;
 	}
+	cs_free(inst, 1);
 
 	m_Sci.SetText(text);
 	cs_close(&handle);
@@ -253,13 +255,15 @@ LRESULT CScintillaView::OnDisassembleAtEnd(WORD, WORD, HWND, BOOL&) {
 
 	auto bytes = (const uint8_t*)m_PE.GetData() + address - m_PE.GetImageBase();
 	size_t size = 0x1000;
-	cs_insn inst{};
+	cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);
+	auto inst = cs_malloc(handle);
 	CStringA text;
-	while (cs_disasm_iter(handle, &bytes, &size, &address, &inst)) {
-		text += PEStrings::FormatInstruction(inst, Frame()->GetSymbols()) + L"\r\n";
-		if (_strcmpi(inst.mnemonic, "ret") == 0 || _strcmpi(inst.mnemonic, "jmp") == 0)
+	while (cs_disasm_iter(handle, &bytes, &size, &address, inst)) {
+		text += PEStrings::FormatInstruction(*inst, Frame()) + "\r\n";
+		if (_strcmpi(inst->mnemonic, "ret") == 0 || _strcmpi(inst->mnemonic, "jmp") == 0)
 			break;
 	}
+	cs_free(inst, 1);
 	cs_close(&handle);
 
 	m_Sci.SetReadOnly(false);

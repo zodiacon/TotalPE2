@@ -3,8 +3,10 @@
 /////////////////////////////////////////////////////////////////////////////
 
 #include "pch.h"
+#include <unordered_set>
 #include "resource.h"
 #include "LoadConfigView.h"
+#include <unordered_set>
 #include "PEFile.h"
 #include "PEStrings.h"
 #include <SortHelper.h>
@@ -84,7 +86,7 @@ void CLoadConfigView::BuildItems() {
 		{ L"Global Flags Set", std::format(L"0x{:08X}", lc32.GlobalFlagsSet) },
 		{ L"Critical Section Default Timeout", std::format(L"0x{:X}", lc32.CriticalSectionDefaultTimeout) },
 		{ L"Decommit Free Block Threshold", std::format(L"0x{:X}", is64 ? lc64.DeCommitFreeBlockThreshold : lc32.DeCommitFreeBlockThreshold) },
-		{ L"Decommit Total Free Threshold", std::format(L"0x{:X}", is64 ? lc64.DeCommitTotalFreeThreshold : lc64.DeCommitTotalFreeThreshold) },
+		{ L"Decommit Total Free Threshold", std::format(L"0x{:X}", is64 ? lc64.DeCommitTotalFreeThreshold : lc32.DeCommitTotalFreeThreshold) },
 		{ L"Lock Prefix Table", std::format(L"0x{:X}", is64 ? lc64.LockPrefixTable : lc32.LockPrefixTable) },
 		{ L"Maximum Allocation Size", std::format(L"0x{:X}", is64 ? lc64.MaximumAllocationSize : lc32.MaximumAllocationSize) },
 		{ L"Virtual Memory Threshold", std::format(L"0x{:X}", is64 ? lc64.VirtualMemoryThreshold : lc32.VirtualMemoryThreshold) },
@@ -110,14 +112,27 @@ void CLoadConfigView::BuildItems() {
 		{ L"Guard RF Failure Routine", std::format(L"0x{:X}", is64 ? lc64.GuardRFFailureRoutine : lc32.GuardRFFailureRoutine) },
 		{ L"Guard RF Failure Routine Function Pointer", std::format(L"0x{:X}", is64 ? lc64.GuardRFFailureRoutineFunctionPointer : lc32.GuardRFFailureRoutineFunctionPointer) },
 		{ L"Dynamic Value Relocation Table Offset", std::format(L"0x{:X}", is64 ? lc64.DynamicValueRelocTableOffset : lc32.DynamicValueRelocTableOffset) },
-		{ L"Guard RF Verify Stack Pointer Function Pointer", std::format(L"0x{:X}", is64 ? lc64.DynamicValueRelocTableSection : lc32.DynamicValueRelocTableSection) },
-		{ L"Dynamic Value Relocation Table Section", std::format(L"0x{:X}", is64 ? lc64.GuardRFVerifyStackPointerFunctionPointer : lc32.GuardRFVerifyStackPointerFunctionPointer) },
+		{ L"Guard RF Verify Stack Pointer Function Pointer", std::format(L"0x{:X}", is64 ? lc64.GuardRFVerifyStackPointerFunctionPointer : lc32.GuardRFVerifyStackPointerFunctionPointer) },
+		{ L"Dynamic Value Relocation Table Section", std::format(L"0x{:X}", is64 ? lc64.DynamicValueRelocTableSection : lc32.DynamicValueRelocTableSection) },
 		{ L"Hot Patch Table Offset", std::format(L"0x{:X}", is64 ? lc64.HotPatchTableOffset : lc32.HotPatchTableOffset) },
 		{ L"Enclave Configuration Pointer", std::format(L"0x{:X}", is64 ? lc64.EnclaveConfigurationPointer : lc32.EnclaveConfigurationPointer) },
 		{ L"Volatile Metadata Pointer", std::format(L"0x{:X}", is64 ? lc64.VolatileMetadataPointer : lc32.VolatileMetadataPointer) },
 		{ L"Guard EH Continuation Table", std::format(L"0x{:X}", is64 ? lc64.GuardEHContinuationTable : lc32.GuardEHContinuationTable) },
 		{ L"Guard EH Continuation Count", std::format(L"0x{:X}", is64 ? lc64.GuardEHContinuationCount : lc32.GuardEHContinuationCount) },
 	};
+
+	// fields holding virtual addresses: show what they point at
+	static const std::unordered_set<std::wstring> pointers{
+		L"Lock Prefix Table", L"Edit List", L"Security Cookie", L"SE Handler Table",
+		L"Guard CF Check Function", L"Guard CF Dispatch Function", L"Guard CF Function Table",
+		L"Guard Address Taken IAT Entry Table", L"Guard Long Jump Target Table", L"CHPE Metadata Pointer",
+		L"Guard RF Failure Routine", L"Guard RF Failure Routine Function Pointer", L"Guard RF Verify Stack Pointer Function Pointer", L"Enclave Configuration Pointer",
+		L"Volatile Metadata Pointer", L"Guard EH Continuation Table",
+	};
+	for (auto& item : m_Items) {
+		if (item.Details.empty() && pointers.contains(item.Name) && item.Value.size() > 2)
+			item.Details = Frame()->ResolveVa(wcstoull(item.Value.c_str() + 2, nullptr, 16));
+	}
 
 	m_List.SetItemCount((int)m_Items.size());
 }

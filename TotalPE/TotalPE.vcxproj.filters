@@ -156,6 +156,30 @@
     <ClCompile Include="RichHeaderView.cpp">
       <Filter>Views</Filter>
     </ClCompile>
+    <ClCompile Include="GlobalPtrView.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="DialogTemplate.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MenuTemplate.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MenuView.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ClrMetadata.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="BoundImportView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
+    <ClCompile Include="ClrView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
+    <ClCompile Include="DialogView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -276,6 +300,30 @@
       <Filter>Views\DataDirectories</Filter>
     </ClInclude>
     <ClInclude Include="RichHeaderView.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="GlobalPtrView.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DialogTemplate.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MenuTemplate.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MenuView.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ClrMetadata.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="BoundImportView.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="ClrView.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="DialogView.h">
       <Filter>Views</Filter>
     </ClInclude>
   </ItemGroup>

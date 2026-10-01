@@ -28,11 +28,13 @@ public:
 
 private:
 	void BuildItems();
+	std::wstring GetTarget(PERelocData const& reloc) const;
 
 	CListViewCtrl m_List, m_RelocList;
 	CCustomSplitterWindow m_Splitter;
 	std::vector<PERelocation> m_Items;
 	std::vector<PERelocData> m_RelocData;
+	DWORD m_BlockRva{};	// page RVA of the block whose entries are listed in m_RelocList
 	PEFile const& m_PE;
 };
 

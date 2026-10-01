@@ -390,6 +390,30 @@ BEGIN
 END
 
 
+IDD_SYMBOLS DIALOGEX 0, 0, 320, 214
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Symbol Settings"
+FONT 9, "Segoe UI", 0, 0, 0x0
+BEGIN
+    CONTROL         "Use a symbol &server (downloads missing PDB files)",IDC_SYM_USE_SERVER,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,7,200,10
+    LTEXT           "Symbol server &URL:",IDC_STATIC,19,22,80,8
+    EDITTEXT        IDC_SYM_SERVER_URL,19,32,294,14,ES_AUTOHSCROLL
+    LTEXT           "Local &cache directory:",IDC_STATIC,19,52,80,8
+    EDITTEXT        IDC_SYM_CACHE,19,62,240,14,ES_AUTOHSCROLL
+    PUSHBUTTON      "&Browse...",IDC_SYM_BROWSE,263,62,50,14
+    LTEXT           "&Additional symbol paths (separate with ;):",IDC_STATIC,7,85,160,8
+    EDITTEXT        IDC_SYM_EXTRA,7,95,306,14,ES_AUTOHSCROLL
+    CONTROL         "Also use the _NT_SYMBOL_&PATH environment variable",IDC_SYM_USE_ENV,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,116,220,10
+    LTEXT           "Resulting symbol path:",IDC_STATIC,7,132,100,8
+    EDITTEXT        IDC_SYM_PREVIEW,7,142,306,40,ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY | WS_VSCROLL
+    PUSHBUTTON      "&Microsoft Defaults",IDC_SYM_DEFAULTS,7,193,80,14
+    DEFPUSHBUTTON   "OK",IDOK,207,193,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,263,193,50,14
+END
+
+
 /////////////////////////////////////////////////////////////////////////////
 //
 // DESIGNINFO

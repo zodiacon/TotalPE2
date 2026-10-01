@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "PEStrings.h"
+#include "Interfaces.h"
 #include <atltime.h>
 #include <DbgHelp.h>
 #include <DiaHelper.h>
@@ -190,23 +191,31 @@ std::wstring PEStrings::ResourceTypeToString(WORD id) {
 	return id >= _countof(types) ? L"" : types[id];
 }
 
-CStringA PEStrings::FormatInstruction(const cs_insn& inst, DiaSession const& symbols) {
+CStringA PEStrings::FormatInstruction(const cs_insn& inst, IMainFrame* frame) {
 	CStringA text, extra;
-	static PCSTR branches[] = { "call", "je", "jmp", "jne", "js" };
-	for (auto& br : branches)
-		if (_stricmp(inst.mnemonic, br) == 0) {
-			long disp;
-			auto address = strtoll(inst.op_str, nullptr, 16);
-			if (symbols && address != 0 && address != LLONG_MAX && address != LLONG_MIN) {
-				auto sym = symbols.GetSymbolByVA(address, SymbolTag::Null, &disp);
-				if (sym) {
-					extra = UndecorateName(sym.Name().c_str()).c_str();
-					if (!extra.IsEmpty() && disp)
-						extra += std::format("+0x{:X}", disp).c_str();
-				}
-			}
-			break;
+	if (frame && inst.detail) {
+		auto const& detail = *inst.detail;
+		bool branch = false;
+		for (int i = 0; i < detail.groups_count; i++)
+			if (detail.groups[i] == CS_GRP_JUMP || detail.groups[i] == CS_GRP_CALL)
+				branch = true;
+
+		// resolve the first operand that refers to a known address: a branch target, a RIP-relative
+		// operand or an absolute memory operand
+		for (int i = 0; i < detail.x86.op_count && extra.IsEmpty(); i++) {
+			auto const& op = detail.x86.operands[i];
+			ULONGLONG target;
+			if (op.type == X86_OP_IMM && branch)
+				target = op.imm;
+			else if (op.type == X86_OP_MEM && op.mem.base == X86_REG_RIP && op.mem.index == X86_REG_INVALID)
+				target = inst.address + inst.size + op.mem.disp;
+			else if (op.type == X86_OP_MEM && op.mem.base == X86_REG_INVALID && op.mem.index == X86_REG_INVALID && op.mem.disp > 0)
+				target = (uint32_t)op.mem.disp;
+			else
+				continue;
+			extra = CStringA(frame->ResolveVa(target).c_str());
 		}
+	}
 
 	if (!extra.IsEmpty())
 		extra = std::format("{} ({})", inst.op_str, (PCSTR)extra).c_str();

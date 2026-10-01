@@ -79,6 +79,10 @@ struct IMainFrame abstract {
 	virtual std::vector<FlatResource> const& GetFlatResources() const = 0;
 	virtual int GetResourceIconIndex(WORD resType) const = 0;
 	virtual DiaSymbol GetSymbolForName(PCWSTR mod, PCWSTR name) const = 0;
+	// Resolves an address to "name" or "name+0x1A" using the PDB (if any), falling back to exports and import slots.
+	// Returns an empty string if nothing is known about the address.
+	virtual std::wstring ResolveRva(DWORD rva) const = 0;
+	virtual std::wstring ResolveVa(ULONGLONG va) const = 0;
 	virtual bool AddToolBar(HWND tb) = 0;
 	virtual bool DeleteTreeItem(HTREEITEM hItem) = 0;
 	virtual bool CreateAssemblyView(std::span<const std::byte> code, uint64_t address, uint32_t rva, PCWSTR title, TreeItemType parent) = 0;

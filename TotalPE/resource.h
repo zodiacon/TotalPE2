@@ -73,6 +73,15 @@
 #define IDC_VERSION                     1000
 #define IDC_COPYRIGHT                   1001
 #define IDC_LINK                        1002
+#define IDC_SYM_USE_SERVER              1003
+#define IDC_SYM_SERVER_URL              1004
+#define IDC_SYM_CACHE                   1005
+#define IDC_SYM_BROWSE                  1006
+#define IDC_SYM_EXTRA                   1007
+#define IDC_SYM_USE_ENV                 1008
+#define IDC_SYM_PREVIEW                 1009
+#define IDC_SYM_DEFAULTS                1010
+#define IDD_SYMBOLS                     269
 #define ID_WINDOW_CLOSE                 32772
 #define ID_WINDOW_CLOSE_ALL             32773
 #define ID_FILE_RUNASADMINISTRATOR      32775
@@ -120,9 +129,9 @@
 //
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        269
+#define _APS_NEXT_RESOURCE_VALUE        270
 #define _APS_NEXT_COMMAND_VALUE         32817
-#define _APS_NEXT_CONTROL_VALUE         1003
+#define _APS_NEXT_CONTROL_VALUE         1011
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

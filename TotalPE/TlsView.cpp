@@ -13,11 +13,7 @@ CString CTlsView::GetColumnText(HWND h, int row, int col) const {
 		auto& item = m_Items[row];
 		switch (col) {
 			case 0: return std::format(L"0x{:X}", item).c_str();
-			case 1:
-				auto & sym = Frame()->GetSymbols();
-				if (sym)
-					return sym.GetSymbolByRVA(item).Name().c_str();
-				break;
+			case 1: return Frame()->ResolveVa(item).c_str();	// callbacks are VAs
 		}
 	}
 	else {
@@ -64,17 +60,24 @@ void CTlsView::BuildItems() {
 	auto tls = m_PE.GetTLS();
 
 	for (auto cb : tls->TLSCallbacks)
-		m_Items.push_back((DWORD)cb);
+		m_Items.push_back(cb);
 	m_List.SetItemCount((int)m_Items.size());
 	auto& tls32 = tls->unTLS.TLSDir32;
 	auto& tls64 = tls->unTLS.TLSDir64;
 	auto is64 = m_PE.GetFileInfo()->IsPE64;
 
+	// address fields are VAs; show the symbol next to them when one is known
+	auto va = [&](ULONGLONG addr) {
+		auto text = std::format(L"0x{:X}", addr);
+		auto sym = Frame()->ResolveVa(addr);
+		return sym.empty() ? text : text + L" (" + sym + L")";
+	};
+
 	m_Data = std::vector<DataItem>{
-		{ L"Start Address of Raw Data", std::format(L"0x{:X}", is64 ? tls64.StartAddressOfRawData : tls32.StartAddressOfRawData) },
-		{ L"End Address of Raw Data", std::format(L"0x{:X}", is64 ? tls64.EndAddressOfRawData : tls32.EndAddressOfRawData) },
-		{ L"Address of Callbacks", std::format(L"0x{:X}", is64 ? tls64.AddressOfCallBacks : tls32.AddressOfCallBacks) },
-		{ L"Address of Index", std::format(L"0x{:X}", is64 ? tls64.AddressOfIndex : tls32.AddressOfIndex) },
+		{ L"Start Address of Raw Data", va(is64 ? tls64.StartAddressOfRawData : tls32.StartAddressOfRawData) },
+		{ L"End Address of Raw Data", va(is64 ? tls64.EndAddressOfRawData : tls32.EndAddressOfRawData) },
+		{ L"Address of Callbacks", va(is64 ? tls64.AddressOfCallBacks : tls32.AddressOfCallBacks) },
+		{ L"Address of Index", va(is64 ? tls64.AddressOfIndex : tls32.AddressOfIndex) },
 		{ L"Characteristics", std::format(L"0x{:X}", is64 ? tls64.Characteristics : tls32.Characteristics) },
 		{ L"Alignment", std::format(L"{}", is64 ? tls64.Alignment : tls32.Alignment) },
 	};

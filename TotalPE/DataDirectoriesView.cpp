@@ -62,7 +62,7 @@ void CDataDirectoriesView::OnStateChanged(HWND, int from, int to, DWORD oldState
 void CDataDirectoriesView::BuildItems() {
 	int i = 0;
 	for (auto& dir : *m_PE.GetDataDirs()) {
-		if (dir.DataDir.Size) {
+		if (dir.DataDir.Size || (i == IMAGE_DIRECTORY_ENTRY_GLOBALPTR && dir.DataDir.VirtualAddress)) {
 			DataDirectory dd(dir);
 			dd.Index = i;
 			m_Directories.push_back(std::move(dd));

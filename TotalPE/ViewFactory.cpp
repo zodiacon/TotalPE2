@@ -25,6 +25,11 @@
 #include "DelayImportView.h"
 #include "RichHeaderView.h"
 #include "IATView.h"
+#include "ClrView.h"
+#include "BoundImportView.h"
+#include "GlobalPtrView.h"
+#include "DialogView.h"
+#include "MenuView.h"
 
 std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 	CWaitCursor wait;
@@ -126,6 +131,49 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		case TreeItemType::DirectoryTLS:
 		{
 			auto view = new CTlsView(this, m_PE);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::DirectoryBoundImport:
+		{
+			auto view = new CBoundImportView(this, m_PE);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::DirectoryGlobalPtr:
+		{
+			auto view = new CGlobalPtrView(this, m_PE);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::DirectoryArch:
+		{
+			// reserved directory - show its raw contents
+			auto const& dir = (*m_PE.GetDataDirs())[IMAGE_DIRECTORY_ENTRY_ARCHITECTURE].DataDir;
+			auto view = new CHexView(this, L"Architecture");
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			view->SetData(m_PE, (uint32_t)m_PE.GetOffsetFromRVA(dir.VirtualAddress), dir.Size);
+			return { view, view };
+		}
+
+		case TreeItemType::DirectoryCLR:
+		{
+			auto view = new CClrView(this, m_PE);
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};
@@ -324,6 +372,26 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateResourceView(TreeItemType type
 		view->SetData(res.Data);
 		return { view, view };
 	}
+	if (resId == RT_DIALOG) {
+		auto view = new CDialogView(this, (res.Name + L" (Dialog)").c_str());
+		if (!view->DoCreate(m_Tabs))
+			return {};
+
+		if (view->SetData(res.Data))
+			return { view, view };
+		view->DestroyWindow();
+		// malformed template - fall back to the hex view below
+	}
+	else if (resId == RT_MENU) {
+		auto view = new CMenuView(this, (res.Name + L" (Menu)").c_str());
+		if (!view->DoCreate(m_Tabs))
+			return {};
+
+		if (view->SetData(res.Data))
+			return { view, view };
+		view->DestroyWindow();
+	}
+
 	if (resId == RT_BITMAP) {
 		auto view = new CBitmapView(this, (res.Name + L" (Bitmap)").c_str());
 		if (!view->DoCreate(m_Tabs))

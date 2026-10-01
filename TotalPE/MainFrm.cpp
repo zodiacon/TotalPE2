@@ -11,6 +11,7 @@
 #include <ToolbarHelper.h>
 #include "PEStrings.h"
 #include "AppSettings.h"
+#include "SymbolSettingsDlg.h"
 #include <thread>
 #include <WTLHelper.h>
 
@@ -101,6 +102,7 @@ DiaSymbol CMainFrame::GetSymbolForName(PCWSTR mod, PCWSTR name) const {
 	auto it = symbols.find(mod);
 	if (it == symbols.end()) {
 		DiaSession session;
+		session.SetSymbolPath(AppSettings::Get().BuildSymbolSearchPath().c_str());
 		WCHAR path[MAX_PATH];
 		if (m_PE.GetFileInfo()->IsPE32)
 			::GetSystemWow64Directory(path, _countof(path));
@@ -341,6 +343,70 @@ CFindReplaceDialog* CMainFrame::GetFindDialog() {
 	return m_pFindDlg;
 }
 
+void CMainFrame::BuildNamedRvas() {
+	m_NamedRvas.clear();
+	auto widen = [](std::string const& s) { return std::wstring(s.begin(), s.end()); };
+
+	if (auto exp = m_PE.GetExport()) {
+		for (auto& f : exp->Funcs) {
+			if (f.FuncRVA == 0 || !f.ForwarderName.empty())
+				continue;
+			m_NamedRvas.emplace_back(f.FuncRVA, f.FuncName.empty() ? std::format(L"Ordinal#{}", f.Ordinal) : widen(f.FuncName));
+		}
+	}
+
+	if (auto imports = m_PE.GetImport()) {
+		auto ptrSize = m_PE.GetFileInfo()->IsPE64 ? 8u : 4u;
+		for (auto& imp : *imports) {
+			DWORD slot = imp.ImportDesc.FirstThunk;
+			if (slot == 0)
+				continue;
+			auto module = widen(imp.ModuleName);
+			for (auto& fn : imp.ImportFunc) {
+				m_NamedRvas.emplace_back(slot, module + L"!" + (fn.FuncName.empty() ? L"(ordinal)" : widen(fn.FuncName)));
+				slot += ptrSize;
+			}
+		}
+	}
+
+	auto const& hdr = *m_PE.GetNTHeader();
+	auto entry = m_PE.GetFileInfo()->IsPE64 ? hdr.NTHdr64.OptionalHeader.AddressOfEntryPoint : hdr.NTHdr32.OptionalHeader.AddressOfEntryPoint;
+	if (entry)
+		m_NamedRvas.emplace_back(entry, L"<entry point>");
+
+	// stable: exports win over import slots, which win over the entry point marker
+	std::stable_sort(m_NamedRvas.begin(), m_NamedRvas.end(), [](auto& a, auto& b) { return a.first < b.first; });
+}
+
+std::wstring CMainFrame::ResolveRva(DWORD rva) const {
+	if (rva == 0)
+		return {};
+
+	if (m_Symbols) {
+		long disp = 0;
+		auto sym = m_Symbols.GetSymbolByRVA(rva, SymbolTag::Null, &disp);
+		if (sym) {
+			auto name = sym.Name();
+			if (!name.empty()) {
+				auto undecorated = PEStrings::UndecorateName(name.c_str());
+				if (!undecorated.empty())
+					name = std::move(undecorated);
+				return disp > 0 ? std::format(L"{}+0x{:X}", name, disp) : name;
+			}
+		}
+	}
+
+	auto it = std::lower_bound(m_NamedRvas.begin(), m_NamedRvas.end(), rva, [](auto& p, DWORD v) { return p.first < v; });
+	return it != m_NamedRvas.end() && it->first == rva ? it->second : std::wstring();
+}
+
+std::wstring CMainFrame::ResolveVa(ULONGLONG va) const {
+	auto base = m_PE.GetImageBase();
+	if (va < base || va - base > 0xFFFFFFFFULL)
+		return {};
+	return ResolveRva((DWORD)(va - base));
+}
+
 DiaSession const& CMainFrame::GetSymbols() const {
 	return m_Symbols;
 }
@@ -420,7 +486,9 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 		m_SymbolsForModules.clear();
 
 	m_Symbols.Close();
+	m_Symbols.SetSymbolPath(AppSettings::Get().BuildSymbolSearchPath().c_str());
 	m_Symbols.OpenImage(path);
+	BuildNamedRvas();
 	m_Views.clear();
 	m_Views2.clear();
 	m_Tabs.RemoveAllPages();
@@ -483,7 +551,7 @@ void CMainFrame::BuildTree(int iconSize) {
 	auto directories = InsertTreeItem(m_Tree, L"Data Directories", GetTreeIcon(IDI_DIRS), TreeItemType::Directories, root);
 	i = 0;
 	for (auto const& dir : *m_PE.GetDataDirs()) {
-		if (dir.DataDir.Size) {
+		if (dir.DataDir.Size || (i == IMAGE_DIRECTORY_ENTRY_GLOBALPTR && dir.DataDir.VirtualAddress)) {
 			InsertTreeItem(m_Tree, PEStrings::GetDataDirectoryName(i), DirectoryIndexToIcon(i),
 				TreeItemWithIndex(TreeItemType::Directory, i), directories);
 		}
@@ -870,6 +938,21 @@ LRESULT CMainFrame::OnToggleDarkMode(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*
 		return TRUE;
 		}, 0);
 
+	return 0;
+}
+
+LRESULT CMainFrame::OnSymbolSettings(WORD, WORD, HWND, BOOL&) {
+	CSymbolSettingsDlg dlg;
+	if (dlg.DoModal(m_hWnd) != IDOK)
+		return 0;
+
+	// symbols already loaded (including those for other modules) used the old path
+	m_SymbolsForModules.clear();
+	if (m_PE && AtlMessageBox(m_hWnd, L"Reload the current file to apply the new symbol settings?",
+		IDR_MAINFRAME, MB_ICONQUESTION | MB_YESNO) == IDYES) {
+		std::wstring path(m_PE.GetPath());	// OpenPE closes the file, so work on a copy
+		OpenPE(path.c_str());
+	}
 	return 0;
 }
 

@@ -62,6 +62,7 @@ public:
 		MESSAGE_HANDLER(WM_SHOWWINDOW, OnShowWindow)
 		MESSAGE_HANDLER(WM_MENUSELECT, OnMenuSelect)
 		COMMAND_ID_HANDLER(ID_OPTIONS_DARKMODE, OnToggleDarkMode)
+		COMMAND_ID_HANDLER(ID_OPTIONS_SYMBOLS, OnSymbolSettings)
 		MESSAGE_HANDLER(WM_UPDATE_DARKMODE, OnUpdateDarkMode)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
 		MESSAGE_HANDLER(WM_DESTROY, OnDestroy)
@@ -87,6 +88,8 @@ private:
 	std::vector<FlatResource> const& GetFlatResources() const override;
 	int GetResourceIconIndex(WORD resType) const override;
 	DiaSymbol GetSymbolForName(PCWSTR mod, PCWSTR name) const override;
+	std::wstring ResolveRva(DWORD rva) const override;
+	std::wstring ResolveVa(ULONGLONG va) const override;
 	bool AddToolBar(HWND tb) override;
 	bool DeleteTreeItem(HTREEITEM hItem) override;
 	bool CreateAssemblyView(std::span<const std::byte> code, uint64_t address, uint32_t rva, PCWSTR title, TreeItemType parent) override;
@@ -151,6 +154,7 @@ private:
 	LRESULT OnAlwaysOnTop(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnUpdateDarkMode(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnToggleDarkMode(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnSymbolSettings(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnPageActivated(int /*idCtrl*/, LPNMHDR /*pnmh*/, BOOL& /*bHandled*/);
 	LRESULT OnViewFileInHex(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnPageCloseButton(int /*idCtrl*/, LPNMHDR /*pnmh*/, BOOL& /*bHandled*/);
@@ -178,6 +182,8 @@ private:
 	HTREEITEM m_hResVersion, m_hResManifest;
 	std::unordered_map<TreeItemType, ContextMenuInfo> m_ContextMenus;
 	mutable std::unordered_map<std::wstring, DiaSession> m_SymbolsForModules;
+	std::vector<std::pair<DWORD, std::wstring>> m_NamedRvas;	// exports, import slots; sorted by RVA
+	void BuildNamedRvas();
 	inline static std::unordered_map<UINT, int> s_ImageIndices;
 	inline static int s_Frames{ 1 };
 	inline static Theme s_DarkTheme;

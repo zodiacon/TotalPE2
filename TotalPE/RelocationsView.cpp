@@ -18,6 +18,7 @@ CString CRelocationsView::GetColumnText(HWND h, int row, int col) const {
 			case 0: return std::format(L"0x{:X}", item.BaseReloc.VirtualAddress).c_str();
 			case 1: return std::format(L"0x{:X}", item.BaseReloc.SizeOfBlock).c_str();
 			case 2: return std::format(L"0x{:X}", item.RelocData.size()).c_str();
+			case 3: return Frame()->ResolveRva(item.BaseReloc.VirtualAddress).c_str();
 		}
 	}
 	else {
@@ -25,9 +26,38 @@ CString CRelocationsView::GetColumnText(HWND h, int row, int col) const {
 		switch (col) {
 			case 0: return PEStrings::x64RelocationTypeToString(reloc.RelocType);
 			case 1: return std::format(L"0x{:X}", reloc.RelocOffset).c_str();
+			case 2: return std::format(L"0x{:X}", m_BlockRva + reloc.RelocOffset).c_str();
+			case 3: return Frame()->ResolveRva(m_BlockRva + reloc.RelocOffset).c_str();
+			case 4: return GetTarget(reloc).c_str();
 		}
 	}
 	return CString();
+}
+
+// the pointer stored at the relocated location, as a VA plus its symbol (if any)
+std::wstring CRelocationsView::GetTarget(PERelocData const& reloc) const {
+	auto rva = m_BlockRva + reloc.RelocOffset;
+	auto offset = m_PE.GetOffsetFromRVA(rva);
+	if (offset == 0 || offset >= m_PE.GetFileSize())
+		return {};
+
+	ULONGLONG va;
+	if (reloc.RelocType == IMAGE_REL_BASED_DIR64) {
+		if (offset + 8 > m_PE.GetFileSize())
+			return {};
+		va = m_PE.Read<ULONGLONG>((uint32_t)offset);
+	}
+	else if (reloc.RelocType == IMAGE_REL_BASED_HIGHLOW) {
+		if (offset + 4 > m_PE.GetFileSize())
+			return {};
+		va = m_PE.Read<DWORD>((uint32_t)offset);
+	}
+	else {
+		return {};
+	}
+	auto text = std::format(L"0x{:X}", va);
+	auto sym = Frame()->ResolveVa(va);
+	return sym.empty() ? text : text + L"  " + sym;
 }
 
 void CRelocationsView::DoSort(SortInfo const* si) {
@@ -61,7 +91,9 @@ void CRelocationsView::OnStateChanged(HWND, int from, int to, DWORD oldState, DW
 			m_RelocData.clear();
 		}
 		else {
-			m_RelocData = m_Items[m_List.GetNextItem(-1, LVNI_SELECTED)].RelocData;
+			auto& block = m_Items[m_List.GetNextItem(-1, LVNI_SELECTED)];
+			m_BlockRva = block.BaseReloc.VirtualAddress;
+			m_RelocData = block.RelocData;
 			m_RelocList.SetItemCount((int)m_RelocData.size());
 			Sort(m_RelocList);
 		}
@@ -84,11 +116,15 @@ LRESULT CRelocationsView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	cm->AddColumn(L"Address", LVCFMT_RIGHT, 100);
 	cm->AddColumn(L"Size", LVCFMT_RIGHT, 100);
 	cm->AddColumn(L"Count", LVCFMT_RIGHT, 80);
+	cm->AddColumn(L"Symbol", LVCFMT_LEFT, 250);
 	cm->DeleteColumn(0);
 
 	cm = GetColumnManager(m_RelocList);
 	cm->AddColumn(L"Type", LVCFMT_LEFT, 100);
-	cm->AddColumn(L"Offset", LVCFMT_RIGHT, 100);
+	cm->AddColumn(L"Offset", LVCFMT_RIGHT, 80);
+	cm->AddColumn(L"RVA", LVCFMT_RIGHT, 100);
+	cm->AddColumn(L"Symbol", LVCFMT_LEFT, 220);
+	cm->AddColumn(L"Target", LVCFMT_LEFT, 300);
 
 	m_Splitter.SetSplitterPanes(m_List, m_RelocList);
 	m_Splitter.SetSplitterPosPct(40);

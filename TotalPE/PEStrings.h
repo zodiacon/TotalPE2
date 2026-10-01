@@ -3,6 +3,7 @@
 struct cs_insn;
 enum class SymbolTag;
 enum class LocationKind;
+struct IMainFrame;
 class DiaSession;
 
 enum class DllCharacteristics : unsigned short {
@@ -33,7 +34,7 @@ struct PEStrings abstract final {
 	static std::wstring ToHex(ULONGLONG value);
 	static std::wstring ToMemorySize(ULONGLONG size);
 	static std::wstring ResourceTypeToString(WORD id);
-	static CStringA FormatInstruction(const cs_insn& inst, DiaSession const& symbols);
+	static CStringA FormatInstruction(const cs_insn& inst, IMainFrame* frame);
 	static std::wstring ManagedTypeAttributesToString(CorTypeAttr attr);
 	//static std::wstring MemberAttributesToString(const ManagedMember& member);
 	static std::wstring MethodAttributesToString(CorMethodAttr attr);
