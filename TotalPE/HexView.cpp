@@ -250,6 +250,11 @@ LRESULT CHexView::OnDropDown(int, LPNMHDR hdr, BOOL&) {
 }
 
 LRESULT CHexView::OnUpdateTheme(UINT, WPARAM, LPARAM, BOOL&) {
+	// The scroll bars of the hex control are not a window of their own: their theme is opened with the control and kept until it is
+	// told that the theme changed, so they stayed dark after the switch to the light mode.
+	m_Hex.SendMessage(WM_THEMECHANGED);
+	m_Hex.SetWindowPos(nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+	::RedrawWindow(m_Hex, nullptr, nullptr, RDW_INVALIDATE | RDW_FRAME | RDW_UPDATENOW);
 	UpdateColors();
 
 	return 0;
