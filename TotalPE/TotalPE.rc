@@ -127,7 +127,7 @@ END
 // remains consistent on all systems.
 IDR_MAINFRAME           ICON                    "res\\TotalPE.ico"
 
-IDI_CHECK               ICON                    "res\\check.ico"
+IDI_CHECK               ICON                    "C:\\Dev\\totalpe2\\TotalPE\\res\\check.ico"
 
 IDI_RADIO               ICON                    "res\\circle.ico"
 
@@ -251,6 +251,8 @@ IDI_LOOK                ICON                    "res\\Look.ico"
 
 IDI_BOOKMARK            ICON                    "res\\Bookmark.ico"
 
+IDI_FLOW                ICON                    "res\\Flow.ico"
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -358,6 +360,7 @@ BEGIN
     BEGIN
         MENUITEM "&Disassemble...",             ID_VIEW_DISASSEMBLE
         MENUITEM "Cross-&References...",        ID_EXPORT_XREFS
+        MENUITEM "Flow &Graph...",              ID_EXPORT_FLOWGRAPH
         MENUITEM SEPARATOR
         MENUITEM "&Copy\tCtrl+C",               ID_EDIT_COPY
     END
@@ -381,6 +384,8 @@ BEGIN
         MENUITEM "Cross-References to This &Instruction\tX", ID_ASSEMBLY_XREFS_HERE
         MENUITEM "Cross-References to the &Target", ID_ASSEMBLY_XREFS_TARGET
         MENUITEM SEPARATOR
+        MENUITEM "Function Flow &Graph\tG",     ID_ASSEMBLY_FLOWGRAPH
+        MENUITEM SEPARATOR
         MENUITEM "Disassemble at the End",      ID_ASSEMBLY_DISASSEMBLEATTHEEND
         MENUITEM "Go to Address",               ID_ASSEMBLY_GOTOADDRESS
     END
@@ -395,6 +400,10 @@ BEGIN
         MENUITEM "Cross-&References to the Import...", ID_IMPORT_XREFS
         MENUITEM SEPARATOR
         MENUITEM "&Copy\tCtrl+C",               ID_EDIT_COPY
+    END
+    POPUP "flowgraph"
+    BEGIN
+        MENUITEM "&Export as Image (SVG)...",   ID_ICON_EXPORT
     END
 END
 
@@ -467,12 +476,11 @@ FONT 9, "Segoe UI", 0, 0, 0x0
 BEGIN
     LTEXT           "Scanning with VirusTotal needs an API key. The key is free: sign in on virustotal.com and copy it from your profile. It is stored encrypted for your Windows account.",IDC_STATIC,7,7,246,32
     LTEXT           "&API key:",IDC_STATIC,7,46,246,8
-    EDITTEXT        IDC_VT_KEY,7,56,246,14,ES_AUTOHSCROLL | ES_PASSWORD
+    EDITTEXT        IDC_VT_KEY,7,56,246,14,ES_PASSWORD | ES_AUTOHSCROLL
     PUSHBUTTON      "&Get a Key...",IDC_VT_GETKEY,7,97,60,14
     DEFPUSHBUTTON   "OK",IDOK,147,97,50,14
     PUSHBUTTON      "Cancel",IDCANCEL,203,97,50,14
 END
-
 
 IDD_GOTO DIALOGEX 0, 0, 230, 110
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
@@ -713,11 +721,15 @@ BEGIN
     ID_VIEW_RESOURCES       "\nResources"
     ID_VIEW_MANIFEST        "\nManifest"
     ID_VIEW_VERSION         "\nVersion"
+    ID_VIEW_DEBUG           "\nDebug"
+    ID_PE_SECURITY          "\nSecurity"
+END
+
+STRINGTABLE
+BEGIN
     ID_VIEW_OVERLAY         "\nOverlay"
     ID_PE_VIRUSTOTAL        "\nScan the file with VirusTotal"
     ID_PE_VTAPIKEY          "\nSet the VirusTotal API key"
-    ID_VIEW_DEBUG           "\nDebug"
-    ID_PE_SECURITY          "\nSecurity"
 END
 
 #endif    // English (United States) resources

@@ -144,7 +144,7 @@
       <PreprocessorDefinitions>_WINDOWS;STRICT;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\WTLHelper\WTLHelper;..\WTLHelper\WTL;..\PECore;..\HexControl;..\DiaHelper;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\WTLHelper\WTLHelper;..\WTLHelper\WTL;..\WTLHelper\NodeGraphControl\include;..\PECore;..\HexControl;..\DiaHelper;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -181,7 +181,7 @@
       <PreprocessorDefinitions>WIN32;_WINDOWS;STRICT;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\WTLHelper\WTLHelper;..\WTLHelper\WTL;..\PECore;..\HexControl;..\DiaHelper;..\Scintilla\Include;..\Lexilla\lexers;..\Lexilla\Include;..\Lexilla\lexlib</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\WTLHelper\WTLHelper;..\WTLHelper\WTL;..\WTLHelper\NodeGraphControl\include;..\PECore;..\HexControl;..\DiaHelper;..\Scintilla\Include;..\Lexilla\lexers;..\Lexilla\Include;..\Lexilla\lexlib</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -214,7 +214,7 @@
       <PreprocessorDefinitions>WIN32;_WINDOWS;STRICT;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\WTLHelper\WTLHelper;..\WTLHelper\WTL;..\PECore;..\HexControl;..\DiaHelper;..\Scintilla\Include;..\Lexilla\lexers;..\Lexilla\Include;..\Lexilla\lexlib</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\WTLHelper\WTLHelper;..\WTLHelper\WTL;..\WTLHelper\NodeGraphControl\include;..\PECore;..\HexControl;..\DiaHelper;..\Scintilla\Include;..\Lexilla\lexers;..\Lexilla\Include;..\Lexilla\lexlib</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -250,7 +250,7 @@
       <PreprocessorDefinitions>WIN32;_WINDOWS;STRICT;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\WTLHelper\WTLHelper;..\WTLHelper\WTL;..\PECore;..\HexControl;..\DiaHelper;..\Scintilla\Include;..\Lexilla\lexers;..\Lexilla\Include;..\Lexilla\lexlib</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\WTLHelper\WTLHelper;..\WTLHelper\WTL;..\WTLHelper\NodeGraphControl\include;..\PECore;..\HexControl;..\DiaHelper;..\Scintilla\Include;..\Lexilla\lexers;..\Lexilla\Include;..\Lexilla\lexlib</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -286,7 +286,7 @@
       <PreprocessorDefinitions>_WINDOWS;STRICT;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\WTLHelper\WTLHelper;..\WTLHelper\WTL;..\PECore;..\HexControl;..\DiaHelper;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\WTLHelper\WTLHelper;..\WTLHelper\WTL;..\WTLHelper\NodeGraphControl\include;..\PECore;..\HexControl;..\DiaHelper;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -330,7 +330,7 @@
       <PreprocessorDefinitions>_WINDOWS;STRICT;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\WTLHelper\WTLHelper;..\WTLHelper\WTL;..\PECore;..\HexControl;..\DiaHelper;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\WTLHelper\WTLHelper;..\WTLHelper\WTL;..\WTLHelper\NodeGraphControl\include;..\PECore;..\HexControl;..\DiaHelper;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -406,6 +406,8 @@
     <ClCompile Include="PEAnomalies.cpp" />
     <ClCompile Include="AnomalyView.cpp" />
     <ClCompile Include="CodeAnalysis.cpp" />
+    <ClCompile Include="FlowGraph.cpp" />
+    <ClCompile Include="FlowGraphView.cpp" />
     <ClCompile Include="Authenticode.cpp" />
     <ClCompile Include="Overlay.cpp" />
     <ClCompile Include="OverlayView.cpp" />
@@ -471,6 +473,8 @@
     <ClInclude Include="PEAnomalies.h" />
     <ClInclude Include="AnomalyView.h" />
     <ClInclude Include="CodeAnalysis.h" />
+    <ClInclude Include="FlowGraph.h" />
+    <ClInclude Include="FlowGraphView.h" />
     <ClInclude Include="Authenticode.h" />
     <ClInclude Include="Overlay.h" />
     <ClInclude Include="OverlayView.h" />
@@ -546,6 +550,7 @@
     <Image Include="res\find.ico" />
     <Image Include="res\find_next.ico" />
     <Image Include="res\find_previous.ico" />
+    <Image Include="res\Flow.ico" />
     <Image Include="res\folder.ico" />
     <Image Include="res\folders.ico" />
     <Image Include="res\font.ico" />
@@ -598,6 +603,9 @@
     </ProjectReference>
     <ProjectReference Include="..\HexControl\HexControl.vcxproj">
       <Project>{ef5c2f6b-5fcd-446c-be8d-1485407cd65a}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\WTLHelper\NodeGraphControl\NodeGraphControl.vcxproj">
+      <Project>{768e9381-b6e3-4d46-8257-64e5bd8409b2}</Project>
     </ProjectReference>
     <ProjectReference Include="..\PECore\PECore.vcxproj">
       <Project>{03a66844-1884-41c0-899d-f01c8a601c8e}</Project>

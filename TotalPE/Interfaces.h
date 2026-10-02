@@ -64,6 +64,7 @@ enum class TreeItemType : int64_t {
 	Anomalies,
 	Xrefs,
 	Overlay,
+	FlowGraph,
 
 	ItemMask = 255,
 };
@@ -104,6 +105,8 @@ struct IMainFrame abstract {
 	virtual XrefMap const& GetXrefs() = 0;
 	// Lists the references to an address in a view of its own.
 	virtual bool ShowXrefs(uint64_t va) = 0;
+	// The flow graph of the function that contains the address (the code from the address if the function is not known)
+	virtual bool ShowFlowGraph(uint64_t va) = 0;
 	// Remembers where the user is, so that Back returns to it.
 	virtual void RecordNavigation() = 0;
 	virtual bool AddToolBar(HWND tb) = 0;

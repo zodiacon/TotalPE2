@@ -112,6 +112,7 @@
     <ClCompile Include="..\TotalPE\PERegions.cpp" />
     <ClCompile Include="..\TotalPE\PEAnomalies.cpp" />
     <ClCompile Include="..\TotalPE\CodeAnalysis.cpp" />
+    <ClCompile Include="..\TotalPE\FlowGraph.cpp" />
     <ClCompile Include="..\TotalPE\Authenticode.cpp" />
     <ClCompile Include="..\TotalPE\Overlay.cpp" />
     <ClCompile Include="..\TotalPE\VersionInfo.cpp" />
@@ -129,6 +130,7 @@
     <ClCompile Include="PERegionsTests.cpp" />
     <ClCompile Include="AnomalyTests.cpp" />
     <ClCompile Include="CodeAnalysisTests.cpp" />
+    <ClCompile Include="FlowGraphTests.cpp" />
     <ClCompile Include="AuthenticodeTests.cpp" />
     <ClCompile Include="OverlayTests.cpp" />
     <ClCompile Include="VersionInfoTests.cpp" />

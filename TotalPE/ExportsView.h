@@ -29,6 +29,7 @@ public:
 		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnCopy)
 		COMMAND_ID_HANDLER(ID_VIEW_DISASSEMBLE, OnDissassemble)
 		COMMAND_ID_HANDLER(ID_EXPORT_XREFS, OnXrefs)
+		COMMAND_ID_HANDLER(ID_EXPORT_FLOWGRAPH, OnFlowGraph)
 		CHAIN_MSG_MAP_ALT(CViewBase<CExportsView>, 1)
 	END_MSG_MAP()
 
@@ -56,6 +57,7 @@ private:
 	LRESULT OnFind(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnDissassemble(WORD, WORD, HWND, BOOL&) const;
 	LRESULT OnXrefs(WORD, WORD, HWND, BOOL&) const;
+	LRESULT OnFlowGraph(WORD, WORD, HWND, BOOL&) const;
 
 	CListViewCtrl m_List;
 	std::vector<Export> m_Exports;

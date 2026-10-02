@@ -154,6 +154,7 @@ void XrefMap::Clear() {
 	m_Refs.clear();
 	m_Count = 0;
 	m_JumpTables = 0;
+	m_Switches.clear();
 	m_Built = false;
 }
 
@@ -257,6 +258,7 @@ bool XrefMap::Build(PEFile const& pe) {
 
 				if (inst->id == X86_INS_JMP)
 					if (auto table = FindJumpTable(recent, *inst, is64, imageBase, imageSize)) {
+						std::vector<uint64_t> targets;
 						size_t entries = 0;
 						for (size_t i = 0; i < table->MaxEntries; i++) {
 							uint64_t value;
@@ -266,12 +268,14 @@ bool XrefMap::Build(PEFile const& pe) {
 							if (!isCode(target))
 								break;
 							add(target, inst->address, XrefKind::Jump);
+							targets.push_back(target);
 							entries++;
 						}
 						if (entries) {
 							add(table->Address, inst->address, XrefKind::Data);
 							data[table->Address] = table->Address + entries * table->EntrySize;
 							m_JumpTables++;
+							m_Switches[inst->address] = std::move(targets);
 						}
 					}
 
@@ -319,6 +323,13 @@ bool XrefMap::Build(PEFile const& pe) {
 
 	m_Built = any;
 	return any;
+}
+
+std::span<const uint64_t> XrefMap::SwitchTargets(uint64_t jmp) const {
+	auto it = m_Switches.find(jmp);
+	if (it == m_Switches.end())
+		return {};
+	return it->second;
 }
 
 std::span<const Xref> XrefMap::To(uint64_t va) const {

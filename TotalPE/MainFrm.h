@@ -29,6 +29,7 @@ public:
 	void OnFinalMessage(HWND) override;
 
 	bool OnTreeDoubleClick(HWND tree, HTREEITEM hItem);
+	bool OnTreeRightClick(HWND tree, HTREEITEM hItem, POINT const& pt);
 
 	BEGIN_MSG_MAP(CMainFrame)
 		COMMAND_TABVIEW_HANDLER(m_Tabs, 1)
@@ -104,6 +105,7 @@ private:
 	bool GoToVa(uint64_t va) override;
 	XrefMap const& GetXrefs() override;
 	bool ShowXrefs(uint64_t va) override;
+	bool ShowFlowGraph(uint64_t va) override;
 	void RecordNavigation() override;
 	bool AddToolBar(HWND tb) override;
 	bool DeleteTreeItem(HTREEITEM hItem) override;

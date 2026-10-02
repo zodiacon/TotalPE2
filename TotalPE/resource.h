@@ -72,22 +72,14 @@
 #define IDI_ICON2                       268
 #define IDD_SYMBOLS                     269
 #define IDD_HEXFIND                     270
-#define IDD_GOTO                        273
-#define IDD_VTKEY                       274
-#define IDC_GOTO_VALUE                  1018
-#define IDC_GOTO_RVA                    1019
-#define IDC_GOTO_VA                     1020
-#define IDC_GOTO_OFFSET                 1021
-#define IDC_GOTO_DISASM                 1022
-#define IDC_VT_KEY                      1023
-#define IDC_VT_GETKEY                   1024
-#define ID_NAV_GOTO                     32831
-#define ID_NAV_BACK                     32832
-#define ID_NAV_FORWARD                  32833
 #define IDI_ICON1                       271
 #define IDI_LOOK                        271
 #define IDI_ICON3                       272
 #define IDI_BOOKMARK                    272
+#define IDD_GOTO                        273
+#define IDD_VTKEY                       274
+#define IDI_ICON5                       276
+#define IDI_FLOW                        276
 #define IDC_VERSION                     1000
 #define IDC_COPYRIGHT                   1001
 #define IDC_LINK                        1002
@@ -106,6 +98,13 @@
 #define IDC_HEXFIND_MATCHCASE           1015
 #define IDC_HEXFIND_DOWN                1016
 #define IDC_HEXFIND_UP                  1017
+#define IDC_GOTO_VALUE                  1018
+#define IDC_GOTO_RVA                    1019
+#define IDC_GOTO_VA                     1020
+#define IDC_GOTO_OFFSET                 1021
+#define IDC_GOTO_DISASM                 1022
+#define IDC_VT_KEY                      1023
+#define IDC_VT_GETKEY                   1024
 #define ID_WINDOW_CLOSE                 32772
 #define ID_WINDOW_CLOSE_ALL             32773
 #define ID_FILE_RUNASADMINISTRATOR      32775
@@ -162,6 +161,9 @@
 #define ID_HEX_BIGENDIAN                32828
 #define ID_HEX_COPYAS                   32829
 #define ID_HEX_BOOKMARKS                32830
+#define ID_NAV_GOTO                     32831
+#define ID_NAV_BACK                     32832
+#define ID_NAV_FORWARD                  32833
 #define ID_ASSEMBLY_FOLLOW              32834
 #define ID_ASSEMBLY_XREFS_HERE          32835
 #define ID_ASSEMBLY_XREFS_TARGET        32836
@@ -170,13 +172,15 @@
 #define ID_PE_VTAPIKEY                  32839
 #define ID_EXPORT_XREFS                 32840
 #define ID_IMPORT_XREFS                 32841
+#define ID_ASSEMBLY_FLOWGRAPH           32842
+#define ID_EXPORT_FLOWGRAPH             32843
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        275
-#define _APS_NEXT_COMMAND_VALUE         32842
+#define _APS_NEXT_RESOURCE_VALUE        277
+#define _APS_NEXT_COMMAND_VALUE         32844
 #define _APS_NEXT_CONTROL_VALUE         1025
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

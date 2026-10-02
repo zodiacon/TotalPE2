@@ -49,6 +49,9 @@ public:
 	// How many jump tables (the tables behind a "switch") were found. Their entries are jump targets, and their bytes are not code.
 	size_t JumpTables() const { return m_JumpTables; }
 
+	// Where the jump table behind the "switch" at 'jmp' leads, in the order of the table (empty if there is no such table).
+	std::span<const uint64_t> SwitchTargets(uint64_t jmp) const;
+
 	// The references to 'va', sorted by address (empty if there are none).
 	std::span<const Xref> To(uint64_t va) const;
 
@@ -62,5 +65,6 @@ private:
 	std::unordered_map<uint64_t, std::vector<Xref>> m_Refs;
 	size_t m_Count{ 0 };
 	size_t m_JumpTables{ 0 };
+	std::unordered_map<uint64_t, std::vector<uint64_t>> m_Switches;	// by the address of the jump
 	bool m_Built{ false };
 };

@@ -42,6 +42,17 @@ bool CMainFrame::OnTreeDoubleClick(HWND, HTREEITEM hItem) {
 	return ShowView(hItem);
 }
 
+// The menu of a flow graph is also that of its tree item: the item is selected, which shows the graph that the commands apply to
+bool CMainFrame::OnTreeRightClick(HWND, HTREEITEM hItem, POINT const& pt) {
+	if (((TreeItemType)m_Tree.GetItemData(hItem) & TreeItemType::ItemMask) != TreeItemType::FlowGraph)
+		return false;
+	ShowView(hItem);
+	UIEnable(ID_ICON_EXPORT, TRUE);
+	CMenu menu;
+	menu.LoadMenu(IDR_CONTEXT);
+	return ShowContextMenu(menu.GetSubMenu(9), 0, pt.x, pt.y, m_hWnd);
+}
+
 void CMainFrame::UpdateUI() {
 	auto const fi = m_PE ? m_PE.GetFileInfo() : nullptr;
 	UIEnable(ID_PE_DISASSEMBLEENTRYPOINT, fi != nullptr);
@@ -92,6 +103,7 @@ void CMainFrame::InitMenu(HMENU hMenu) {
 		{ ID_FILE_CLOSE, IDI_CLOSE },
 		{ ID_WINDOW_CLOSE, IDI_WIN_CLOSE },
 		{ ID_WINDOW_CLOSE_ALL, IDI_WIN_CLOSEALL },
+		{ ID_EXPORT_FLOWGRAPH, IDI_FLOW },
 
 	};
 	WTLHelper::InitMenu(hMenu, commands, _countof(commands));
@@ -238,6 +250,21 @@ bool CMainFrame::ShowView(TreeItemType data, HTREEITEM hItem, UINT icon) {
 			}
 			if (!hItem)
 				hItem = view->GetHTreeItem();
+			if (!hItem) {
+				// opened from a menu: the view belongs to the tree item of its type, which the views created under it need as their parent
+				for (auto h = m_Tree.GetRootItem(); h && !hItem;) {
+					if (m_Tree.GetItemData(h) == (DWORD_PTR)data)
+						hItem = h;
+					else if (auto child = m_Tree.GetChildItem(h))
+						h = child;
+					else {
+						while (h && !m_Tree.GetNextSiblingItem(h))
+							h = m_Tree.GetParentItem(h);
+						if (h)
+							h = m_Tree.GetNextSiblingItem(h);
+					}
+				}
+			}
 			view->SetHTreeItem(hItem);
 			m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, map);
 			m_Views.insert({ data, view });
@@ -734,7 +761,7 @@ bool CMainFrame::BuildTreeImageList(int iconSize) {
 		IDI_THREAD, IDI_RICH_HEADER, IDI_MSDOS, IDI_FILE_HEADER, IDI_COMPONENT,
 		IDI_FUNCTION, IDI_FUNC_FORWARD, IDI_INTERFACE, IDI_DLL_IMPORT, IDI_FUNCTION2, IDI_SYMBOLS,
 		IDI_TYPE, IDI_ENUM, IDI_BITFIELD, IDI_FIELD, IDI_ARRAY, IDI_UNION, IDI_BINARY,
-		IDI_DATA,
+		IDI_DATA, IDI_FLOW,
 	};
 
 	bool insert = s_ImageIndices.empty();

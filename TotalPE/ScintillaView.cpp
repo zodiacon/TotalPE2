@@ -135,6 +135,7 @@ void CScintillaView::UpdateUI(bool first) {
 	ui.UIEnable(ID_ASSEMBLY_FOLLOW, line && line->Target());
 	ui.UIEnable(ID_ASSEMBLY_XREFS_HERE, line && line->Va);
 	ui.UIEnable(ID_ASSEMBLY_XREFS_TARGET, line && line->Target());
+	ui.UIEnable(ID_ASSEMBLY_FLOWGRAPH, line && line->Va);
 }
 
 namespace {
@@ -282,11 +283,15 @@ bool CScintillaView::Follow(int line) {
 
 BOOL CScintillaView::PreTranslateMessage(MSG* pMsg) {
 	if (pMsg->message == WM_KEYDOWN && m_Language == LexLanguage::Asm && m_Sci.m_hWnd && pMsg->hwnd == m_Sci.m_hWnd &&
-		(pMsg->wParam == VK_RETURN || pMsg->wParam == 'X') &&
+		(pMsg->wParam == VK_RETURN || pMsg->wParam == 'X' || pMsg->wParam == 'G') &&
 		::GetKeyState(VK_CONTROL) >= 0 && ::GetKeyState(VK_MENU) >= 0 && ::GetKeyState(VK_SHIFT) >= 0) {
 		m_ContextLine = -1;		// the line of the caret
 		if (pMsg->wParam == VK_RETURN) {
 			Follow(CurrentLine());
+		}
+		else if (pMsg->wParam == 'G') {
+			if (auto line = GetLine(InstructionLine(CurrentLine())))
+				Frame()->ShowFlowGraph(line->Va);
 		}
 		else if (auto line = GetLine(CurrentLine()); line && line->Va) {
 			Frame()->ShowXrefs(line->Va);
@@ -316,6 +321,12 @@ LRESULT CScintillaView::OnXrefsHere(WORD, WORD, HWND, BOOL&) {
 LRESULT CScintillaView::OnXrefsTarget(WORD, WORD, HWND, BOOL&) {
 	if (auto line = GetLine(m_ContextLine >= 0 ? m_ContextLine : CurrentLine()); line && line->Target())
 		Frame()->ShowXrefs(*line->Target());
+	return 0;
+}
+
+LRESULT CScintillaView::OnFlowGraph(WORD, WORD, HWND, BOOL&) {
+	if (auto line = GetLine(InstructionLine(m_ContextLine >= 0 ? m_ContextLine : CurrentLine())); line && line->Va)
+		Frame()->ShowFlowGraph(line->Va);
 	return 0;
 }
 

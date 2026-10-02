@@ -24,7 +24,7 @@ public:
 	CString GetTitle() const override;
 	CScintillaCtrl& GetCtrl();
 
-	// Enter follows the call or jump of the line, X lists the references to the instruction
+	// Enter follows the call or jump of the line, X lists the references to the instruction, G shows the flow graph of the function
 	BOOL PreTranslateMessage(MSG* pMsg);
 
 	void UpdateUI(bool first = false);
@@ -51,6 +51,7 @@ public:
 		COMMAND_ID_HANDLER(ID_ASSEMBLY_FOLLOW, OnFollow)
 		COMMAND_ID_HANDLER(ID_ASSEMBLY_XREFS_HERE, OnXrefsHere)
 		COMMAND_ID_HANDLER(ID_ASSEMBLY_XREFS_TARGET, OnXrefsTarget)
+		COMMAND_ID_HANDLER(ID_ASSEMBLY_FLOWGRAPH, OnFlowGraph)
 		COMMAND_ID_HANDLER(ID_ASSEMBLY_DISASSEMBLEATTHEEND, OnDisassembleAtEnd)
 		COMMAND_ID_HANDLER(ID_ASSEMBLY_DISASSEMBLEINANEWTAB, OnDisassembleNewTab)
 		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnEditCopy)
@@ -92,6 +93,7 @@ private:
 	LRESULT OnFollow(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnXrefsHere(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnXrefsTarget(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnFlowGraph(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 
 	CString m_Title;
 	CScintillaCtrl m_Sci;

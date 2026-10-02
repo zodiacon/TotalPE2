@@ -34,6 +34,7 @@
 #include "AnimatedCursorView.h"
 #include "XrefView.h"
 #include "OverlayView.h"
+#include "FlowGraphView.h"
 
 std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 	CWaitCursor wait;
@@ -580,6 +581,61 @@ bool CMainFrame::ShowXrefs(uint64_t va) {
 
 	auto image = GetIconIndex(IDI_BINARY);
 	auto itemType = TreeItemWithIndex(TreeItemType::Xrefs, (int64_t)(va - base) << ItemShift);
+	auto hItem = InsertTreeItem(m_Tree, title.c_str(), image, itemType, hParent, TVI_SORT);
+	m_Tree.EnsureVisible(hItem);
+	view->SetHTreeItem(hItem);
+	m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, view);
+	m_Views.insert({ itemType, view });
+	m_Views2.insert({ view->GetHwnd(), itemType });
+	RecordNavigation();
+	return true;
+}
+
+bool CMainFrame::ShowFlowGraph(uint64_t va) {
+	if (!m_PE)
+		return false;
+	auto base = m_PE.GetImageBase();
+	if (va < base || va - base > 0xFFFFFFFFULL)
+		return false;
+
+	auto const& xrefs = GetXrefs();
+	auto function = FindFunctionStart(m_PE, xrefs, va);
+
+	// next to the disassembly of the function: under Exports for an exported function, otherwise under the image
+	auto parentType = TreeItemType::Image;
+	if (auto exports = m_PE.GetExport(); exports && m_Views.contains(TreeItemType::DirectoryExports))
+		for (auto const& f : exports->Funcs)
+			if (f.ForwarderName.empty() && base + f.FuncRVA == function) {
+				parentType = TreeItemType::DirectoryExports;
+				break;
+			}
+	auto parent = m_Views.find(parentType);
+	if (parent == m_Views.end())
+		return false;
+	auto hParent = parent->second->GetHTreeItem();
+
+	auto name = ResolveVa(function);
+	auto title = std::format(L"{}", name.empty() ? std::format(L"0x{:X}", function) : name);
+	if (auto hItem = FindChild(m_Tree, hParent, title.c_str())) {
+		ShowView(hItem);
+		return true;
+	}
+
+	auto view = new CFlowGraphView(this, m_PE, function, title.c_str());
+	if (nullptr == view->DoCreate(m_Tabs)) {
+		ATLASSERT(false);
+		delete view;
+		return false;
+	}
+	if (!view->Build()) {
+		view->DestroyWindow();
+		AtlMessageBox(m_hWnd, std::format(L"There is no code at 0x{:X} that can be shown as a graph.", function).c_str(), IDR_MAINFRAME, MB_ICONINFORMATION);
+		return false;
+	}
+	view->SetDeleteFromTree(true);
+
+	auto image = GetIconIndex(IDI_FLOW);
+	auto itemType = TreeItemWithIndex(TreeItemType::FlowGraph, (int64_t)(function - base) << ItemShift);
 	auto hItem = InsertTreeItem(m_Tree, title.c_str(), image, itemType, hParent, TVI_SORT);
 	m_Tree.EnsureVisible(hItem);
 	view->SetHTreeItem(hItem);
