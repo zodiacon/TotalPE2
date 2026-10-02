@@ -386,12 +386,12 @@ void CHexView::UpdateInspector() {
 
 void CHexView::BuildCopyAsMenu(CMenuHandle menu) const {
 	UINT flags = MF_STRING | (m_Hex.HasSelection() ? MF_ENABLED : MF_GRAYED);
-	menu.AppendMenu(flags, ID_HEX_COPYAS_HEX, L"&Hex String (spaced)");
-	menu.AppendMenu(flags, ID_HEX_COPYAS_HEX_COMPACT, L"Hex String (&compact)");
+	menu.AppendMenu(flags, ID_HEX_COPYAS_HEX, L"&Hex String (Spaced)");
+	menu.AppendMenu(flags, ID_HEX_COPYAS_HEX_COMPACT, L"He&x String (Compact)");
 	menu.AppendMenu(flags, ID_HEX_COPYAS_C, L"&C Array");
-	menu.AppendMenu(flags, ID_HEX_COPYAS_CSHARP, L"C#&Byte Array");
+	menu.AppendMenu(flags, ID_HEX_COPYAS_CSHARP, L"C# &Byte Array");
 	menu.AppendMenu(flags, ID_HEX_COPYAS_PYTHON, L"&Python Bytes");
-	menu.AppendMenu(flags, ID_HEX_COPYAS_BASE64, L"&Base64");
+	menu.AppendMenu(flags, ID_HEX_COPYAS_BASE64, L"Base&64");
 }
 
 LRESULT CHexView::OnCopyAs(WORD, WORD id, HWND, BOOL&) {

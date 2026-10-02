@@ -104,6 +104,7 @@
     <ClCompile Include="..\TotalPE\HexFormat.cpp" />
     <ClCompile Include="..\TotalPE\HexSearch.cpp" />
     <ClCompile Include="..\TotalPE\HexNumber.cpp" />
+    <ClCompile Include="..\TotalPE\AniFile.cpp" />
     <ClCompile Include="..\TotalPE\PERegions.cpp" />
     <ClCompile Include="..\TotalPE\PEAnomalies.cpp" />
     <ClCompile Include="ClrMetadataTests.cpp" />
@@ -111,6 +112,7 @@
     <ClCompile Include="DialogTemplateTests.cpp" />
     <ClCompile Include="HexSearchTests.cpp" />
     <ClCompile Include="HexNumberTests.cpp" />
+    <ClCompile Include="AniFileTests.cpp" />
     <ClCompile Include="HexFormatTests.cpp" />
     <ClCompile Include="PERegionsTests.cpp" />
     <ClCompile Include="AnomalyTests.cpp" />

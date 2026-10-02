@@ -31,6 +31,7 @@
 #include "DialogView.h"
 #include "MenuView.h"
 #include "AnomalyView.h"
+#include "AnimatedCursorView.h"
 
 std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 	CWaitCursor wait;
@@ -444,6 +445,17 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateResourceView(TreeItemType type
 			view->SetMessageTableData(res.Data);
 		return { view, view };
 
+	}
+
+	if (resId == RT_ANICURSOR || resId == RT_ANIICON) {
+		auto view = new CAnimatedCursorView(this, (res.Name + (resId == RT_ANICURSOR ? L" (Animated Cursor)" : L" (Animated Icon)")).c_str());
+		if (!view->DoCreate(m_Tabs))
+			return {};
+
+		if (view->SetData(res.Data))
+			return { view, view };
+		view->DestroyWindow();
+		// not a usable .ani file: it is shown as raw data below
 	}
 
 	bool icon = resId == RT_ICON || resId == RT_GROUP_ICON;
