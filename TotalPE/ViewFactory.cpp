@@ -35,6 +35,7 @@
 #include "XrefView.h"
 #include "OverlayView.h"
 #include "FlowGraphView.h"
+#include "ArchiveView.h"
 
 std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 	CWaitCursor wait;
@@ -65,6 +66,41 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 			view->SetDeleteFromTree(true);
 			view->SetHTreeItem(hItem);
 
+			return { view, view };
+		}
+
+		case TreeItemType::ArchiveMembers:
+		case TreeItemType::ArchiveSymbols:
+		case TreeItemType::ArchiveImports:
+		{
+			auto kind = (type & TreeItemType::ItemMask) == TreeItemType::ArchiveMembers ? ArchiveViewKind::Members :
+				(type & TreeItemType::ItemMask) == TreeItemType::ArchiveSymbols ? ArchiveViewKind::Symbols : ArchiveViewKind::Imports;
+			auto view = new CArchiveView(this, m_Archive, kind);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		// the data of a member: opened from a list, and a tree item of its own while the view is open
+		case TreeItemType::ArchiveMember:
+		{
+			auto index = (size_t)((int64_t)type >> ItemShift) - 1;
+			if (!m_Archive || index >= m_Archive.Members().size())
+				return {};
+			auto const& member = m_Archive.Members()[index];
+			CString name(std::wstring(member.Name.begin(), member.Name.end()).c_str());
+			auto view = new CHexView(this, name + L" (Member)");
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			view->SetData(m_Archive.MemberData(index));
+			view->ShowInspector(true);
+			auto hItem = InsertTreeItem(m_Tree, view->GetTitle(), GetIconIndex(IDI_BINARY), type, m_hRoot, TVI_SORT);
+			view->SetDeleteFromTree(true);
+			view->SetHTreeItem(hItem);
 			return { view, view };
 		}
 

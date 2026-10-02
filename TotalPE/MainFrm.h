@@ -9,6 +9,7 @@
 #include <CustomSplitterWindow.h>
 #include <TreeViewHelper.h>
 #include <PEFile.h>
+#include "LibArchive.h"
 #include "Interfaces.h"
 #include "GoToDlg.h"
 #include "RecentFilesManager.h"
@@ -106,6 +107,7 @@ private:
 	XrefMap const& GetXrefs() override;
 	bool ShowXrefs(uint64_t va) override;
 	bool ShowFlowGraph(uint64_t va) override;
+	bool ShowArchiveMember(int member) override;
 	void RecordNavigation() override;
 	bool AddToolBar(HWND tb) override;
 	bool DeleteTreeItem(HTREEITEM hItem) override;
@@ -122,6 +124,9 @@ private:
 	void InitMenu(HMENU hMenu);
 	void BuildTree(int iconSize = 16);
 	bool OpenPE(PCWSTR path);
+	bool OpenArchive(PCWSTR path);
+	void BuildArchiveTree(int iconSize);
+	std::wstring CurrentPath() const;
 	CString DoFileOpen() const;
 	bool BuildTreeImageList(int iconSize = 16);
 	void ParseCommandLine();
@@ -197,6 +202,7 @@ private:
 	CTreeViewCtrl m_Tree;
 	CMultiPaneStatusBarCtrl m_StatusBar;
 	PEFile m_PE;
+	LibArchive m_Archive;		// a library is open instead of a PE file
 	std::vector<FlatResource> m_FlatResources;
 	CImageList m_TreeImages;
 	std::unordered_map<TreeItemType, IView*> m_Views;

@@ -410,6 +410,8 @@
     <ClCompile Include="FlowGraphView.cpp" />
     <ClCompile Include="Authenticode.cpp" />
     <ClCompile Include="Overlay.cpp" />
+    <ClCompile Include="LibArchive.cpp" />
+    <ClCompile Include="ArchiveView.cpp" />
     <ClCompile Include="OverlayView.cpp" />
     <ClCompile Include="VersionInfo.cpp" />
     <ClCompile Include="VirusTotal.cpp" />
@@ -477,6 +479,8 @@
     <ClInclude Include="FlowGraphView.h" />
     <ClInclude Include="Authenticode.h" />
     <ClInclude Include="Overlay.h" />
+    <ClInclude Include="LibArchive.h" />
+    <ClInclude Include="ArchiveView.h" />
     <ClInclude Include="OverlayView.h" />
     <ClInclude Include="VersionInfo.h" />
     <ClInclude Include="VirusTotal.h" />

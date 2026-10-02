@@ -63,15 +63,15 @@ void CMainFrame::UpdateUI() {
 	UIEnable(ID_VIEW_DIRECTORIES, fi && fi->HasDataDirs);
 	UIEnable(ID_VIEW_SECTIONS, fi && fi->HasSections);
 	UIEnable(ID_PE_SECURITY, fi && fi->HasSecurity);
-	UIEnable(ID_FILE_CLOSE, fi != nullptr);
+	UIEnable(ID_FILE_CLOSE, fi != nullptr || m_Archive);
 	UIEnable(ID_FILE_SAVE, fi != nullptr);
 	UIEnable(ID_VIEW_MANIFEST, fi && m_hResManifest != nullptr);
 	UIEnable(ID_VIEW_VERSION, fi && m_hResVersion != nullptr);
 	UIEnable(ID_VIEW_OVERLAY, fi && m_hOverlay != nullptr);
 	UIEnable(ID_PE_VIRUSTOTAL, fi && !m_Vt.Running());
-	UIEnable(ID_FILE_OPENINANEWWINDOW, fi != nullptr);
+	UIEnable(ID_FILE_OPENINANEWWINDOW, fi != nullptr || m_Archive);
 	UIEnable(ID_EDIT_COPY, FALSE);
-	UIEnable(ID_EDIT_FIND, fi && m_Tabs.GetActivePage() >= 0);
+	UIEnable(ID_EDIT_FIND, (fi || m_Archive) && m_Tabs.GetActivePage() >= 0);
 	UIEnable(ID_PE_ENTIREFILEINHEX, fi != nullptr);
 }
 
@@ -500,7 +500,14 @@ LRESULT CMainFrame::OnDropFiles(UINT /*uMsg*/, WPARAM wParam, LPARAM /*lParam*/,
 	return 0;
 }
 
+std::wstring CMainFrame::CurrentPath() const {
+	return m_Archive ? m_Archive.Path() : m_PE.GetPath();
+}
+
 bool CMainFrame::OpenPE(PCWSTR path) {
+	if (LibArchive::IsArchiveFile(path))
+		return OpenArchive(path);
+
 	CWaitCursor wait;
 	int bitness = (m_PE && m_PE.GetFileInfo()->IsPE64) * 2 + (m_PE && m_PE.GetFileInfo()->IsPE32);
 
@@ -527,6 +534,7 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	m_Views.clear();
 	m_Views2.clear();
 	m_Tabs.RemoveAllPages();
+	m_Archive.Close();
 
 	BuildTree(16);
 
@@ -545,6 +553,80 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	UpdateUI();
 
 	return true;
+}
+
+// A library: the members, the index of the symbols and the records of an import library are shown. The PE file that was open is closed.
+bool CMainFrame::OpenArchive(PCWSTR path) {
+	CWaitCursor wait;
+	LibArchive archive;
+	if (!archive.Open(path)) {
+		AtlMessageBox(m_hWnd, L"Error parsing the library", IDR_MAINFRAME, MB_ICONERROR);
+		return false;
+	}
+
+	m_Tabs.RemoveAllPages();
+	m_Views.clear();
+	m_Views2.clear();
+	m_PE.Close();
+	m_Symbols.Close();
+	++m_SymbolGeneration;
+	m_SymbolsForModules.clear();
+	m_Anomalies.clear();
+	CancelVirusTotal();
+	m_Overlay = {};
+	m_hOverlay = nullptr;
+	m_hResVersion = m_hResManifest = nullptr;
+	m_FlatResources.clear();
+	m_NamedRvas.clear();
+	m_Xrefs.Clear();
+	ResetNavigation();
+	m_Archive = std::move(archive);
+	SetStatusText(0, L"");
+
+	BuildArchiveTree(16);
+
+	CString ftitle;
+	ftitle.LoadString(IDR_MAINFRAME);
+	if (SecurityHelper::IsRunningElevated())
+		ftitle += L" (Administrator)";
+	CString spath(path);
+	SetWindowText(spath.Mid(spath.ReverseFind(L'\\') + 1) + L" - " + ftitle);
+	m_RecentFiles.AddFile(path);
+	AppSettings::Get().RecentFiles(m_RecentFiles.Files());
+	UpdateRecentFilesMenu();
+
+	ShowView(m_hRoot);
+	UpdateUI();
+	return true;
+}
+
+void CMainFrame::BuildArchiveTree(int iconSize) {
+	m_Tree.SetRedraw(FALSE);
+	m_Tree.DeleteAllItems();
+	m_Tree.SetItemHeight(iconSize + 2);
+	if (BuildTreeImageList(iconSize)) {
+		m_Tree.SetImageList(m_TreeImages);
+		m_Tabs.SetImageList(m_TreeImages);
+	}
+
+	auto& path = m_Archive.Path();
+	auto root = InsertTreeItem(m_Tree, path.substr(path.rfind(L'\\') + 1).c_str(), 0, TreeItemType::ArchiveMembers);
+	if (!m_Archive.Symbols().empty())
+		InsertTreeItem(m_Tree, std::format(L"Symbols ({})", m_Archive.Symbols().size()).c_str(), GetTreeIcon(IDI_SYMBOLS), TreeItemType::ArchiveSymbols, root);
+	if (!m_Archive.Imports().empty())
+		InsertTreeItem(m_Tree, std::format(L"Import Records ({})", m_Archive.Imports().size()).c_str(), GetTreeIcon(IDI_DLL_IMPORT), TreeItemType::ArchiveImports, root);
+
+	m_hRoot = root;
+	m_Tree.Expand(root, TVE_EXPAND);
+	m_Tree.SelectItem(root);
+	m_Tree.SetRedraw();
+	m_Tree.SetFocus();
+}
+
+bool CMainFrame::ShowArchiveMember(int member) {
+	if (!m_Archive || member < 0 || member >= (int)m_Archive.Members().size())
+		return false;
+	return ShowView(TreeItemWithIndex(TreeItemType::ArchiveMember, (int64_t)(member + 1) << ItemShift), nullptr, IDI_BINARY);
 }
 
 TreeItemType CMainFrame::TreeItemWithIndex(TreeItemType type, int64_t index) {
@@ -673,6 +755,7 @@ LRESULT CMainFrame::OnFileClose(WORD, WORD, HWND, BOOL&) {
 	m_Views.clear();
 	m_Views2.clear();
 	m_PE.Close();
+	m_Archive.Close();
 	++m_SymbolGeneration;	// a symbol load in progress belongs to the file that was just closed
 	m_Symbols.Close();
 	m_Anomalies.clear();
@@ -721,7 +804,7 @@ LRESULT CMainFrame::OnFileOpenNewWindow(WORD, WORD, HWND, BOOL&) {
 
 CString CMainFrame::DoFileOpen() const {
 	CSimpleFileDialog dlg(TRUE, nullptr, nullptr, OFN_EXPLORER | OFN_ENABLESIZING,
-		L"All PE Files\0*.exe;*.dll;*.efi;*.ocx;*.cpl;*.sys;*.mui;*.mun;*.scr\0All Files\0*.*\0");
+		L"All PE Files\0*.exe;*.dll;*.efi;*.ocx;*.cpl;*.sys;*.mui;*.mun;*.scr\0Libraries\0*.lib;*.a\0All Files\0*.*\0");
 	WTLHelper::SuspendHook();
 	auto path = IDOK == dlg.DoModal() ? dlg.m_szFileName : L"";
 	WTLHelper::ResumeHook();
@@ -742,7 +825,7 @@ bool CMainFrame::BuildTreeImageList(int iconSize) {
 		m_TreeImages.Create(iconSize, iconSize, ILC_COLOR32, 32, 16);
 
 	WORD icon = 0;
-	CString path = m_PE.GetPath().c_str();
+	CString path = CurrentPath().c_str();
 	auto hIcon = ::ExtractAssociatedIcon(_Module.GetModuleInstance(), path.GetBuffer(), &icon);
 	if (!hIcon)
 		hIcon = AtlLoadSysIcon(IDI_APPLICATION);

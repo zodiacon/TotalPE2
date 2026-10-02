@@ -115,6 +115,8 @@
     <ClCompile Include="..\TotalPE\FlowGraph.cpp" />
     <ClCompile Include="..\TotalPE\Authenticode.cpp" />
     <ClCompile Include="..\TotalPE\Overlay.cpp" />
+    <ClCompile Include="..\TotalPE\LibArchive.cpp" />
+    <ClCompile Include="LibArchiveTests.cpp" />
     <ClCompile Include="..\TotalPE\VersionInfo.cpp" />
     <ClCompile Include="..\TotalPE\VirusTotal.cpp" />
     <ClCompile Include="ClrMetadataTests.cpp" />

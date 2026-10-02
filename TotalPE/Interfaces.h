@@ -66,6 +66,12 @@ enum class TreeItemType : int64_t {
 	Overlay,
 	FlowGraph,
 
+	// a library (an archive of object files or import records)
+	ArchiveMembers,
+	ArchiveSymbols,
+	ArchiveImports,
+	ArchiveMember,
+
 	ItemMask = 255,
 };
 DEFINE_ENUM_FLAG_OPERATORS(TreeItemType);
@@ -107,6 +113,8 @@ struct IMainFrame abstract {
 	virtual bool ShowXrefs(uint64_t va) = 0;
 	// The flow graph of the function that contains the address (the code from the address if the function is not known)
 	virtual bool ShowFlowGraph(uint64_t va) = 0;
+	// The data of a member of the library, in the hex view
+	virtual bool ShowArchiveMember(int member) = 0;
 	// Remembers where the user is, so that Back returns to it.
 	virtual void RecordNavigation() = 0;
 	virtual bool AddToolBar(HWND tb) = 0;
