@@ -5,10 +5,13 @@
 #include "PEAnomalies.h"
 #include "CodeAnalysis.h"
 #include "Overlay.h"
+#include "VirusTotal.h"
 
 static const UINT WM_UPDATE_DARKMODE = WM_APP + 56;
 // posted by the symbol loading thread: wParam is the generation of the request, lParam a DiaSession* (or null)
 static const UINT WM_SYMBOLS_LOADED = WM_APP + 57;
+// posted by the VirusTotal thread: wParam is the generation of the scan, lParam a vt::Status* that the receiver deletes
+static const UINT WM_VT_STATUS = WM_APP + 58;
 
 constexpr uint32_t ItemShift = 8;
 
@@ -120,4 +123,6 @@ struct IView abstract {
 	virtual void SetNavigationPosition(int64_t) {}
 	// Brings an address (a virtual address) into view if the view shows it. False if it does not.
 	virtual bool GoToAddress(uint64_t va) { return false; }
+	// The progress and the result of the VirusTotal scan, for the view that shows it
+	virtual void SetVirusTotalStatus(vt::Status const&) {}
 };

@@ -2,6 +2,9 @@
 #include "CodeAnalysis.h"
 #include <PEFile.h>
 #include <capstone/capstone.h>
+#include <deque>
+#include <map>
+#include <optional>
 
 const wchar_t* XrefKindToString(XrefKind kind) {
 	switch (kind) {
@@ -62,9 +65,95 @@ namespace {
 	};
 }
 
+namespace {
+	// what jump table detection needs of an instruction that was decoded earlier
+	struct Recent {
+		uint32_t Id{ 0 };
+		uint64_t Address{ 0 };
+		uint8_t Size{ 0 };
+		uint8_t Count{ 0 };
+		cs_x86_op Ops[3]{};
+	};
+
+	struct JumpTable {
+		uint64_t Address{ 0 };
+		uint32_t EntrySize{ 4 };
+		bool Relative{ false };		// the entries are RVAs (64-bit code) and not addresses
+		size_t MaxEntries{ 1024 };
+	};
+
+	constexpr size_t RecentCount = 16;
+
+	// "cmp index, N" before the jump bounds the table: N+1 entries
+	size_t EntryLimit(std::deque<Recent> const& recent) {
+		for (auto i = recent.size(); i-- > 0;) {
+			auto const& r = recent[i];
+			if (r.Id == X86_INS_CMP && r.Count >= 2 && r.Ops[1].type == X86_OP_IMM && r.Ops[1].imm >= 0 && r.Ops[1].imm < 4096)
+				return (size_t)r.Ops[1].imm + 1;
+		}
+		return 1024;
+	}
+
+	// A "switch" compiled to a jump through a table:
+	//   x86:  jmp dword ptr [eax*4 + table]            or   mov eax, [eax*4 + table] ... jmp eax
+	//   x64:  lea rdx, [image base] ... mov eax, [rdx + rcx*4 + table RVA] ... add rax, rdx ... jmp rax
+	std::optional<JumpTable> FindJumpTable(std::deque<Recent> const& recent, cs_insn const& jmp, bool is64, uint64_t imageBase, uint64_t imageSize) {
+		if (!jmp.detail || jmp.detail->x86.op_count < 1)
+			return std::nullopt;
+		auto const& target = jmp.detail->x86.operands[0];
+		auto inImage = [&](uint64_t va) { return va >= imageBase && va < imageBase + imageSize; };
+
+		if (target.type == X86_OP_MEM) {
+			auto const& m = target.mem;
+			if (m.index == X86_REG_INVALID || m.base != X86_REG_INVALID || m.disp <= 0 || (m.scale != 4 && m.scale != 8))
+				return std::nullopt;
+			if (m.segment == X86_REG_FS || m.segment == X86_REG_GS || !inImage((uint32_t)m.disp))
+				return std::nullopt;
+			return JumpTable{ (uint32_t)m.disp, (uint32_t)m.scale, false, EntryLimit(recent) };
+		}
+		if (target.type != X86_OP_REG)
+			return std::nullopt;
+
+		// jmp reg: the register was loaded from the table a few instructions before
+		bool added = false;
+		for (auto i = recent.size(); i-- > 0;) {
+			auto const& r = recent[i];
+			if (r.Id == X86_INS_ADD) {
+				added = true;
+				continue;
+			}
+			if (r.Id != X86_INS_MOV || r.Count < 2 || r.Ops[0].type != X86_OP_REG || r.Ops[1].type != X86_OP_MEM)
+				continue;
+			auto const& m = r.Ops[1].mem;
+			if (m.index == X86_REG_INVALID || m.scale != 4 || m.disp <= 0 || m.segment == X86_REG_FS || m.segment == X86_REG_GS)
+				continue;
+
+			if (!is64) {
+				// the entries are addresses: mov eax, [eax*4 + table]
+				if (m.base == X86_REG_INVALID && inImage((uint32_t)m.disp))
+					return JumpTable{ (uint32_t)m.disp, 4, false, EntryLimit(recent) };
+				continue;
+			}
+
+			// the entries are RVAs: the base register holds the image base, and the loaded value is added to it
+			if (!added || m.base == X86_REG_INVALID || m.base == X86_REG_RIP || (uint64_t)m.disp >= imageSize)
+				continue;
+			for (auto j = i; j-- > 0;) {
+				auto const& l = recent[j];
+				if (l.Id == X86_INS_LEA && l.Count >= 2 && l.Ops[0].type == X86_OP_REG && l.Ops[0].reg == m.base &&
+					l.Ops[1].type == X86_OP_MEM && l.Ops[1].mem.base == X86_REG_RIP &&
+					l.Address + l.Size + l.Ops[1].mem.disp == imageBase)
+					return JumpTable{ imageBase + (uint32_t)m.disp, 4, true, EntryLimit(recent) };
+			}
+		}
+		return std::nullopt;
+	}
+}
+
 void XrefMap::Clear() {
 	m_Refs.clear();
 	m_Count = 0;
+	m_JumpTables = 0;
 	m_Built = false;
 }
 
@@ -101,6 +190,29 @@ bool XrefMap::Build(PEFile const& pe) {
 		m_Count++;
 	};
 
+	// where the code of the file is, for the targets of jump tables
+	std::vector<Range> code;
+	for (auto const& s : *sections)
+		if (s.SecHdr.Characteristics & (IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_CNT_CODE))
+			code.push_back({ imageBase + s.SecHdr.VirtualAddress, imageBase + s.SecHdr.VirtualAddress + std::max(s.SecHdr.Misc.VirtualSize, s.SecHdr.SizeOfRawData) });
+	auto isCode = [&](uint64_t va) {
+		return std::any_of(code.begin(), code.end(), [&](Range const& r) { return r.Contains(va); });
+	};
+	auto read = [&](uint64_t va, uint32_t size, uint64_t& value) {
+		if (va < imageBase || va - imageBase > 0xFFFFFFFFULL)
+			return false;
+		auto offset = pe.GetOffsetFromRVA(va - imageBase);
+		if (offset == 0 || offset + size > pe.GetFileSize())
+			return false;
+		value = 0;
+		memcpy(&value, pe.GetData() + offset, size);
+		return true;
+	};
+
+	// the tables of jump targets that were found: their bytes are data, even in a code section
+	std::map<uint64_t, uint64_t> data;
+	std::deque<Recent> recent;
+
 	bool any = false;
 	for (auto const& s : *sections) {
 		auto const& h = s.SecHdr;
@@ -115,12 +227,25 @@ bool XrefMap::Build(PEFile const& pe) {
 		if (size == 0)
 			continue;
 		any = true;
+		recent.clear();
 
-		auto code = pe.GetSpan(h.PointerToRawData, (uint32_t)size);
-		auto bytes = (const uint8_t*)code.data();
-		size_t left = code.size();
+		auto span = pe.GetSpan(h.PointerToRawData, (uint32_t)size);
+		auto bytes = (const uint8_t*)span.data();
+		size_t left = span.size();
 		uint64_t address = imageBase + h.VirtualAddress;
 		while (left > 0) {
+			// a table found earlier: skip it
+			if (auto it = data.upper_bound(address); it != data.begin()) {
+				--it;
+				if (address >= it->first && address < it->second) {
+					auto skip = (size_t)std::min<uint64_t>(it->second - address, left);
+					bytes += skip;
+					left -= skip;
+					address += skip;
+					continue;
+				}
+			}
+
 			if (cs_disasm_iter(handle, &bytes, &left, &address, inst)) {
 				auto refs = GetInstructionRefs(*inst, is64);
 				if (refs.Branch)
@@ -129,6 +254,39 @@ bool XrefMap::Build(PEFile const& pe) {
 					add(*refs.Memory, inst->address, XrefKind::Data);
 				if (refs.Pointer)
 					add(*refs.Pointer, inst->address, XrefKind::Data);
+
+				if (inst->id == X86_INS_JMP)
+					if (auto table = FindJumpTable(recent, *inst, is64, imageBase, imageSize)) {
+						size_t entries = 0;
+						for (size_t i = 0; i < table->MaxEntries; i++) {
+							uint64_t value;
+							if (!read(table->Address + i * table->EntrySize, table->EntrySize, value))
+								break;
+							auto target = table->Relative ? imageBase + (uint32_t)value : value;
+							if (!isCode(target))
+								break;
+							add(target, inst->address, XrefKind::Jump);
+							entries++;
+						}
+						if (entries) {
+							add(table->Address, inst->address, XrefKind::Data);
+							data[table->Address] = table->Address + entries * table->EntrySize;
+							m_JumpTables++;
+						}
+					}
+
+				Recent r;
+				r.Id = inst->id;
+				r.Address = inst->address;
+				r.Size = (uint8_t)inst->size;
+				if (inst->detail) {
+					r.Count = (uint8_t)std::min<int>(inst->detail->x86.op_count, 3);
+					for (int i = 0; i < r.Count; i++)
+						r.Ops[i] = inst->detail->x86.operands[i];
+				}
+				recent.push_back(r);
+				if (recent.size() > RecentCount)
+					recent.pop_front();
 			}
 			else {
 				// not an instruction: move on to the next byte
@@ -140,6 +298,20 @@ bool XrefMap::Build(PEFile const& pe) {
 	}
 	cs_free(inst, 1);
 	cs_close(&handle);
+
+	// what was decoded from the bytes of a table that was found only after them is not code
+	if (!data.empty()) {
+		auto inTable = [&](uint64_t va) {
+			auto it = data.upper_bound(va);
+			return it != data.begin() && va < std::prev(it)->second;
+		};
+		m_Count = 0;
+		for (auto it = m_Refs.begin(); it != m_Refs.end();) {
+			std::erase_if(it->second, [&](Xref const& x) { return inTable(x.From); });
+			m_Count += it->second.size();
+			it = it->second.empty() ? m_Refs.erase(it) : std::next(it);
+		}
+	}
 
 	for (auto& [target, v] : m_Refs)
 		if (!std::is_sorted(v.begin(), v.end(), [](Xref const& a, Xref const& b) { return a.From < b.From; }))

@@ -91,6 +91,8 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 				ATLASSERT(false);
 				return {};
 			}
+			if (m_Vt.Step != vt::Phase::Idle)
+				view->SetVirusTotalStatus(m_Vt);
 			return { view, view };
 		}
 

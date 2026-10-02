@@ -204,6 +204,7 @@ TEST_CASE("Cross-references of a system DLL", "[xref][system]") {
 	REQUIRE(map.Build(pe));
 	CHECK(map.Count() > 5000);
 	CHECK(map.TargetCount() > 1000);
+	CHECK(map.JumpTables() > 5);	// the switch statements of kernel32
 
 	// every reference starts in an executable section
 	auto imageBase = pe.GetImageBase();
@@ -229,4 +230,97 @@ TEST_CASE("Cross-references of a system DLL", "[xref][system]") {
 	for (auto target : map.Targets())
 		most = std::max(most, map.CallCount(target));
 	CHECK(most > 20);
+}
+
+namespace {
+	void Put(Bytes& code, size_t at, Bytes const& b) {
+		std::copy(b.begin(), b.end(), code.begin() + at);
+	}
+}
+
+TEST_CASE("A jump table of an x64 switch gives jump targets, and its bytes are not code", "[xref][jumptable]") {
+	SyntheticPE spec;
+	Bytes code(0x100, 0xCC);
+	// 1000 lea rdx,[image base]   1007 mov eax,[rdx+rcx*4+0x1030]   100E add rax,rdx   1011 jmp rax
+	Put(code, 0x00, { 0x48, 0x8D, 0x15, 0xF9, 0xEF, 0xFF, 0xFF });
+	Put(code, 0x07, { 0x8B, 0x84, 0x8A, 0x30, 0x10, 0x00, 0x00 });
+	Put(code, 0x0E, { 0x48, 0x03, 0xC2 });
+	Put(code, 0x11, { 0xFF, 0xE0 });
+	// the table at 1030: the RVAs 0x10E8 and 0x1000. The first four bytes are also the instruction "call +0x10".
+	Put(code, 0x30, { 0xE8, 0x10, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00 });
+	Put(code, 0xE8, { 0xC3 });
+
+	auto map = BuildMap(WithCode(spec, code));
+	const uint64_t base = 0x140001000;
+	CHECK(map.JumpTables() == 1);
+	CHECK(Has(map, base + 0xE8, base + 0x11, XrefKind::Jump));
+	CHECK(Has(map, base + 0x00, base + 0x11, XrefKind::Jump));
+	CHECK(Has(map, base + 0x30, base + 0x11, XrefKind::Data));	// the table itself
+	CHECK(map.To(base + 0x45).empty());							// the "call" in the table is not one
+	CHECK(map.To(base + 0x108).empty());
+}
+
+TEST_CASE("A jump table of an x86 switch", "[xref][jumptable]") {
+	SyntheticPE spec;
+	spec.Is64 = false;
+
+	SECTION("jmp [index*4 + table], bounded by the comparison") {
+		Bytes code(0x100, 0xCC);
+		// 1000 cmp eax,2   1003 ja 1030   1005 jmp dword ptr [eax*4+0x401020]
+		Put(code, 0x00, { 0x83, 0xF8, 0x02 });
+		Put(code, 0x03, { 0x77, 0x2B });
+		Put(code, 0x05, { 0xFF, 0x24, 0x85, 0x20, 0x10, 0x40, 0x00 });
+		// the table has four entries, but the comparison allows three
+		Put(code, 0x20, { 0x40, 0x10, 0x40, 0x00, 0x50, 0x10, 0x40, 0x00, 0x60, 0x10, 0x40, 0x00, 0x70, 0x10, 0x40, 0x00 });
+		for (size_t at : { 0x30, 0x40, 0x50, 0x60, 0x70 })
+			code[at] = 0xC3;
+
+		auto map = BuildMap(WithCode(spec, code));
+		const uint64_t base = 0x401000;
+		CHECK(map.JumpTables() == 1);
+		CHECK(Has(map, base + 0x40, base + 0x05, XrefKind::Jump));
+		CHECK(Has(map, base + 0x50, base + 0x05, XrefKind::Jump));
+		CHECK(Has(map, base + 0x60, base + 0x05, XrefKind::Jump));
+		CHECK_FALSE(Has(map, base + 0x70, base + 0x05, XrefKind::Jump));
+		CHECK(Has(map, base + 0x20, base + 0x05, XrefKind::Data));
+		CHECK(Has(map, base + 0x30, base + 0x03, XrefKind::ConditionalJump));
+	}
+	SECTION("mov eax, [index*4 + table] ... jmp eax") {
+		Bytes code(0x100, 0xCC);
+		Put(code, 0x00, { 0x8B, 0x04, 0x85, 0x20, 0x10, 0x40, 0x00 });
+		Put(code, 0x07, { 0xFF, 0xE0 });
+		Put(code, 0x20, { 0x40, 0x10, 0x40, 0x00, 0x50, 0x10, 0x40, 0x00 });
+		code[0x40] = 0xC3;
+		code[0x50] = 0xC3;
+
+		auto map = BuildMap(WithCode(spec, code));
+		CHECK(map.JumpTables() == 1);
+		CHECK(Has(map, 0x401040, 0x401007, XrefKind::Jump));
+		CHECK(Has(map, 0x401050, 0x401007, XrefKind::Jump));
+	}
+}
+
+TEST_CASE("Indirect jumps that are not jump tables", "[xref][jumptable]") {
+	SyntheticPE spec;
+	Bytes code(0x100, 0xCC);
+	Put(code, 0x00, { 0xFF, 0xE0 });										// jmp rax
+	Put(code, 0x02, { 0xFF, 0x25, 0xE8, 0x20, 0x00, 0x00 });				// jmp [rip+x]: an import thunk
+	Put(code, 0x08, { 0x8B, 0x04, 0x8A });									// mov eax,[rdx+rcx*4]: no table, no base
+	Put(code, 0x0B, { 0xFF, 0xE0 });
+	Put(code, 0x0D, { 0x48, 0x8D, 0x15, 0x00, 0x00, 0x00, 0x00 });			// lea rdx,[rip]: not the image base
+	Put(code, 0x14, { 0x8B, 0x84, 0x8A, 0x30, 0x10, 0x00, 0x00 });
+	Put(code, 0x1B, { 0x48, 0x03, 0xC2 });
+	Put(code, 0x1E, { 0xFF, 0xE0 });
+	auto map = BuildMap(WithCode(spec, code));
+	CHECK(map.JumpTables() == 0);
+}
+
+TEST_CASE("A jump table whose entries are not code is not one", "[xref][jumptable]") {
+	SyntheticPE spec;
+	spec.Is64 = false;
+	Bytes code(0x100, 0xCC);
+	Put(code, 0x00, { 0xFF, 0x24, 0x85, 0x20, 0x10, 0x40, 0x00 });
+	Put(code, 0x20, { 0x00, 0x30, 0x40, 0x00 });	// 0x403000 is in .rdata
+	auto map = BuildMap(WithCode(spec, code));
+	CHECK(map.JumpTables() == 0);
 }

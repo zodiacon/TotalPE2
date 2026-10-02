@@ -2,7 +2,6 @@
 #include "OverlayView.h"
 #include "PEStrings.h"
 #include "Md5.h"
-#include "Authenticode.h"
 #include <PEFile.h>
 #include <ClipboardHelper.h>
 #include <ListViewHelper.h>

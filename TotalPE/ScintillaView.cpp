@@ -280,6 +280,22 @@ bool CScintillaView::Follow(int line) {
 	return NavigateTo(*info->Target());
 }
 
+BOOL CScintillaView::PreTranslateMessage(MSG* pMsg) {
+	if (pMsg->message == WM_KEYDOWN && m_Language == LexLanguage::Asm && m_Sci.m_hWnd && pMsg->hwnd == m_Sci.m_hWnd &&
+		(pMsg->wParam == VK_RETURN || pMsg->wParam == 'X') &&
+		::GetKeyState(VK_CONTROL) >= 0 && ::GetKeyState(VK_MENU) >= 0 && ::GetKeyState(VK_SHIFT) >= 0) {
+		m_ContextLine = -1;		// the line of the caret
+		if (pMsg->wParam == VK_RETURN) {
+			Follow(CurrentLine());
+		}
+		else if (auto line = GetLine(CurrentLine()); line && line->Va) {
+			Frame()->ShowXrefs(line->Va);
+		}
+		return TRUE;
+	}
+	return CViewBase::PreTranslateMessage(pMsg);
+}
+
 LRESULT CScintillaView::OnDoubleClick(int, LPNMHDR pnmh, BOOL& handled) {
 	auto line = (int)m_Sci.LineFromPosition(((SCNotification*)pnmh)->position);
 	handled = Follow(line);
@@ -367,13 +383,14 @@ LRESULT CScintillaView::OnSetFocus(UINT, WPARAM, LPARAM, BOOL&) {
 	return 0;
 }
 
-LRESULT CScintillaView::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/) {
+LRESULT CScintillaView::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& bHandled) {
 	m_hWndClient = m_Sci.Create(m_hWnd);
 
 	m_Sci.StyleSetFont(STYLE_DEFAULT, "Consolas");
 	m_Sci.StyleSetSize(STYLE_DEFAULT, 11);
 	m_Sci.UsePopup(SC_POPUP_NEVER);
 
+	bHandled = FALSE;	// the base class registers the view for the message filter (PreTranslateMessage) and idle handling
 	return 0;
 }
 

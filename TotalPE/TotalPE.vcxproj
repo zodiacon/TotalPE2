@@ -410,6 +410,8 @@
     <ClCompile Include="Overlay.cpp" />
     <ClCompile Include="OverlayView.cpp" />
     <ClCompile Include="VersionInfo.cpp" />
+    <ClCompile Include="VirusTotal.cpp" />
+    <ClCompile Include="VtKeyDlg.cpp" />
     <ClCompile Include="XrefView.cpp" />
     <ClCompile Include="GoToDlg.cpp" />
     <ClCompile Include="HexFind.cpp" />
@@ -473,6 +475,8 @@
     <ClInclude Include="Overlay.h" />
     <ClInclude Include="OverlayView.h" />
     <ClInclude Include="VersionInfo.h" />
+    <ClInclude Include="VirusTotal.h" />
+    <ClInclude Include="VtKeyDlg.h" />
     <ClInclude Include="XrefView.h" />
     <ClInclude Include="GoToDlg.h" />
     <ClInclude Include="HexFind.h" />

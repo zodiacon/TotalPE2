@@ -13,6 +13,7 @@
 #include "AppSettings.h"
 #include "SymbolSettingsDlg.h"
 #include "GoToDlg.h"
+#include "VtKeyDlg.h"
 #include <thread>
 #include <WTLHelper.h>
 
@@ -56,6 +57,7 @@ void CMainFrame::UpdateUI() {
 	UIEnable(ID_VIEW_MANIFEST, fi && m_hResManifest != nullptr);
 	UIEnable(ID_VIEW_VERSION, fi && m_hResVersion != nullptr);
 	UIEnable(ID_VIEW_OVERLAY, fi && m_hOverlay != nullptr);
+	UIEnable(ID_PE_VIRUSTOTAL, fi && !m_Vt.Running());
 	UIEnable(ID_FILE_OPENINANEWWINDOW, fi != nullptr);
 	UIEnable(ID_EDIT_COPY, FALSE);
 	UIEnable(ID_EDIT_FIND, fi && m_Tabs.GetActivePage() >= 0);
@@ -490,6 +492,7 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	m_Symbols.Close();
 	BuildNamedRvas();
 	m_Anomalies = FindAnomalies(m_PE);
+	CancelVirusTotal();
 	m_Overlay = FindOverlay(m_PE);
 	m_Xrefs.Clear();
 	ResetNavigation();
@@ -646,6 +649,7 @@ LRESULT CMainFrame::OnFileClose(WORD, WORD, HWND, BOOL&) {
 	++m_SymbolGeneration;	// a symbol load in progress belongs to the file that was just closed
 	m_Symbols.Close();
 	m_Anomalies.clear();
+	CancelVirusTotal();
 	m_Overlay = {};
 	m_hOverlay = nullptr;
 	m_Xrefs.Clear();
@@ -975,6 +979,98 @@ LRESULT CMainFrame::OnSymbolSettings(WORD, WORD, HWND, BOOL&) {
 		std::wstring path(m_PE.GetPath());	// OpenPE closes the file, so work on a copy
 		OpenPE(path.c_str());
 	}
+	return 0;
+}
+
+//
+// VirusTotal
+//
+
+void CMainFrame::CancelVirusTotal() {
+	if (m_VtCancel)
+		*m_VtCancel = true;	// the thread stops at its next step, and what it posts is ignored
+	m_VtCancel.reset();
+	++m_VtGeneration;
+	m_Vt = {};
+}
+
+// The key from the settings, else from the environment, else (if 'ask') from the user, who is then asked to keep it.
+std::wstring CMainFrame::GetVirusTotalKey(bool ask) {
+	auto& settings = AppSettings::Get();
+	auto key = vt::UnprotectKey(settings.VirusTotalApiKey());
+	if (vt::LooksLikeKey(key))
+		return key;
+	if (key = vt::KeyFromEnvironment(); vt::LooksLikeKey(key))
+		return key;
+	if (!ask)
+		return L"";
+
+	CVtKeyDlg dlg;
+	if (dlg.DoModal(m_hWnd) != IDOK)
+		return L"";
+	settings.VirusTotalApiKey(vt::ProtectKey(dlg.GetKey()));
+	return dlg.GetKey();
+}
+
+LRESULT CMainFrame::OnVirusTotalKey(WORD, WORD, HWND, BOOL&) {
+	auto& settings = AppSettings::Get();
+	CVtKeyDlg dlg(vt::UnprotectKey(settings.VirusTotalApiKey()));
+	if (dlg.DoModal(m_hWnd) == IDOK)
+		settings.VirusTotalApiKey(vt::ProtectKey(dlg.GetKey()));
+	return 0;
+}
+
+LRESULT CMainFrame::OnVirusTotal(WORD, WORD, HWND, BOOL&) {
+	if (!m_PE || m_Vt.Running())
+		return 0;
+
+	// sending a file to somebody else is the user's decision
+	auto path = std::wstring(m_PE.GetPath());
+	auto text = std::format(L"Scan {} with VirusTotal?\n\n"
+		L"VirusTotal is asked first if it already knows the file (by its SHA-256 hash), and nothing is sent then. "
+		L"If it does not, the file itself is uploaded, and VirusTotal shares uploaded files with its customers and the security community.\n\n"
+		L"Do not upload files that are confidential.", path.substr(path.find_last_of(L'\\') + 1));
+	if (AtlMessageBox(m_hWnd, text.c_str(), L"Upload to VirusTotal", MB_ICONQUESTION | MB_YESNO | MB_DEFBUTTON2) != IDYES)
+		return 0;
+
+	auto key = GetVirusTotalKey(true);
+	if (key.empty())
+		return 0;
+
+	CancelVirusTotal();
+	m_VtCancel = std::make_shared<std::atomic_bool>(false);
+	vt::Status start;
+	start.Step = vt::Phase::Hashing;
+	start.Message = L"Starting...";
+	m_Vt = start;
+	if (auto it = m_Views.find(TreeItemType::Image); it != m_Views.end()) {
+		it->second->SetVirusTotalStatus(m_Vt);
+		ShowView(TreeItemType::Image, it->second->GetHTreeItem());
+	}
+	UpdateUI();
+
+	// the thread has its own copies of everything: the window and the file may be gone when it finishes
+	std::thread([hWnd = m_hWnd, generation = m_VtGeneration, cancel = m_VtCancel, path = std::wstring(m_PE.GetPath()), key] {
+		vt::Scan(path, key, *cancel, [&](vt::Status const& status) {
+			auto copy = new vt::Status(status);
+			if (!::PostMessage(hWnd, WM_VT_STATUS, generation, (LPARAM)copy))
+				delete copy;
+		});
+	}).detach();
+	return 0;
+}
+
+LRESULT CMainFrame::OnVirusTotalStatus(UINT, WPARAM generation, LPARAM lParam, BOOL&) {
+	std::unique_ptr<vt::Status> status((vt::Status*)lParam);
+	if ((uint32_t)generation != m_VtGeneration || !m_PE)
+		return 0;	// the scan of a file that is not open any more
+
+	m_Vt = *status;
+	if (auto it = m_Views.find(TreeItemType::Image); it != m_Views.end())
+		it->second->SetVirusTotalStatus(m_Vt);
+	if (!m_Vt.Running())
+		m_VtCancel.reset();
+	UpdateUI();
 	return 0;
 }
 

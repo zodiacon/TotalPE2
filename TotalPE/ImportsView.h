@@ -28,6 +28,7 @@ public:
 	ALT_MSG_MAP(1)
 		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnCopy)
 		COMMAND_ID_HANDLER(ID_IMPORT_FILEPROPERTIES, OnFileProperties)
+		COMMAND_ID_HANDLER(ID_IMPORT_XREFS, OnXrefs)
 		COMMAND_ID_HANDLER(ID_IMPORT_GOTOFILELOCATION, OnGotoFileLocation)
 		CHAIN_MSG_MAP_ALT(CViewBase<CImportsView>, 1)
 	END_MSG_MAP()
@@ -50,6 +51,7 @@ private:
 	LRESULT OnCopy(WORD, WORD, HWND, BOOL&) const;
 	LRESULT OnFind(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnFileProperties(WORD, WORD, HWND, BOOL&) const;
+	LRESULT OnXrefs(WORD, WORD, HWND, BOOL&) const;
 	LRESULT OnGotoFileLocation(WORD, WORD, HWND, BOOL&) const;
 
 	CListViewCtrl m_ModList, m_FuncList;

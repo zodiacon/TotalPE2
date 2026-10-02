@@ -69,6 +69,9 @@ public:
 		COMMAND_ID_HANDLER(ID_NAV_BACK, OnNavBack)
 		COMMAND_ID_HANDLER(ID_NAV_FORWARD, OnNavForward)
 		MESSAGE_HANDLER(WM_SYMBOLS_LOADED, OnSymbolsLoaded)
+		MESSAGE_HANDLER(WM_VT_STATUS, OnVirusTotalStatus)
+		COMMAND_ID_HANDLER(ID_PE_VIRUSTOTAL, OnVirusTotal)
+		COMMAND_ID_HANDLER(ID_PE_VTAPIKEY, OnVirusTotalKey)
 		MESSAGE_HANDLER(WM_UPDATE_DARKMODE, OnUpdateDarkMode)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
 		MESSAGE_HANDLER(WM_DESTROY, OnDestroy)
@@ -172,6 +175,11 @@ private:
 	LRESULT OnNavBack(WORD, WORD, HWND, BOOL&);
 	LRESULT OnNavForward(WORD, WORD, HWND, BOOL&);
 	LRESULT OnSymbolsLoaded(UINT, WPARAM, LPARAM, BOOL&);
+	LRESULT OnVirusTotalStatus(UINT, WPARAM, LPARAM, BOOL&);
+	LRESULT OnVirusTotal(WORD, WORD, HWND, BOOL&);
+	LRESULT OnVirusTotalKey(WORD, WORD, HWND, BOOL&);
+	void CancelVirusTotal();
+	std::wstring GetVirusTotalKey(bool ask);
 	LRESULT OnPageActivated(int /*idCtrl*/, LPNMHDR /*pnmh*/, BOOL& /*bHandled*/);
 	LRESULT OnViewFileInHex(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnPageCloseButton(int /*idCtrl*/, LPNMHDR /*pnmh*/, BOOL& /*bHandled*/);
@@ -221,6 +229,9 @@ private:
 
 	// symbols are loaded on a worker thread; results of an older request are ignored
 	uint32_t m_SymbolGeneration{ 0 };
+	vt::Status m_Vt;							// the VirusTotal scan of the current file
+	std::shared_ptr<std::atomic_bool> m_VtCancel;
+	uint32_t m_VtGeneration{ 0 };
 	void StartSymbolLoad(std::wstring path);
 	void RefreshViews();
 	void BuildNamedRvas();

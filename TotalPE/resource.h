@@ -73,11 +73,14 @@
 #define IDD_SYMBOLS                     269
 #define IDD_HEXFIND                     270
 #define IDD_GOTO                        273
+#define IDD_VTKEY                       274
 #define IDC_GOTO_VALUE                  1018
 #define IDC_GOTO_RVA                    1019
 #define IDC_GOTO_VA                     1020
 #define IDC_GOTO_OFFSET                 1021
 #define IDC_GOTO_DISASM                 1022
+#define IDC_VT_KEY                      1023
+#define IDC_VT_GETKEY                   1024
 #define ID_NAV_GOTO                     32831
 #define ID_NAV_BACK                     32832
 #define ID_NAV_FORWARD                  32833
@@ -163,14 +166,18 @@
 #define ID_ASSEMBLY_XREFS_HERE          32835
 #define ID_ASSEMBLY_XREFS_TARGET        32836
 #define ID_VIEW_OVERLAY                 32837
+#define ID_PE_VIRUSTOTAL                32838
+#define ID_PE_VTAPIKEY                  32839
+#define ID_EXPORT_XREFS                 32840
+#define ID_IMPORT_XREFS                 32841
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        274
-#define _APS_NEXT_COMMAND_VALUE         32838
-#define _APS_NEXT_CONTROL_VALUE         1023
+#define _APS_NEXT_RESOURCE_VALUE        275
+#define _APS_NEXT_COMMAND_VALUE         32842
+#define _APS_NEXT_CONTROL_VALUE         1025
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

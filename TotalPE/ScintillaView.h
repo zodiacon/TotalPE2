@@ -24,6 +24,9 @@ public:
 	CString GetTitle() const override;
 	CScintillaCtrl& GetCtrl();
 
+	// Enter follows the call or jump of the line, X lists the references to the instruction
+	BOOL PreTranslateMessage(MSG* pMsg);
+
 	void UpdateUI(bool first = false);
 
 	bool SetAsmCode(std::span<const std::byte> code, uint64_t address, bool is32Bit);

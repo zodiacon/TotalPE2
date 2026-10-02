@@ -17,6 +17,7 @@ public:
 	SETTING_STRING(SymbolCache, L"%LOCALAPPDATA%\\TotalPE\\Symbols");
 	SETTING_STRING(SymbolExtraPaths, L"");
 	SETTING(SymbolUseEnvPath, 1, SettingType::Bool);
+	SETTING_STRING(VirusTotalApiKey, L"");	// encrypted with DPAPI: see vt::ProtectKey
 	END_SETTINGS
 
 	DEF_SETTING(AlwaysOnTop, bool)
@@ -31,6 +32,7 @@ public:
 	DEF_SETTING_STRING(SymbolCache)
 	DEF_SETTING_STRING(SymbolExtraPaths)
 	DEF_SETTING(SymbolUseEnvPath, bool)
+	DEF_SETTING_STRING(VirusTotalApiKey)
 
 	static constexpr PCWSTR DefaultSymbolServerUrl = L"https://msdl.microsoft.com/download/symbols";
 	static constexpr PCWSTR DefaultSymbolCache = L"%LOCALAPPDATA%\\TotalPE\\Symbols";

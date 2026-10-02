@@ -118,6 +118,7 @@ void CImportsView::UpdateUI(bool first) const {
 		ui.UIEnable(ID_EDIT_COPY, selected > 0);
 		ui.UIEnable(ID_IMPORT_GOTOFILELOCATION, hWnd == m_ModList && selected == 1);
 		ui.UIEnable(ID_IMPORT_FILEPROPERTIES, hWnd == m_ModList && selected == 1);
+		ui.UIEnable(ID_IMPORT_XREFS, hWnd == m_FuncList && selected == 1);
 	}
 }
 
@@ -220,5 +221,27 @@ LRESULT CImportsView::OnGotoFileLocation(WORD, WORD, HWND, BOOL&) const {
 bool CImportsView::OnRightClickList(HWND h, int row, int col, POINT const& pt) const {
 	CMenu menu;
 	menu.LoadMenu(IDR_CONTEXT);
-	return Frame()->ShowContextMenu(menu.GetSubMenu(h == m_ModList ? 4 : 0), 0, pt.x, pt.y);
+	return Frame()->ShowContextMenu(menu.GetSubMenu(h == m_ModList ? 4 : 8), 0, pt.x, pt.y);
+}
+
+// Who uses the import: the code that reads the slot of the import address table that the loader fills in for it
+LRESULT CImportsView::OnXrefs(WORD, WORD, HWND, BOOL&) const {
+	int module = m_ModList.GetNextItem(-1, LVNI_SELECTED), row = m_FuncList.GetNextItem(-1, LVNI_SELECTED);
+	if (module < 0 || row < 0 || row >= (int)m_Functions.size())
+		return 0;
+
+	// the list may be sorted: the position of the function in the table is its position in the module
+	auto const& mod = m_Modules[module];
+	auto const& fn = m_Functions[row];
+	auto same = [&](PEImportFunction const& f) {
+		return f.FuncName == fn.FuncName && (m_Is64 ? f.unThunk.Thunk64.u1.Ordinal == fn.unThunk.Thunk64.u1.Ordinal : f.unThunk.Thunk32.u1.Ordinal == fn.unThunk.Thunk32.u1.Ordinal);
+	};
+	auto it = std::find_if(mod.ImportFunc.begin(), mod.ImportFunc.end(), same);
+	if (it == mod.ImportFunc.end() || mod.ImportDesc.FirstThunk == 0) {
+		AtlMessageBox(m_hWnd, L"The import address table slot of this function is not known.", IDR_MAINFRAME, MB_ICONWARNING);
+		return 0;
+	}
+	auto slot = mod.ImportDesc.FirstThunk + (uint64_t)(it - mod.ImportFunc.begin()) * (m_Is64 ? 8 : 4);
+	Frame()->ShowXrefs(m_PE.GetImageBase() + slot);
+	return 0;
 }

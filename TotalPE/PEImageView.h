@@ -2,6 +2,7 @@
 
 #include "ViewBase.h"
 #include <VirtualListView.h>
+#include "VirusTotal.h"
 
 class PEFile;
 
@@ -15,6 +16,8 @@ public:
 	void DoSort(SortInfo const* si);
 	bool IsSortable(HWND, int col) const;
 	void OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD newState);
+	bool OnDoubleClickList(HWND, int row, int col, CPoint const& pt) const;
+	void SetVirusTotalStatus(vt::Status const& status) override;
 
 	void UpdateUI(bool first = false);
 
@@ -32,6 +35,7 @@ private:
 	CString GetTitle() const override;
 
 	void BuildItems();
+	void AppendVirusTotal();
 
 	// Handler prototypes (uncomment arguments if needed):
 	//	LRESULT MessageHandler(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)
@@ -50,5 +54,6 @@ private:
 
 	CListViewCtrl m_List;
 	std::vector<DataItem> m_Items;
+	vt::Status m_Vt;
 	PEFile const& m_PE;
 };

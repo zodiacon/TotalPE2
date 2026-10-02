@@ -10,6 +10,7 @@
 #include "ImportAnalysis.h"
 #include <SortHelper.h>
 #include <ClipboardHelper.h>
+#include <ctime>
 
 LRESULT CPEImageView::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/) {
 	m_hWndClient = m_List.Create(*this, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | LVS_REPORT | LVS_OWNERDATA, 0);
@@ -133,7 +134,63 @@ void CPEImageView::BuildItems() {
 		m_Items.push_back({ L"Base of Data", std::format(L"0x{:X}", opt32.BaseOfData) });
 	}
 
+	AppendVirusTotal();
 	m_List.SetItemCount((int)m_Items.size());
+}
+
+// The result of the VirusTotal scan, below the other information: the verdict, where to read more, and the engines that flagged the file.
+void CPEImageView::AppendVirusTotal() {
+	if (m_Vt.Step == vt::Phase::Idle)
+		return;
+
+	// a double-click on a row that has a link opens it
+	if (m_Vt.Step == vt::Phase::Failed) {
+		m_Items.push_back({ L"VirusTotal", L"Failed", m_Vt.Message });	// the message is long: it needs the wide column
+		return;
+	}
+	m_Items.push_back({ L"VirusTotal", m_Vt.Summary(), m_Vt.Link() });
+	if (m_Vt.Step != vt::Phase::Done)
+		return;
+
+	auto const& r = m_Vt.Results;
+	if (!m_Vt.Sha256.empty())
+		m_Items.push_back({ L"SHA-256", m_Vt.Sha256, m_Vt.Uploaded ? L"The file was uploaded to VirusTotal" : L"VirusTotal knew the file: it was not uploaded" });
+	if (r.LastAnalysis) {
+		auto t = (time_t)r.LastAnalysis;
+		tm local{};
+		if (localtime_s(&local, &t) == 0) {
+			wchar_t text[64]{};
+			wcsftime(text, _countof(text), L"%x  %X", &local);
+			m_Items.push_back({ L"Analysis Date", text, L"" });
+		}
+	}
+	if (!r.FileType.empty())
+		m_Items.push_back({ L"VirusTotal File Type", r.FileType, L"" });
+	m_Items.push_back({ L"Engines", std::format(L"{} malicious, {} suspicious, {} harmless, {} undetected", r.Malicious, r.Suspicious, r.Harmless, r.Undetected),
+		std::format(L"{} timed out, {} did not support the file", r.TimedOut, r.Unsupported) });
+
+	const size_t limit = 40;
+	for (size_t i = 0; i < r.Detections.size() && i < limit; i++) {
+		auto const& d = r.Detections[i];
+		m_Items.push_back({ L"  " + d.Engine, d.Result.empty() ? L"(no name)" : d.Result, d.Category });
+	}
+	if (r.Detections.size() > limit)
+		m_Items.push_back({ L"  ...", std::format(L"{} more engines flagged the file", r.Detections.size() - limit), m_Vt.Link() });
+}
+
+void CPEImageView::SetVirusTotalStatus(vt::Status const& status) {
+	m_Vt = status;
+	if (!m_List)
+		return;
+	BuildItems();
+	m_List.Invalidate();
+}
+
+bool CPEImageView::OnDoubleClickList(HWND, int row, int, CPoint const&) const {
+	if (row < 0 || row >= (int)m_Items.size() || !m_Items[row].Details.starts_with(L"https://"))
+		return false;
+	::ShellExecute(m_hWnd, L"open", m_Items[row].Details.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+	return true;
 }
 
 void CPEImageView::UpdateUI(bool first) {

@@ -115,6 +115,7 @@
     <ClCompile Include="..\TotalPE\Authenticode.cpp" />
     <ClCompile Include="..\TotalPE\Overlay.cpp" />
     <ClCompile Include="..\TotalPE\VersionInfo.cpp" />
+    <ClCompile Include="..\TotalPE\VirusTotal.cpp" />
     <ClCompile Include="ClrMetadataTests.cpp" />
     <ClCompile Include="MenuTemplateTests.cpp" />
     <ClCompile Include="DialogTemplateTests.cpp" />
@@ -131,6 +132,7 @@
     <ClCompile Include="AuthenticodeTests.cpp" />
     <ClCompile Include="OverlayTests.cpp" />
     <ClCompile Include="VersionInfoTests.cpp" />
+    <ClCompile Include="VirusTotalTests.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\PECore\PECore.vcxproj">

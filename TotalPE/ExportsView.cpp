@@ -103,6 +103,7 @@ void CExportsView::UpdateUI(bool first) const {
 	int selected = m_List.GetSelectedCount();
 	ui.UIEnable(ID_EDIT_COPY, selected > 0);
 	ui.UIEnable(ID_VIEW_DISASSEMBLE, selected == 1 && m_Exports[m_List.GetNextItem(-1, LVNI_SELECTED)].ForwarderName.empty());
+	ui.UIEnable(ID_EXPORT_XREFS, selected == 1 && m_Exports[m_List.GetNextItem(-1, LVNI_SELECTED)].ForwarderName.empty());
 	if(first)
 		Frame()->SetStatusText(1, std::format(L"Exports: {}", m_Exports.size()).c_str());
 }
@@ -173,6 +174,14 @@ LRESULT CExportsView::OnFind(UINT, WPARAM, LPARAM, BOOL&) {
 	else {
 		AtlMessageBox(m_hWnd, L"Finished searching list.", IDR_MAINFRAME, MB_ICONINFORMATION);
 	}
+	return 0;
+}
+
+// The code of the file that refers to the exported function: calls from other functions of the same file
+LRESULT CExportsView::OnXrefs(WORD, WORD, HWND, BOOL&) const {
+	ATLASSERT(m_List.GetSelectedCount() == 1);
+	auto& exp = m_Exports[m_List.GetNextItem(-1, LVNI_SELECTED)];
+	Frame()->ShowXrefs(m_PE.GetImageBase() + exp.FuncRVA);
 	return 0;
 }
 
