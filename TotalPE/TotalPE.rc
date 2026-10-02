@@ -1,6 +1,7 @@
 // Microsoft Visual C++ generated resource script.
 //
 #include "resource.h"
+#include <atlres.h>
 
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
@@ -8,7 +9,6 @@
 // Generated from the TEXTINCLUDE 2 resource.
 //
 #include "winres.h"
-#include "atlres.h"
 
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
@@ -242,6 +242,10 @@ IDI_DATA                ICON                    "res\\Data.ico"
 
 IDI_GLOBE               ICON                    "res\\globe.ico"
 
+IDI_LOOK                ICON                    "res\\Look.ico"
+
+IDI_BOOKMARK            ICON                    "res\\Bookmark.ico"
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -389,7 +393,6 @@ BEGIN
                     "SysLink",WS_TABSTOP,49,40,125,14
 END
 
-
 IDD_SYMBOLS DIALOGEX 0, 0, 320, 214
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Symbol Settings"
@@ -411,6 +414,26 @@ BEGIN
     PUSHBUTTON      "&Microsoft Defaults",IDC_SYM_DEFAULTS,7,193,80,14
     DEFPUSHBUTTON   "OK",IDOK,207,193,50,14
     PUSHBUTTON      "Cancel",IDCANCEL,263,193,50,14
+END
+
+IDD_HEXFIND DIALOGEX 0, 0, 250, 122
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Find in Hex"
+FONT 9, "Segoe UI", 0, 0, 0x0
+BEGIN
+    LTEXT           "Find &what:",IDC_STATIC,7,7,60,8
+    EDITTEXT        IDC_HEXFIND_TEXT,7,17,236,14,ES_AUTOHSCROLL
+    GROUPBOX        "Search for",IDC_STATIC,7,38,150,60
+    CONTROL         "&Hex bytes (?? matches any byte)",IDC_HEXFIND_HEX,
+                    "Button",BS_AUTORADIOBUTTON | WS_GROUP,14,51,138,10
+    CONTROL         "&Text (UTF-8 / ASCII)",IDC_HEXFIND_ASCII,"Button",BS_AUTORADIOBUTTON,14,64,138,10
+    CONTROL         "&Unicode text (UTF-16)",IDC_HEXFIND_UNICODE,"Button",BS_AUTORADIOBUTTON,14,77,138,10
+    CONTROL         "&Match case",IDC_HEXFIND_MATCHCASE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,165,40,78,10
+    GROUPBOX        "Direction",IDC_STATIC,165,56,78,42
+    CONTROL         "&Down",IDC_HEXFIND_DOWN,"Button",BS_AUTORADIOBUTTON | WS_GROUP,172,69,60,10
+    CONTROL         "&Up",IDC_HEXFIND_UP,"Button",BS_AUTORADIOBUTTON,172,82,60,10
+    DEFPUSHBUTTON   "Find",IDOK,139,103,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,193,103,50,14
 END
 
 
@@ -456,6 +479,10 @@ BEGIN
     VK_F6,          ID_PREV_PANE,           VIRTKEY, SHIFT, NOINVERT
     "F",            ID_EDIT_FIND,           VIRTKEY, CONTROL, NOINVERT
     VK_F3,          ID_EDIT_FIND_NEXT,      VIRTKEY, NOINVERT
+    VK_F3,          ID_EDIT_FIND_PREVIOUS,  VIRTKEY, SHIFT, NOINVERT
+    "B",            ID_HEX_BOOKMARK_TOGGLE, VIRTKEY, CONTROL, NOINVERT
+    VK_F2,          ID_HEX_BOOKMARK_NEXT,   VIRTKEY, NOINVERT
+    VK_F2,          ID_HEX_BOOKMARK_PREV,   VIRTKEY, SHIFT, NOINVERT
 END
 
 

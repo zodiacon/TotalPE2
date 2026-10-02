@@ -394,6 +394,10 @@
     <ClCompile Include="IATView.cpp" />
     <ClCompile Include="ClrView.cpp" />
     <ClCompile Include="SymbolSettingsDlg.cpp" />
+    <ClCompile Include="HexFormat.cpp" />
+    <ClCompile Include="HexFind.cpp" />
+    <ClCompile Include="HexInspector.cpp" />
+    <ClCompile Include="PERegions.cpp" />
     <ClCompile Include="BoundImportView.cpp" />
     <ClCompile Include="GlobalPtrView.cpp" />
     <ClCompile Include="DialogTemplate.cpp" />
@@ -436,6 +440,10 @@
     <ClInclude Include="IATView.h" />
     <ClInclude Include="ClrView.h" />
     <ClInclude Include="SymbolSettingsDlg.h" />
+    <ClInclude Include="HexFormat.h" />
+    <ClInclude Include="HexFind.h" />
+    <ClInclude Include="HexInspector.h" />
+    <ClInclude Include="PERegions.h" />
     <ClInclude Include="BoundImportView.h" />
     <ClInclude Include="GlobalPtrView.h" />
     <ClInclude Include="DialogTemplate.h" />
@@ -478,6 +486,7 @@
     <Image Include="res\Binary.ico" />
     <Image Include="res\bitfield.ico" />
     <Image Include="res\bitmap.ico" />
+    <Image Include="res\Bookmark.ico" />
     <Image Include="res\check.ico" />
     <Image Include="res\circle.ico" />
     <Image Include="res\Close.ico" />
@@ -512,6 +521,7 @@
     <Image Include="res\imports.ico" />
     <Image Include="res\interface.ico" />
     <Image Include="res\keyboard.ico" />
+    <Image Include="res\Look.ico" />
     <Image Include="res\manifest.ico" />
     <Image Include="res\message.ico" />
     <Image Include="res\msdos.ico" />

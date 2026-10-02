@@ -88,6 +88,7 @@ void PEFile::Close() {
     m_Impl.reset();
     m_Raw.reset();
     m_Path.clear();
+    m_FileSize = 0;
     m_Info = {};
     m_NtHeader = {};
     m_DosHeader = {};
@@ -166,7 +167,9 @@ void PEFile::BuildCaches() {
     m_Info.HasExport     = pe.has_exports();
     m_Info.HasDebug      = !pe.debug().empty();
     m_Info.HasReloc      = !pe.relocations().empty();
-    m_Info.HasException  = pe.has_exceptions();
+    // pe.has_exceptions() dereferences the exception directory, which does not exist if the optional header is truncated
+    auto const* exceptionDir = pe.data_directory(LIEF::PE::DataDirectory::TYPES::EXCEPTION_TABLE);
+    m_Info.HasException  = exceptionDir && exceptionDir->size() != 0;
     m_Info.HasSecurity   = !pe.signatures().empty();
     m_Info.HasTLS        = pe.has_tls();
     m_Info.HasLoadConfig = pe.has_configuration();
@@ -226,7 +229,9 @@ void PEFile::BuildCaches() {
         PEImport imp{};
         imp.ModuleName               = mod.name();
         imp.ImportDesc.TimeDateStamp = mod.timedatestamp();
-        imp.ImportDesc.Name          = mod.import_address_table_rva(); // best approximation
+        imp.ImportDesc.OriginalFirstThunk = mod.import_lookup_table_rva();
+        imp.ImportDesc.Name          = mod.name_rva();
+        imp.ImportDesc.FirstThunk    = mod.import_address_table_rva();
 
         for (auto const& e : mod.entries()) {
             PEImportFunction fn{};
@@ -260,8 +265,11 @@ void PEFile::BuildCaches() {
             fn.FuncRVA   = (DWORD)e.value();
             fn.Ordinal   = (DWORD)e.ordinal();
             fn.NameRVA   = 0; // LIEF doesn't expose individual name RVAs easily
-            if (e.is_forwarded())
-                fn.ForwarderName = e.forward_information().function;
+            if (e.is_forwarded()) {
+                // the forwarder string of the file: "NTDLL.RtlAllocateHeap"
+                auto fwd = e.forward_information();
+                fn.ForwarderName = fwd.library.empty() ? fwd.function : fwd.library + "." + fwd.function;
+            }
             m_Exports.Funcs.push_back(std::move(fn));
         }
     }

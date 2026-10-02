@@ -148,7 +148,7 @@ void CIATView::BuildItems() {
 	for (auto const& imp : *imports) {
 		ModuleItem mi{};
 		mi.ModuleName  = imp.ModuleName;
-		mi.IatBaseRVA  = imp.ImportDesc.Name;  // stored as import_address_table_rva() in BuildCaches
+		mi.IatBaseRVA  = imp.ImportDesc.FirstThunk;
 		mi.Count       = (uint32_t)imp.ImportFunc.size();
 		mi.FileOffset  = mi.IatBaseRVA ? (DWORD)m_PE.GetOffsetFromRVA(mi.IatBaseRVA) : 0;
 		mi.ImportIndex = idx++;
@@ -172,7 +172,7 @@ void CIATView::PopulateFunctions(int importIndex) {
 
 	auto const& imp = m_PE.GetImport()->at(importIndex);
 	DWORD ptrSize  = m_Is64 ? 8 : 4;
-	DWORD iatBase  = imp.ImportDesc.Name;
+	DWORD iatBase  = imp.ImportDesc.FirstThunk;
 	auto const* raw = m_PE.GetData();
 	uint32_t fileSize = m_PE.GetFileSize();
 

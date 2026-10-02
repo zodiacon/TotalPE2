@@ -71,6 +71,8 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 				return {};
 			}
 			view->SetData(m_PE.GetSpan(0, m_PE.GetFileSize()));
+			view->SetPE(m_PE, BuildPERegions(m_PE));	// color the headers, sections, directories and overlay
+			view->ShowInspector(true);
 			auto hItem = InsertTreeItem(m_Tree, view->GetTitle(), GetIconIndex(IDI_BINARY), type, m_Views.at(TreeItemType::Image)->GetHTreeItem(), TVI_SORT);
 			view->SetDeleteFromTree(true);
 			view->SetHTreeItem(hItem);
@@ -210,6 +212,7 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 			}
 			view->SetData(m_PE, 0, m_PE.GetFileInfo()->IsPE64 ?
 				m_PE.GetNTHeader()->NTHdr64.OptionalHeader.SizeOfHeaders : m_PE.GetNTHeader()->NTHdr32.OptionalHeader.SizeOfHeaders);
+			view->SetPE(m_PE, BuildPERegions(m_PE));
 			return { view, view };
 		}
 

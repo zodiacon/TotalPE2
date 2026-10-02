@@ -305,7 +305,7 @@ private:
     PEFileInfo       m_Info{};
     PENtHeader       m_NtHeader{};
     IMAGE_DOS_HEADER m_DosHeader{};
-    DWORD            m_FileSize;
+    DWORD            m_FileSize{};
 
     PESECHDR_VEC      m_Sections;
     PEDATADIR_VEC     m_DataDirs;

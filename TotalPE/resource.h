@@ -70,6 +70,12 @@
 #define IDI_DATA                        266
 #define IDI_GLOBE                       267
 #define IDI_ICON2                       268
+#define IDD_SYMBOLS                     269
+#define IDD_HEXFIND                     270
+#define IDI_ICON1                       271
+#define IDI_LOOK                        271
+#define IDI_ICON3                       272
+#define IDI_BOOKMARK                    272
 #define IDC_VERSION                     1000
 #define IDC_COPYRIGHT                   1001
 #define IDC_LINK                        1002
@@ -81,7 +87,13 @@
 #define IDC_SYM_USE_ENV                 1008
 #define IDC_SYM_PREVIEW                 1009
 #define IDC_SYM_DEFAULTS                1010
-#define IDD_SYMBOLS                     269
+#define IDC_HEXFIND_TEXT                1011
+#define IDC_HEXFIND_HEX                 1012
+#define IDC_HEXFIND_ASCII               1013
+#define IDC_HEXFIND_UNICODE             1014
+#define IDC_HEXFIND_MATCHCASE           1015
+#define IDC_HEXFIND_DOWN                1016
+#define IDC_HEXFIND_UP                  1017
 #define ID_WINDOW_CLOSE                 32772
 #define ID_WINDOW_CLOSE_ALL             32773
 #define ID_FILE_RUNASADMINISTRATOR      32775
@@ -124,14 +136,28 @@
 #define ID_ASSEMBLY_DISASSEMBLEATTHEEND 32814
 #define ID_ASSEMBLY_GOTOADDRESS         32815
 #define ID_SECURITY_VIEWCERTIFICATE     32816
+#define ID_HEX_COPYAS_HEX               32817
+#define ID_HEX_COPYAS_HEX_COMPACT       32818
+#define ID_HEX_COPYAS_C                 32819
+#define ID_HEX_COPYAS_CSHARP            32820
+#define ID_HEX_COPYAS_PYTHON            32821
+#define ID_HEX_COPYAS_BASE64            32822
+#define ID_HEX_BOOKMARK_TOGGLE          32823
+#define ID_HEX_BOOKMARK_NEXT            32824
+#define ID_HEX_BOOKMARK_PREV            32825
+#define ID_HEX_BOOKMARK_CLEAR           32826
+#define ID_HEX_INSPECTOR                32827
+#define ID_HEX_BIGENDIAN                32828
+#define ID_HEX_COPYAS                   32829
+#define ID_HEX_BOOKMARKS                32830
 
 // Next default values for new objects
-//
+// 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        270
-#define _APS_NEXT_COMMAND_VALUE         32817
-#define _APS_NEXT_CONTROL_VALUE         1011
+#define _APS_NEXT_RESOURCE_VALUE        273
+#define _APS_NEXT_COMMAND_VALUE         32831
+#define _APS_NEXT_CONTROL_VALUE         1018
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

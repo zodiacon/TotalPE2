@@ -180,6 +180,21 @@
     <ClCompile Include="DialogView.cpp">
       <Filter>Views</Filter>
     </ClCompile>
+    <ClCompile Include="SymbolSettingsDlg.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="HexFormat.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="HexFind.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="HexInspector.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="PERegions.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -325,6 +340,21 @@
     </ClInclude>
     <ClInclude Include="DialogView.h">
       <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="SymbolSettingsDlg.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="HexFormat.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="HexFind.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="HexInspector.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="PERegions.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -526,6 +556,12 @@
       <Filter>Resource Files\Icons</Filter>
     </Image>
     <Image Include="res\Expanded2.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\Look.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\Bookmark.ico">
       <Filter>Resource Files\Icons</Filter>
     </Image>
   </ItemGroup>
