@@ -55,6 +55,7 @@ void CMainFrame::UpdateUI() {
 	UIEnable(ID_FILE_SAVE, fi != nullptr);
 	UIEnable(ID_VIEW_MANIFEST, fi && m_hResManifest != nullptr);
 	UIEnable(ID_VIEW_VERSION, fi && m_hResVersion != nullptr);
+	UIEnable(ID_VIEW_OVERLAY, fi && m_hOverlay != nullptr);
 	UIEnable(ID_FILE_OPENINANEWWINDOW, fi != nullptr);
 	UIEnable(ID_EDIT_COPY, FALSE);
 	UIEnable(ID_EDIT_FIND, fi && m_Tabs.GetActivePage() >= 0);
@@ -489,6 +490,8 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	m_Symbols.Close();
 	BuildNamedRvas();
 	m_Anomalies = FindAnomalies(m_PE);
+	m_Overlay = FindOverlay(m_PE);
+	m_Xrefs.Clear();
 	ResetNavigation();
 	StartSymbolLoad(path);	// the window is usable at once; symbols arrive later (WM_SYMBOLS_LOADED)
 	m_Views.clear();
@@ -514,8 +517,8 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	return true;
 }
 
-TreeItemType CMainFrame::TreeItemWithIndex(TreeItemType type, int index) {
-	return static_cast<TreeItemType>((uint32_t)type + index);
+TreeItemType CMainFrame::TreeItemWithIndex(TreeItemType type, int64_t index) {
+	return static_cast<TreeItemType>((int64_t)type + index);
 }
 
 void CMainFrame::BuildTree(int iconSize) {
@@ -562,6 +565,9 @@ void CMainFrame::BuildTree(int iconSize) {
 	m_Tree.Expand(directories, TVE_EXPAND);
 
 	InsertTreeItem(m_Tree, std::format(L"Anomalies ({})", m_Anomalies.size()).c_str(), GetTreeIcon(IDI_EXCEPTION), TreeItemType::Anomalies, root);
+	m_hOverlay = nullptr;
+	if (!m_Overlay.Empty())
+		m_hOverlay = InsertTreeItem(m_Tree, L"Overlay", GetTreeIcon(IDI_BINARY), TreeItemType::Overlay, root);
 
 	if (m_PE.GetFileInfo()->HasResource) {
 		auto resources = InsertTreeItem(m_Tree, L"Resources", GetTreeIcon(IDI_RESOURCE), TreeItemType::Resources, root);
@@ -640,6 +646,9 @@ LRESULT CMainFrame::OnFileClose(WORD, WORD, HWND, BOOL&) {
 	++m_SymbolGeneration;	// a symbol load in progress belongs to the file that was just closed
 	m_Symbols.Close();
 	m_Anomalies.clear();
+	m_Overlay = {};
+	m_hOverlay = nullptr;
+	m_Xrefs.Clear();
 	ResetNavigation();
 	m_Tree.DeleteAllItems();
 	UpdateUI();
@@ -829,6 +838,12 @@ LRESULT CMainFrame::OnViewImports(WORD, WORD, HWND, BOOL&) {
 
 LRESULT CMainFrame::OnViewVersion(WORD, WORD, HWND, BOOL&) {
 	ShowView(m_hResVersion);
+	return 0;
+}
+
+LRESULT CMainFrame::OnViewOverlay(WORD, WORD, HWND, BOOL&) {
+	if (m_hOverlay)
+		ShowView(m_hOverlay);
 	return 0;
 }
 
@@ -1232,6 +1247,47 @@ bool CMainFrame::GoToFileOffset(int64_t offset, bool disassemble) {
 		it->second->SetNavigationPosition(offset);
 	RecordNavigation();
 	return true;
+}
+
+XrefMap const& CMainFrame::GetXrefs() {
+	if (m_PE && !m_Xrefs.Built()) {
+		CWaitCursor wait;
+		m_Xrefs.Build(m_PE);
+	}
+	return m_Xrefs;
+}
+
+bool CMainFrame::GoToVa(uint64_t va) {
+	if (!m_PE)
+		return false;
+
+	// a disassembly that already shows the address
+	RecordNavigation();
+	for (auto const& [type, view] : m_Views)
+		if (view->GoToAddress(va)) {
+			ShowView(type, view->GetHTreeItem());
+			RecordNavigation();
+			return true;
+		}
+
+	GoToOptions options;
+	options.Kind = GoToKind::Va;
+	options.Value = va;
+	int64_t offset;
+	std::wstring error;
+	if (!ResolveGoTo(options, offset, error)) {
+		AtlMessageBox(m_hWnd, error.c_str(), IDR_MAINFRAME, MB_ICONWARNING);
+		return false;
+	}
+
+	bool code = false;
+	auto rva = (uint32_t)(va - m_PE.GetImageBase());
+	for (auto const& s : *m_PE.GetSecHeaders()) {
+		auto& h = s.SecHdr;
+		if (rva >= h.VirtualAddress && rva < h.VirtualAddress + std::max(h.Misc.VirtualSize, h.SizeOfRawData))
+			code = (h.Characteristics & (IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_CNT_CODE)) != 0;
+	}
+	return GoToFileOffset(offset, code);
 }
 
 std::vector<Anomaly> const& CMainFrame::GetAnomalies() const {

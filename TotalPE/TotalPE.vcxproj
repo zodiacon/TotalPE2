@@ -396,7 +396,7 @@
     <ClCompile Include="SymbolSettingsDlg.cpp" />
     <ClCompile Include="HexFormat.cpp" />
     <ClCompile Include="Md5.cpp" />
-    <ClCompile Include="ApiSet.cpp" />
+    <ClCompile Include="ApiSetMap.cpp" />
     <ClCompile Include="ImportAnalysis.cpp" />
     <ClCompile Include="ImphashOrdinals.cpp" />
     <ClCompile Include="AniFile.cpp" />
@@ -405,6 +405,12 @@
     <ClCompile Include="HexNumber.cpp" />
     <ClCompile Include="PEAnomalies.cpp" />
     <ClCompile Include="AnomalyView.cpp" />
+    <ClCompile Include="CodeAnalysis.cpp" />
+    <ClCompile Include="Authenticode.cpp" />
+    <ClCompile Include="Overlay.cpp" />
+    <ClCompile Include="OverlayView.cpp" />
+    <ClCompile Include="VersionInfo.cpp" />
+    <ClCompile Include="XrefView.cpp" />
     <ClCompile Include="GoToDlg.cpp" />
     <ClCompile Include="HexFind.cpp" />
     <ClCompile Include="HexInspector.cpp" />
@@ -453,7 +459,7 @@
     <ClInclude Include="SymbolSettingsDlg.h" />
     <ClInclude Include="HexFormat.h" />
     <ClInclude Include="Md5.h" />
-    <ClInclude Include="ApiSet.h" />
+    <ClInclude Include="ApiSetMap.h" />
     <ClInclude Include="ImportAnalysis.h" />
     <ClInclude Include="ImphashOrdinals.h" />
     <ClInclude Include="AniFile.h" />
@@ -462,6 +468,12 @@
     <ClInclude Include="HexNumber.h" />
     <ClInclude Include="PEAnomalies.h" />
     <ClInclude Include="AnomalyView.h" />
+    <ClInclude Include="CodeAnalysis.h" />
+    <ClInclude Include="Authenticode.h" />
+    <ClInclude Include="Overlay.h" />
+    <ClInclude Include="OverlayView.h" />
+    <ClInclude Include="VersionInfo.h" />
+    <ClInclude Include="XrefView.h" />
     <ClInclude Include="GoToDlg.h" />
     <ClInclude Include="HexFind.h" />
     <ClInclude Include="HexInspector.h" />

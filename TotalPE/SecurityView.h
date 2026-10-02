@@ -4,6 +4,7 @@
 #include "resource.h"
 #include <VirtualListView.h>
 #include <CustomSplitterWindow.h>
+#include "Authenticode.h"
 
 class PEFile;
 
@@ -37,16 +38,14 @@ public:
 
 private:
 	void BuildItems();
-	void PopulateCertDetails(std::vector<BYTE> const& certData);
+	void PopulateCertDetails(int index);
 	void AddProperty(std::wstring_view name, std::wstring_view value);
 	void FreeCertContext();
-
-	static std::wstring FileTimeToString(FILETIME const& ft);
-	static std::wstring BytesToHex(BYTE const* data, DWORD len, wchar_t sep = L' ');
 
 	CListViewCtrl            m_List, m_DetailList;
 	CCustomHorSplitterWindow m_Splitter;
 	std::vector<PESecurity>  m_Items;
+	AuthenticodeResult       m_Auth;
 	PCCERT_CONTEXT           m_CurrentCert{};
 	HCERTSTORE               m_CurrentStore{};
 	HCRYPTMSG                m_CurrentMsg{};

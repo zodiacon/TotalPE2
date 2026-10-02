@@ -304,6 +304,7 @@ BEGIN
         MENUITEM "&Resources",                  ID_VIEW_RESOURCES
         MENUITEM "&Manifest",                   ID_VIEW_MANIFEST
         MENUITEM "&Version",                    ID_VIEW_VERSION
+        MENUITEM "&Overlay",                    ID_VIEW_OVERLAY
         MENUITEM "&Debug",                      ID_VIEW_DEBUG
         MENUITEM "Security",                    ID_PE_SECURITY
         MENUITEM SEPARATOR
@@ -371,6 +372,10 @@ BEGIN
     POPUP "assembly"
     BEGIN
         MENUITEM "&Copy\tCtrl+C",               ID_EDIT_COPY
+        MENUITEM SEPARATOR
+        MENUITEM "&Follow\tDouble-click",       ID_ASSEMBLY_FOLLOW
+        MENUITEM "Cross-References to This &Instruction", ID_ASSEMBLY_XREFS_HERE
+        MENUITEM "Cross-References to the &Target", ID_ASSEMBLY_XREFS_TARGET
         MENUITEM SEPARATOR
         MENUITEM "Disassemble at the End",      ID_ASSEMBLY_DISASSEMBLEATTHEEND
         MENUITEM "Go to Address",               ID_ASSEMBLY_GOTOADDRESS
@@ -684,6 +689,7 @@ BEGIN
     ID_VIEW_RESOURCES       "\nResources"
     ID_VIEW_MANIFEST        "\nManifest"
     ID_VIEW_VERSION         "\nVersion"
+    ID_VIEW_OVERLAY         "\nOverlay"
     ID_VIEW_DEBUG           "\nDebug"
     ID_PE_SECURITY          "\nSecurity"
 END

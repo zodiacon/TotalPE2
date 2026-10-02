@@ -2,7 +2,7 @@
 #include "ImportsView.h"
 #include "PEStrings.h"
 #include "ImportAnalysis.h"
-#include "ApiSet.h"
+#include "ApiSetMap.h"
 #include "resource.h"
 #include <SortHelper.h>
 #include <ClipboardHelper.h>

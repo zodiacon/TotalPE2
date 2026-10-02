@@ -3,6 +3,8 @@
 #include <DiaHelper.h>
 #include <PEFile.h>
 #include "PEAnomalies.h"
+#include "CodeAnalysis.h"
+#include "Overlay.h"
 
 static const UINT WM_UPDATE_DARKMODE = WM_APP + 56;
 // posted by the symbol loading thread: wParam is the generation of the request, lParam a DiaSession* (or null)
@@ -57,6 +59,8 @@ enum class TreeItemType : int64_t {
 	AsmEntryPoint,
 	FileInHex,
 	Anomalies,
+	Xrefs,
+	Overlay,
 
 	ItemMask = 255,
 };
@@ -90,6 +94,15 @@ struct IMainFrame abstract {
 	virtual std::vector<Anomaly> const& GetAnomalies() const = 0;
 	// Shows a place in the file: in the hex view, or as disassembly if the offset is in a code section.
 	virtual bool GoToFileOffset(int64_t offset, bool disassemble = false) = 0;
+	// Shows an address (a virtual address): in a disassembly view that already contains it, in a new one if it is in a code
+	// section, or in the hex view.
+	virtual bool GoToVa(uint64_t va) = 0;
+	// The places in the code that refer to addresses. Built from the whole file on first use.
+	virtual XrefMap const& GetXrefs() = 0;
+	// Lists the references to an address in a view of its own.
+	virtual bool ShowXrefs(uint64_t va) = 0;
+	// Remembers where the user is, so that Back returns to it.
+	virtual void RecordNavigation() = 0;
 	virtual bool AddToolBar(HWND tb) = 0;
 	virtual bool DeleteTreeItem(HTREEITEM hItem) = 0;
 	virtual bool CreateAssemblyView(std::span<const std::byte> code, uint64_t address, uint32_t rva, PCWSTR title, TreeItemType parent) = 0;
@@ -105,4 +118,6 @@ struct IView abstract {
 	// The history of Go To / Back / Forward uses these to return to the same place.
 	virtual int64_t GetNavigationPosition() const { return -1; }
 	virtual void SetNavigationPosition(int64_t) {}
+	// Brings an address (a virtual address) into view if the view shows it. False if it does not.
+	virtual bool GoToAddress(uint64_t va) { return false; }
 };

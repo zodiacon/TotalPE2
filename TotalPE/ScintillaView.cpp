@@ -11,6 +11,7 @@
 #include <WTLHelper.h>
 #include "PEStrings.h"
 #include "PEFile.h"
+#include "CodeAnalysis.h"
 
 
 using namespace Lexilla;
@@ -108,37 +109,198 @@ CScintillaCtrl& CScintillaView::GetCtrl() {
 	return m_Sci;
 }
 
+namespace {
+	// "0x401000", "401000" or "00000001400010A0", as a number
+	bool ParseHexAddress(std::string text, uint64_t& value) {
+		if (text.starts_with("0x") || text.starts_with("0X"))
+			text = text.substr(2);
+		if (text.empty() || text.size() > 16 || !std::all_of(text.begin(), text.end(), [](unsigned char c) { return isxdigit(c) != 0; }))
+			return false;
+		value = strtoull(text.c_str(), nullptr, 16);
+		return true;
+	}
+}
+
 void CScintillaView::UpdateUI(bool first) {
 	auto& ui = Frame()->GetUI();
 	ui.UIEnable(ID_EDIT_COPY, !m_Sci.IsSelectionEmpty());
 	auto text = m_Sci.GetSelText();
-	auto address = text.starts_with("0x");
+	uint64_t value;
+	auto address = ParseHexAddress(text, value);
 	ui.UIEnable(ID_ASSEMBLY_GOTOADDRESS, address);
 	ui.UIEnable(ID_ASSEMBLY_DISASSEMBLEATTHEEND, address);
 	ui.UIEnable(ID_ASSEMBLY_DISASSEMBLEINANEWTAB, address);
+
+	auto line = GetLine(m_ContextLine >= 0 ? m_ContextLine : CurrentLine());
+	ui.UIEnable(ID_ASSEMBLY_FOLLOW, line && line->Target());
+	ui.UIEnable(ID_ASSEMBLY_XREFS_HERE, line && line->Va);
+	ui.UIEnable(ID_ASSEMBLY_XREFS_TARGET, line && line->Target());
 }
 
-bool CScintillaView::SetAsmCode(std::span<const std::byte> code, uint64_t address, bool is32Bit) {
-	m_Is32Bit = is32Bit;
-	csh handle;
-	if (cs_open(CS_ARCH_X86, is32Bit ? CS_MODE_32 : CS_MODE_64, &handle) != CS_ERR_OK)
+namespace {
+	// "; name -- 12 xrefs (10 calls, 2 jumps)", the label above an instruction that something refers to
+	CStringA XrefLabel(std::wstring const& name, std::span<const Xref> refs) {
+		int calls = 0, jumps = 0, data = 0;
+		for (auto const& x : refs) {
+			switch (x.Kind) {
+				case XrefKind::Call: calls++; break;
+				case XrefKind::Data: data++; break;
+				default: jumps++; break;
+			}
+		}
+		std::string detail;
+		auto add = [&](int count, char const* what) {
+			if (count > 0)
+				detail += std::format("{}{} {}{}", detail.empty() ? "" : ", ", count, what, count == 1 ? "" : "s");
+		};
+		add(calls, "call");
+		add(jumps, "jump");
+		add(data, "data reference");
+		std::string prefix = name.empty() ? std::string() : std::string(CStringA(name.c_str())) + " -- ";
+		auto text = std::format("; {}{} xref{} ({})", prefix, refs.size(), refs.size() == 1 ? "" : "s", detail);
+		return text.c_str();
+	}
+
+	bool IsJumpTarget(XrefMap const& xrefs, uint64_t va) {
+		for (auto const& x : xrefs.To(va))
+			if (x.Kind == XrefKind::Jump || x.Kind == XrefKind::ConditionalJump)
+				return true;
 		return false;
+	}
+}
+
+// Disassembles until the end of the function: after an instruction that ends the flow of control, unless the next
+// instruction is the target of a jump (the function goes on there). Every piece of text ends with a line break and has
+// one entry in m_Lines, so that line numbers and entries correspond.
+CStringA CScintillaView::Disassemble(std::span<const std::byte> code, uint64_t address) {
+	csh handle;
+	if (cs_open(CS_ARCH_X86, m_Is32Bit ? CS_MODE_32 : CS_MODE_64, &handle) != CS_ERR_OK)
+		return "";
 	cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);	// operand details are needed to resolve symbols
+	auto const& xrefs = Frame()->GetXrefs();
+
 	auto bytes = (const uint8_t*)code.data();
 	auto size = code.size();
 	auto inst = cs_malloc(handle);
 	CStringA text;
 	while (cs_disasm_iter(handle, &bytes, &size, &address, inst)) {
+		auto refs = xrefs.To(inst->address);
+		if (!refs.empty()) {
+			if (!m_Lines.empty()) {
+				text += "\r\n";
+				m_Lines.push_back({});
+			}
+			text += XrefLabel(Frame()->ResolveVa(inst->address), refs) + "\r\n";
+			m_Lines.push_back({});
+		}
+
+		auto info = GetInstructionRefs(*inst, !m_Is32Bit);
+		Line line;
+		line.Va = inst->address;
+		line.Branch = info.Branch;
+		line.Memory = info.Memory;
+		m_LineOfVa.insert({ inst->address, (int)m_Lines.size() });
+		m_Lines.push_back(line);
 		text += PEStrings::FormatInstruction(*inst, Frame()) + "\r\n";
-		if (_strcmpi(inst->mnemonic, "ret") == 0)
+
+		bool end = inst->id == X86_INS_RET || inst->id == X86_INS_RETF || inst->id == X86_INS_IRET ||
+			inst->id == X86_INS_IRETD || inst->id == X86_INS_IRETQ || inst->id == X86_INS_JMP;
+		if (end && !IsJumpTarget(xrefs, address))
 			break;
 	}
 	cs_free(inst, 1);
-
-	m_Sci.SetText(text);
 	cs_close(&handle);
+	return text;
+}
 
+bool CScintillaView::SetAsmCode(std::span<const std::byte> code, uint64_t address, bool is32Bit) {
+	m_Is32Bit = is32Bit;
+	m_Lines.clear();
+	m_LineOfVa.clear();
+	m_Sci.SetText(Disassemble(code, address));
 	return true;
+}
+
+int CScintillaView::CurrentLine() const {
+	return (int)m_Sci.LineFromPosition(m_Sci.GetCurrentPos());
+}
+
+CScintillaView::Line const* CScintillaView::GetLine(int line) const {
+	return line >= 0 && line < (int)m_Lines.size() ? &m_Lines[line] : nullptr;
+}
+
+// the first line at or below 'line' that is an instruction, or -1
+int CScintillaView::InstructionLine(int line) const {
+	for (int i = std::max(line, 0); i < (int)m_Lines.size(); i++)
+		if (m_Lines[i].Va)
+			return i;
+	return -1;
+}
+
+int64_t CScintillaView::GetNavigationPosition() const {
+	if (m_Language != LexLanguage::Asm)
+		return -1;
+	auto line = GetLine(InstructionLine(CurrentLine()));
+	return line ? (int64_t)line->Va : -1;
+}
+
+void CScintillaView::SetNavigationPosition(int64_t va) {
+	GoToAddress((uint64_t)va);
+}
+
+void CScintillaView::ShowLine(int line) {
+	auto start = (intptr_t)m_Sci.SendMessage(SCI_POSITIONFROMLINE, line);
+	auto onScreen = (int)m_Sci.SendMessage(SCI_LINESONSCREEN);
+	m_Sci.SendMessage(SCI_SETFIRSTVISIBLELINE, std::max(0, line - onScreen / 3));
+	m_Sci.SendMessage(SCI_SETSEL, start, m_Sci.SendMessage(SCI_GETLINEENDPOSITION, line));
+}
+
+bool CScintillaView::GoToAddress(uint64_t va) {
+	auto it = m_LineOfVa.find(va);
+	if (it == m_LineOfVa.end())
+		return false;
+	ShowLine(it->second);
+	return true;
+}
+
+// in this view if it shows the address, otherwise wherever the main window finds a place for it
+bool CScintillaView::NavigateTo(uint64_t va) {
+	Frame()->RecordNavigation();
+	if (GoToAddress(va)) {
+		Frame()->RecordNavigation();
+		return true;
+	}
+	return Frame()->GoToVa(va);
+}
+
+bool CScintillaView::Follow(int line) {
+	auto info = GetLine(line);
+	if (info == nullptr || !info->Target())
+		return false;
+	return NavigateTo(*info->Target());
+}
+
+LRESULT CScintillaView::OnDoubleClick(int, LPNMHDR pnmh, BOOL& handled) {
+	auto line = (int)m_Sci.LineFromPosition(((SCNotification*)pnmh)->position);
+	handled = Follow(line);
+	return 0;
+}
+
+LRESULT CScintillaView::OnFollow(WORD, WORD, HWND, BOOL&) {
+	Follow(m_ContextLine >= 0 ? m_ContextLine : CurrentLine());
+	return 0;
+}
+
+LRESULT CScintillaView::OnXrefsHere(WORD, WORD, HWND, BOOL&) {
+	if (auto line = GetLine(m_ContextLine >= 0 ? m_ContextLine : CurrentLine()); line && line->Va)
+		Frame()->ShowXrefs(line->Va);
+	return 0;
+}
+
+LRESULT CScintillaView::OnXrefsTarget(WORD, WORD, HWND, BOOL&) {
+	if (auto line = GetLine(m_ContextLine >= 0 ? m_ContextLine : CurrentLine()); line && line->Target())
+		Frame()->ShowXrefs(*line->Target());
+	return 0;
 }
 
 void CScintillaView::SetText(PCWSTR text) {
@@ -221,53 +383,52 @@ LRESULT CScintillaView::OnUpdateTheme(UINT, WPARAM, LPARAM, BOOL&) {
 }
 
 LRESULT CScintillaView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
+	// the line under the mouse: a right click does not move the caret
+	m_ContextLine = -1;
+	int x = GET_X_LPARAM(lp), y = GET_Y_LPARAM(lp);
+	if (m_Language == LexLanguage::Asm && x != -1 && y != -1) {
+		CPoint pt(x, y);
+		::ScreenToClient(m_Sci, &pt);
+		auto pos = (intptr_t)m_Sci.SendMessage(SCI_POSITIONFROMPOINT, pt.x, pt.y);
+		if (pos >= 0)
+			m_ContextLine = (int)m_Sci.LineFromPosition(pos);
+	}
 	UpdateUI();
 	CMenu menu;
 	menu.LoadMenuW(IDR_CONTEXT);
-	return Frame()->ShowContextMenu(menu.GetSubMenu(m_Language == LexLanguage::Xml ? 0 : 6), 0, 
-		GET_X_LPARAM(lp), GET_Y_LPARAM(lp));
+	auto result = Frame()->ShowContextMenu(menu.GetSubMenu(m_Language == LexLanguage::Xml ? 0 : 6), 0,
+		x, y);
+	return result;
 }
 
 LRESULT CScintillaView::OnGoToAddress(WORD, WORD, HWND, BOOL&) {
-	auto text = m_Sci.GetSelText();
-
-	auto pos = m_Sci.FindTextW(Scintilla::FindOption::WordStart | Scintilla::FindOption::WholeWord, text.substr(2).c_str());
-	if (pos >= 0)
-		m_Sci.GotoPos(pos);
-	else
+	uint64_t va;
+	if (!ParseHexAddress(m_Sci.GetSelText(), va) || !NavigateTo(va))
 		AtlMessageBox(m_hWnd, L"Address not found", IDR_MAINFRAME, MB_ICONWARNING);
 	return 0;
 }
 
 LRESULT CScintillaView::OnDisassembleNewTab(WORD, WORD, HWND, BOOL&) {
-	auto selection = m_Sci.GetSelText();
-	auto address = strtoull(selection.substr(2).c_str(), nullptr, 16);
-
+	uint64_t va;
+	if (ParseHexAddress(m_Sci.GetSelText(), va))
+		Frame()->GoToVa(va);
 	return 0;
 }
 
 LRESULT CScintillaView::OnDisassembleAtEnd(WORD, WORD, HWND, BOOL&) {
-	auto selection = m_Sci.GetSelText();
-	auto address = strtoull(selection.c_str(), nullptr, 16);
-	csh handle;
-	if (cs_open(CS_ARCH_X86, m_Is32Bit ? CS_MODE_32 : CS_MODE_64, &handle) != CS_ERR_OK)
-		return false;
+	uint64_t address;
+	if (!ParseHexAddress(m_Sci.GetSelText(), address) || address < m_PE.GetImageBase())
+		return 0;
+	auto offset = m_PE.GetOffsetFromRVA(address - m_PE.GetImageBase());
+	if (offset == 0 || offset >= m_PE.GetFileSize())
+		return 0;
 
-	auto bytes = (const uint8_t*)m_PE.GetData() + address - m_PE.GetImageBase();
-	size_t size = 0x1000;
-	cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);
-	auto inst = cs_malloc(handle);
-	CStringA text;
-	while (cs_disasm_iter(handle, &bytes, &size, &address, inst)) {
-		text += PEStrings::FormatInstruction(*inst, Frame()) + "\r\n";
-		if (_strcmpi(inst->mnemonic, "ret") == 0 || _strcmpi(inst->mnemonic, "jmp") == 0)
-			break;
-	}
-	cs_free(inst, 1);
-	cs_close(&handle);
+	// the text ends with a line break, so the new lines start at the line that is now empty
+	auto size = std::min<uint32_t>(0x1000, m_PE.GetFileSize() - (uint32_t)offset);
+	auto text = Disassemble(m_PE.GetSpan((uint32_t)offset, size), address);
 
 	m_Sci.SetReadOnly(false);
-	m_Sci.AppendText(text.GetLength() + 1, "\n" + text);
+	m_Sci.AppendText(text.GetLength(), text);
 	m_Sci.SetReadOnly(true);
 
 	return 0;

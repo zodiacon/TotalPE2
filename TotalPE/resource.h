@@ -159,13 +159,17 @@
 #define ID_HEX_BIGENDIAN                32828
 #define ID_HEX_COPYAS                   32829
 #define ID_HEX_BOOKMARKS                32830
+#define ID_ASSEMBLY_FOLLOW              32834
+#define ID_ASSEMBLY_XREFS_HERE          32835
+#define ID_ASSEMBLY_XREFS_TARGET        32836
+#define ID_VIEW_OVERLAY                 32837
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        274
-#define _APS_NEXT_COMMAND_VALUE         32834
+#define _APS_NEXT_COMMAND_VALUE         32838
 #define _APS_NEXT_CONTROL_VALUE         1023
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

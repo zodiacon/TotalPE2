@@ -52,6 +52,7 @@ public:
 		COMMAND_ID_HANDLER(ID_VIEW_DEBUG, OnViewDebug)
 		COMMAND_ID_HANDLER(ID_VIEW_MANIFEST, OnViewManifest)
 		COMMAND_ID_HANDLER(ID_VIEW_VERSION, OnViewVersion)
+		COMMAND_ID_HANDLER(ID_VIEW_OVERLAY, OnViewOverlay)
 		COMMAND_ID_HANDLER(ID_PE_SECURITY, OnViewSecurity)
 		COMMAND_ID_HANDLER(ID_PE_ENTIREFILEINHEX, OnViewFileInHex)
 		COMMAND_ID_HANDLER(ID_VIEW_SECTIONS, OnViewSections)
@@ -97,6 +98,10 @@ private:
 	std::wstring ResolveVa(ULONGLONG va) const override;
 	std::vector<Anomaly> const& GetAnomalies() const override;
 	bool GoToFileOffset(int64_t offset, bool disassemble = false) override;
+	bool GoToVa(uint64_t va) override;
+	XrefMap const& GetXrefs() override;
+	bool ShowXrefs(uint64_t va) override;
+	void RecordNavigation() override;
 	bool AddToolBar(HWND tb) override;
 	bool DeleteTreeItem(HTREEITEM hItem) override;
 	bool CreateAssemblyView(std::span<const std::byte> code, uint64_t address, uint32_t rva, PCWSTR title, TreeItemType parent) override;
@@ -119,7 +124,7 @@ private:
 	void RegisterContextMenu(TreeItemType type, UINT menuId, int subMenu);
 
 	static int GetTreeIcon(UINT id);
-	static TreeItemType TreeItemWithIndex(TreeItemType type, int index);
+	static TreeItemType TreeItemWithIndex(TreeItemType type, int64_t index);
 	static int ResourceTypeToIcon(WORD resType);
 	static int DirectoryIndexToIcon(int index);
 	static TreeItemType GetIndex(TreeItemType value);
@@ -157,6 +162,7 @@ private:
 	LRESULT OnViewDataDirs(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewManifest(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewVersion(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnViewOverlay(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnDisassembleEntryPoint(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnAlwaysOnTop(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnUpdateDarkMode(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
@@ -195,6 +201,9 @@ private:
 	mutable std::unordered_map<std::wstring, DiaSession> m_SymbolsForModules;
 	std::vector<std::pair<DWORD, std::wstring>> m_NamedRvas;	// exports, import slots; sorted by RVA
 	std::vector<Anomaly> m_Anomalies;
+	XrefMap m_Xrefs;
+	OverlayInfo m_Overlay;
+	HTREEITEM m_hOverlay{ nullptr };
 
 	// Go To, Back and Forward
 	struct NavigationEntry {
@@ -205,7 +214,6 @@ private:
 	int m_HistoryIndex{ -1 };
 	bool m_Navigating{ false };
 	GoToOptions m_GoTo;
-	void RecordNavigation();
 	bool NavigateHistory(int delta);
 	void UpdateNavigationUI();
 	void ResetNavigation();

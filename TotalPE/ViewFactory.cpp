@@ -32,6 +32,8 @@
 #include "MenuView.h"
 #include "AnomalyView.h"
 #include "AnimatedCursorView.h"
+#include "XrefView.h"
+#include "OverlayView.h"
 
 std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 	CWaitCursor wait;
@@ -178,6 +180,16 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		case TreeItemType::Anomalies:
 		{
 			auto view = new CAnomalyView(this, m_Anomalies);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::Overlay:
+		{
+			auto view = new COverlayView(this, m_PE, m_Overlay);
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};
@@ -529,5 +541,49 @@ bool CMainFrame::CreateAssemblyView(std::span<const std::byte> code, uint64_t ad
 	m_Views.insert({ itemType, view });
 	m_Views2.insert({ view->GetHwnd(), itemType });
 
+	return true;
+}
+
+bool CMainFrame::ShowXrefs(uint64_t va) {
+	if (!m_PE)
+		return false;
+	auto base = m_PE.GetImageBase();
+	if (va < base || va - base > 0xFFFFFFFFULL)
+		return false;
+
+	auto refs = GetXrefs().To(va);
+	if (refs.empty()) {
+		AtlMessageBox(m_hWnd, std::format(L"Nothing in the code refers to 0x{:X}.", va).c_str(), IDR_MAINFRAME, MB_ICONINFORMATION);
+		return false;
+	}
+
+	auto parent = m_Views.find(TreeItemType::Image);
+	if (parent == m_Views.end())
+		return false;
+	auto hParent = parent->second->GetHTreeItem();
+
+	auto name = ResolveVa(va);
+	auto title = std::format(L"Xrefs to {}", name.empty() ? std::format(L"0x{:X}", va) : name);
+	if (auto hItem = FindChild(m_Tree, hParent, title.c_str())) {
+		ShowView(hItem);
+		return true;
+	}
+
+	auto view = new CXrefView(this, m_PE, va, refs, title.c_str());
+	if (nullptr == view->DoCreate(m_Tabs)) {
+		ATLASSERT(false);
+		return false;
+	}
+	view->SetDeleteFromTree(true);
+
+	auto image = GetIconIndex(IDI_BINARY);
+	auto itemType = TreeItemWithIndex(TreeItemType::Xrefs, (int64_t)(va - base) << ItemShift);
+	auto hItem = InsertTreeItem(m_Tree, title.c_str(), image, itemType, hParent, TVI_SORT);
+	m_Tree.EnsureVisible(hItem);
+	view->SetHTreeItem(hItem);
+	m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, view);
+	m_Views.insert({ itemType, view });
+	m_Views2.insert({ view->GetHwnd(), itemType });
+	RecordNavigation();
 	return true;
 }

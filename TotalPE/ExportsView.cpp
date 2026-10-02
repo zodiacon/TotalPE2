@@ -6,7 +6,7 @@
 #include <SortHelper.h>
 #include "resource.h"
 #include <DiaHelper.h>
-#include "ApiSet.h"
+#include "ApiSetMap.h"
 
 namespace {
 	// what is worth knowing about an export besides its name and address

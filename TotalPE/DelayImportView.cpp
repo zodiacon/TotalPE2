@@ -2,7 +2,7 @@
 #include "DelayImportView.h"
 #include "resource.h"
 #include <SortHelper.h>
-#include "ApiSet.h"
+#include "ApiSetMap.h"
 
 CDelayImportView::CDelayImportView(IMainFrame* frame, PEFile const& pe) : CViewBase(frame), m_PE(pe) {
 }

@@ -34,6 +34,7 @@ private:
 	struct Item {
 		std::wstring Name;
 		std::wstring Value;
+		std::wstring Block;		// where the value comes from: the fixed information, a language of StringFileInfo, VarFileInfo
 	};
 
 	void BuildItems();

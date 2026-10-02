@@ -106,11 +106,15 @@
     <ClCompile Include="..\TotalPE\HexNumber.cpp" />
     <ClCompile Include="..\TotalPE\AniFile.cpp" />
     <ClCompile Include="..\TotalPE\Md5.cpp" />
-    <ClCompile Include="..\TotalPE\ApiSet.cpp" />
+    <ClCompile Include="..\TotalPE\ApiSetMap.cpp" />
     <ClCompile Include="..\TotalPE\ImportAnalysis.cpp" />
     <ClCompile Include="..\TotalPE\ImphashOrdinals.cpp" />
     <ClCompile Include="..\TotalPE\PERegions.cpp" />
     <ClCompile Include="..\TotalPE\PEAnomalies.cpp" />
+    <ClCompile Include="..\TotalPE\CodeAnalysis.cpp" />
+    <ClCompile Include="..\TotalPE\Authenticode.cpp" />
+    <ClCompile Include="..\TotalPE\Overlay.cpp" />
+    <ClCompile Include="..\TotalPE\VersionInfo.cpp" />
     <ClCompile Include="ClrMetadataTests.cpp" />
     <ClCompile Include="MenuTemplateTests.cpp" />
     <ClCompile Include="DialogTemplateTests.cpp" />
@@ -123,6 +127,10 @@
     <ClCompile Include="HexFormatTests.cpp" />
     <ClCompile Include="PERegionsTests.cpp" />
     <ClCompile Include="AnomalyTests.cpp" />
+    <ClCompile Include="CodeAnalysisTests.cpp" />
+    <ClCompile Include="AuthenticodeTests.cpp" />
+    <ClCompile Include="OverlayTests.cpp" />
+    <ClCompile Include="VersionInfoTests.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\PECore\PECore.vcxproj">
