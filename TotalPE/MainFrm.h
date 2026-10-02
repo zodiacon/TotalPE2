@@ -10,6 +10,7 @@
 #include <TreeViewHelper.h>
 #include <PEFile.h>
 #include "Interfaces.h"
+#include "GoToDlg.h"
 #include "RecentFilesManager.h"
 #include <Theme.h>
 
@@ -63,6 +64,10 @@ public:
 		MESSAGE_HANDLER(WM_MENUSELECT, OnMenuSelect)
 		COMMAND_ID_HANDLER(ID_OPTIONS_DARKMODE, OnToggleDarkMode)
 		COMMAND_ID_HANDLER(ID_OPTIONS_SYMBOLS, OnSymbolSettings)
+		COMMAND_ID_HANDLER(ID_NAV_GOTO, OnNavGoTo)
+		COMMAND_ID_HANDLER(ID_NAV_BACK, OnNavBack)
+		COMMAND_ID_HANDLER(ID_NAV_FORWARD, OnNavForward)
+		MESSAGE_HANDLER(WM_SYMBOLS_LOADED, OnSymbolsLoaded)
 		MESSAGE_HANDLER(WM_UPDATE_DARKMODE, OnUpdateDarkMode)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
 		MESSAGE_HANDLER(WM_DESTROY, OnDestroy)
@@ -90,6 +95,8 @@ private:
 	DiaSymbol GetSymbolForName(PCWSTR mod, PCWSTR name) const override;
 	std::wstring ResolveRva(DWORD rva) const override;
 	std::wstring ResolveVa(ULONGLONG va) const override;
+	std::vector<Anomaly> const& GetAnomalies() const override;
+	bool GoToFileOffset(int64_t offset, bool disassemble = false) override;
 	bool AddToolBar(HWND tb) override;
 	bool DeleteTreeItem(HTREEITEM hItem) override;
 	bool CreateAssemblyView(std::span<const std::byte> code, uint64_t address, uint32_t rva, PCWSTR title, TreeItemType parent) override;
@@ -155,6 +162,10 @@ private:
 	LRESULT OnUpdateDarkMode(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnToggleDarkMode(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnSymbolSettings(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnNavGoTo(WORD, WORD, HWND, BOOL&);
+	LRESULT OnNavBack(WORD, WORD, HWND, BOOL&);
+	LRESULT OnNavForward(WORD, WORD, HWND, BOOL&);
+	LRESULT OnSymbolsLoaded(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnPageActivated(int /*idCtrl*/, LPNMHDR /*pnmh*/, BOOL& /*bHandled*/);
 	LRESULT OnViewFileInHex(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnPageCloseButton(int /*idCtrl*/, LPNMHDR /*pnmh*/, BOOL& /*bHandled*/);
@@ -183,6 +194,27 @@ private:
 	std::unordered_map<TreeItemType, ContextMenuInfo> m_ContextMenus;
 	mutable std::unordered_map<std::wstring, DiaSession> m_SymbolsForModules;
 	std::vector<std::pair<DWORD, std::wstring>> m_NamedRvas;	// exports, import slots; sorted by RVA
+	std::vector<Anomaly> m_Anomalies;
+
+	// Go To, Back and Forward
+	struct NavigationEntry {
+		HWND Page;
+		int64_t Position;
+	};
+	std::vector<NavigationEntry> m_History;
+	int m_HistoryIndex{ -1 };
+	bool m_Navigating{ false };
+	GoToOptions m_GoTo;
+	void RecordNavigation();
+	bool NavigateHistory(int delta);
+	void UpdateNavigationUI();
+	void ResetNavigation();
+	bool ResolveGoTo(GoToOptions const& options, int64_t& offset, std::wstring& error) const;
+
+	// symbols are loaded on a worker thread; results of an older request are ignored
+	uint32_t m_SymbolGeneration{ 0 };
+	void StartSymbolLoad(std::wstring path);
+	void RefreshViews();
 	void BuildNamedRvas();
 	inline static std::unordered_map<UINT, int> s_ImageIndices;
 	inline static int s_Frames{ 1 };

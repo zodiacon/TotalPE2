@@ -1,5 +1,31 @@
 #pragma once
 
+#ifdef TOTALPE_LOGIC_TESTS
+// The unit tests compile the logic sources (parsers, analysis) on their own, without WTL and the UI libraries
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
+#include <wil\resource.h>
+#include <vector>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <format>
+#include <algorithm>
+#include <numeric>
+#include <functional>
+#include <unordered_map>
+#include <unordered_set>
+#include <span>
+#include <cstdint>
+#include <cstring>
+#include <cstdlib>
+#include <cwctype>
+#include <cmath>
+#include <ctime>
+#include <WinTrust.h>
+#else
+
 // Change these values to use different versions
 #define WINVER		0x0601
 #define _WIN32_WINNT	0x0601
@@ -50,3 +76,4 @@ extern CAppModule _Module;
 #else
   #pragma comment(linker, "/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 #endif
+#endif // TOTALPE_LOGIC_TESTS

@@ -72,6 +72,15 @@
 #define IDI_ICON2                       268
 #define IDD_SYMBOLS                     269
 #define IDD_HEXFIND                     270
+#define IDD_GOTO                        273
+#define IDC_GOTO_VALUE                  1018
+#define IDC_GOTO_RVA                    1019
+#define IDC_GOTO_VA                     1020
+#define IDC_GOTO_OFFSET                 1021
+#define IDC_GOTO_DISASM                 1022
+#define ID_NAV_GOTO                     32831
+#define ID_NAV_BACK                     32832
+#define ID_NAV_FORWARD                  32833
 #define IDI_ICON1                       271
 #define IDI_LOOK                        271
 #define IDI_ICON3                       272
@@ -155,9 +164,9 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        273
-#define _APS_NEXT_COMMAND_VALUE         32831
-#define _APS_NEXT_CONTROL_VALUE         1018
+#define _APS_NEXT_RESOURCE_VALUE        274
+#define _APS_NEXT_COMMAND_VALUE         32834
+#define _APS_NEXT_CONTROL_VALUE         1023
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

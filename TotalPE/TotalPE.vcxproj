@@ -395,6 +395,11 @@
     <ClCompile Include="ClrView.cpp" />
     <ClCompile Include="SymbolSettingsDlg.cpp" />
     <ClCompile Include="HexFormat.cpp" />
+    <ClCompile Include="HexSearch.cpp" />
+    <ClCompile Include="HexNumber.cpp" />
+    <ClCompile Include="PEAnomalies.cpp" />
+    <ClCompile Include="AnomalyView.cpp" />
+    <ClCompile Include="GoToDlg.cpp" />
     <ClCompile Include="HexFind.cpp" />
     <ClCompile Include="HexInspector.cpp" />
     <ClCompile Include="PERegions.cpp" />
@@ -441,6 +446,11 @@
     <ClInclude Include="ClrView.h" />
     <ClInclude Include="SymbolSettingsDlg.h" />
     <ClInclude Include="HexFormat.h" />
+    <ClInclude Include="HexSearch.h" />
+    <ClInclude Include="HexNumber.h" />
+    <ClInclude Include="PEAnomalies.h" />
+    <ClInclude Include="AnomalyView.h" />
+    <ClInclude Include="GoToDlg.h" />
     <ClInclude Include="HexFind.h" />
     <ClInclude Include="HexInspector.h" />
     <ClInclude Include="PERegions.h" />

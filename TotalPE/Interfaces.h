@@ -2,8 +2,11 @@
 
 #include <DiaHelper.h>
 #include <PEFile.h>
+#include "PEAnomalies.h"
 
 static const UINT WM_UPDATE_DARKMODE = WM_APP + 56;
+// posted by the symbol loading thread: wParam is the generation of the request, lParam a DiaSession* (or null)
+static const UINT WM_SYMBOLS_LOADED = WM_APP + 57;
 
 constexpr uint32_t ItemShift = 8;
 
@@ -53,6 +56,7 @@ enum class TreeItemType : int64_t {
 	Disassembly,
 	AsmEntryPoint,
 	FileInHex,
+	Anomalies,
 
 	ItemMask = 255,
 };
@@ -83,6 +87,9 @@ struct IMainFrame abstract {
 	// Returns an empty string if nothing is known about the address.
 	virtual std::wstring ResolveRva(DWORD rva) const = 0;
 	virtual std::wstring ResolveVa(ULONGLONG va) const = 0;
+	virtual std::vector<Anomaly> const& GetAnomalies() const = 0;
+	// Shows a place in the file: in the hex view, or as disassembly if the offset is in a code section.
+	virtual bool GoToFileOffset(int64_t offset, bool disassemble = false) = 0;
 	virtual bool AddToolBar(HWND tb) = 0;
 	virtual bool DeleteTreeItem(HTREEITEM hItem) = 0;
 	virtual bool CreateAssemblyView(std::span<const std::byte> code, uint64_t address, uint32_t rva, PCWSTR title, TreeItemType parent) = 0;
@@ -94,4 +101,8 @@ struct IView abstract {
 	virtual void SetHTreeItem(HTREEITEM hItem) = 0;
 	virtual HTREEITEM GetHTreeItem() const = 0;
 	virtual bool DeleteFromTree() const = 0;
+	// Where the user is in the view (a file offset for hex views, -1 if the view has no notion of position).
+	// The history of Go To / Back / Forward uses these to return to the same place.
+	virtual int64_t GetNavigationPosition() const { return -1; }
+	virtual void SetNavigationPosition(int64_t) {}
 };

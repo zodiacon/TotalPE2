@@ -15,6 +15,7 @@
 struct SyntheticPE {
 	bool Is64{ true };
 	bool Dll{ true };
+	bool Clr{ false };	// add a CLR header and metadata (see below)
 
 	static constexpr uint32_t FileAlignment = 0x200;
 	static constexpr uint32_t SectionAlignment = 0x1000;
@@ -38,11 +39,21 @@ struct SyntheticPE {
 	static constexpr uint32_t ImportDirRva = 0x30A0, ImportDirSize = 0x28;
 	static constexpr uint32_t IatRva = 0x30F0;
 
+	// .NET: with Clr set, .data also holds a CLR header at RVA 0x2080 and the metadata at 0x2100
+	//   module "Test.dll", assembly "TestAsm" 1.2.3.4, references mscorlib 4.0.0.0 and System.Core 3.5.0.0
+	static constexpr uint32_t ClrHeaderRva = 0x2080, ClrMetadataRva = 0x2100, ClrMetadataSize = 0xD4;
+
+	size_t OptionalHeaderOffset() const { return ELfanew + 4 + 20; }
+	size_t SectionHeaderOffset(int index) const { return OptionalHeaderOffset() + (Is64 ? 240 : 224) + (size_t)index * 40; }
+
 	uint64_t ImageBase() const { return Is64 ? 0x140000000ULL : 0x400000ULL; }
 	uint32_t PointerSize() const { return Is64 ? 8 : 4; }
 	uint32_t IatSize() const { return PointerSize() * 2; }	// one import plus the terminator
 
 	std::vector<uint8_t> Build() const;
+
+private:
+	void AddClr(std::vector<uint8_t>& buf, IMAGE_DATA_DIRECTORY* dirs) const;
 };
 
 // Writes bytes to a unique temporary file that is deleted when the object goes out of scope.

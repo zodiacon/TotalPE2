@@ -165,7 +165,7 @@ TEST_CASE("Raw file access", "[read]") {
 		auto span = pe.GetSpan(SyntheticPE::DataOffset, 16);
 		REQUIRE(span.size() == 16);
 		for (size_t i = 0; i < span.size(); i++)
-			CHECK(std::to_integer<uint8_t>(span[i]) == i);	// .data holds 0, 1, 2, ...
+			CHECK(std::to_integer<uint8_t>(span[i]) == i);	// .data holds 0, 1 ... 15, 0, 1 ...
 
 		auto whole = pe.GetSpan(0, size);
 		CHECK(memcmp(whole.data(), bytes.data(), size) == 0);

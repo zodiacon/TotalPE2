@@ -54,11 +54,11 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>TOTALPE_LOGIC_TESTS;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-      <AdditionalIncludeDirectories>..\PECore;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\PECore;..\TotalPE;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -72,11 +72,11 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>TOTALPE_LOGIC_TESTS;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <AdditionalIncludeDirectories>..\PECore;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\PECore;..\TotalPE;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -89,6 +89,7 @@
   <ItemGroup>
     <ClInclude Include="SyntheticPE.h" />
     <ClInclude Include="TestCommon.h" />
+    <ClInclude Include="ByteWriter.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
@@ -97,6 +98,22 @@
     <ClCompile Include="ParsingTests.cpp" />
     <ClCompile Include="SystemBinaryTests.cpp" />
     <ClCompile Include="RobustnessTests.cpp" />
+    <ClCompile Include="..\TotalPE\ClrMetadata.cpp" />
+    <ClCompile Include="..\TotalPE\DialogTemplate.cpp" />
+    <ClCompile Include="..\TotalPE\MenuTemplate.cpp" />
+    <ClCompile Include="..\TotalPE\HexFormat.cpp" />
+    <ClCompile Include="..\TotalPE\HexSearch.cpp" />
+    <ClCompile Include="..\TotalPE\HexNumber.cpp" />
+    <ClCompile Include="..\TotalPE\PERegions.cpp" />
+    <ClCompile Include="..\TotalPE\PEAnomalies.cpp" />
+    <ClCompile Include="ClrMetadataTests.cpp" />
+    <ClCompile Include="MenuTemplateTests.cpp" />
+    <ClCompile Include="DialogTemplateTests.cpp" />
+    <ClCompile Include="HexSearchTests.cpp" />
+    <ClCompile Include="HexNumberTests.cpp" />
+    <ClCompile Include="HexFormatTests.cpp" />
+    <ClCompile Include="PERegionsTests.cpp" />
+    <ClCompile Include="AnomalyTests.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\PECore\PECore.vcxproj">

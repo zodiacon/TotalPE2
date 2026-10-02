@@ -62,6 +62,21 @@ void CHexView::ClearData() {
 	UpdateInspector();
 }
 
+int64_t CHexView::GetNavigationPosition() const {
+	return m_Hex.GetCaretOffset() + m_Hex.GetBiasOffset();
+}
+
+void CHexView::SetNavigationPosition(int64_t position) {
+	if (!m_Buffer)
+		return;
+	auto offset = position - m_Hex.GetBiasOffset();
+	if (offset < 0 || offset >= m_Buffer->GetSize())
+		return;
+	m_Hex.SetSelection(offset, 1);
+	m_Hex.GotoOffset(offset);
+	m_Hex.SetFocus();
+}
+
 void CHexView::SetPE(PEFile const& pe, std::vector<HexRegion> regions) {
 	m_PE = &pe;
 	m_Regions = std::move(regions);

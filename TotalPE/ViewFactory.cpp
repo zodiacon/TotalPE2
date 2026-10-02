@@ -30,6 +30,7 @@
 #include "GlobalPtrView.h"
 #include "DialogView.h"
 #include "MenuView.h"
+#include "AnomalyView.h"
 
 std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 	CWaitCursor wait;
@@ -170,6 +171,16 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 				return {};
 			}
 			view->SetData(m_PE, (uint32_t)m_PE.GetOffsetFromRVA(dir.VirtualAddress), dir.Size);
+			return { view, view };
+		}
+
+		case TreeItemType::Anomalies:
+		{
+			auto view = new CAnomalyView(this, m_Anomalies);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
 			return { view, view };
 		}
 

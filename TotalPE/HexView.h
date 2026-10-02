@@ -44,6 +44,9 @@ public:
 
 	void ClearData();
 
+	int64_t GetNavigationPosition() const override;
+	void SetNavigationPosition(int64_t position) override;
+
 	BEGIN_MSG_MAP(CHexView)
 		COMMAND_RANGE_HANDLER(ID_DATASIZE_1BYTE, ID_DATASIZE_8BYTES, OnChangeDataSize)
 		COMMAND_ID_HANDLER(ID_HEX_INSPECTOR, OnToggleInspector)

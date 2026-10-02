@@ -12,6 +12,7 @@
 #include "PEStrings.h"
 #include "AppSettings.h"
 #include "SymbolSettingsDlg.h"
+#include "GoToDlg.h"
 #include <thread>
 #include <WTLHelper.h>
 
@@ -486,9 +487,10 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 		m_SymbolsForModules.clear();
 
 	m_Symbols.Close();
-	m_Symbols.SetSymbolPath(AppSettings::Get().BuildSymbolSearchPath().c_str());
-	m_Symbols.OpenImage(path);
 	BuildNamedRvas();
+	m_Anomalies = FindAnomalies(m_PE);
+	ResetNavigation();
+	StartSymbolLoad(path);	// the window is usable at once; symbols arrive later (WM_SYMBOLS_LOADED)
 	m_Views.clear();
 	m_Views2.clear();
 	m_Tabs.RemoveAllPages();
@@ -558,6 +560,8 @@ void CMainFrame::BuildTree(int iconSize) {
 		i++;
 	}
 	m_Tree.Expand(directories, TVE_EXPAND);
+
+	InsertTreeItem(m_Tree, std::format(L"Anomalies ({})", m_Anomalies.size()).c_str(), GetTreeIcon(IDI_EXCEPTION), TreeItemType::Anomalies, root);
 
 	if (m_PE.GetFileInfo()->HasResource) {
 		auto resources = InsertTreeItem(m_Tree, L"Resources", GetTreeIcon(IDI_RESOURCE), TreeItemType::Resources, root);
@@ -633,7 +637,10 @@ LRESULT CMainFrame::OnFileClose(WORD, WORD, HWND, BOOL&) {
 	m_Views.clear();
 	m_Views2.clear();
 	m_PE.Close();
+	++m_SymbolGeneration;	// a symbol load in progress belongs to the file that was just closed
 	m_Symbols.Close();
+	m_Anomalies.clear();
+	ResetNavigation();
 	m_Tree.DeleteAllItems();
 	UpdateUI();
 	CString ftitle;
@@ -957,7 +964,278 @@ LRESULT CMainFrame::OnSymbolSettings(WORD, WORD, HWND, BOOL&) {
 }
 
 LRESULT CMainFrame::OnPageActivated(int /*idCtrl*/, LPNMHDR /*pnmh*/, BOOL& /*bHandled*/) {
+	RecordNavigation();
 	return 0;
+}
+
+//
+// symbols in the background
+//
+
+void CMainFrame::StartSymbolLoad(std::wstring path) {
+	auto generation = ++m_SymbolGeneration;
+	auto searchPath = AppSettings::Get().BuildSymbolSearchPath();	// settings are only read on the UI thread
+	SetStatusText(0, L"Loading symbols...");
+
+	std::thread([hWnd = m_hWnd, generation, path = std::move(path), searchPath = std::move(searchPath)] {
+		::CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+		auto session = std::make_unique<DiaSession>();
+		session->SetSymbolPath(searchPath.c_str());
+		bool ok = session->OpenImage(path.c_str());
+		// ownership of the session moves to the UI thread, unless the window is gone
+		if (!::PostMessage(hWnd, WM_SYMBOLS_LOADED, generation, ok ? (LPARAM)session.get() : 0))
+			return;
+		if (ok)
+			session.release();
+	}).detach();
+}
+
+LRESULT CMainFrame::OnSymbolsLoaded(UINT, WPARAM generation, LPARAM lParam, BOOL&) {
+	std::unique_ptr<DiaSession> session((DiaSession*)lParam);
+	if ((uint32_t)generation != m_SymbolGeneration || !m_PE)
+		return 0;	// the file was closed or another one opened in the meantime
+
+	if (!session) {
+		SetStatusText(0, L"No symbols");
+		return 0;
+	}
+	m_Symbols = *session;
+	m_Symbols.LoadAddress(m_PE.GetImageBase());
+	SetStatusText(0, L"Symbols loaded");
+	RefreshViews();
+	return 0;
+}
+
+// Views that were opened before the symbols arrived show addresses without names. Create them again.
+void CMainFrame::RefreshViews() {
+	struct Entry {
+		TreeItemType Type;
+		HTREEITEM Item;
+		int Page;
+		bool Active;
+	};
+	std::vector<Entry> entries;
+	int active = m_Tabs.GetActivePage();
+	for (int i = 0; i < m_Tabs.GetPageCount(); i++) {
+		auto it = m_Views2.find(m_Tabs.GetPageHWND(i));
+		if (it == m_Views2.end())
+			continue;
+		auto view = m_Views.find(it->second);
+		// views that were created on request (disassembly, the file in hex) keep what they show
+		if (view == m_Views.end() || view->second->DeleteFromTree())
+			continue;
+		entries.push_back({ it->second, view->second->GetHTreeItem(), i, i == active });
+	}
+	if (entries.empty())
+		return;
+
+	m_Navigating = true;	// not a navigation the user made
+	auto selected = m_Tree.GetSelectedItem();
+	m_Tree.SetRedraw(FALSE);
+	for (auto it = entries.rbegin(); it != entries.rend(); ++it) {
+		CloseTab(it->Page);
+		m_Tabs.RemovePage(it->Page);
+	}
+	for (auto& e : entries)
+		ShowView(e.Type, e.Item);
+	for (auto& e : entries)
+		if (e.Active)
+			ShowView(e.Type, e.Item);
+	if (selected)
+		m_Tree.SelectItem(selected);
+	m_Tree.SetRedraw(TRUE);
+	m_Navigating = false;
+
+	ResetNavigation();
+	RecordNavigation();
+}
+
+//
+// Go To, Back and Forward
+//
+
+void CMainFrame::ResetNavigation() {
+	m_History.clear();
+	m_HistoryIndex = -1;
+	UpdateNavigationUI();
+}
+
+void CMainFrame::UpdateNavigationUI() {
+	UIEnable(ID_NAV_GOTO, m_PE ? TRUE : FALSE);
+	UIEnable(ID_NAV_BACK, m_HistoryIndex > 0);
+	UIEnable(ID_NAV_FORWARD, m_HistoryIndex + 1 < (int)m_History.size());
+}
+
+// Remembers the page and position the user is at, unless that is already the current entry.
+void CMainFrame::RecordNavigation() {
+	if (m_Navigating)
+		return;
+	int page = m_Tabs.GetActivePage();
+	if (page < 0)
+		return;
+
+	auto hWnd = m_Tabs.GetPageHWND(page);
+	int64_t position = -1;
+	if (auto it = m_Views2.find(hWnd); it != m_Views2.end())
+		if (auto view = m_Views.find(it->second); view != m_Views.end())
+			position = view->second->GetNavigationPosition();
+
+	if (m_HistoryIndex >= 0 && m_HistoryIndex < (int)m_History.size()) {
+		auto const& current = m_History[m_HistoryIndex];
+		if (current.Page == hWnd && current.Position == position)
+			return;
+	}
+	m_History.resize(m_HistoryIndex + 1);	// going somewhere new discards what was "forward"
+	m_History.push_back({ hWnd, position });
+	if (m_History.size() > 100)
+		m_History.erase(m_History.begin());
+	m_HistoryIndex = (int)m_History.size() - 1;
+	UpdateNavigationUI();
+}
+
+bool CMainFrame::NavigateHistory(int delta) {
+	int index = m_HistoryIndex + delta;
+	while (index >= 0 && index < (int)m_History.size()) {
+		auto entry = m_History[index];
+		int page = -1;
+		for (int i = 0; i < m_Tabs.GetPageCount(); i++)
+			if (m_Tabs.GetPageHWND(i) == entry.Page)
+				page = i;
+
+		if (page >= 0) {
+			m_Navigating = true;
+			m_Tabs.SetActivePage(page);
+			if (entry.Position >= 0)
+				if (auto it = m_Views2.find(entry.Page); it != m_Views2.end())
+					if (auto view = m_Views.find(it->second); view != m_Views.end())
+						view->second->SetNavigationPosition(entry.Position);
+			m_Navigating = false;
+			m_HistoryIndex = index;
+			UpdateNavigationUI();
+			return true;
+		}
+		// the tab was closed: forget the entry and try the next one in the same direction
+		m_History.erase(m_History.begin() + index);
+		if (delta < 0) {
+			index--;
+			m_HistoryIndex--;
+		}
+	}
+	UpdateNavigationUI();
+	return false;
+}
+
+LRESULT CMainFrame::OnNavBack(WORD, WORD, HWND, BOOL&) {
+	NavigateHistory(-1);
+	return 0;
+}
+
+LRESULT CMainFrame::OnNavForward(WORD, WORD, HWND, BOOL&) {
+	NavigateHistory(1);
+	return 0;
+}
+
+bool CMainFrame::ResolveGoTo(GoToOptions const& options, int64_t& offset, std::wstring& error) const {
+	if (!m_PE) {
+		error = L"No file is open.";
+		return false;
+	}
+	const uint64_t fileSize = m_PE.GetFileSize();
+	if (options.Kind == GoToKind::FileOffset) {
+		if (options.Value >= fileSize) {
+			error = std::format(L"The offset 0x{:X} is beyond the end of the file (0x{:X} bytes).", options.Value, fileSize);
+			return false;
+		}
+		offset = (int64_t)options.Value;
+		return true;
+	}
+
+	uint64_t rva = options.Value;
+	if (options.Kind == GoToKind::Va) {
+		auto base = m_PE.GetImageBase();
+		if (options.Value < base || options.Value - base > 0xFFFFFFFFULL) {
+			error = std::format(L"The address 0x{:X} is outside the image (which starts at 0x{:X}).", options.Value, base);
+			return false;
+		}
+		rva = options.Value - base;
+	}
+	else if (rva > 0xFFFFFFFFULL) {
+		error = L"An RVA is at most 32 bits.";
+		return false;
+	}
+
+	auto const& nt = *m_PE.GetNTHeader();
+	auto sizeOfHeaders = m_PE.GetFileInfo()->IsPE64 ? nt.NTHdr64.OptionalHeader.SizeOfHeaders : nt.NTHdr32.OptionalHeader.SizeOfHeaders;
+	if (rva < sizeOfHeaders && rva < fileSize) {
+		offset = (int64_t)rva;	// the headers are mapped one to one
+		return true;
+	}
+	auto mapped = m_PE.GetOffsetFromRVA(rva);
+	if (mapped == 0 || mapped >= fileSize) {
+		error = std::format(L"The RVA 0x{:X} is not backed by data in the file: it is outside the image or in uninitialized data.", rva);
+		return false;
+	}
+	offset = (int64_t)mapped;
+	return true;
+}
+
+LRESULT CMainFrame::OnNavGoTo(WORD, WORD, HWND, BOOL&) {
+	if (!m_PE)
+		return 0;
+	CGoToDlg dlg(m_GoTo);
+	if (dlg.DoModal(m_hWnd) != IDOK)
+		return 0;
+
+	int64_t offset;
+	std::wstring error;
+	if (!ResolveGoTo(m_GoTo, offset, error)) {
+		AtlMessageBox(m_hWnd, error.c_str(), IDR_MAINFRAME, MB_ICONWARNING);
+		return 0;
+	}
+	GoToFileOffset(offset, m_GoTo.Disassemble);
+	return 0;
+}
+
+bool CMainFrame::GoToFileOffset(int64_t offset, bool disassemble) {
+	if (!m_PE || offset < 0 || offset >= (int64_t)m_PE.GetFileSize())
+		return false;
+
+	RecordNavigation();	// so that Back returns to where the user was
+	if (disassemble) {
+		PESectionHeader const* host = nullptr;
+		for (auto const& s : *m_PE.GetSecHeaders()) {
+			auto& h = s.SecHdr;
+			if (offset >= h.PointerToRawData && offset < (int64_t)h.PointerToRawData + h.SizeOfRawData) {
+				host = &s;
+				break;
+			}
+		}
+		if (host && (host->SecHdr.Characteristics & (IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_CNT_CODE))) {
+			auto& h = host->SecHdr;
+			auto rva = (uint32_t)(h.VirtualAddress + (offset - h.PointerToRawData));
+			auto va = m_PE.GetImageBase() + rva;
+			auto size = (uint32_t)std::min<int64_t>(0x2000, (int64_t)h.PointerToRawData + h.SizeOfRawData - offset);
+			auto title = std::format(L"Code at 0x{:X}", va);
+			if (CreateAssemblyView(m_PE.GetSpan((uint32_t)offset, size), va, rva, title.c_str(), TreeItemType::Image)) {
+				RecordNavigation();
+				return true;
+			}
+		}
+		else {
+			AtlMessageBox(m_hWnd, L"That address is not in a code section. It is shown in the hex view instead.", IDR_MAINFRAME, MB_ICONINFORMATION);
+		}
+	}
+
+	if (!ShowView(TreeItemType::FileInHex, nullptr, IDI_BINARY))
+		return false;
+	if (auto it = m_Views.find(TreeItemType::FileInHex); it != m_Views.end())
+		it->second->SetNavigationPosition(offset);
+	RecordNavigation();
+	return true;
+}
+
+std::vector<Anomaly> const& CMainFrame::GetAnomalies() const {
+	return m_Anomalies;
 }
 
 LRESULT CMainFrame::OnViewFileInHex(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {

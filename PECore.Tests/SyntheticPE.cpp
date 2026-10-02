@@ -103,9 +103,9 @@ std::vector<uint8_t> SyntheticPE::Build() const {
 	memset(buf.data() + TextOffset, 0xCC, SectionSize);
 	buf[TextOffset] = 0xC3;
 
-	// .data: a recognizable pattern
+	// .data: a recognizable pattern (0, 1 ... 15, 0, 1 ...), with the low entropy of ordinary data
 	for (uint32_t i = 0; i < SectionSize; i++)
-		buf[DataOffset + i] = (uint8_t)i;
+		buf[DataOffset + i] = (uint8_t)(i % 16);
 
 	// .rdata, addressed by offsets relative to the section start (RVA = RdataRva + offset)
 	auto rdata = [&](uint32_t rvaInSection) { return (size_t)RdataOffset + (rvaInSection - RdataRva); };
@@ -147,7 +147,74 @@ std::vector<uint8_t> SyntheticPE::Build() const {
 	PutString(buf, rdata(0x3102), "ExitProcess");
 	PutString(buf, rdata(0x3120), "kernel32.dll");
 
+	if (Clr)
+		AddClr(buf, dirs);
 	return buf;
+}
+
+void SyntheticPE::AddClr(std::vector<uint8_t>& buf, IMAGE_DATA_DIRECTORY* dirs) const {
+	auto data = [&](uint32_t rva) { return (size_t)DataOffset + (rva - DataRva); };
+
+	// the CLR header and metadata replace the pattern that .data otherwise holds
+	memset(buf.data() + data(ClrHeaderRva), 0, ClrMetadataRva + ClrMetadataSize - ClrHeaderRva);
+
+	auto cor = At<IMAGE_COR20_HEADER>(buf, data(ClrHeaderRva));
+	cor->cb = sizeof(IMAGE_COR20_HEADER);
+	cor->MajorRuntimeVersion = 2;
+	cor->MinorRuntimeVersion = 5;
+	cor->MetaData = { ClrMetadataRva, ClrMetadataSize };
+	cor->Flags = COMIMAGE_FLAGS_ILONLY;
+	cor->EntryPointToken = 0x06000001;
+	dirs[IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR] = { ClrHeaderRva, sizeof(IMAGE_COR20_HEADER) };
+
+	// The buffer is zero filled, so skipping bytes writes zeros (padding and string terminators).
+	size_t p = data(ClrMetadataRva);
+	auto put16 = [&](uint16_t v) { *At<uint16_t>(buf, p) = v; p += 2; };
+	auto put32 = [&](uint32_t v) { *At<uint32_t>(buf, p) = v; p += 4; };
+	// a string followed by zero padding up to 'width' bytes
+	auto putPadded = [&](char const* s, size_t width) { memcpy(buf.data() + p, s, strlen(s)); p += width; };
+	// a zero terminated string
+	auto putZ = [&](char const* s) { memcpy(buf.data() + p, s, strlen(s)); p += strlen(s) + 1; };
+
+	// metadata root
+	const uint32_t tablesOffset = 0x40, tablesSize = 108;
+	const uint32_t stringsOffset = tablesOffset + tablesSize, stringsSize = 40;
+	put32(0x424A5342);	// "BSJB"
+	put16(1); put16(1);
+	put32(0);
+	put32(12);			// length of the version string
+	putPadded("v4.0.30319", 12);
+	put16(0);
+	put16(2);			// streams
+	put32(tablesOffset); put32(tablesSize); putPadded("#~", 4);
+	put32(stringsOffset); put32(stringsSize); putPadded("#Strings", 12);
+
+	// "#~" stream: Module (1 row), Assembly (1 row), AssemblyRef (2 rows); all heap indexes are 2 bytes wide
+	p = data(ClrMetadataRva) + tablesOffset;
+	put32(0);			// reserved
+	buf[p++] = 2;		// major version
+	buf[p++] = 0;		// minor version
+	buf[p++] = 0;		// heap sizes
+	buf[p++] = 1;		// reserved
+	// "valid" is a 64 bit mask: tables 0x20 and 0x23 are bits 0 and 3 of the upper half
+	put32(1u << 0);
+	put32((1u << (0x20 - 32)) | (1u << (0x23 - 32)));
+	put32(0); put32(0);	// sorted
+	put32(1); put32(1); put32(2);	// row counts
+	// Module: Generation, Name, Mvid, EncId, EncBaseId
+	put16(0); put16(1); put16(0); put16(0); put16(0);
+	// Assembly: HashAlgId, version, Flags, PublicKey, Name, Culture
+	put32(0x8004); put16(1); put16(2); put16(3); put16(4); put32(0); put16(0); put16(10); put16(0);
+	// AssemblyRef: version, Flags, PublicKeyOrToken, Name, Culture, HashValue
+	put16(4); put16(0); put16(0); put16(0); put32(0); put16(0); put16(18); put16(0); put16(0);
+	put16(3); put16(5); put16(0); put16(0); put32(0); put16(0); put16(27); put16(0); put16(0);
+
+	// "#Strings" stream: index 0 is the empty string, then "Test.dll" (1), "TestAsm" (10), "mscorlib" (18), "System.Core" (27)
+	p = data(ClrMetadataRva) + stringsOffset + 1;
+	putZ("Test.dll");
+	putZ("TestAsm");
+	putZ("mscorlib");
+	putZ("System.Core");
 }
 
 TempFile::TempFile(std::vector<uint8_t> const& data, PCWSTR extension) {

@@ -1,6 +1,16 @@
 #include "pch.h"
 #include "PERegions.h"
-#include "PEStrings.h"
+
+namespace {
+	PCWSTR DirectoryName(int index) {
+		static const PCWSTR names[] = {
+			L"Export", L"Import", L"Resource", L"Exception", L"Security", L"Base Relocation",
+			L"Debug", L"Architecture", L"Global Pointer", L"Thread Local Storage", L"Load Config",
+			L"Bound Import", L"IAT", L"Delay Import", L"COM Descriptor (CLR)",
+		};
+		return index >= 0 && index < (int)_countof(names) ? names[index] : L"Reserved";
+	}
+}
 
 bool FileOffsetToRva(PEFile const& pe, uint64_t offset, DWORD& rva) {
 	auto sections = pe.GetSecHeaders();
@@ -113,7 +123,7 @@ std::vector<HexRegion> BuildPERegions(PEFile const& pe) {
 			}
 			auto end = std::min<uint64_t>(offset + dd.Size, sectionEnd(offset));
 			if (end > offset)
-				add(offset, end - offset, std::wstring(PEStrings::GetDataDirectoryName(i)) + L" Directory", 11);
+				add(offset, end - offset, std::wstring(DirectoryName(i)) + L" Directory", 11);
 		}
 	}
 
