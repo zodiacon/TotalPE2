@@ -1,9 +1,17 @@
 #include "pch.h"
 #include "ImportsView.h"
 #include "PEStrings.h"
+#include "ImportAnalysis.h"
+#include "ApiSet.h"
 #include "resource.h"
 #include <SortHelper.h>
 #include <ClipboardHelper.h>
+
+namespace {
+	std::wstring Widen(std::string const& s) {
+		return std::wstring(s.begin(), s.end());
+	}
+}
 
 CImportsView::CImportsView(IMainFrame* frame, PEFile const& pe) : CViewBase(frame), m_PE(pe) {
 }
@@ -18,14 +26,19 @@ CString CImportsView::GetColumnText(HWND h, int row, int col) const {
 			case ColumnType::ModuleName: return mod.ModuleName.c_str();
 			case ColumnType::FunctionCount: return std::to_wstring(mod.ImportFunc.size()).c_str();
 			case ColumnType::Bound: return mod.ImportDesc.TimeDateStamp ? L"Yes" : L"No";
+			case ColumnType::ResolvedTo: return DescribeApiSet(mod.ModuleName).c_str();
 		}
 	}
 	else {
 		auto& func = m_Functions[row];
 		switch (tag) {
-			case ColumnType::FunctionName: return func.FuncName.c_str();
-			case ColumnType::Hint: return std::to_wstring(func.ImpByName.Hint).c_str();
-			case ColumnType::Ordinal: return func.ImpByName.Name[0] == 0 ? std::to_wstring(func.unThunk.Thunk32.u1.Ordinal).c_str() : L"0";
+			case ColumnType::FunctionName:
+				if (IsOrdinalImport(func, m_Is64))	// the name the ordinal has in the DLL on this system, if it can be found
+					return Widen(ResolveOrdinalName(m_CurrentModule, ImportOrdinal(func), !m_Is64)).c_str();
+				return func.FuncName.c_str();
+			case ColumnType::ImportBy: return IsOrdinalImport(func, m_Is64) ? L"Ordinal" : L"Name";
+			case ColumnType::Hint: return IsOrdinalImport(func, m_Is64) ? L"" : std::to_wstring(func.ImpByName.Hint).c_str();
+			case ColumnType::Ordinal: return IsOrdinalImport(func, m_Is64) ? std::to_wstring(ImportOrdinal(func)).c_str() : L"";
 			case ColumnType::UndecoratedName: return func.FuncName.empty() ? "" : PEStrings::UndecorateName(func.FuncName.c_str()).c_str();
 		}
 	}
@@ -48,6 +61,7 @@ void CImportsView::DoSort(SortInfo const* si) {
 				case ColumnType::ModuleName: return SortHelper::Sort(m1.ModuleName, m2.ModuleName, asc);
 				case ColumnType::FunctionCount: return SortHelper::Sort(m1.ImportFunc.size(), m2.ImportFunc.size(), asc);
 				case ColumnType::Bound: return SortHelper::Sort(m1.ImportDesc.TimeDateStamp, m2.ImportDesc.TimeDateStamp, asc);
+				case ColumnType::ResolvedTo: return SortHelper::Sort(DescribeApiSet(m1.ModuleName), DescribeApiSet(m2.ModuleName), asc);
 			}
 			return false;
 		};
@@ -59,9 +73,8 @@ void CImportsView::DoSort(SortInfo const* si) {
 				case ColumnType::FunctionName: return SortHelper::Sort(f1.FuncName, f2.FuncName, asc);
 				case ColumnType::UndecoratedName: return SortHelper::Sort(PEStrings::UndecorateName(f1.FuncName.c_str()), PEStrings::UndecorateName(f2.FuncName.c_str()), asc);
 				case ColumnType::Hint: return SortHelper::Sort(f1.ImpByName.Hint, f2.ImpByName.Hint, asc);
-				case ColumnType::Ordinal: return SortHelper::Sort(
-					f1.ImpByName.Hint == 0 ? f1.unThunk.Thunk32.u1.Ordinal : 0,
-					f2.ImpByName.Hint == 0 ? f2.unThunk.Thunk32.u1.Ordinal : 0, asc);
+				case ColumnType::ImportBy: return SortHelper::Sort(IsOrdinalImport(f1, m_Is64), IsOrdinalImport(f2, m_Is64), asc);
+				case ColumnType::Ordinal: return SortHelper::Sort(ImportOrdinal(f1), ImportOrdinal(f2), asc);
 			}
 			return false;
 		};
@@ -76,11 +89,13 @@ void CImportsView::OnStateChanged(HWND hWnd, int from, int to, DWORD oldState, D
 			if (selected == 1) {
 				auto const& mod = m_Modules[m_ModList.GetNextItem(-1, LVNI_SELECTED)];
 				m_Functions = mod.ImportFunc;
+				m_CurrentModule = mod.ModuleName;
 				Sort(m_FuncList);
 				m_FuncList.SetItemCount((int)m_Functions.size());
 			}
 			else {
 				m_Functions.clear();
+				m_CurrentModule.clear();
 				m_FuncList.SetItemCount(0);
 			}
 		}
@@ -89,6 +104,8 @@ void CImportsView::OnStateChanged(HWND hWnd, int from, int to, DWORD oldState, D
 }
 
 void CImportsView::UpdateUI(bool first) const {
+	if (!m_Imphash.empty())
+		Frame()->SetStatusText(1, (L"Import hash: " + m_Imphash).c_str());
 	auto& ui = Frame()->GetUI();
 	auto hWnd = ::GetFocus();
 	CListViewCtrl lv;
@@ -123,11 +140,13 @@ LRESULT CImportsView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 
 	auto cm = GetColumnManager(m_ModList);
 	cm->AddColumn(L"Module", LVCFMT_LEFT, 280, ColumnType::ModuleName);
+	cm->AddColumn(L"Resolved To", LVCFMT_LEFT, 180, ColumnType::ResolvedTo);
 	cm->AddColumn(L"Count", LVCFMT_RIGHT, 60, ColumnType::FunctionCount);
 	cm->AddColumn(L"Bound?", LVCFMT_RIGHT, 60, ColumnType::Bound);
 
 	cm = GetColumnManager(m_FuncList);
 	cm->AddColumn(L"Name", LVCFMT_LEFT, 250, ColumnType::FunctionName);
+	cm->AddColumn(L"Import By", LVCFMT_LEFT, 70, ColumnType::ImportBy);
 	cm->AddColumn(L"Hint", LVCFMT_RIGHT, 60, ColumnType::Hint);
 	cm->AddColumn(L"Ordinal", LVCFMT_RIGHT, 60, ColumnType::Ordinal);
 	cm->AddColumn(L"Undecorated Name", LVCFMT_LEFT, 250, ColumnType::UndecoratedName);
@@ -149,6 +168,7 @@ void CImportsView::BuildItems() {
 	m_Modules = *m_PE.GetImport();
 	m_ModList.SetItemCount((int)m_Modules.size());
 	m_Is64 = m_PE.GetFileInfo()->IsPE64;
+	m_Imphash = Widen(ComputeImphash(m_PE));
 }
 
 LRESULT CImportsView::OnFind(UINT, WPARAM, LPARAM, BOOL&) {

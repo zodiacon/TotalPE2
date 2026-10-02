@@ -2,6 +2,7 @@
 #include "DelayImportView.h"
 #include "resource.h"
 #include <SortHelper.h>
+#include "ApiSet.h"
 
 CDelayImportView::CDelayImportView(IMainFrame* frame, PEFile const& pe) : CViewBase(frame), m_PE(pe) {
 }
@@ -12,6 +13,7 @@ CString CDelayImportView::GetColumnText(HWND h, int row, int colIndex) const {
 		auto& item = m_Items[row];
 		switch (col) {
 			case ColumnType::Module: return item.ModuleName.c_str();
+			case ColumnType::ResolvedTo: return DescribeApiSet(item.ModuleName).c_str();
 			case ColumnType::Functions: return std::to_wstring(item.DelayImpFunc.size()).c_str();
 			case ColumnType::DllName: return std::format(L"0x{:X}", item.DelayImpDesc.rvaDLLName).c_str();
 			case ColumnType::IAT: return std::format(L"0x{:X}", item.DelayImpDesc.rvaIAT).c_str();
@@ -59,6 +61,7 @@ void CDelayImportView::DoSort(SortInfo const* si) {
 		auto compare = [&](auto& i1, auto& i2) {
 			switch (col) {
 				case ColumnType::Module: return SortHelper::Sort(i1.ModuleName, i2.ModuleName, asc);
+				case ColumnType::ResolvedTo: return SortHelper::Sort(DescribeApiSet(i1.ModuleName), DescribeApiSet(i2.ModuleName), asc);
 				case ColumnType::Functions: return SortHelper::Sort(i1.DelayImpFunc.size(), i2.DelayImpFunc.size(), asc);
 				case ColumnType::IAT: return SortHelper::Sort(i1.DelayImpDesc.rvaIAT, i2.DelayImpDesc.rvaIAT, asc);
 				case ColumnType::ImportNameTable: return SortHelper::Sort(i1.DelayImpDesc.rvaINT, i2.DelayImpDesc.rvaINT, asc);
@@ -91,6 +94,7 @@ LRESULT CDelayImportView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 
 	auto cm = GetColumnManager(m_List);
 	cm->AddColumn(L"Module", LVCFMT_LEFT, 260, ColumnType::Module);
+	cm->AddColumn(L"Resolved To", LVCFMT_LEFT, 180, ColumnType::ResolvedTo);
 	cm->AddColumn(L"Functions", LVCFMT_RIGHT, 70, ColumnType::Functions);
 	cm->AddColumn(L"DLL Name RVA", LVCFMT_RIGHT, 100, ColumnType::DllName);
 	cm->AddColumn(L"IAT RVA", LVCFMT_RIGHT, 100, ColumnType::IAT);

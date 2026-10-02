@@ -32,7 +32,7 @@ private:
 
 	enum class ColumnType {
 		Module, Hint, Functions, DllName, IAT, ImportNameTable, ModuleHandle, TimeStamp, Attributes,
-		Name, BoundImport, UnloadInfo,
+		Name, BoundImport, UnloadInfo, ResolvedTo,
 	};
 
 	// Handler prototypes (uncomment arguments if needed):

@@ -7,6 +7,7 @@
 #include "PEImageView.h"
 #include "PEFile.h"
 #include "PEStrings.h"
+#include "ImportAnalysis.h"
 #include <SortHelper.h>
 #include <ClipboardHelper.h>
 
@@ -16,7 +17,7 @@ LRESULT CPEImageView::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam
 	auto cm = GetColumnManager(m_List);
 
 	cm->AddColumn(L"Name", LVCFMT_LEFT, 150);
-	cm->AddColumn(L"Value", LVCFMT_LEFT, 200);
+	cm->AddColumn(L"Value", LVCFMT_LEFT, 270);
 	cm->AddColumn(L"Details", LVCFMT_LEFT, 550);
 
 	BuildItems();
@@ -82,6 +83,9 @@ void CPEImageView::BuildItems() {
 	auto dllchar = is64 ? opt64.DllCharacteristics : opt32.DllCharacteristics;
 	auto file = Frame()->GetSymbols().GetSymbolFile();
 
+	auto narrowHash = ComputeImphash(m_PE);
+	std::wstring imphash(narrowHash.begin(), narrowHash.end());
+
 	m_Items = std::vector<DataItem> {
 		{ L"File Name", m_PE.GetPath().substr(m_PE.GetPath().rfind(L'\\') + 1), m_PE.GetPath() },
 		{ L"File Size", PEStrings::ToMemorySize(m_PE.GetFileSize()) },
@@ -109,6 +113,7 @@ void CPEImageView::BuildItems() {
 		{ L"Size of Initialized Data", PEStrings::ToMemorySize(is64 ? opt64.SizeOfInitializedData : opt32.SizeOfInitializedData) },
 		{ L"Size of Uninitialized Data", PEStrings::ToMemorySize(is64 ? opt64.SizeOfUninitializedData : opt32.SizeOfUninitializedData) },
 		{ L"Is Managed?", m_PE.GetFileInfo()->HasCOMDescr ? L"Yes" : L"No" },
+		{ L"Import Hash (imphash)", imphash.empty() ? L"(no imports)" : imphash, L"MD5 of the imported functions in order; the same value as the pefile library and VirusTotal compute" },
 		{ L"Entry Point", std::format(L"0x{:X}", is64 ? opt64.AddressOfEntryPoint : opt32.AddressOfEntryPoint),
 			Frame()->ResolveRva(is64 ? opt64.AddressOfEntryPoint : opt32.AddressOfEntryPoint) },
 		{ L"Base of Code", std::format(L"0x{:X}", is64 ? opt64.BaseOfCode : opt32.BaseOfCode) },

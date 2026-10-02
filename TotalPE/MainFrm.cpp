@@ -137,7 +137,7 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 
 	CreateSimpleStatusBar();
 	m_StatusBar.SubclassWindow(m_hWndStatusBar);
-	int parts[] = { 200, 400, 600, 800, 1000 };
+	int parts[] = { 200, 560, 760, 960, 1160 };
 	m_StatusBar.SetParts(_countof(parts), parts);
 
 	ToolBarButtonInfo const buttons[] = {

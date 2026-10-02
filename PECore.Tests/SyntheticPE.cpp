@@ -135,17 +135,20 @@ std::vector<uint8_t> SyntheticPE::Build() const {
 	imp->OriginalFirstThunk = 0x30D0;
 	imp->Name = 0x3120;
 	imp->FirstThunk = IatRva;
+	// by name: the thunk is the RVA of the hint/name entry; by ordinal: the ordinal with the top bit set
+	uint64_t thunk64 = ImportByOrdinal ? (IMAGE_ORDINAL_FLAG64 | ImportOrdinal) : 0x3100;
+	DWORD thunk32 = ImportByOrdinal ? (IMAGE_ORDINAL_FLAG32 | ImportOrdinal) : 0x3100;
 	if (Is64) {
-		*At<uint64_t>(buf, rdata(0x30D0)) = 0x3100;	// import name table
-		*At<uint64_t>(buf, rdata(IatRva)) = 0x3100;	// import address table
+		*At<uint64_t>(buf, rdata(0x30D0)) = thunk64;	// import name table
+		*At<uint64_t>(buf, rdata(IatRva)) = thunk64;	// import address table
 	}
 	else {
-		*At<DWORD>(buf, rdata(0x30D0)) = 0x3100;
-		*At<DWORD>(buf, rdata(IatRva)) = 0x3100;
+		*At<DWORD>(buf, rdata(0x30D0)) = thunk32;
+		*At<DWORD>(buf, rdata(IatRva)) = thunk32;
 	}
 	*At<WORD>(buf, rdata(0x3100)) = 0;	// hint
 	PutString(buf, rdata(0x3102), "ExitProcess");
-	PutString(buf, rdata(0x3120), "kernel32.dll");
+	PutString(buf, rdata(0x3120), ImportModule.c_str());	// up to 0xE0 bytes
 
 	if (Clr)
 		AddClr(buf, dirs);

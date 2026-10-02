@@ -16,6 +16,9 @@ struct SyntheticPE {
 	bool Is64{ true };
 	bool Dll{ true };
 	bool Clr{ false };	// add a CLR header and metadata (see below)
+	std::string ImportModule{ "kernel32.dll" };	// the module the single import comes from
+	bool ImportByOrdinal{ false };	// import ImportOrdinal instead of ExitProcess
+	uint16_t ImportOrdinal{ 12 };
 
 	static constexpr uint32_t FileAlignment = 0x200;
 	static constexpr uint32_t SectionAlignment = 0x1000;

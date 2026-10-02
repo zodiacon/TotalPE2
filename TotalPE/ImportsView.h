@@ -34,7 +34,7 @@ public:
 
 private:
 	enum ColumnType {
-		ModuleName, Size, FunctionCount, Bound, FunctionName, Hint, Ordinal, UndecoratedName,
+		ModuleName, Size, FunctionCount, Bound, FunctionName, Hint, Ordinal, UndecoratedName, ResolvedTo, ImportBy,
 	};
 
 	CString GetTitle() const override;
@@ -59,4 +59,6 @@ private:
 	int m_SelectedModule{ -1 };
 	PEFile const& m_PE;
 	bool m_Is64;
+	std::string m_CurrentModule;	// the module whose functions are listed
+	std::wstring m_Imphash;
 };

@@ -6,6 +6,39 @@
 #include <SortHelper.h>
 #include "resource.h"
 #include <DiaHelper.h>
+#include "ApiSet.h"
+
+namespace {
+	// what is worth knowing about an export besides its name and address
+	std::wstring ExportDetails(PEExportFunction const& exp, bool nameFromSymbols) {
+		std::vector<std::wstring> parts;
+		if (exp.FuncName.empty())
+			parts.push_back(L"Ordinal only");
+		if (nameFromSymbols)
+			parts.push_back(L"Name from symbols");
+		if (!exp.ForwarderName.empty()) {
+			// "NTDLL.RtlAllocateHeap": the module is everything before the last dot
+			auto dot = exp.ForwarderName.rfind('.');
+			if (dot == std::string::npos) {
+				parts.push_back(L"Forwarded");
+			}
+			else {
+				auto module = exp.ForwarderName.substr(0, dot);
+				if (ApiSetMap::IsApiSetName(module)) {
+					auto host = DescribeApiSet(module);
+					parts.push_back(L"Forwarded to an API set, hosted by " + host);
+				}
+				else {
+					parts.push_back(L"Forwarded to " + std::wstring(module.begin(), module.end()));
+				}
+			}
+		}
+		std::wstring text;
+		for (auto& p : parts)
+			text += (text.empty() ? L"" : L"; ") + p;
+		return text;
+	}
+}
 
 CExportsView::CExportsView(IMainFrame* frame, PEFile const& pe) : CViewBase(frame), m_PE(pe) {
 }
@@ -19,7 +52,7 @@ CString CExportsView::GetColumnText(HWND h, int row, int col) {
 		case ColumnType::RVA: return std::format(L"0x{:X}", exp.FuncRVA).c_str();
 		case ColumnType::NameRVA: return std::format(L"0x{:X}", exp.NameRVA).c_str();
 		case ColumnType::UndecoratedName: return PEStrings::UndecorateName(exp.Name.c_str()).c_str();
-		case ColumnType::Details: return exp.FromSymbols ? L"From symbols" : L"";
+		case ColumnType::Details: return ExportDetails(exp, exp.FromSymbols).c_str();
 	}
 	return CString();
 }
@@ -34,7 +67,7 @@ void CExportsView::DoSort(SortInfo const* si) {
 			case ColumnType::Name: return SortHelper::Sort(e1.Name, e2.Name, asc);
 			case ColumnType::ForwardedName: return SortHelper::Sort(e1.ForwarderName, e2.ForwarderName, asc);
 			case ColumnType::UndecoratedName: return SortHelper::Sort(PEStrings::UndecorateName(e1.FuncName.c_str()), PEStrings::UndecorateName(e2.FuncName.c_str()), asc);
-			case ColumnType::Details: return SortHelper::Sort(e1.FromSymbols, e2.FromSymbols, asc);
+			case ColumnType::Details: return SortHelper::Sort(ExportDetails(e1, e1.FromSymbols), ExportDetails(e2, e2.FromSymbols), asc);
 		}
 		return false;
 	};
@@ -114,7 +147,7 @@ LRESULT CExportsView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	cm->AddColumn(L"Forwarded Name", LVCFMT_LEFT, 250, ColumnType::ForwardedName);
 	cm->AddColumn(L"Name RVA", LVCFMT_RIGHT, 100, ColumnType::NameRVA);
 	cm->AddColumn(L"Undecorated Name", LVCFMT_LEFT, 250, ColumnType::UndecoratedName);
-	cm->AddColumn(L"Details", LVCFMT_LEFT, 150, ColumnType::Details);
+	cm->AddColumn(L"Details", LVCFMT_LEFT, 300, ColumnType::Details);
 
 	BuildItems();
 

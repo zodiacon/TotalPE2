@@ -105,6 +105,10 @@
     <ClCompile Include="..\TotalPE\HexSearch.cpp" />
     <ClCompile Include="..\TotalPE\HexNumber.cpp" />
     <ClCompile Include="..\TotalPE\AniFile.cpp" />
+    <ClCompile Include="..\TotalPE\Md5.cpp" />
+    <ClCompile Include="..\TotalPE\ApiSet.cpp" />
+    <ClCompile Include="..\TotalPE\ImportAnalysis.cpp" />
+    <ClCompile Include="..\TotalPE\ImphashOrdinals.cpp" />
     <ClCompile Include="..\TotalPE\PERegions.cpp" />
     <ClCompile Include="..\TotalPE\PEAnomalies.cpp" />
     <ClCompile Include="ClrMetadataTests.cpp" />
@@ -113,6 +117,9 @@
     <ClCompile Include="HexSearchTests.cpp" />
     <ClCompile Include="HexNumberTests.cpp" />
     <ClCompile Include="AniFileTests.cpp" />
+    <ClCompile Include="Md5Tests.cpp" />
+    <ClCompile Include="ApiSetTests.cpp" />
+    <ClCompile Include="ImportAnalysisTests.cpp" />
     <ClCompile Include="HexFormatTests.cpp" />
     <ClCompile Include="PERegionsTests.cpp" />
     <ClCompile Include="AnomalyTests.cpp" />
