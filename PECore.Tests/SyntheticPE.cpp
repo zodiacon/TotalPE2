@@ -23,7 +23,7 @@ std::vector<uint8_t> SyntheticPE::Build() const {
 	// NT headers
 	*At<DWORD>(buf, ELfanew) = IMAGE_NT_SIGNATURE;
 	auto fh = At<IMAGE_FILE_HEADER>(buf, ELfanew + 4);
-	fh->Machine = Is64 ? IMAGE_FILE_MACHINE_AMD64 : IMAGE_FILE_MACHINE_I386;
+	fh->Machine = Machine ? Machine : Is64 ? IMAGE_FILE_MACHINE_AMD64 : IMAGE_FILE_MACHINE_I386;
 	fh->NumberOfSections = 3;
 	fh->TimeDateStamp = TimeDateStamp;
 	fh->Characteristics = IMAGE_FILE_EXECUTABLE_IMAGE | (Dll ? IMAGE_FILE_DLL : 0) | (Is64 ? IMAGE_FILE_LARGE_ADDRESS_AWARE : IMAGE_FILE_32BIT_MACHINE);

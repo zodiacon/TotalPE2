@@ -9,6 +9,25 @@
 class PEFile;
 struct cs_insn;
 
+// The instruction sets that are disassembled
+enum class CpuArch : uint8_t {
+	X86,
+	X64,
+	Arm64,
+};
+
+// The instruction set of a PE machine (IMAGE_FILE_MACHINE_*) or an ELF machine (EM_*); none for the others
+std::optional<CpuArch> ArchOfPeMachine(uint16_t machine);
+std::optional<CpuArch> ArchOfElfMachine(uint16_t machine);
+// The instruction set of a PE file
+std::optional<CpuArch> ArchOf(PEFile const& pe);
+const wchar_t* CpuArchName(CpuArch arch);
+
+// Opens Capstone for an instruction set, with the details of the instructions (the handle is a csh)
+bool OpenDisassembler(CpuArch arch, size_t& handle);
+// The bytes to skip when something is not an instruction: ARM64 instructions are 4 bytes, aligned
+size_t SkipSize(CpuArch arch);
+
 enum class XrefKind : uint8_t {
 	Call,
 	Jump,			// unconditional jump
@@ -27,7 +46,24 @@ struct InstructionRefs {
 };
 
 // Decodes the references of an instruction that was disassembled with CS_OPT_DETAIL enabled.
-InstructionRefs GetInstructionRefs(cs_insn const& inst, bool is64Bit);
+// The address of an ARM64 instruction that is built in two (adrp, then add or ldr) needs the AddressTracker.
+InstructionRefs GetInstructionRefs(cs_insn const& inst, CpuArch arch);
+
+// An instruction after which the code does not go on: a return, an unconditional jump
+bool EndsFlow(cs_insn const& inst, CpuArch arch);
+
+// The references of a run of instructions: ARM64 code builds an address with two instructions (adrp x1, page; add x1, x1, #offset
+// or ldr x2, [x1, #offset]), and the second one refers to the address. The tracker remembers the pages that registers hold.
+class AddressTracker {
+public:
+	explicit AddressTracker(CpuArch arch) : m_Arch(arch) {}
+	InstructionRefs Refs(cs_insn const& inst);
+	void Reset() { m_Pages.clear(); }
+
+private:
+	CpuArch m_Arch;
+	std::unordered_map<unsigned, uint64_t> m_Pages;		// register -> the address it holds
+};
 
 struct Xref {
 	uint64_t From;	// the address of the instruction
@@ -39,7 +75,7 @@ struct Xref {
 // do not exist, and code that is only reachable through computed jumps is still covered, as it is part of the sweep.
 class XrefMap {
 public:
-	// Replaces the contents with the references of 'pe'. False for a file that is not x86/x64 or has no code.
+	// Replaces the contents with the references of 'pe'. False for a file that is not x86, x64 or ARM64, or has no code.
 	bool Build(PEFile const& pe);
 	void Clear();
 

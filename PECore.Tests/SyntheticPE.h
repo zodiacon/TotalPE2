@@ -14,6 +14,7 @@
 //                                                  import directory (kernel32.dll: ExitProcess) and the IAT
 struct SyntheticPE {
 	bool Is64{ true };
+	uint16_t Machine{ 0 };	// IMAGE_FILE_MACHINE_*: by Is64 if 0 (ARM64 is a 64-bit machine)
 	bool Dll{ true };
 	bool Clr{ false };	// add a CLR header and metadata (see below)
 	std::string ImportModule{ "kernel32.dll" };	// the module the single import comes from

@@ -55,7 +55,8 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		{
 			bool is32Bit = m_PE.GetFileInfo()->IsPE32;
 			auto entry = is32Bit ? m_PE.GetNTHeader()->NTHdr32.OptionalHeader.AddressOfEntryPoint : m_PE.GetNTHeader()->NTHdr64.OptionalHeader.AddressOfEntryPoint;
-			if (entry == 0)
+			auto arch = ArchOf(m_PE);
+			if (entry == 0 || !arch)
 				return {};
 
 			auto view = new CScintillaView(this, m_PE, L"Entry Point");
@@ -68,7 +69,8 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 			ULONGLONG imageBase = m_PE.GetImageBase();
 			auto offset = m_PE.GetOffsetFromRVA(entry);
 			uint32_t size = 0x500;		// hard coded for now
-			view->SetAsmCode(m_PE.GetSpan((uint32_t)offset, size), offset + imageBase, is32Bit);
+			// the address is that of the entry point (its file offset is not its RVA, unless the alignments are the same)
+			view->SetAsmCode(m_PE.GetSpan((uint32_t)offset, size), entry + imageBase, *arch);
 			view->GetCtrl().SetReadOnly(true);
 			auto hItem = InsertTreeItem(m_Tree, view->GetTitle(), GetIconIndex(IDI_BINARY), type, m_Views.at(TreeItemType::Image)->GetHTreeItem(), TVI_SORT);
 			view->SetDeleteFromTree(true);
@@ -773,6 +775,11 @@ bool CMainFrame::CreateAssemblyView(std::span<const std::byte> code, uint64_t ad
 		return true;
 	}
 
+	auto arch = ArchOf(m_PE);
+	if (!arch) {
+		AtlMessageBox(m_hWnd, L"The code of this machine is not disassembled (x86, x64 and ARM64 are)", IDR_MAINFRAME, MB_ICONINFORMATION);
+		return false;
+	}
 	auto view = new CScintillaView(this, m_PE, title);
 	if (nullptr == view->DoCreate(m_Tabs)) {
 		ATLASSERT(false);
@@ -780,7 +787,7 @@ bool CMainFrame::CreateAssemblyView(std::span<const std::byte> code, uint64_t ad
 	}
 
 	view->SetLanguage(LexLanguage::Asm);
-	view->SetAsmCode(code, address, m_PE.GetFileInfo()->IsPE32);
+	view->SetAsmCode(code, address, *arch);
 	view->GetCtrl().SetReadOnly(true);
 	view->SetDeleteFromTree(true);
 
@@ -863,12 +870,16 @@ bool CMainFrame::ShowFlowGraph(uint64_t va) {
 		return false;
 	auto hParent = parent->second->GetHTreeItem();
 
-	auto name = ResolveVa(function);
-	auto title = std::format(L"{}", name.empty() ? std::format(L"0x{:X}", function) : name);
-	if (auto hItem = FindChild(m_Tree, hParent, title.c_str())) {
-		ShowView(hItem);
+	// the graph of the function may be open already: found by its item, not by its title (the disassembly of an export
+	// has the same title, under the same parent)
+	auto itemType = TreeItemWithIndex(TreeItemType::FlowGraph, (int64_t)(function - base) << ItemShift);
+	if (auto it = m_Views.find(itemType); it != m_Views.end()) {
+		ShowView(it->second->GetHTreeItem());
 		return true;
 	}
+
+	auto name = ResolveVa(function);
+	auto title = std::format(L"{}", name.empty() ? std::format(L"0x{:X}", function) : name);
 
 	auto view = new CFlowGraphView(this, m_PE, function, title.c_str());
 	if (nullptr == view->DoCreate(m_Tabs)) {
@@ -884,7 +895,6 @@ bool CMainFrame::ShowFlowGraph(uint64_t va) {
 	view->SetDeleteFromTree(true);
 
 	auto image = GetIconIndex(IDI_FLOW);
-	auto itemType = TreeItemWithIndex(TreeItemType::FlowGraph, (int64_t)(function - base) << ItemShift);
 	auto hItem = InsertTreeItem(m_Tree, title.c_str(), image, itemType, hParent, TVI_SORT);
 	m_Tree.EnsureVisible(hItem);
 	view->SetHTreeItem(hItem);

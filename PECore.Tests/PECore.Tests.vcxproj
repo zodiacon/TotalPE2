@@ -113,6 +113,7 @@
     <ClCompile Include="HexFormatTests.cpp" />
     <ClCompile Include="PERegionsTests.cpp" />
     <ClCompile Include="AnomalyTests.cpp" />
+    <ClCompile Include="Arm64Tests.cpp" />
     <ClCompile Include="CodeAnalysisTests.cpp" />
     <ClCompile Include="FlowGraphTests.cpp" />
     <ClCompile Include="AuthenticodeTests.cpp" />

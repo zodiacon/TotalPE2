@@ -13,31 +13,15 @@
 #include "PEFile.h"
 #include "CodeAnalysis.h"
 
-// "address mnemonic operands (name of the target) ; bytes": an operand that refers to a known address gets its name
-static CStringA FormatInstruction(const cs_insn& inst, IMainFrame* frame) {
+// "address mnemonic operands (name of the target) ; bytes": an instruction that refers to a known address gets its name:
+// a branch target, a RIP-relative or absolute operand (x86, x64), the address that adrp and add or ldr make (ARM64)
+static CStringA FormatInstruction(const cs_insn& inst, InstructionRefs const& refs, IMainFrame* frame) {
 	CStringA text, extra;
-	if (frame && inst.detail) {
-		auto const& detail = *inst.detail;
-		bool branch = false;
-		for (int i = 0; i < detail.groups_count; i++)
-			if (detail.groups[i] == CS_GRP_JUMP || detail.groups[i] == CS_GRP_CALL)
-				branch = true;
-
-		// resolve the first operand that refers to a known address: a branch target, a RIP-relative
-		// operand or an absolute memory operand
-		for (int i = 0; i < detail.x86.op_count && extra.IsEmpty(); i++) {
-			auto const& op = detail.x86.operands[i];
-			ULONGLONG target;
-			if (op.type == X86_OP_IMM && branch)
-				target = op.imm;
-			else if (op.type == X86_OP_MEM && op.mem.base == X86_REG_RIP && op.mem.index == X86_REG_INVALID)
-				target = inst.address + inst.size + op.mem.disp;
-			else if (op.type == X86_OP_MEM && op.mem.base == X86_REG_INVALID && op.mem.index == X86_REG_INVALID && op.mem.disp > 0)
-				target = (uint32_t)op.mem.disp;
-			else
-				continue;
-			extra = CStringA(frame->ResolveVa(target).c_str());
-		}
+	if (frame) {
+		if (refs.Branch)
+			extra = CStringA(frame->ResolveVa(*refs.Branch).c_str());
+		if (extra.IsEmpty() && refs.Memory)
+			extra = CStringA(frame->ResolveVa(*refs.Memory).c_str());
 	}
 
 	if (!extra.IsEmpty())
@@ -170,7 +154,7 @@ void CScintillaView::UpdateUI(bool first) {
 	ui.UIEnable(ID_ASSEMBLY_FOLLOW, line && line->Target());
 	ui.UIEnable(ID_ASSEMBLY_XREFS_HERE, line && line->Va);
 	ui.UIEnable(ID_ASSEMBLY_XREFS_TARGET, line && line->Target());
-	ui.UIEnable(ID_ASSEMBLY_FLOWGRAPH, line && line->Va);
+	ui.UIEnable(ID_ASSEMBLY_FLOWGRAPH, FlowGraphAddress().has_value());
 }
 
 namespace {
@@ -209,11 +193,12 @@ namespace {
 // instruction is the target of a jump (the function goes on there). Every piece of text ends with a line break and has
 // one entry in m_Lines, so that line numbers and entries correspond.
 CStringA CScintillaView::Disassemble(std::span<const std::byte> code, uint64_t address) {
-	csh handle;
-	if (cs_open(CS_ARCH_X86, m_Is32Bit ? CS_MODE_32 : CS_MODE_64, &handle) != CS_ERR_OK)
+	size_t h;
+	if (!OpenDisassembler(m_Arch, h))	// with the details of the operands: they are needed to resolve symbols
 		return "";
-	cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);	// operand details are needed to resolve symbols
+	csh handle = h;
 	auto const& xrefs = Frame()->GetXrefs();
+	AddressTracker tracker(m_Arch);
 
 	auto bytes = (const uint8_t*)code.data();
 	auto size = code.size();
@@ -230,18 +215,16 @@ CStringA CScintillaView::Disassemble(std::span<const std::byte> code, uint64_t a
 			m_Lines.push_back({});
 		}
 
-		auto info = GetInstructionRefs(*inst, !m_Is32Bit);
+		auto info = tracker.Refs(*inst);
 		Line line;
 		line.Va = inst->address;
 		line.Branch = info.Branch;
 		line.Memory = info.Memory;
 		m_LineOfVa.insert({ inst->address, (int)m_Lines.size() });
 		m_Lines.push_back(line);
-		text += FormatInstruction(*inst, Frame()) + "\r\n";
+		text += FormatInstruction(*inst, info, Frame()) + "\r\n";
 
-		bool end = inst->id == X86_INS_RET || inst->id == X86_INS_RETF || inst->id == X86_INS_IRET ||
-			inst->id == X86_INS_IRETD || inst->id == X86_INS_IRETQ || inst->id == X86_INS_JMP;
-		if (end && !IsJumpTarget(xrefs, address))
+		if (EndsFlow(*inst, m_Arch) && !IsJumpTarget(xrefs, address))
 			break;
 	}
 	cs_free(inst, 1);
@@ -249,8 +232,12 @@ CStringA CScintillaView::Disassemble(std::span<const std::byte> code, uint64_t a
 	return text;
 }
 
-bool CScintillaView::SetAsmCode(std::span<const std::byte> code, uint64_t address, bool is32Bit) {
-	m_Is32Bit = is32Bit;
+bool CScintillaView::SetAsmCode(std::span<const std::byte> code, uint64_t address, CpuArch arch) {
+	if (arch != m_Arch) {
+		m_Arch = arch;
+		if (m_Language == LexLanguage::Asm)
+			SetLanguage(LexLanguage::Asm);	// the words of the instruction set
+	}
 	m_Lines.clear();
 	m_LineOfVa.clear();
 	m_Sci.SetText(Disassemble(code, address));
@@ -325,8 +312,8 @@ BOOL CScintillaView::PreTranslateMessage(MSG* pMsg) {
 			Follow(CurrentLine());
 		}
 		else if (pMsg->wParam == 'G') {
-			if (auto line = GetLine(InstructionLine(CurrentLine())))
-				Frame()->ShowFlowGraph(line->Va);
+			if (auto va = FlowGraphAddress(); !va || !Frame()->ShowFlowGraph(*va))
+				::MessageBeep(MB_ICONWARNING);
 		}
 		else if (auto line = GetLine(CurrentLine()); line && line->Va) {
 			Frame()->ShowXrefs(line->Va);
@@ -360,9 +347,25 @@ LRESULT CScintillaView::OnXrefsTarget(WORD, WORD, HWND, BOOL&) {
 }
 
 LRESULT CScintillaView::OnFlowGraph(WORD, WORD, HWND, BOOL&) {
-	if (auto line = GetLine(InstructionLine(m_ContextLine >= 0 ? m_ContextLine : CurrentLine())); line && line->Va)
-		Frame()->ShowFlowGraph(line->Va);
+	if (auto va = FlowGraphAddress())
+		Frame()->ShowFlowGraph(*va);
 	return 0;
+}
+
+// What the flow graph is of: an address that is selected (in the image), the instruction of the line (or the one that a label
+// is above), and otherwise (an empty line, below the code) the function that the view shows. Flow graphs are of PE files.
+std::optional<uint64_t> CScintillaView::FlowGraphAddress() {
+	if (!m_PE || m_Language != LexLanguage::Asm)
+		return std::nullopt;
+	uint64_t va;
+	auto base = m_PE.GetImageBase();
+	if (ParseHexAddress(m_Sci.GetSelText(), va) && va >= base && va - base <= 0xFFFFFFFFULL && m_PE.GetOffsetFromRVA((uint32_t)(va - base)) != 0)
+		return va;
+	if (auto line = GetLine(InstructionLine(m_ContextLine >= 0 ? m_ContextLine : CurrentLine())); line && line->Va)
+		return line->Va;
+	if (auto first = GetLine(InstructionLine(0)); first && first->Va)
+		return first->Va;
+	return std::nullopt;
 }
 
 void CScintillaView::SetText(PCWSTR text) {
@@ -371,6 +374,35 @@ void CScintillaView::SetText(PCWSTR text) {
 
 void CScintillaView::SetText(PCSTR text) {
 	m_Sci.SetText(text);
+}
+
+// The words of ARM64 code for the assembly lexer: the instructions, (no FPU instructions), the registers
+static std::vector<std::string> const& KeyWords_ARM64() {
+	static std::vector<std::string> const words = [] {
+		std::string registers = "sp wsp xzr wzr lr fp pc nzcv fpcr fpsr";
+		for (int i = 0; i <= 31; i++) {
+			for (auto prefix : { "x", "w", "v", "q", "d", "s", "h", "b" }) {
+				if (i == 31 && (prefix[0] == 'x' || prefix[0] == 'w'))
+					continue;
+				registers += std::format(" {}{}", prefix, i);
+			}
+		}
+		std::string instructions =
+			"adc adcs add adds adr adrp and ands asr at autia autib b bfi bfm bfxil bic bics bl blr blraa br brk bti "
+			"cas casa casal casl cbnz cbz ccmn ccmp cinc cinv clrex cls clz cmn cmp cneg crc32b crc32cb crc32ch crc32cw crc32cx "
+			"crc32h crc32w crc32x csel cset csetm csinc csinv csneg dc dmb dsb eon eor eret extr fabs fadd fccmp fcmp fcsel "
+			"fcvt fcvtzs fcvtzu fdiv fmadd fmax fmin fmov fmsub fmul fneg fnmadd fnmul frinta frintm frintn frintp frintz "
+			"fsqrt fsub hint hlt hvc ic isb ld1 ld2 ld3 ld4 ldadd ldaddal ldaddl ldar ldarb ldarh ldaxp ldaxr ldaxrb ldaxrh "
+			"ldclr ldclral ldeor ldnp ldp ldpsw ldr ldrb ldrh ldrsb ldrsh ldrsw ldset ldsetal ldswp ldswpal ldtr ldur ldurb "
+			"ldurh ldursb ldursh ldursw ldxp ldxr ldxrb ldxrh lsl lsr madd mneg mov movi movk movn movz mrs msr msub mul mvn "
+			"neg negs ngc ngcs nop orn orr pacia pacib paciasp pacibsp autiasp autibsp prfm rbit ret retaa retab rev rev16 rev32 ror sbc sbcs sbfiz "
+			"sbfm sbfx scvtf sdiv sev sevl smaddl smc smnegl smsubl smulh smull st1 st2 st3 st4 stlr stlrb stlrh stlxp stlxr "
+			"stlxrb stlxrh stnp stp str strb strh sttr stur sturb sturh stxp stxr stxrb stxrh sub subs svc swp sxtb sxth sxtw "
+			"sys sysl tbnz tbz tlbi tst ubfiz ubfm ubfx ucvtf udf udiv umaddl umnegl umsubl umulh umull uxtb uxth wfe wfi yield "
+			"b.eq b.ne b.cs b.hs b.cc b.lo b.mi b.pl b.vs b.vc b.hi b.ls b.ge b.lt b.gt b.le b.al";
+		return std::vector<std::string>{ instructions, "", registers, "", "", "" };
+	}();
+	return words;
 }
 
 void CScintillaView::SetLanguage(LexLanguage lang) {
@@ -384,6 +416,12 @@ void CScintillaView::SetLanguage(LexLanguage lang) {
 		{
 			auto lexer = lmAsm.Create();
 			m_Sci.SetLexer(lexer);
+			if (m_Arch == CpuArch::Arm64) {
+				auto const& words = KeyWords_ARM64();
+				for (int i = 0; i < (int)words.size(); i++)
+					lexer->WordListSet(i, words[i].c_str());
+				break;
+			}
 			auto count = _countof(KeyWords_ASM);
 			for(int i = 0; i < count; i++)
 				lexer->WordListSet(i, KeyWords_ASM[i]);

@@ -16,10 +16,101 @@ const wchar_t* XrefKindToString(XrefKind kind) {
 	return L"";
 }
 
-InstructionRefs GetInstructionRefs(cs_insn const& inst, bool is64Bit) {
+std::optional<CpuArch> ArchOfPeMachine(uint16_t machine) {
+	switch (machine) {
+		case IMAGE_FILE_MACHINE_I386: return CpuArch::X86;
+		case IMAGE_FILE_MACHINE_AMD64: return CpuArch::X64;
+		case IMAGE_FILE_MACHINE_ARM64:
+		case 0xA641:	// ARM64EC
+		case 0xA64E:	// ARM64X
+			return CpuArch::Arm64;
+	}
+	return std::nullopt;
+}
+
+std::optional<CpuArch> ArchOfElfMachine(uint16_t machine) {
+	switch (machine) {
+		case 3: return CpuArch::X86;		// EM_386
+		case 62: return CpuArch::X64;		// EM_X86_64
+		case 183: return CpuArch::Arm64;	// EM_AARCH64
+	}
+	return std::nullopt;
+}
+
+std::optional<CpuArch> ArchOf(PEFile const& pe) {
+	auto nt = pe.GetNTHeader();
+	if (!pe.GetFileInfo() || !nt)
+		return std::nullopt;
+	return ArchOfPeMachine(nt->NTHdr32.FileHeader.Machine);
+}
+
+const wchar_t* CpuArchName(CpuArch arch) {
+	switch (arch) {
+		case CpuArch::X86: return L"x86";
+		case CpuArch::X64: return L"x64";
+		case CpuArch::Arm64: return L"ARM64";
+	}
+	return L"";
+}
+
+bool OpenDisassembler(CpuArch arch, size_t& handle) {
+	csh h;
+	auto err = arch == CpuArch::Arm64 ? cs_open(CS_ARCH_ARM64, CS_MODE_LITTLE_ENDIAN, &h) :
+		cs_open(CS_ARCH_X86, arch == CpuArch::X64 ? CS_MODE_64 : CS_MODE_32, &h);
+	if (err != CS_ERR_OK)
+		return false;
+	cs_option(h, CS_OPT_DETAIL, CS_OPT_ON);
+	handle = h;
+	return true;
+}
+
+size_t SkipSize(CpuArch arch) {
+	return arch == CpuArch::Arm64 ? 4 : 1;
+}
+
+namespace {
+	bool InGroup(cs_insn const& inst, uint8_t group) {
+		for (int i = 0; i < inst.detail->groups_count; i++)
+			if (inst.detail->groups[i] == group)
+				return true;
+		return false;
+	}
+
+	// The loads whose address is in the instruction (ldr x0, =label: the "literal" forms)
+	bool IsLiteralLoad(unsigned id) {
+		return id == ARM64_INS_LDR || id == ARM64_INS_LDRSW || id == ARM64_INS_PRFM;
+	}
+
+	InstructionRefs Arm64Refs(cs_insn const& inst) {
+		InstructionRefs refs;
+		auto const& a = inst.detail->arm64;
+		bool call = InGroup(inst, CS_GRP_CALL), jump = InGroup(inst, CS_GRP_JUMP);
+		if (call || jump) {
+			// the target is the last immediate: b label, cbz x0, label, tbz x0, #bit, label
+			for (int i = a.op_count; i-- > 0;) {
+				if (a.operands[i].type == ARM64_OP_IMM) {
+					refs.Branch = (uint64_t)a.operands[i].imm;
+					bool always = inst.id == ARM64_INS_B && (a.cc == ARM64_CC_INVALID || a.cc == ARM64_CC_AL);
+					refs.BranchKind = call ? XrefKind::Call : always ? XrefKind::Jump : XrefKind::ConditionalJump;
+					break;
+				}
+			}
+			return refs;
+		}
+		// adr x0, label; ldr x0, label
+		if (a.op_count == 2 && a.operands[1].type == ARM64_OP_IMM && (inst.id == ARM64_INS_ADR || IsLiteralLoad(inst.id)))
+			refs.Memory = (uint64_t)a.operands[1].imm;
+		return refs;
+	}
+}
+
+InstructionRefs GetInstructionRefs(cs_insn const& inst, CpuArch arch) {
 	InstructionRefs refs;
 	if (inst.detail == nullptr)
 		return refs;
+	if (arch == CpuArch::Arm64)
+		return Arm64Refs(inst);
+	bool is64Bit = arch == CpuArch::X64;
 
 	auto const& detail = *inst.detail;
 	bool call = false, jump = false;
@@ -54,6 +145,70 @@ InstructionRefs GetInstructionRefs(cs_insn const& inst, bool is64Bit) {
 			else if (m.base == X86_REG_INVALID && m.disp > 0)
 				refs.Memory = (uint32_t)m.disp;
 		}
+	}
+	return refs;
+}
+
+bool EndsFlow(cs_insn const& inst, CpuArch arch) {
+	if (arch == CpuArch::Arm64) {
+		switch (inst.id) {
+			case ARM64_INS_RET: case ARM64_INS_RETAA: case ARM64_INS_RETAB: case ARM64_INS_BR:
+				return true;
+			case ARM64_INS_B:
+				return inst.detail && (inst.detail->arm64.cc == ARM64_CC_INVALID || inst.detail->arm64.cc == ARM64_CC_AL);
+		}
+		return false;
+	}
+	switch (inst.id) {
+		case X86_INS_RET: case X86_INS_RETF: case X86_INS_IRET: case X86_INS_IRETD: case X86_INS_IRETQ: case X86_INS_JMP:
+			return true;
+	}
+	return false;
+}
+
+InstructionRefs AddressTracker::Refs(cs_insn const& inst) {
+	auto refs = GetInstructionRefs(inst, m_Arch);
+	if (m_Arch != CpuArch::Arm64 || !inst.detail)
+		return refs;
+	auto const& a = inst.detail->arm64;
+	auto page = [&](unsigned reg) -> std::optional<uint64_t> {
+		auto it = m_Pages.find(reg);
+		return it == m_Pages.end() ? std::nullopt : std::optional(it->second);
+	};
+
+	// a call changes the registers that are not saved; the code after a branch may be reached from elsewhere
+	if (InGroup(inst, CS_GRP_CALL) || InGroup(inst, CS_GRP_JUMP) || InGroup(inst, CS_GRP_RET)) {
+		m_Pages.clear();
+		return refs;
+	}
+	if (inst.id == ARM64_INS_ADRP && a.op_count == 2 && a.operands[0].type == ARM64_OP_REG && a.operands[1].type == ARM64_OP_IMM) {
+		m_Pages[a.operands[0].reg] = (uint64_t)a.operands[1].imm;
+		return refs;
+	}
+
+	// add x0, x1, #offset: the address, which x0 holds now
+	if (inst.id == ARM64_INS_ADD && a.op_count == 3 && a.operands[0].type == ARM64_OP_REG && a.operands[1].type == ARM64_OP_REG &&
+		a.operands[2].type == ARM64_OP_IMM && a.operands[2].shift.type == ARM64_SFT_INVALID) {
+		if (auto p = page(a.operands[1].reg)) {
+			refs.Memory = *p + a.operands[2].imm;
+			m_Pages[a.operands[0].reg] = *refs.Memory;
+			return refs;
+		}
+	}
+	// ldr x0, [x1, #offset], str...: the address of the memory
+	for (int i = 0; i < a.op_count; i++) {
+		auto const& op = a.operands[i];
+		if (op.type == ARM64_OP_MEM && op.mem.index == ARM64_REG_INVALID && !refs.Memory)
+			if (auto p = page(op.mem.base))
+				refs.Memory = *p + op.mem.disp;
+	}
+	// what is written to no longer holds an address (a base that is written back moves)
+	for (int i = 0; i < a.op_count; i++) {
+		auto const& op = a.operands[i];
+		if (op.type == ARM64_OP_REG && (op.access & CS_AC_WRITE))
+			m_Pages.erase(op.reg);
+		else if (op.type == ARM64_OP_MEM && a.writeback)
+			m_Pages.erase(op.mem.base);
 	}
 	return refs;
 }
@@ -166,20 +321,22 @@ bool XrefMap::Build(PEFile const& pe) {
 	if (!info || !nt || !sections)
 		return false;
 
-	auto machine = nt->NTHdr32.FileHeader.Machine;
-	bool is64 = machine == IMAGE_FILE_MACHINE_AMD64;
-	if (!is64 && machine != IMAGE_FILE_MACHINE_I386)
+	auto arch = ArchOfPeMachine(nt->NTHdr32.FileHeader.Machine);
+	if (!arch)
 		return false;
+	bool is64 = *arch != CpuArch::X86;
 
 	uint64_t imageBase = pe.GetImageBase();
-	uint64_t imageSize = is64 ? nt->NTHdr64.OptionalHeader.SizeOfImage : nt->NTHdr32.OptionalHeader.SizeOfImage;
+	uint64_t imageSize = info->IsPE64 ? nt->NTHdr64.OptionalHeader.SizeOfImage : nt->NTHdr32.OptionalHeader.SizeOfImage;
 	Range image{ imageBase, imageBase + imageSize };
 
-	csh handle;
-	if (cs_open(CS_ARCH_X86, is64 ? CS_MODE_64 : CS_MODE_32, &handle) != CS_ERR_OK)
+	size_t h;
+	if (!OpenDisassembler(*arch, h))
 		return false;
-	cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);
+	csh handle = h;
 	auto inst = cs_malloc(handle);
+	AddressTracker tracker(*arch);
+	auto skip = SkipSize(*arch);
 
 	auto add = [&](uint64_t target, uint64_t from, XrefKind kind) {
 		if (!image.Contains(target))
@@ -229,6 +386,7 @@ bool XrefMap::Build(PEFile const& pe) {
 			continue;
 		any = true;
 		recent.clear();
+		tracker.Reset();
 
 		auto span = pe.GetSpan(h.PointerToRawData, (uint32_t)size);
 		auto bytes = (const uint8_t*)span.data();
@@ -248,7 +406,7 @@ bool XrefMap::Build(PEFile const& pe) {
 			}
 
 			if (cs_disasm_iter(handle, &bytes, &left, &address, inst)) {
-				auto refs = GetInstructionRefs(*inst, is64);
+				auto refs = tracker.Refs(*inst);
 				if (refs.Branch)
 					add(*refs.Branch, inst->address, refs.BranchKind);
 				if (refs.Memory)
@@ -256,7 +414,8 @@ bool XrefMap::Build(PEFile const& pe) {
 				if (refs.Pointer)
 					add(*refs.Pointer, inst->address, XrefKind::Data);
 
-				if (inst->id == X86_INS_JMP)
+				// the jump tables of x86 and x64 code
+				if (*arch != CpuArch::Arm64 && inst->id == X86_INS_JMP)
 					if (auto table = FindJumpTable(recent, *inst, is64, imageBase, imageSize)) {
 						std::vector<uint64_t> targets;
 						size_t entries = 0;
@@ -283,7 +442,7 @@ bool XrefMap::Build(PEFile const& pe) {
 				r.Id = inst->id;
 				r.Address = inst->address;
 				r.Size = (uint8_t)inst->size;
-				if (inst->detail) {
+				if (inst->detail && *arch != CpuArch::Arm64) {
 					r.Count = (uint8_t)std::min<int>(inst->detail->x86.op_count, 3);
 					for (int i = 0; i < r.Count; i++)
 						r.Ops[i] = inst->detail->x86.operands[i];
@@ -293,10 +452,12 @@ bool XrefMap::Build(PEFile const& pe) {
 					recent.pop_front();
 			}
 			else {
-				// not an instruction: move on to the next byte
-				bytes++;
-				left--;
-				address++;
+				// not an instruction: move on to the next byte (the next instruction of ARM64)
+				auto n = std::min(skip, left);
+				bytes += n;
+				left -= n;
+				address += n;
+				tracker.Reset();
 			}
 		}
 	}

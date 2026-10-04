@@ -64,8 +64,8 @@ bool CMainFrame::OnTreeRightClick(HWND, HTREEITEM hItem, POINT const& pt) {
 	}
 	if (kind == TreeItemType::ElfSection && m_Elf) {
 		auto index = (int)(((int64_t)type >> ItemShift) - 1);
-		bool x86 = m_Elf.Machine() == 3 || m_Elf.Machine() == 62;
-		if (index <= 0 || index >= (int)m_Elf.Sections().size() || !(m_Elf.Sections()[index].Flags & 4) || !x86)
+		bool code = ArchOfElfMachine(m_Elf.Machine()).has_value();
+		if (index <= 0 || index >= (int)m_Elf.Sections().size() || !(m_Elf.Sections()[index].Flags & 4) || !code)
 			return false;
 		CMenu menu;
 		menu.CreatePopupMenu();
@@ -937,9 +937,8 @@ bool CMainFrame::ShowElfSection(int section, int64_t offset, bool code) {
 	}
 	if (offset >= (int64_t)data.size())
 		offset = -1;
-	// code: x86 and x64 are disassembled
-	bool x86 = m_Elf.Machine() == 3 || m_Elf.Machine() == 62;
-	if (code && x86 && (m_Elf.Sections()[section].Flags & 4))
+	// code: x86, x64 and ARM64 are disassembled
+	if (code && ArchOfElfMachine(m_Elf.Machine()) && (m_Elf.Sections()[section].Flags & 4))
 		return ShowElfCode(section, offset < 0 ? 0 : (uint64_t)offset);
 
 	RecordNavigation();
@@ -967,6 +966,9 @@ bool CMainFrame::ShowElfFileOffset(int64_t offset) {
 
 // The code from an offset in a section to the end of the section (0x2000 bytes at most), in a view of its own
 bool CMainFrame::ShowElfCode(int section, uint64_t offset) {
+	auto arch = ArchOfElfMachine(m_Elf.Machine());
+	if (!arch)
+		return false;
 	auto const& sec = m_Elf.Sections()[section];
 	auto data = m_Elf.SectionData(section);
 	auto address = sec.Address + offset;
@@ -985,7 +987,7 @@ bool CMainFrame::ShowElfCode(int section, uint64_t offset) {
 		return false;
 	}
 	view->SetLanguage(LexLanguage::Asm);
-	view->SetAsmCode(data.subspan((size_t)offset, (size_t)std::min<uint64_t>(0x2000, data.size() - offset)), address, m_Elf.Machine() == 3);
+	view->SetAsmCode(data.subspan((size_t)offset, (size_t)std::min<uint64_t>(0x2000, data.size() - offset)), address, *arch);
 	view->GetCtrl().SetReadOnly(true);
 	view->SetDeleteFromTree(true);
 

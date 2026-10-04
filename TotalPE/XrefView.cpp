@@ -22,10 +22,11 @@ CString CXrefView::Describe(uint64_t va) const {
 	if (offset == 0 || offset >= m_PE.GetFileSize())
 		return L"";
 
-	csh handle;
-	if (cs_open(CS_ARCH_X86, m_PE.GetFileInfo()->IsPE32 ? CS_MODE_32 : CS_MODE_64, &handle) != CS_ERR_OK)
+	auto arch = ArchOf(m_PE);
+	size_t h;
+	if (!arch || !OpenDisassembler(*arch, h))
 		return L"";
-	cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);
+	csh handle = h;
 	auto size = std::min<uint32_t>(16, m_PE.GetFileSize() - (uint32_t)offset);
 	auto code = m_PE.GetSpan((uint32_t)offset, size);
 	CString text;

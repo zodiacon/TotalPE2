@@ -56,7 +56,7 @@ The kind of file is recognized by its contents, not its extension. Open files fr
 
 ## Code
 
-* Disassembly (x86 and x64) with symbol names, cross references and switch tables
+* Disassembly (x86, x64 and ARM64) with symbol names, cross references and switch tables (x86 and x64); the addresses that ARM64 code builds with `adrp` and `add` / `ldr` are resolved
 * Cross references: who calls a function, who uses an import, a string or an address
 * Flow graphs of functions, exported as SVG
 * Go To (address, RVA or file offset), Back and Forward
@@ -71,7 +71,7 @@ The kind of file is recognized by its contents, not its extension. Open files fr
 
 * Header: class, byte order, OS/ABI, type, machine, entry point, interpreter, needed libraries, SONAME, RUNPATH, build ID
 * Program headers (with the sections in each segment), sections, symbols (`.symtab` and `.dynsym`), the dynamic section, relocations (REL, RELA and packed RELR) and notes
-* Functions, code sections, executable segments, the init and fini functions and the entry point are disassembled (x86 and x64), with symbol names; Go To takes addresses and file offsets
+* Functions, code sections, executable segments, the init and fini functions and the entry point are disassembled (x86, x64 and ARM64), with symbol names; Go To takes addresses and file offsets
 * C++ names are demangled (the Itanium ABI of GCC and Clang): symbols, relocations, the disassembly, Search All
 * Debug information: the DWARF (versions 2 to 5, zlib-compressed sections too) compile units and functions; a separate debug file is found by `.gnu_debuglink` or the build ID (next to the file, in its `.debug` directory, or in `/usr/lib/debug` of a WSL distribution)
 * Strings (ASCII and UTF-16) with their sections and addresses

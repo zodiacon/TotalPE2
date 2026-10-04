@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include "CodeAnalysis.h"
+
 #include "ScintillaCtrl.h"
 #include "ViewBase.h"
 #include <optional>
@@ -31,7 +33,7 @@ public:
 
 	void UpdateUI(bool first = false);
 
-	bool SetAsmCode(std::span<const std::byte> code, uint64_t address, bool is32Bit);
+	bool SetAsmCode(std::span<const std::byte> code, uint64_t address, CpuArch arch);
 
 	void SetText(PCWSTR text);
 	void SetText(PCSTR text);
@@ -97,11 +99,13 @@ private:
 	LRESULT OnXrefsTarget(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnFlowGraph(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 
+	std::optional<uint64_t> FlowGraphAddress();
+
 	CString m_Title;
 	CScintillaCtrl m_Sci;
 	LexLanguage m_Language{ LexLanguage::Text };
 	PEFile const& m_PE;
-	bool m_Is32Bit{ false };
+	CpuArch m_Arch{ CpuArch::X64 };
 	std::vector<Line> m_Lines;						// by line of the text: what each line of the disassembly is
 	std::unordered_map<uint64_t, int> m_LineOfVa;	// the line of each instruction
 	int m_ContextLine{ -1 };						// the line the context menu was opened on

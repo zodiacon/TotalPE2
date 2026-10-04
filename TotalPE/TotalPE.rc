@@ -517,7 +517,7 @@ BEGIN
 END
 
 IDD_SEARCH DIALOGEX 0, 0, 440, 260
-STYLE DS_SETFONT | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MAXIMIZEBOX
+STYLE DS_SETFONT | DS_FIXEDSYS | WS_MAXIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
 CAPTION "Search All"
 FONT 9, "Segoe UI", 0, 0, 0x0
 BEGIN
@@ -596,8 +596,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,0
- PRODUCTVERSION 1,0,0,0
+ FILEVERSION 1,1,0,0
+ PRODUCTVERSION 1,1,0,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -614,12 +614,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Pavel Yosifovich"
             VALUE "FileDescription", "Total PE - PE Viewer"
-            VALUE "FileVersion", "1.0.0.0"
+            VALUE "FileVersion", "1.1.0.0"
             VALUE "InternalName", "TotalPE"
             VALUE "LegalCopyright", "©2022-2026 Pavel Yosifovich"
             VALUE "OriginalFilename", "TotalPE.exe"
             VALUE "ProductName", "Total PE"
-            VALUE "ProductVersion", "1.0.0.0"
+            VALUE "ProductVersion", "1.1.0.0"
         END
     END
     BLOCK "VarFileInfo"
@@ -775,9 +775,9 @@ STRINGTABLE
 BEGIN
     ID_DATA_SAVE            "Save the data to a file\nSave Data"
     ID_FILE_EXPORTLIST      "Save the list of the active view as CSV or text\nExport List"
+    ID_EDIT_SEARCHALL       "Search the imports, exports, strings, resources, symbols and sections of the file\nSearch All"
     ID_FILE_COMPARE         "Compare the file with another PE file\nCompare With"
     ID_COMPARE_SHOWSAME     "Show the items that are the same in both files\nShow Unchanged"
-    ID_EDIT_SEARCHALL       "Search the imports, exports, strings, resources, symbols and sections of the file\nSearch All"
 END
 
 #endif    // English (United States) resources

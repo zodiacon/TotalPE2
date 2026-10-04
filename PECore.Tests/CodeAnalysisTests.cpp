@@ -158,7 +158,7 @@ TEST_CASE("Instruction references from Capstone details", "[xref]") {
 		cs_insn* inst = nullptr;
 		auto n = cs_disasm(handle, code.data(), code.size(), address, 1, &inst);
 		REQUIRE(n == 1);
-		auto refs = GetInstructionRefs(*inst, true);
+		auto refs = GetInstructionRefs(*inst, CpuArch::X64);
 		cs_free(inst, 1);
 		return refs;
 	};

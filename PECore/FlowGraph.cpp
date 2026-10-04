@@ -47,18 +47,20 @@ namespace {
 			auto sections = pe.GetSecHeaders();
 			if (!info || !nt || !sections)
 				return;
-			auto machine = nt->NTHdr32.FileHeader.Machine;
-			m_Is64 = machine == IMAGE_FILE_MACHINE_AMD64;
-			if (!m_Is64 && machine != IMAGE_FILE_MACHINE_I386)
+			auto arch = ArchOfPeMachine(nt->NTHdr32.FileHeader.Machine);
+			if (!arch)
 				return;
+			m_Arch = *arch;
 			m_Base = pe.GetImageBase();
 			for (auto const& s : *sections)
 				if (s.SecHdr.Characteristics & (IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_CNT_CODE))
 					m_Code.push_back({ m_Base + s.SecHdr.VirtualAddress, m_Base + s.SecHdr.VirtualAddress + std::max(s.SecHdr.Misc.VirtualSize, s.SecHdr.SizeOfRawData) });
-			if (cs_open(CS_ARCH_X86, m_Is64 ? CS_MODE_64 : CS_MODE_32, &m_Handle) != CS_ERR_OK)
+			size_t handle;
+			if (!OpenDisassembler(m_Arch, handle))
 				return;
-			cs_option(m_Handle, CS_OPT_DETAIL, CS_OPT_ON);
+			m_Handle = handle;
 			m_Inst = cs_malloc(m_Handle);
+			m_Tracker.emplace(m_Arch);
 		}
 
 		~Decoder() {
@@ -92,14 +94,50 @@ namespace {
 			d.Inst.Size = (uint8_t)inst.size;
 			d.Inst.Mnemonic = inst.mnemonic;
 			d.Inst.Operands = inst.op_str;
-			auto refs = GetInstructionRefs(inst, m_Is64);
+			// the addresses that ARM64 builds with two instructions: the code is decoded in runs, from an address on
+			if (va != m_Next)
+				m_Tracker->Reset();
+			m_Next = va + inst.size;
+			auto refs = m_Tracker->Refs(inst);
 			d.Inst.Branch = refs.Branch;
 			d.Inst.Memory = refs.Memory;
-			d.Kind = Classify(inst);
+			d.Kind = m_Arch == CpuArch::Arm64 ? ClassifyArm64(inst) : Classify(inst);
 			return true;
 		}
 
 	private:
+		static Kind ClassifyArm64(cs_insn const& inst) {
+			switch (inst.id) {
+				case ARM64_INS_RET: case ARM64_INS_RETAA: case ARM64_INS_RETAB:
+					return Kind::Return;
+				case ARM64_INS_BRK: case ARM64_INS_HLT: case ARM64_INS_UDF:
+					return Kind::Trap;
+			}
+			if (!inst.detail)
+				return Kind::Normal;
+			bool call = false, jump = false;
+			for (int i = 0; i < inst.detail->groups_count; i++) {
+				if (inst.detail->groups[i] == CS_GRP_CALL)
+					call = true;
+				else if (inst.detail->groups[i] == CS_GRP_JUMP)
+					jump = true;
+			}
+			if (call)
+				return Kind::Call;
+			if (!jump)
+				return Kind::Normal;
+			// b label, b.cond / cbz / tbz label; br x16 is an indirect jump
+			auto const& a = inst.detail->arm64;
+			bool direct = false;
+			for (int i = 0; i < a.op_count; i++)
+				if (a.operands[i].type == ARM64_OP_IMM)
+					direct = true;
+			if (!direct)
+				return Kind::Indirect;
+			bool always = inst.id == ARM64_INS_B && (a.cc == ARM64_CC_INVALID || a.cc == ARM64_CC_AL);
+			return always ? Kind::Jump : Kind::Conditional;
+		}
+
 		static Kind Classify(cs_insn const& inst) {
 			switch (inst.id) {
 				case X86_INS_RET: case X86_INS_RETF: case X86_INS_IRET: case X86_INS_IRETD: case X86_INS_IRETQ:
@@ -134,7 +172,9 @@ namespace {
 		}
 
 		PEFile const& m_PE;
-		bool m_Is64{ false };
+		CpuArch m_Arch{ CpuArch::X64 };
+		std::optional<AddressTracker> m_Tracker;
+		uint64_t m_Next{ 0 };
 		uint64_t m_Base{ 0 };
 		std::vector<Range> m_Code;
 		csh m_Handle{ 0 };
@@ -341,7 +381,8 @@ uint64_t FindFunctionStart(PEFile const& pe, XrefMap const& xrefs, uint64_t va) 
 	auto rva = (uint32_t)(va - base);
 
 	if (auto f = FunctionEntry(pe, rva)) {
-		for (int i = 0; i < 16; i++) {
+		// the chained entries of x64 unwind information (ARM64 has them in another form)
+		for (int i = 0; i < 16 && ArchOf(pe) == CpuArch::X64; i++) {
 			auto parent = ParentEntry(pe, *f);
 			if (!parent)
 				break;
