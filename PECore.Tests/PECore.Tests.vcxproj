@@ -54,7 +54,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>TOTALPE_LOGIC_TESTS;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
@@ -72,7 +72,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>TOTALPE_LOGIC_TESTS;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
@@ -98,26 +98,7 @@
     <ClCompile Include="ParsingTests.cpp" />
     <ClCompile Include="SystemBinaryTests.cpp" />
     <ClCompile Include="RobustnessTests.cpp" />
-    <ClCompile Include="..\TotalPE\ClrMetadata.cpp" />
-    <ClCompile Include="..\TotalPE\DialogTemplate.cpp" />
-    <ClCompile Include="..\TotalPE\MenuTemplate.cpp" />
-    <ClCompile Include="..\TotalPE\HexFormat.cpp" />
-    <ClCompile Include="..\TotalPE\HexSearch.cpp" />
-    <ClCompile Include="..\TotalPE\HexNumber.cpp" />
-    <ClCompile Include="..\TotalPE\AniFile.cpp" />
-    <ClCompile Include="..\TotalPE\Md5.cpp" />
-    <ClCompile Include="..\TotalPE\ApiSetMap.cpp" />
-    <ClCompile Include="..\TotalPE\ImportAnalysis.cpp" />
-    <ClCompile Include="..\TotalPE\ImphashOrdinals.cpp" />
-    <ClCompile Include="..\TotalPE\PERegions.cpp" />
-    <ClCompile Include="..\TotalPE\PEAnomalies.cpp" />
-    <ClCompile Include="..\TotalPE\CodeAnalysis.cpp" />
-    <ClCompile Include="..\TotalPE\FlowGraph.cpp" />
-    <ClCompile Include="..\TotalPE\Authenticode.cpp" />
-    <ClCompile Include="..\TotalPE\Overlay.cpp" />
-    <ClCompile Include="..\TotalPE\LibArchive.cpp" />
     <ClCompile Include="LibArchiveTests.cpp" />
-    <ClCompile Include="..\TotalPE\VirusTotal.cpp" />
     <ClCompile Include="ClrMetadataTests.cpp" />
     <ClCompile Include="MenuTemplateTests.cpp" />
     <ClCompile Include="DialogTemplateTests.cpp" />
@@ -134,22 +115,13 @@
     <ClCompile Include="FlowGraphTests.cpp" />
     <ClCompile Include="AuthenticodeTests.cpp" />
     <ClCompile Include="OverlayTests.cpp" />
-    <ClCompile Include="..\TotalPE\FileStrings.cpp" />
     <ClCompile Include="FileStringsTests.cpp" />
-    <ClCompile Include="..\TotalPE\UnwindInfo.cpp" />
     <ClCompile Include="UnwindInfoTests.cpp" />
-    <ClCompile Include="..\TotalPE\ResourceContent.cpp" />
-    <ClCompile Include="..\TotalPE\TypeLibText.cpp" />
     <ClCompile Include="ResourceContentTests.cpp" />
-    <ClCompile Include="..\TotalPE\CoffObject.cpp" />
-    <ClCompile Include="..\TotalPE\GuardTables.cpp" />
     <ClCompile Include="CoffObjectTests.cpp" />
-    <ClCompile Include="..\TotalPE\CodeViewInfo.cpp" />
     <ClCompile Include="CodeViewTests.cpp" />
-    <ClCompile Include="..\TotalPE\SearchIndex.cpp" />
     <ClCompile Include="SearchIndexTests.cpp" />
     <ClCompile Include="PEDiffTests.cpp" />
-    <ClCompile Include="..\TotalPE\ElfFile.cpp" />
     <ClCompile Include="ElfFileTests.cpp" />
     <ClCompile Include="VersionInfoTests.cpp" />
     <ClCompile Include="VirusTotalTests.cpp" />

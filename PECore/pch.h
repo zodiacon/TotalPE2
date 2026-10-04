@@ -13,3 +13,14 @@
 #include <string_view>
 #include <unordered_map>
 #include <span>
+#include <format>
+#include <algorithm>
+#include <numeric>
+#include <functional>
+#include <unordered_set>
+#include <cstdint>
+#include <cstring>
+#include <cstdlib>
+#include <cwctype>
+#include <cmath>
+#include <ctime>

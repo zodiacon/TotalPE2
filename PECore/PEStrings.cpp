@@ -1,6 +1,5 @@
 #include "pch.h"
 #include "PEStrings.h"
-#include "Interfaces.h"
 #include <atltime.h>
 #include <DbgHelp.h>
 #include <DiaHelper.h>
@@ -189,40 +188,6 @@ std::wstring PEStrings::ResourceTypeToString(WORD id) {
 		L"HTML", L"Manifest"
 	};
 	return id >= _countof(types) ? L"" : types[id];
-}
-
-CStringA PEStrings::FormatInstruction(const cs_insn& inst, IMainFrame* frame) {
-	CStringA text, extra;
-	if (frame && inst.detail) {
-		auto const& detail = *inst.detail;
-		bool branch = false;
-		for (int i = 0; i < detail.groups_count; i++)
-			if (detail.groups[i] == CS_GRP_JUMP || detail.groups[i] == CS_GRP_CALL)
-				branch = true;
-
-		// resolve the first operand that refers to a known address: a branch target, a RIP-relative
-		// operand or an absolute memory operand
-		for (int i = 0; i < detail.x86.op_count && extra.IsEmpty(); i++) {
-			auto const& op = detail.x86.operands[i];
-			ULONGLONG target;
-			if (op.type == X86_OP_IMM && branch)
-				target = op.imm;
-			else if (op.type == X86_OP_MEM && op.mem.base == X86_REG_RIP && op.mem.index == X86_REG_INVALID)
-				target = inst.address + inst.size + op.mem.disp;
-			else if (op.type == X86_OP_MEM && op.mem.base == X86_REG_INVALID && op.mem.index == X86_REG_INVALID && op.mem.disp > 0)
-				target = (uint32_t)op.mem.disp;
-			else
-				continue;
-			extra = CStringA(frame->ResolveVa(target).c_str());
-		}
-	}
-
-	if (!extra.IsEmpty())
-		extra = std::format("{} ({})", inst.op_str, (PCSTR)extra).c_str();
-	text.Format("%llX %-10s %-55s;", inst.address, inst.mnemonic, !extra.IsEmpty() ? (PCSTR)extra : inst.op_str);
-	for (int i = 0; i < inst.size; i++)
-		text += std::format(" {:02X}", inst.bytes[i]).c_str();
-	return text;
 }
 
 std::wstring PEStrings::ManagedTypeAttributesToString(CorTypeAttr attr) {

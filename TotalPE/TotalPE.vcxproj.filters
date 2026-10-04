@@ -54,9 +54,6 @@
     <ClCompile Include="SecurityHelper.cpp">
       <Filter>Helpers</Filter>
     </ClCompile>
-    <ClCompile Include="PEStrings.cpp">
-      <Filter>Helpers</Filter>
-    </ClCompile>
     <ClCompile Include="PEImageView.cpp">
       <Filter>Views</Filter>
     </ClCompile>
@@ -159,16 +156,7 @@
     <ClCompile Include="GlobalPtrView.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="DialogTemplate.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="MenuTemplate.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="MenuView.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="ClrMetadata.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="BoundImportView.cpp">
@@ -183,74 +171,20 @@
     <ClCompile Include="SymbolSettingsDlg.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="HexFormat.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="HexFind.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="HexInspector.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="PERegions.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Md5.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="ApiSetMap.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="ImportAnalysis.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="ImphashOrdinals.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="AniFile.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="AnimatedCursorView.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="HexSearch.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="HexNumber.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="PEAnomalies.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="AnomalyView.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="CodeAnalysis.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Authenticode.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="ResourceContent.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="TypeLibText.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="ElfFile.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="ElfView.cpp">
       <Filter>Views</Filter>
-    </ClCompile>
-    <ClCompile Include="CoffObject.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="CodeViewInfo.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="SearchIndex.cpp">
-      <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="CompareView.cpp">
       <Filter>Views</Filter>
@@ -264,9 +198,6 @@
     <ClCompile Include="DebugInfoView.cpp">
       <Filter>Views</Filter>
     </ClCompile>
-    <ClCompile Include="GuardTables.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="ObjectView.cpp">
       <Filter>Views</Filter>
     </ClCompile>
@@ -279,18 +210,6 @@
     <ClCompile Include="FontView.cpp">
       <Filter>Views</Filter>
     </ClCompile>
-    <ClCompile Include="UnwindInfo.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="FileStrings.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Overlay.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="VirusTotal.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="VtKeyDlg.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -302,9 +221,6 @@
     </ClCompile>
     <ClCompile Include="OverlayView.cpp">
       <Filter>Views</Filter>
-    </ClCompile>
-    <ClCompile Include="FlowGraph.cpp">
-      <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="FlowGraphView.cpp">
       <Filter>Views</Filter>
@@ -328,9 +244,6 @@
     </ClInclude>
     <ClInclude Include="Interfaces.h">
       <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="PEStrings.h">
-      <Filter>Helpers</Filter>
     </ClInclude>
     <ClInclude Include="PEImageView.h">
       <Filter>Views</Filter>
@@ -434,16 +347,7 @@
     <ClInclude Include="GlobalPtrView.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="DialogTemplate.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="MenuTemplate.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="MenuView.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="ClrMetadata.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="BoundImportView.h">
@@ -458,74 +362,20 @@
     <ClInclude Include="SymbolSettingsDlg.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="HexFormat.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="HexFind.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="HexInspector.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="PERegions.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Md5.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="ApiSetMap.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="ImportAnalysis.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="ImphashOrdinals.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="AniFile.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="AnimatedCursorView.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="HexSearch.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="HexNumber.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="PEAnomalies.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="AnomalyView.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="CodeAnalysis.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Authenticode.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="ResourceContent.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="TypeLibText.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="ElfFile.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="ElfView.h">
       <Filter>Views</Filter>
-    </ClInclude>
-    <ClInclude Include="CoffObject.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="CodeViewInfo.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="SearchIndex.h">
-      <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="CompareView.h">
       <Filter>Views</Filter>
@@ -535,9 +385,6 @@
     </ClInclude>
     <ClInclude Include="DebugInfoView.h">
       <Filter>Views</Filter>
-    </ClInclude>
-    <ClInclude Include="GuardTables.h">
-      <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ObjectView.h">
       <Filter>Views</Filter>
@@ -551,18 +398,6 @@
     <ClInclude Include="FontView.h">
       <Filter>Views</Filter>
     </ClInclude>
-    <ClInclude Include="UnwindInfo.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="FileStrings.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Overlay.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="VirusTotal.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="VtKeyDlg.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -574,9 +409,6 @@
     </ClInclude>
     <ClInclude Include="OverlayView.h">
       <Filter>Views</Filter>
-    </ClInclude>
-    <ClInclude Include="FlowGraph.h">
-      <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="FlowGraphView.h">
       <Filter>Views</Filter>

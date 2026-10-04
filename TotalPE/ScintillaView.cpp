@@ -13,6 +13,41 @@
 #include "PEFile.h"
 #include "CodeAnalysis.h"
 
+// "address mnemonic operands (name of the target) ; bytes": an operand that refers to a known address gets its name
+static CStringA FormatInstruction(const cs_insn& inst, IMainFrame* frame) {
+	CStringA text, extra;
+	if (frame && inst.detail) {
+		auto const& detail = *inst.detail;
+		bool branch = false;
+		for (int i = 0; i < detail.groups_count; i++)
+			if (detail.groups[i] == CS_GRP_JUMP || detail.groups[i] == CS_GRP_CALL)
+				branch = true;
+
+		// resolve the first operand that refers to a known address: a branch target, a RIP-relative
+		// operand or an absolute memory operand
+		for (int i = 0; i < detail.x86.op_count && extra.IsEmpty(); i++) {
+			auto const& op = detail.x86.operands[i];
+			ULONGLONG target;
+			if (op.type == X86_OP_IMM && branch)
+				target = op.imm;
+			else if (op.type == X86_OP_MEM && op.mem.base == X86_REG_RIP && op.mem.index == X86_REG_INVALID)
+				target = inst.address + inst.size + op.mem.disp;
+			else if (op.type == X86_OP_MEM && op.mem.base == X86_REG_INVALID && op.mem.index == X86_REG_INVALID && op.mem.disp > 0)
+				target = (uint32_t)op.mem.disp;
+			else
+				continue;
+			extra = CStringA(frame->ResolveVa(target).c_str());
+		}
+	}
+
+	if (!extra.IsEmpty())
+		extra = std::format("{} ({})", inst.op_str, (PCSTR)extra).c_str();
+	text.Format("%llX %-10s %-55s;", inst.address, inst.mnemonic, !extra.IsEmpty() ? (PCSTR)extra : inst.op_str);
+	for (int i = 0; i < inst.size; i++)
+		text += std::format(" {:02X}", inst.bytes[i]).c_str();
+	return text;
+}
+
 
 using namespace Lexilla;
 using namespace Scintilla;
@@ -202,7 +237,7 @@ CStringA CScintillaView::Disassemble(std::span<const std::byte> code, uint64_t a
 		line.Memory = info.Memory;
 		m_LineOfVa.insert({ inst->address, (int)m_Lines.size() });
 		m_Lines.push_back(line);
-		text += PEStrings::FormatInstruction(*inst, Frame()) + "\r\n";
+		text += FormatInstruction(*inst, Frame()) + "\r\n";
 
 		bool end = inst->id == X86_INS_RET || inst->id == X86_INS_RETF || inst->id == X86_INS_IRET ||
 			inst->id == X86_INS_IRETD || inst->id == X86_INS_IRETQ || inst->id == X86_INS_JMP;

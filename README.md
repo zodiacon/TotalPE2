@@ -88,6 +88,8 @@ vcpkg install lief capstone scintilla lexilla wil nlohmann-json catch2 --triplet
 
 The `WTLHelper` submodule is needed as well (`git submodule update --init`).
 
+`PECore` has everything that is not UI: the parsers (PE, COFF, libraries, ELF, CodeView, resources), the analysis (disassembly, flow graphs, anomalies, signatures, comparison) and the formatting of values. `TotalPE` is the UI on top of it.
+
 `PECore.Tests` has the unit tests (Catch2). Some of them use files of the system (`kernel32.dll` and the like); the ones that need the Windows SDK or WSL skip themselves when those are not installed.
 
 Enjoy!
