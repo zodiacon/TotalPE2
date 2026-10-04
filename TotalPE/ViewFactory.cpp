@@ -41,6 +41,7 @@
 #include "ResourceContent.h"
 #include "TypeLibText.h"
 #include "ObjectView.h"
+#include "DebugInfoView.h"
 #include "GuardTableView.h"
 #include "ElfView.h"
 
@@ -105,9 +106,12 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 			}
 			view->SetData(m_Archive.MemberData(index));
 			view->ShowInspector(true);
-			auto hItem = InsertTreeItem(m_Tree, view->GetTitle(), GetIconIndex(IDI_BINARY), type, m_hRoot, TVI_SORT);
-			view->SetDeleteFromTree(true);
-			view->SetHTreeItem(hItem);
+			// an object that was opened has a tree item for its data already
+			if (!m_MemberObjects.contains((int)index)) {
+				auto hItem = InsertTreeItem(m_Tree, view->GetTitle(), GetIconIndex(IDI_BINARY), type, m_hRoot, TVI_SORT);
+				view->SetDeleteFromTree(true);
+				view->SetHTreeItem(hItem);
+			}
 			return { view, view };
 		}
 
@@ -233,15 +237,22 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 			return { view, view };
 		}
 
+		// an object file, or a member of a library that is an object
 		case TreeItemType::ObjectHeader:
 		case TreeItemType::ObjectSections:
 		case TreeItemType::ObjectSymbols:
 		case TreeItemType::ObjectRelocations:
+		case TreeItemType::ObjectLineNumbers:
 		{
+			auto member = ObjectItemMember(type);
+			auto obj = FindObject(member);
+			if (!obj.Object)
+				return {};
 			auto item = type & TreeItemType::ItemMask;
 			auto kind = item == TreeItemType::ObjectHeader ? ObjectViewKind::Header : item == TreeItemType::ObjectSections ? ObjectViewKind::Sections :
-				item == TreeItemType::ObjectSymbols ? ObjectViewKind::Symbols : ObjectViewKind::Relocations;
-			auto view = new CObjectView(this, m_Object, kind);
+				item == TreeItemType::ObjectSymbols ? ObjectViewKind::Symbols : item == TreeItemType::ObjectRelocations ? ObjectViewKind::Relocations :
+				ObjectViewKind::LineNumbers;
+			auto view = new CObjectView(this, *obj.Object, kind, member, obj.Owner);
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};
@@ -249,19 +260,45 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 			return { view, view };
 		}
 
-		// the data of a section of an object file
-		case TreeItemType::ObjectSection:
+		case TreeItemType::CodeView:
+		case TreeItemType::CodeViewSymbols:
+		case TreeItemType::CodeViewLines:
+		case TreeItemType::CodeViewFiles:
+		case TreeItemType::CodeViewTypes:
 		{
-			auto index = (size_t)((int64_t)type >> ItemShift) - 1;
-			if (!m_Object || index >= m_Object.Sections().size())
+			auto member = ObjectItemMember(type);
+			auto obj = FindObject(member);
+			if (!obj.Object)
 				return {};
-			auto const& sec = m_Object.Sections()[index];
-			auto view = new CHexView(this, CString(std::format(L"{} ({}, Section)", std::wstring(sec.Name.begin(), sec.Name.end()), index + 1).c_str()));
+			auto item = type & TreeItemType::ItemMask;
+			auto kind = item == TreeItemType::CodeView ? DebugInfoViewKind::Subsections : item == TreeItemType::CodeViewSymbols ? DebugInfoViewKind::Symbols :
+				item == TreeItemType::CodeViewLines ? DebugInfoViewKind::Lines : item == TreeItemType::CodeViewFiles ? DebugInfoViewKind::Files :
+				DebugInfoViewKind::Types;
+			auto view = new CDebugInfoView(this, *obj.Object, *obj.CodeView, kind, member, obj.Owner);
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};
 			}
-			view->SetData(m_Object.SectionData(index));
+			return { view, view };
+		}
+
+		// the data of a section of an object
+		case TreeItemType::ObjectSection:
+		{
+			auto obj = FindObject(ObjectItemMember(type));
+			auto index = (size_t)ObjectItemSection(type);
+			if (!obj.Object || index >= obj.Object->Sections().size())
+				return {};
+			auto const& sec = obj.Object->Sections()[index];
+			auto title = std::format(L"{} ({}, Section)", std::wstring(sec.Name.begin(), sec.Name.end()), index + 1);
+			if (obj.Owner)
+				title = std::format(L"{}: {}", obj.Owner, title);
+			auto view = new CHexView(this, CString(title.c_str()));
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			view->SetData(obj.Object->SectionData(index));
 			view->ShowInspector(true);
 			return { view, view };
 		}

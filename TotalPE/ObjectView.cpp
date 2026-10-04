@@ -27,16 +27,20 @@ namespace {
 	}
 }
 
-CObjectView::CObjectView(IMainFrame* frame, CoffObject const& obj, ObjectViewKind kind) : CViewBase(frame), m_Object(obj), m_Kind(kind) {
+CObjectView::CObjectView(IMainFrame* frame, CoffObject const& obj, ObjectViewKind kind, int member, PCWSTR owner)
+	: CViewBase(frame), m_Object(obj), m_Kind(kind), m_Member(member), m_Owner(owner) {
 }
 
 CString CObjectView::GetTitle() const {
+	CString title;
 	switch (m_Kind) {
-		case ObjectViewKind::Header: return L"Object Header";
-		case ObjectViewKind::Sections: return L"Object Sections";
-		case ObjectViewKind::Symbols: return L"Object Symbols";
+		case ObjectViewKind::Header: title = L"Object Header"; break;
+		case ObjectViewKind::Sections: title = L"Object Sections"; break;
+		case ObjectViewKind::Symbols: title = L"Object Symbols"; break;
+		case ObjectViewKind::Relocations: title = L"Object Relocations"; break;
+		case ObjectViewKind::LineNumbers: title = L"Object Line Numbers"; break;
 	}
-	return L"Object Relocations";
+	return m_Owner.IsEmpty() ? title : m_Owner + L": " + title;
 }
 
 std::wstring CObjectView::SectionText(int32_t number) const {
@@ -153,6 +157,19 @@ CString CObjectView::GetColumnText(HWND, int row, int col) const {
 			}
 			break;
 		}
+
+		case ObjectViewKind::LineNumbers:
+		{
+			auto const& l = m_Object.LineNumbers()[i];
+			switch (tag) {
+				case LineSection: return SectionText(l.Section + 1).c_str();
+				case LineFunction: return m_LineFunctions[i].c_str();
+				// the first entry of a function is the function; the line numbers of the others are relative to its first line
+				case LineNumber: return l.Line ? std::to_wstring(l.Line).c_str() : L"(Function)";
+				case LineOffset: return l.Line ? std::format(L"0x{:X}", l.SymbolIndexOrOffset).c_str() : L"";
+			}
+			break;
+		}
 	}
 	return CString();
 }
@@ -174,6 +191,7 @@ void CObjectView::DoSort(SortInfo const* si) {
 	auto const& sections = m_Object.Sections();
 	auto const& symbols = m_Object.Symbols();
 	auto const& relocs = m_Object.Relocations();
+	auto const& lines = m_Object.LineNumbers();
 
 	std::ranges::stable_sort(m_Rows, [&](int a, int b) {
 		switch (m_Kind) {
@@ -216,6 +234,16 @@ void CObjectView::DoSort(SortInfo const* si) {
 				}
 				return x.Section != y.Section ? SortHelper::Sort(x.Section, y.Section, asc) : SortHelper::Sort(x.Offset, y.Offset, asc);
 			}
+			case ObjectViewKind::LineNumbers:
+			{
+				auto const& x = lines[a], & y = lines[b];
+				switch (tag) {
+					case LineSection: return SortHelper::Sort(x.Section, y.Section, asc);
+					case LineFunction: return SortHelper::Sort(m_LineFunctions[a], m_LineFunctions[b], asc);
+					case LineNumber: return SortHelper::Sort(x.Line, y.Line, asc);
+				}
+				return SortHelper::Sort(a, b, asc);
+			}
 		}
 		return false;
 	});
@@ -228,18 +256,27 @@ bool CObjectView::OnDoubleClickList(HWND, int row, int, CPoint const&) const {
 	int i = m_Rows[row];
 	switch (m_Kind) {
 		case ObjectViewKind::Sections:
-			return Frame()->ShowObjectSection(i, -1);
+			return Frame()->ShowObjectSection(i, -1, m_Member);
 		case ObjectViewKind::Symbols:
 		{
 			auto const& s = m_Object.Symbols()[i];
 			if (s.SectionNumber <= 0 || s.SectionNumber > (int32_t)m_Object.Sections().size())
 				return false;
-			return Frame()->ShowObjectSection(s.SectionNumber - 1, s.Value);
+			return Frame()->ShowObjectSection(s.SectionNumber - 1, s.Value, m_Member);
 		}
 		case ObjectViewKind::Relocations:
 		{
 			auto const& r = m_Object.Relocations()[i];
-			return Frame()->ShowObjectSection(r.Section, r.Offset);
+			return Frame()->ShowObjectSection(r.Section, r.Offset, m_Member);
+		}
+		case ObjectViewKind::LineNumbers:
+		{
+			// a line is at an offset in its section; a function where its symbol is
+			auto const& l = m_Object.LineNumbers()[i];
+			if (l.Line)
+				return Frame()->ShowObjectSection(l.Section, l.SymbolIndexOrOffset, m_Member);
+			auto sym = m_Object.SymbolByIndex(l.SymbolIndexOrOffset);
+			return Frame()->ShowObjectSection(l.Section, sym ? sym->Value : -1, m_Member);
 		}
 	}
 	return false;
@@ -253,7 +290,7 @@ void CObjectView::OnStateChanged(HWND, int, int, DWORD oldState, DWORD newState)
 void CObjectView::UpdateUI(bool first) const {
 	Frame()->GetUI().UIEnable(ID_EDIT_COPY, m_List.GetSelectedCount() > 0);
 	if (first && m_Kind != ObjectViewKind::Header)
-		Frame()->SetStatusText(1, std::format(L"{}: {}", (PCWSTR)GetTitle().Mid(7), m_Rows.size()).c_str());
+		Frame()->SetStatusText(1, std::format(L"{} items", m_Rows.size()).c_str());
 }
 
 LRESULT CObjectView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
@@ -306,6 +343,22 @@ LRESULT CObjectView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 			cm->AddColumn(L"Symbol", LVCFMT_LEFT, 400, RelocSymbol);
 			cm->AddColumn(L"Symbol Index", LVCFMT_RIGHT, 90, RelocSymbolIndex);
 			break;
+
+		case ObjectViewKind::LineNumbers:
+		{
+			count = m_Object.LineNumbers().size();
+			std::wstring function;
+			for (auto const& l : m_Object.LineNumbers()) {
+				if (l.Line == 0)
+					function = SymbolNameAt(l.SymbolIndexOrOffset);
+				m_LineFunctions.push_back(function);
+			}
+			cm->AddColumn(L"Section", LVCFMT_LEFT, 180, LineSection);
+			cm->AddColumn(L"Function", LVCFMT_LEFT, 300, LineFunction);
+			cm->AddColumn(L"Line", LVCFMT_RIGHT, 80, LineNumber);
+			cm->AddColumn(L"Offset", LVCFMT_RIGHT, 80, LineOffset);
+			break;
+		}
 	}
 	m_Rows.resize(count);
 	std::iota(m_Rows.begin(), m_Rows.end(), 0);

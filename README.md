@@ -14,8 +14,8 @@ As usual, it's a work in progress.
 ## What it opens
 
 * **PE files** - executables, DLLs, drivers, 32 and 64 bit
-* **Static libraries** (`.lib`, `.a`) - the members, the symbol index and the records of import libraries
-* **COFF object files** (`.obj`, regular and bigobj) - header, linker directives, sections, symbols and relocations
+* **Static libraries** (`.lib`, `.a`) - the members, the symbol index and the records of import libraries; an object member opens with everything an object file has
+* **COFF object files** (`.obj`, regular and bigobj) - header, linker directives, sections, symbols, relocations and line numbers, and the CodeView debug information (`/Z7`, `/Zi`): symbols, source lines and files, types (or the PDB that has them)
 * **ELF files** (Linux and friends) - executables, shared objects, relocatable objects and core dumps; 32 and 64 bit, either byte order
 
 The kind of file is recognized by its contents, not its extension. Open files from the menu, the command line, by drag and drop, or from the recent files list.

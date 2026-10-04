@@ -11,12 +11,14 @@
 #include <PEFile.h>
 #include "LibArchive.h"
 #include "CoffObject.h"
+#include "CodeViewInfo.h"
 #include "GuardTables.h"
 #include "ElfFile.h"
 #include "Interfaces.h"
 #include "GoToDlg.h"
 #include "RecentFilesManager.h"
 #include <Theme.h>
+#include <map>
 
 class CMainFrame :
 	public CFrameWindowImpl<CMainFrame>,
@@ -114,7 +116,7 @@ private:
 	bool ShowXrefs(uint64_t va) override;
 	bool ShowFlowGraph(uint64_t va) override;
 	bool ShowArchiveMember(int member) override;
-	bool ShowObjectSection(int section, int64_t offset) override;
+	bool ShowObjectSection(int section, int64_t offset, int member = -1) override;
 	bool ShowElfAddress(uint64_t address, bool code) override;
 	bool ShowElfSection(int section, int64_t offset, bool code) override;
 	bool ShowElfFileOffset(int64_t offset) override;
@@ -138,6 +140,20 @@ private:
 	void BuildArchiveTree(int iconSize);
 	bool OpenObject(PCWSTR path);
 	void BuildObjectTree(int iconSize);
+	// the items of an object under its own: sections, symbols... the CodeView information
+	void InsertObjectItems(HTREEITEM hObject, CoffObject const& obj, CodeViewInfo const& cv, int member);
+
+	// An object: the object file that is open (member -1), or a member of the library that was opened as an object
+	struct ObjectRef {
+		CoffObject const* Object{ nullptr };
+		CodeViewInfo const* CodeView{ nullptr };
+		PCWSTR Owner{ nullptr };	// the name of the member, for the titles of its views
+	};
+	ObjectRef FindObject(int member) const;
+	// The tree item type of an item of an object (see TreeItemType): the member (if any) in bits 8-31, the section in bits 32-62
+	static TreeItemType ObjectItem(TreeItemType type, int member, int section = -1);
+	static int ObjectItemMember(TreeItemType type);
+	static int ObjectItemSection(TreeItemType type);
 	bool OpenElf(PCWSTR path);
 	void BuildElfTree(int iconSize);
 	bool ShowElfCode(int section, uint64_t offset);
@@ -226,6 +242,15 @@ private:
 	PEFile m_PE;
 	LibArchive m_Archive;		// a library is open instead of a PE file
 	CoffObject m_Object;		// an object file is open instead of a PE file
+	CodeViewInfo m_ObjectCodeView;
+	// the members of the library that were opened as objects, by their index
+	struct MemberObject {
+		CoffObject Object;
+		CodeViewInfo CodeView;
+		std::wstring Name;
+		HTREEITEM hItem{};
+	};
+	std::map<int, MemberObject> m_MemberObjects;
 	ElfFile m_Elf;				// an ELF file is open instead of a PE file
 	struct ElfName {
 		uint64_t Address, Size;

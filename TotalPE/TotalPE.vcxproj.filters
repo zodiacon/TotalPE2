@@ -246,6 +246,12 @@
     <ClCompile Include="CoffObject.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="CodeViewInfo.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="DebugInfoView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
     <ClCompile Include="GuardTables.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -505,6 +511,12 @@
     </ClInclude>
     <ClInclude Include="CoffObject.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CodeViewInfo.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DebugInfoView.h">
+      <Filter>Views</Filter>
     </ClInclude>
     <ClInclude Include="GuardTables.h">
       <Filter>Header Files</Filter>

@@ -444,6 +444,8 @@
     <ClCompile Include="FontView.cpp" />
     <ClCompile Include="SaveData.cpp" />
     <ClCompile Include="CoffObject.cpp" />
+    <ClCompile Include="CodeViewInfo.cpp" />
+    <ClCompile Include="DebugInfoView.cpp" />
     <ClCompile Include="ElfFile.cpp" />
     <ClCompile Include="ElfView.cpp" />
     <ClCompile Include="GuardTables.cpp" />
@@ -535,6 +537,8 @@
     <ClInclude Include="FontView.h" />
     <ClInclude Include="SaveData.h" />
     <ClInclude Include="CoffObject.h" />
+    <ClInclude Include="CodeViewInfo.h" />
+    <ClInclude Include="DebugInfoView.h" />
     <ClInclude Include="ElfFile.h" />
     <ClInclude Include="ElfView.h" />
     <ClInclude Include="GuardTables.h" />

@@ -152,6 +152,7 @@ bool CoffObject::Parse(std::span<const std::byte> data) {
 	ReadSections(tableOffset, sections);
 	ReadSymbols(symbolSize);
 	ReadRelocations();
+	ReadLineNumbers();
 	return true;
 }
 
@@ -302,6 +303,23 @@ void CoffObject::ReadRelocations() {
 		for (uint32_t r = first; r < count; r++) {
 			auto at = sec.PointerToRelocations + (size_t)r * RelocationSize;
 			m_Relocations.push_back({ s, Read<uint32_t>(m_Data, at), Read<uint32_t>(m_Data, at + 4), Read<uint16_t>(m_Data, at + 8) });
+		}
+	}
+}
+
+void CoffObject::ReadLineNumbers() {
+	constexpr size_t LineNumberSize = 6;
+	for (uint32_t s = 0; s < (uint32_t)m_Sections.size(); s++) {
+		auto const& sec = m_Sections[s];
+		if (sec.NumberOfLinenumbers == 0)
+			continue;
+		if (!Fits(m_Data, sec.PointerToLinenumbers, (uint64_t)sec.NumberOfLinenumbers * LineNumberSize)) {
+			m_Problems.push_back(std::format(L"The line numbers of section {} ({}) are outside the file", s + 1, Widen(sec.Name)));
+			continue;
+		}
+		for (uint32_t i = 0; i < sec.NumberOfLinenumbers; i++) {
+			auto at = sec.PointerToLinenumbers + (size_t)i * LineNumberSize;
+			m_LineNumbers.push_back({ s, Read<uint32_t>(m_Data, at), Read<uint16_t>(m_Data, at + 4) });
 		}
 	}
 }

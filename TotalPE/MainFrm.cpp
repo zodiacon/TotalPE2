@@ -570,6 +570,8 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	m_Tabs.RemoveAllPages();
 	m_Archive.Close();
 	m_Object.Close();
+	m_ObjectCodeView = {};
+	m_MemberObjects.clear();
 	m_Elf.Close();
 	m_ElfNames.clear();
 
@@ -653,6 +655,8 @@ void CMainFrame::ResetFileState() {
 	m_PE.Close();
 	m_Archive.Close();
 	m_Object.Close();
+	m_ObjectCodeView = {};
+	m_MemberObjects.clear();
 	m_Elf.Close();
 	m_ElfNames.clear();
 	m_Symbols.Close();
@@ -681,6 +685,7 @@ bool CMainFrame::OpenObject(PCWSTR path) {
 
 	ResetFileState();
 	m_Object = std::move(obj);
+	m_ObjectCodeView = ReadCodeView(m_Object);
 	SetStatusText(0, L"");
 	BuildObjectTree(16);
 
@@ -710,27 +715,74 @@ void CMainFrame::BuildObjectTree(int iconSize) {
 
 	auto& path = m_Object.Path();
 	auto root = InsertTreeItem(m_Tree, path.substr(path.rfind(L'\\') + 1).c_str(), 0, TreeItemType::ObjectHeader);
-	auto sections = InsertTreeItem(m_Tree, std::format(L"Sections ({})", m_Object.Sections().size()).c_str(), GetTreeIcon(IDI_SECTIONS),
-		TreeItemType::ObjectSections, root);
-	// a bigobj can have tens of thousands: they are in the list of the sections then
-	if (m_Object.Sections().size() <= 1000) {
-		int i = 0;
-		for (auto const& sec : m_Object.Sections()) {
-			InsertTreeItem(m_Tree, std::format(L"{} ({})", std::wstring(sec.Name.begin(), sec.Name.end()), i + 1).c_str(), GetTreeIcon(IDI_SECTION),
-				TreeItemWithIndex(TreeItemType::ObjectSection, (int64_t)(i + 1) << ItemShift), sections);
-			i++;
-		}
-	}
-	if (!m_Object.Symbols().empty())
-		InsertTreeItem(m_Tree, std::format(L"Symbols ({})", m_Object.Symbols().size()).c_str(), GetTreeIcon(IDI_SYMBOLS), TreeItemType::ObjectSymbols, root);
-	if (!m_Object.Relocations().empty())
-		InsertTreeItem(m_Tree, std::format(L"Relocations ({})", m_Object.Relocations().size()).c_str(), GetTreeIcon(IDI_RELOC), TreeItemType::ObjectRelocations, root);
+	InsertObjectItems(root, m_Object, m_ObjectCodeView, -1);
 
 	m_hRoot = root;
 	m_Tree.Expand(root, TVE_EXPAND);
 	m_Tree.SelectItem(root);
 	m_Tree.SetRedraw();
 	m_Tree.SetFocus();
+}
+
+void CMainFrame::InsertObjectItems(HTREEITEM hObject, CoffObject const& obj, CodeViewInfo const& cv, int member) {
+	auto sections = InsertTreeItem(m_Tree, std::format(L"Sections ({})", obj.Sections().size()).c_str(), GetTreeIcon(IDI_SECTIONS),
+		ObjectItem(TreeItemType::ObjectSections, member), hObject);
+	// a bigobj can have tens of thousands: they are in the list of the sections then
+	if (obj.Sections().size() <= 1000) {
+		int i = 0;
+		for (auto const& sec : obj.Sections()) {
+			InsertTreeItem(m_Tree, std::format(L"{} ({})", std::wstring(sec.Name.begin(), sec.Name.end()), i + 1).c_str(), GetTreeIcon(IDI_SECTION),
+				ObjectItem(TreeItemType::ObjectSection, member, i), sections);
+			i++;
+		}
+	}
+	if (!obj.Symbols().empty())
+		InsertTreeItem(m_Tree, std::format(L"Symbols ({})", obj.Symbols().size()).c_str(), GetTreeIcon(IDI_SYMBOLS),
+			ObjectItem(TreeItemType::ObjectSymbols, member), hObject);
+	if (!obj.Relocations().empty())
+		InsertTreeItem(m_Tree, std::format(L"Relocations ({})", obj.Relocations().size()).c_str(), GetTreeIcon(IDI_RELOC),
+			ObjectItem(TreeItemType::ObjectRelocations, member), hObject);
+	if (!obj.LineNumbers().empty())
+		InsertTreeItem(m_Tree, std::format(L"Line Numbers ({})", obj.LineNumbers().size()).c_str(), GetTreeIcon(IDI_TEXT),
+			ObjectItem(TreeItemType::ObjectLineNumbers, member), hObject);
+	if (cv.Empty())
+		return;
+
+	// the CodeView information (/Z7, /Zi): its subsections, then what is in them
+	auto hcv = InsertTreeItem(m_Tree, L"CodeView", GetTreeIcon(IDI_DEBUG), ObjectItem(TreeItemType::CodeView, member), hObject);
+	if (!cv.Symbols.empty())
+		InsertTreeItem(m_Tree, std::format(L"Symbols ({})", cv.Symbols.size()).c_str(), GetTreeIcon(IDI_SYMBOLS),
+			ObjectItem(TreeItemType::CodeViewSymbols, member), hcv);
+	if (!cv.Lines.empty())
+		InsertTreeItem(m_Tree, std::format(L"Source Lines ({})", cv.Lines.size()).c_str(), GetTreeIcon(IDI_TEXT),
+			ObjectItem(TreeItemType::CodeViewLines, member), hcv);
+	if (!cv.Files.empty())
+		InsertTreeItem(m_Tree, std::format(L"Source Files ({})", cv.Files.size()).c_str(), GetTreeIcon(IDI_DIR_OPEN),
+			ObjectItem(TreeItemType::CodeViewFiles, member), hcv);
+	if (!cv.Types.empty())
+		InsertTreeItem(m_Tree, std::format(L"Types ({})", cv.Types.size()).c_str(), GetTreeIcon(IDI_TYPE),
+			ObjectItem(TreeItemType::CodeViewTypes, member), hcv);
+}
+
+CMainFrame::ObjectRef CMainFrame::FindObject(int member) const {
+	if (member < 0)
+		return m_Object ? ObjectRef{ &m_Object, &m_ObjectCodeView, nullptr } : ObjectRef{};
+	auto it = m_MemberObjects.find(member);
+	if (it == m_MemberObjects.end())
+		return {};
+	return { &it->second.Object, &it->second.CodeView, it->second.Name.c_str() };
+}
+
+TreeItemType CMainFrame::ObjectItem(TreeItemType type, int member, int section) {
+	return static_cast<TreeItemType>((int64_t)type | ((int64_t)(member + 1) << ItemShift) | ((int64_t)(section + 1) << 32));
+}
+
+int CMainFrame::ObjectItemMember(TreeItemType type) {
+	return (int)(((int64_t)type >> ItemShift) & 0xFFFFFF) - 1;
+}
+
+int CMainFrame::ObjectItemSection(TreeItemType type) {
+	return (int)((int64_t)type >> 32) - 1;
 }
 
 // An ELF file: its header, segments, sections, symbols, dynamic section, relocations and notes. The PE file that was open is closed.
@@ -903,15 +955,16 @@ bool CMainFrame::ShowElfCode(int section, uint64_t offset) {
 	return true;
 }
 
-bool CMainFrame::ShowObjectSection(int section, int64_t offset) {
-	if (!m_Object || section < 0 || section >= (int)m_Object.Sections().size())
+bool CMainFrame::ShowObjectSection(int section, int64_t offset, int member) {
+	auto obj = FindObject(member).Object;
+	if (!obj || section < 0 || section >= (int)obj->Sections().size())
 		return false;
-	if (m_Object.SectionData(section).empty()) {
+	if (obj->SectionData(section).empty()) {
 		AtlMessageBox(m_hWnd, L"The section has no data in the file", IDR_MAINFRAME, MB_ICONINFORMATION);
 		return false;
 	}
 	RecordNavigation();
-	auto type = TreeItemWithIndex(TreeItemType::ObjectSection, (int64_t)(section + 1) << ItemShift);
+	auto type = ObjectItem(TreeItemType::ObjectSection, member, section);
 	if (!ShowView(type, nullptr, IDI_SECTION))
 		return false;
 	if (offset >= 0)
@@ -921,10 +974,42 @@ bool CMainFrame::ShowObjectSection(int section, int64_t offset) {
 	return true;
 }
 
+// An object member gets the items of an object file under its own (once); anything else is shown in the hex view
 bool CMainFrame::ShowArchiveMember(int member) {
 	if (!m_Archive || member < 0 || member >= (int)m_Archive.Members().size())
 		return false;
-	return ShowView(TreeItemWithIndex(TreeItemType::ArchiveMember, (int64_t)(member + 1) << ItemShift), nullptr, IDI_BINARY);
+	auto hexType = TreeItemWithIndex(TreeItemType::ArchiveMember, (int64_t)(member + 1) << ItemShift);
+	auto const& info = m_Archive.Members()[member];
+	if (info.Kind != ArchiveMemberKind::Object)
+		return ShowView(hexType, nullptr, IDI_BINARY);
+
+	auto it = m_MemberObjects.find(member);
+	if (it == m_MemberObjects.end()) {
+		CWaitCursor wait;
+		MemberObject obj;
+		if (!obj.Object.Parse(m_Archive.MemberData(member)))
+			return ShowView(hexType, nullptr, IDI_BINARY);
+		obj.CodeView = ReadCodeView(obj.Object);
+		// the name of a member is often the path of the object when the library was built
+		std::wstring name(info.Name.begin(), info.Name.end());
+		if (auto slash = name.find_last_of(L"\\/"); slash != std::wstring::npos && slash + 1 < name.size())
+			name = name.substr(slash + 1);
+		obj.Name = name;
+		it = m_MemberObjects.emplace(member, std::move(obj)).first;
+
+		auto& added = it->second;
+		m_Tree.SetRedraw(FALSE);
+		added.hItem = InsertTreeItem(m_Tree, std::format(L"{} (Member {})", name, member).c_str(), 0,
+			ObjectItem(TreeItemType::ObjectHeader, member), m_hRoot);
+		InsertObjectItems(added.hItem, added.Object, added.CodeView, member);
+		InsertTreeItem(m_Tree, L"Member in Hex", GetTreeIcon(IDI_BINARY), hexType, added.hItem);
+		m_Tree.SetRedraw();
+	}
+	RecordNavigation();
+	auto shown = ShowView(ObjectItem(TreeItemType::ObjectHeader, member), it->second.hItem);
+	m_Tree.Expand(it->second.hItem, TVE_EXPAND);
+	RecordNavigation();
+	return shown;
 }
 
 TreeItemType CMainFrame::TreeItemWithIndex(TreeItemType type, int64_t index) {
@@ -1064,6 +1149,8 @@ LRESULT CMainFrame::OnFileClose(WORD, WORD, HWND, BOOL&) {
 	m_PE.Close();
 	m_Archive.Close();
 	m_Object.Close();
+	m_ObjectCodeView = {};
+	m_MemberObjects.clear();
 	m_Elf.Close();
 	m_ElfNames.clear();
 	m_GuardTables.clear();

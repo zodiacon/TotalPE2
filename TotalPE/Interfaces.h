@@ -96,6 +96,15 @@ enum class TreeItemType : int64_t {
 	ElfFileInHex,
 	ElfCode,
 
+	// more of a COFF object file: its line numbers and its CodeView information. The items of an object have the member of the
+	// library it is in (if it is in one) and a section (for ObjectSection) as their index: see CMainFrame::ObjectItem.
+	ObjectLineNumbers,
+	CodeView,
+	CodeViewSymbols,
+	CodeViewLines,
+	CodeViewFiles,
+	CodeViewTypes,
+
 	ItemMask = 255,
 };
 DEFINE_ENUM_FLAG_OPERATORS(TreeItemType);
@@ -137,10 +146,11 @@ struct IMainFrame abstract {
 	virtual bool ShowXrefs(uint64_t va) = 0;
 	// The flow graph of the function that contains the address (the code from the address if the function is not known)
 	virtual bool ShowFlowGraph(uint64_t va) = 0;
-	// The data of a member of the library, in the hex view
+	// A member of the library: an object as an object file (its header, sections...), anything else in the hex view
 	virtual bool ShowArchiveMember(int member) = 0;
-	// The data of a section of the object file in the hex view, at an offset in the section (-1 for the start)
-	virtual bool ShowObjectSection(int section, int64_t offset) = 0;
+	// The data of a section of an object in the hex view, at an offset in the section (-1 for the start). The object is the object
+	// file (member -1), or a member of the library.
+	virtual bool ShowObjectSection(int section, int64_t offset, int member = -1) = 0;
 	// The places of an ELF file: code is disassembled (x86, x64), anything else is shown in the hex view.
 	// An address is a virtual address; an offset in a section is for relocatable objects, whose sections are all at 0.
 	virtual bool ShowElfAddress(uint64_t address, bool code) = 0;

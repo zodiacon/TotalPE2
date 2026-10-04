@@ -30,6 +30,14 @@ struct CoffSymbol {
 	std::string Details;		// what the auxiliary records say: a file name, a section's definition, the default of a weak external...
 };
 
+// A COFF line number (old compilers; CodeView has the lines now): the first entry of a function has line 0 and the function's symbol,
+// the others the offset of the line in the section and its number relative to the function's first line
+struct CoffLineNumber {
+	uint32_t Section{};				// 0-based
+	uint32_t SymbolIndexOrOffset{};
+	uint16_t Line{};
+};
+
 struct CoffRelocation {
 	uint32_t Section{};			// 0-based
 	uint32_t Offset{};			// in the section
@@ -70,6 +78,7 @@ public:
 	std::vector<CoffSection> const& Sections() const { return m_Sections; }
 	std::vector<CoffSymbol> const& Symbols() const { return m_Symbols; }
 	std::vector<CoffRelocation> const& Relocations() const { return m_Relocations; }
+	std::vector<CoffLineNumber> const& LineNumbers() const { return m_LineNumbers; }
 	// What did not make sense (a table outside the file...): what could be read is there anyway
 	std::vector<std::wstring> const& Problems() const { return m_Problems; }
 
@@ -89,6 +98,7 @@ private:
 	void ReadSections(size_t tableOffset, uint32_t count);
 	void ReadSymbols(size_t symbolSize);
 	void ReadRelocations();
+	void ReadLineNumbers();
 	std::string StringAt(uint32_t offset) const;
 	std::string SectionName(const char* raw) const;
 
@@ -102,5 +112,6 @@ private:
 	std::vector<CoffSymbol> m_Symbols;
 	std::vector<int> m_SymbolPositions;		// for each index of the symbol table, the position in m_Symbols (-1 for an auxiliary record)
 	std::vector<CoffRelocation> m_Relocations;
+	std::vector<CoffLineNumber> m_LineNumbers;
 	std::vector<std::wstring> m_Problems;
 };

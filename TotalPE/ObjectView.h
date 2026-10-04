@@ -5,16 +5,17 @@
 #include "CoffObject.h"
 
 enum class ObjectViewKind {
-	Header, Sections, Symbols, Relocations,
+	Header, Sections, Symbols, Relocations, LineNumbers,
 };
 
-// The lists of a COFF object file (see CoffObject.h): its header, sections, symbols and relocations.
-// Double-click a section, a symbol or a relocation to see the place in the data of its section.
+// The lists of a COFF object file (see CoffObject.h): its header, sections, symbols, relocations and line numbers.
+// Double-click a section, a symbol, a relocation or a line to see the place in the data of its section.
 class CObjectView :
 	public CViewBase<CObjectView>,
 	public CVirtualListView<CObjectView> {
 public:
-	CObjectView(IMainFrame* frame, CoffObject const& obj, ObjectViewKind kind);
+	// 'member' is the member of the library the object is (-1 for an object file); 'owner' its name for the title
+	CObjectView(IMainFrame* frame, CoffObject const& obj, ObjectViewKind kind, int member = -1, PCWSTR owner = nullptr);
 	CString GetTitle() const override;
 
 	CString GetColumnText(HWND, int row, int col) const;
@@ -41,6 +42,7 @@ private:
 		Number, SectionName, RawSize, RawOffset, RelocCount, RelocOffset, Characteristics,		// sections
 		Index, SymbolName, Undecorated, SymbolValue, Section, Type, StorageClass, Aux, SymbolDetails,	// symbols
 		RelocSection, RelocOffsetInSection, RelocType, RelocSymbol, RelocSymbolIndex,			// relocations
+		LineSection, LineFunction, LineNumber, LineOffset,										// line numbers
 	};
 
 	struct HeaderItem {
@@ -59,5 +61,8 @@ private:
 	CoffObject const& m_Object;
 	ObjectViewKind m_Kind;
 	std::vector<HeaderItem> m_Header;
+	std::vector<std::wstring> m_LineFunctions;	// for each line number, the function it is in
+	int m_Member;
+	CString m_Owner;
 	std::vector<int> m_Rows;		// the position of each row in the list of the object: the rows can be sorted
 };
