@@ -42,6 +42,7 @@
 #include "TypeLibText.h"
 #include "ObjectView.h"
 #include "GuardTableView.h"
+#include "ElfView.h"
 
 std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 	CWaitCursor wait;
@@ -261,6 +262,59 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 				return {};
 			}
 			view->SetData(m_Object.SectionData(index));
+			view->ShowInspector(true);
+			return { view, view };
+		}
+
+		case TreeItemType::ElfHeader:
+		case TreeItemType::ElfProgramHeaders:
+		case TreeItemType::ElfSections:
+		case TreeItemType::ElfSymbols:
+		case TreeItemType::ElfDynamic:
+		case TreeItemType::ElfRelocations:
+		case TreeItemType::ElfNotes:
+		{
+			static const std::pair<TreeItemType, ElfViewKind> kinds[] = {
+				{ TreeItemType::ElfHeader, ElfViewKind::Header }, { TreeItemType::ElfProgramHeaders, ElfViewKind::ProgramHeaders },
+				{ TreeItemType::ElfSections, ElfViewKind::Sections }, { TreeItemType::ElfSymbols, ElfViewKind::Symbols },
+				{ TreeItemType::ElfDynamic, ElfViewKind::Dynamic }, { TreeItemType::ElfRelocations, ElfViewKind::Relocations },
+				{ TreeItemType::ElfNotes, ElfViewKind::Notes },
+			};
+			auto item = type & TreeItemType::ItemMask;
+			auto kind = std::ranges::find(kinds, item, &std::pair<TreeItemType, ElfViewKind>::first)->second;
+			auto view = new CElfView(this, m_Elf, kind);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		// the data of a section of an ELF file (the index is one more than the section's: 0 is not an index)
+		case TreeItemType::ElfSection:
+		{
+			auto index = (size_t)((int64_t)type >> ItemShift) - 1;
+			if (!m_Elf || index >= m_Elf.Sections().size())
+				return {};
+			auto const& name = m_Elf.Sections()[index].Name;
+			auto view = new CHexView(this, CString(std::format(L"{} (Section)", std::wstring(name.begin(), name.end())).c_str()));
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			view->SetData(m_Elf.SectionData(index));
+			view->ShowInspector(true);
+			return { view, view };
+		}
+
+		case TreeItemType::ElfFileInHex:
+		{
+			auto view = new CHexView(this, L"File in Hex");
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			view->SetData(m_Elf.Data());
 			view->ShowInspector(true);
 			return { view, view };
 		}

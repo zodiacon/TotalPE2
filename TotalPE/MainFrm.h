@@ -12,6 +12,7 @@
 #include "LibArchive.h"
 #include "CoffObject.h"
 #include "GuardTables.h"
+#include "ElfFile.h"
 #include "Interfaces.h"
 #include "GoToDlg.h"
 #include "RecentFilesManager.h"
@@ -114,6 +115,9 @@ private:
 	bool ShowFlowGraph(uint64_t va) override;
 	bool ShowArchiveMember(int member) override;
 	bool ShowObjectSection(int section, int64_t offset) override;
+	bool ShowElfAddress(uint64_t address, bool code) override;
+	bool ShowElfSection(int section, int64_t offset, bool code) override;
+	bool ShowElfFileOffset(int64_t offset) override;
 	void RecordNavigation() override;
 	bool AddToolBar(HWND tb) override;
 	bool DeleteTreeItem(HTREEITEM hItem) override;
@@ -134,6 +138,9 @@ private:
 	void BuildArchiveTree(int iconSize);
 	bool OpenObject(PCWSTR path);
 	void BuildObjectTree(int iconSize);
+	bool OpenElf(PCWSTR path);
+	void BuildElfTree(int iconSize);
+	bool ShowElfCode(int section, uint64_t offset);
 	void ResetFileState();
 	std::wstring CurrentPath() const;
 	CString DoFileOpen() const;
@@ -219,6 +226,13 @@ private:
 	PEFile m_PE;
 	LibArchive m_Archive;		// a library is open instead of a PE file
 	CoffObject m_Object;		// an object file is open instead of a PE file
+	ElfFile m_Elf;				// an ELF file is open instead of a PE file
+	struct ElfName {
+		uint64_t Address, Size;
+		std::wstring Name;
+	};
+	std::vector<ElfName> m_ElfNames;	// the functions and data of the ELF file, by address: the disassembly shows their names
+	int m_ElfCodeViews{ 0 };
 	std::vector<GuardTable> m_GuardTables;	// of the PE file
 	std::vector<FlatResource> m_FlatResources;
 	CImageList m_TreeImages;

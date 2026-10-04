@@ -237,6 +237,12 @@
     <ClCompile Include="TypeLibText.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="ElfFile.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ElfView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
     <ClCompile Include="CoffObject.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -490,6 +496,12 @@
     </ClInclude>
     <ClInclude Include="TypeLibText.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ElfFile.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ElfView.h">
+      <Filter>Views</Filter>
     </ClInclude>
     <ClInclude Include="CoffObject.h">
       <Filter>Header Files</Filter>

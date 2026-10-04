@@ -15,6 +15,7 @@
 #include "GoToDlg.h"
 #include "VtKeyDlg.h"
 #include "SaveData.h"
+#include "ScintillaView.h"
 #include <thread>
 #include <WTLHelper.h>
 
@@ -76,16 +77,16 @@ void CMainFrame::UpdateUI() {
 	UIEnable(ID_VIEW_DIRECTORIES, fi && fi->HasDataDirs);
 	UIEnable(ID_VIEW_SECTIONS, fi && fi->HasSections);
 	UIEnable(ID_PE_SECURITY, fi && fi->HasSecurity);
-	UIEnable(ID_FILE_CLOSE, fi != nullptr || m_Archive || m_Object);
+	UIEnable(ID_FILE_CLOSE, fi != nullptr || m_Archive || m_Object || m_Elf);
 	m_SaveUIPage = (HWND)-1;	// Save and Export List: from the active view, on the next idle
 	UIEnable(ID_PE_STRINGS, fi != nullptr);
 	UIEnable(ID_VIEW_MANIFEST, fi && m_hResManifest != nullptr);
 	UIEnable(ID_VIEW_VERSION, fi && m_hResVersion != nullptr);
 	UIEnable(ID_VIEW_OVERLAY, fi && m_hOverlay != nullptr);
 	UIEnable(ID_PE_VIRUSTOTAL, fi && !m_Vt.Running());
-	UIEnable(ID_FILE_OPENINANEWWINDOW, fi != nullptr || m_Archive || m_Object);
+	UIEnable(ID_FILE_OPENINANEWWINDOW, fi != nullptr || m_Archive || m_Object || m_Elf);
 	UIEnable(ID_EDIT_COPY, FALSE);
-	UIEnable(ID_EDIT_FIND, (fi || m_Archive || m_Object) && m_Tabs.GetActivePage() >= 0);
+	UIEnable(ID_EDIT_FIND, (fi || m_Archive || m_Object || m_Elf) && m_Tabs.GetActivePage() >= 0);
 	UIEnable(ID_PE_ENTIREFILEINHEX, fi != nullptr);
 }
 
@@ -448,6 +449,18 @@ std::wstring CMainFrame::ResolveRva(DWORD rva) const {
 }
 
 std::wstring CMainFrame::ResolveVa(ULONGLONG va) const {
+	if (m_Elf) {
+		// the function or data that contains the address
+		auto it = std::upper_bound(m_ElfNames.begin(), m_ElfNames.end(), va, [](ULONGLONG a, ElfName const& n) { return a < n.Address; });
+		if (it == m_ElfNames.begin())
+			return {};
+		--it;
+		if (it->Address == va)
+			return it->Name;
+		if (va - it->Address < it->Size)
+			return std::format(L"{}+0x{:X}", it->Name, va - it->Address);
+		return {};
+	}
 	auto base = m_PE.GetImageBase();
 	if (va < base || va - base > 0xFFFFFFFFULL)
 		return {};
@@ -517,7 +530,7 @@ LRESULT CMainFrame::OnDropFiles(UINT /*uMsg*/, WPARAM wParam, LPARAM /*lParam*/,
 }
 
 std::wstring CMainFrame::CurrentPath() const {
-	return m_Archive ? m_Archive.Path() : m_Object ? m_Object.Path() : m_PE.GetPath();
+	return m_Archive ? m_Archive.Path() : m_Object ? m_Object.Path() : m_Elf ? m_Elf.Path() : m_PE.GetPath();
 }
 
 bool CMainFrame::OpenPE(PCWSTR path) {
@@ -525,6 +538,8 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 		return OpenArchive(path);
 	if (CoffObject::IsObjectFile(path))
 		return OpenObject(path);
+	if (ElfFile::IsElfFile(path))
+		return OpenElf(path);
 
 	CWaitCursor wait;
 	int bitness = (m_PE && m_PE.GetFileInfo()->IsPE64) * 2 + (m_PE && m_PE.GetFileInfo()->IsPE32);
@@ -555,6 +570,8 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	m_Tabs.RemoveAllPages();
 	m_Archive.Close();
 	m_Object.Close();
+	m_Elf.Close();
+	m_ElfNames.clear();
 
 	BuildTree(16);
 
@@ -636,6 +653,8 @@ void CMainFrame::ResetFileState() {
 	m_PE.Close();
 	m_Archive.Close();
 	m_Object.Close();
+	m_Elf.Close();
+	m_ElfNames.clear();
 	m_Symbols.Close();
 	++m_SymbolGeneration;
 	m_SymbolsForModules.clear();
@@ -712,6 +731,176 @@ void CMainFrame::BuildObjectTree(int iconSize) {
 	m_Tree.SelectItem(root);
 	m_Tree.SetRedraw();
 	m_Tree.SetFocus();
+}
+
+// An ELF file: its header, segments, sections, symbols, dynamic section, relocations and notes. The PE file that was open is closed.
+bool CMainFrame::OpenElf(PCWSTR path) {
+	CWaitCursor wait;
+	ElfFile elf;
+	if (!elf.Open(path)) {
+		AtlMessageBox(m_hWnd, L"Error parsing the ELF file", IDR_MAINFRAME, MB_ICONERROR);
+		return false;
+	}
+
+	ResetFileState();
+	m_Elf = std::move(elf);
+	m_ElfCodeViews = 0;
+	// the names the disassembly shows: in a relocatable object the values are offsets in sections, not addresses
+	if (m_Elf.Type() != 1) {
+		for (auto const& s : m_Elf.Symbols()) {
+			bool defined = s.SectionIndex != 0 && s.SectionIndex < 0xFF00;
+			if (defined && s.Value && !s.Name.empty() && (s.Type == 1 || s.Type == 2 || s.Type == 10))
+				m_ElfNames.push_back({ s.Value, s.Size, std::wstring(s.Name.begin(), s.Name.end()) });
+		}
+		std::ranges::sort(m_ElfNames, {}, &ElfName::Address);
+		// the same symbol is often in .symtab and .dynsym
+		auto dup = std::ranges::unique(m_ElfNames, [](auto const& a, auto const& b) { return a.Address == b.Address; });
+		m_ElfNames.erase(dup.begin(), dup.end());
+	}
+	SetStatusText(0, L"");
+	BuildElfTree(16);
+
+	CString ftitle;
+	ftitle.LoadString(IDR_MAINFRAME);
+	if (SecurityHelper::IsRunningElevated())
+		ftitle += L" (Administrator)";
+	CString spath(path);
+	SetWindowText(spath.Mid(spath.ReverseFind(L'\\') + 1) + L" - " + ftitle);
+	m_RecentFiles.AddFile(path);
+	AppSettings::Get().RecentFiles(m_RecentFiles.Files());
+	UpdateRecentFilesMenu();
+
+	ShowView(m_hRoot);
+	UpdateUI();
+	return true;
+}
+
+void CMainFrame::BuildElfTree(int iconSize) {
+	m_Tree.SetRedraw(FALSE);
+	m_Tree.DeleteAllItems();
+	m_Tree.SetItemHeight(iconSize + 2);
+	if (BuildTreeImageList(iconSize)) {
+		m_Tree.SetImageList(m_TreeImages);
+		m_Tabs.SetImageList(m_TreeImages);
+	}
+
+	auto& path = m_Elf.Path();
+	auto root = InsertTreeItem(m_Tree, path.substr(path.rfind(L'\\') + 1).c_str(), 0, TreeItemType::ElfHeader);
+	if (!m_Elf.ProgramHeaders().empty())
+		InsertTreeItem(m_Tree, std::format(L"Program Headers ({})", m_Elf.ProgramHeaders().size()).c_str(), GetTreeIcon(IDI_HEADERS),
+			TreeItemType::ElfProgramHeaders, root);
+	if (!m_Elf.Sections().empty()) {
+		auto sections = InsertTreeItem(m_Tree, std::format(L"Sections ({})", m_Elf.Sections().size()).c_str(), GetTreeIcon(IDI_SECTIONS),
+			TreeItemType::ElfSections, root);
+		if (m_Elf.Sections().size() <= 1000) {
+			// the first is the null section
+			for (int i = 1; i < (int)m_Elf.Sections().size(); i++) {
+				auto const& name = m_Elf.Sections()[i].Name;
+				InsertTreeItem(m_Tree, name.empty() ? std::format(L"({})", i).c_str() : std::wstring(name.begin(), name.end()).c_str(),
+					GetTreeIcon(IDI_SECTION), TreeItemWithIndex(TreeItemType::ElfSection, (int64_t)(i + 1) << ItemShift), sections);
+			}
+		}
+	}
+	if (!m_Elf.Symbols().empty())
+		InsertTreeItem(m_Tree, std::format(L"Symbols ({})", m_Elf.Symbols().size()).c_str(), GetTreeIcon(IDI_SYMBOLS), TreeItemType::ElfSymbols, root);
+	if (!m_Elf.Dynamic().empty())
+		InsertTreeItem(m_Tree, std::format(L"Dynamic ({})", m_Elf.Dynamic().size()).c_str(), GetTreeIcon(IDI_DLL_IMPORT), TreeItemType::ElfDynamic, root);
+	if (!m_Elf.Relocations().empty())
+		InsertTreeItem(m_Tree, std::format(L"Relocations ({})", m_Elf.Relocations().size()).c_str(), GetTreeIcon(IDI_RELOC), TreeItemType::ElfRelocations, root);
+	if (!m_Elf.Notes().empty())
+		InsertTreeItem(m_Tree, std::format(L"Notes ({})", m_Elf.Notes().size()).c_str(), GetTreeIcon(IDI_TEXT), TreeItemType::ElfNotes, root);
+	InsertTreeItem(m_Tree, L"File in Hex", GetTreeIcon(IDI_BINARY), TreeItemType::ElfFileInHex, root);
+
+	m_hRoot = root;
+	m_Tree.Expand(root, TVE_EXPAND);
+	m_Tree.SelectItem(root);
+	m_Tree.SetRedraw();
+	m_Tree.SetFocus();
+}
+
+bool CMainFrame::ShowElfAddress(uint64_t address, bool code) {
+	if (!m_Elf)
+		return false;
+	if (auto section = m_Elf.SectionOfAddress(address); section >= 0)
+		return ShowElfSection(section, (int64_t)(address - m_Elf.Sections()[section].Address), code);
+	if (auto offset = m_Elf.OffsetOfAddress(address); offset >= 0)
+		return ShowElfFileOffset(offset);
+	AtlMessageBox(m_hWnd, std::format(L"The address 0x{:X} is not in the file", address).c_str(), IDR_MAINFRAME, MB_ICONINFORMATION);
+	return false;
+}
+
+bool CMainFrame::ShowElfSection(int section, int64_t offset, bool code) {
+	if (!m_Elf || section <= 0 || section >= (int)m_Elf.Sections().size())
+		return false;
+	auto data = m_Elf.SectionData(section);
+	if (data.empty()) {
+		AtlMessageBox(m_hWnd, L"The section has no data in the file", IDR_MAINFRAME, MB_ICONINFORMATION);
+		return false;
+	}
+	if (offset >= (int64_t)data.size())
+		offset = -1;
+	// code: x86 and x64 are disassembled
+	bool x86 = m_Elf.Machine() == 3 || m_Elf.Machine() == 62;
+	if (code && x86 && (m_Elf.Sections()[section].Flags & 4))
+		return ShowElfCode(section, offset < 0 ? 0 : (uint64_t)offset);
+
+	RecordNavigation();
+	auto type = TreeItemWithIndex(TreeItemType::ElfSection, (int64_t)(section + 1) << ItemShift);
+	if (!ShowView(type, nullptr, IDI_SECTION))
+		return false;
+	if (offset >= 0)
+		if (auto it = m_Views.find(type); it != m_Views.end())
+			it->second->SetNavigationPosition(offset);
+	RecordNavigation();
+	return true;
+}
+
+bool CMainFrame::ShowElfFileOffset(int64_t offset) {
+	if (!m_Elf || offset < 0 || offset >= (int64_t)m_Elf.Data().size())
+		return false;
+	RecordNavigation();
+	if (!ShowView(TreeItemType::ElfFileInHex, nullptr, IDI_BINARY))
+		return false;
+	if (auto it = m_Views.find(TreeItemType::ElfFileInHex); it != m_Views.end())
+		it->second->SetNavigationPosition(offset);
+	RecordNavigation();
+	return true;
+}
+
+// The code from an offset in a section to the end of the section (0x2000 bytes at most), in a view of its own
+bool CMainFrame::ShowElfCode(int section, uint64_t offset) {
+	auto const& sec = m_Elf.Sections()[section];
+	auto data = m_Elf.SectionData(section);
+	auto address = sec.Address + offset;
+	auto name = ResolveVa(address);
+	std::wstring title = m_Elf.Type() == 1 ? std::format(L"{}+0x{:X}", std::wstring(sec.Name.begin(), sec.Name.end()), offset)
+		: name.empty() || name.find(L'+') != std::wstring::npos ? std::format(L"Code at 0x{:X}", address) : name;
+	if (auto hItem = FindChild(m_Tree, m_hRoot, title.c_str())) {
+		ShowView(hItem);
+		return true;
+	}
+
+	RecordNavigation();
+	auto view = new CScintillaView(this, m_PE, title.c_str());
+	if (nullptr == view->DoCreate(m_Tabs)) {
+		ATLASSERT(false);
+		return false;
+	}
+	view->SetLanguage(LexLanguage::Asm);
+	view->SetAsmCode(data.subspan((size_t)offset, (size_t)std::min<uint64_t>(0x2000, data.size() - offset)), address, m_Elf.Machine() == 3);
+	view->GetCtrl().SetReadOnly(true);
+	view->SetDeleteFromTree(true);
+
+	auto image = GetIconIndex(IDI_BINARY);
+	auto itemType = TreeItemWithIndex(TreeItemType::ElfCode, (int64_t)(++m_ElfCodeViews) << ItemShift);
+	auto hItem = InsertTreeItem(m_Tree, title.c_str(), image, itemType, m_hRoot, TVI_SORT);
+	m_Tree.EnsureVisible(hItem);
+	view->SetHTreeItem(hItem);
+	m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, view);
+	m_Views.insert({ itemType, view });
+	m_Views2.insert({ view->GetHwnd(), itemType });
+	RecordNavigation();
+	return true;
 }
 
 bool CMainFrame::ShowObjectSection(int section, int64_t offset) {
@@ -875,6 +1064,8 @@ LRESULT CMainFrame::OnFileClose(WORD, WORD, HWND, BOOL&) {
 	m_PE.Close();
 	m_Archive.Close();
 	m_Object.Close();
+	m_Elf.Close();
+	m_ElfNames.clear();
 	m_GuardTables.clear();
 	++m_SymbolGeneration;	// a symbol load in progress belongs to the file that was just closed
 	m_Symbols.Close();
