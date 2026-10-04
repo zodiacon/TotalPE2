@@ -8,14 +8,16 @@
 #include "resource.h"
 
 class PEFile;
+class ElfFile;
 
-// The ASCII and UTF-16 strings of the whole file: headers, sections and overlay.
+// The ASCII and UTF-16 strings of the whole file: headers, sections and overlay (PE), or the sections and what is around them (ELF).
 // Double-click a row to see the string in the hex view.
 class CStringsView :
 	public CViewBase<CStringsView>,
 	public CVirtualListView<CStringsView> {
 public:
 	CStringsView(IMainFrame* frame, PEFile const& pe);
+	CStringsView(IMainFrame* frame, ElfFile const& elf);
 	CString GetTitle() const override;
 
 	CString GetColumnText(HWND, int row, int col) const;
@@ -45,10 +47,17 @@ public:
 private:
 	struct Item : FoundString {
 		int Section;	// index of the section that contains the string, -1 for the headers, -2 for the data after the sections
-		uint32_t Rva;	// 0 if the string is not part of the image
+		uint64_t Rva;	// 0 if the string is not part of the image; for ELF, the virtual address
 	};
 
 	void Scan();
+	// where the strings are: the data of the sections in the file, and what is mapped where
+	struct Range {
+		uint64_t Start, End, Address;
+		int Section;
+	};
+	void ScanPE(std::vector<FoundString>&& strings);
+	void ScanElf(std::vector<FoundString>&& strings);
 	void ApplyFilter();
 	Item const* GetSelectedItem() const;
 
@@ -65,7 +74,8 @@ private:
 	CListViewCtrl m_List;
 	CToolBarCtrl m_tb;
 	CQuickFindEdit m_Filter;
-	PEFile const& m_PE;
+	PEFile const* m_PE{ nullptr };
+	ElfFile const* m_Elf{ nullptr };
 	SortedFilteredVector<Item> m_Items;
 	std::vector<std::wstring> m_SectionNames;
 	StringScanOptions m_Options;

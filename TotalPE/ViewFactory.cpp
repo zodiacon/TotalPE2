@@ -371,7 +371,7 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 
 		case TreeItemType::Strings:
 		{
-			auto view = new CStringsView(this, m_PE);
+			auto view = m_Elf ? new CStringsView(this, m_Elf) : new CStringsView(this, m_PE);
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};

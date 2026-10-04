@@ -2,6 +2,7 @@
 #include "StringsView.h"
 #include "PEStrings.h"
 #include <PEFile.h>
+#include "ElfFile.h"
 #include <SortHelper.h>
 #include <ClipboardHelper.h>
 #include <ListViewHelper.h>
@@ -14,7 +15,10 @@ namespace {
 	enum Column { Offset, Rva, Section, Encoding, Length, Text };
 }
 
-CStringsView::CStringsView(IMainFrame* frame, PEFile const& pe) : CViewBase(frame), m_PE(pe) {
+CStringsView::CStringsView(IMainFrame* frame, PEFile const& pe) : CViewBase(frame), m_PE(&pe) {
+}
+
+CStringsView::CStringsView(IMainFrame* frame, ElfFile const& elf) : CViewBase(frame), m_Elf(&elf) {
 }
 
 CString CStringsView::GetTitle() const {
@@ -27,7 +31,10 @@ CString CStringsView::GetColumnText(HWND, int row, int col) const {
 		case Column::Offset: return std::format(L"0x{:X}", item.Offset).c_str();
 		case Column::Rva: return item.Rva ? std::format(L"0x{:X}", item.Rva).c_str() : L"";
 		case Column::Section:
-			return item.Section >= 0 ? m_SectionNames[item.Section].c_str() : item.Section == -1 ? L"(Headers)" : L"(Overlay)";
+			if (item.Section >= 0)
+				return m_SectionNames[item.Section].c_str();
+			// an ELF file has the section headers after the sections
+			return item.Section == -1 ? L"(Headers)" : m_Elf ? L"(Section Headers)" : L"(Overlay)";
 		case Column::Encoding: return StringEncodingToString(item.Encoding);
 		case Column::Length: return std::to_wstring(item.Length).c_str();
 		case Column::Text: return item.Text.c_str();
@@ -56,7 +63,7 @@ void CStringsView::DoSort(SortInfo const* si) {
 bool CStringsView::OnDoubleClickList(HWND, int row, int, CPoint const&) const {
 	if (row < 0 || row >= (int)m_Items.size())
 		return false;
-	return Frame()->GoToFileOffset(m_Items[row].Offset, false);
+	return m_Elf ? Frame()->ShowElfFileOffset(m_Items[row].Offset) : Frame()->GoToFileOffset(m_Items[row].Offset, false);
 }
 
 void CStringsView::OnStateChanged(HWND, int, int, UINT oldState, UINT newState) {
@@ -78,7 +85,7 @@ void CStringsView::UpdateUI(bool first) {
 	ui.UIEnable(ID_EDIT_COPY, selected > 0);
 	ui.UIEnable(ID_STRINGS_HEX, selected == 1);
 	auto item = GetSelectedItem();
-	ui.UIEnable(ID_STRINGS_XREFS, item && item->Rva != 0);
+	ui.UIEnable(ID_STRINGS_XREFS, m_PE && item && item->Rva != 0);	// the references are known in PE files
 	Frame()->SetStatusText(1, (m_Items.size() == m_Items.TotalSize() ? std::format(L"Strings: {}", m_Items.size()) :
 		std::format(L"Strings: {} of {}", m_Items.size(), m_Items.TotalSize())).c_str());
 }
@@ -91,17 +98,55 @@ CStringsView::Item const* CStringsView::GetSelectedItem() const {
 
 void CStringsView::Scan() {
 	CWaitCursor wait;
-	auto strings = FindStrings(m_PE.GetSpan(0, m_PE.GetFileSize()), m_Options);
-
-	// where each string is: the headers end where the first section starts, the overlay after the last section's data
-	struct Range {
-		uint32_t Start, End, Rva;
-		int Section;
-	};
-	std::vector<Range> ranges;
-	uint32_t headersEnd = m_PE.GetFileSize(), dataEnd = 0;
 	m_SectionNames.clear();
-	if (auto sections = m_PE.GetSecHeaders()) {
+	if (m_Elf)
+		ScanElf(FindStrings(m_Elf->Data(), m_Options));
+	else
+		ScanPE(FindStrings(m_PE->GetSpan(0, m_PE->GetFileSize()), m_Options));
+	ApplyFilter();
+}
+
+// The ELF header and the program headers are before the sections, the section headers after them. The data of a section
+// that is loaded has an address.
+void CStringsView::ScanElf(std::vector<FoundString>&& strings) {
+	constexpr uint32_t SHT_NOBITS = 8;
+	constexpr uint64_t SHF_ALLOC = 2;
+	std::vector<Range> ranges;
+	uint64_t first = m_Elf->Data().size();
+	int i = 0;
+	for (auto const& sec : m_Elf->Sections()) {
+		auto name = std::wstring(sec.Name.begin(), sec.Name.end());
+		m_SectionNames.push_back(name.empty() ? std::format(L"({})", i) : name);
+		if (sec.Type != SHT_NOBITS && sec.Size && sec.Offset) {
+			ranges.push_back({ sec.Offset, sec.Offset + sec.Size, (sec.Flags & SHF_ALLOC) ? sec.Address : 0, i });
+			first = std::min(first, sec.Offset);
+		}
+		i++;
+	}
+
+	std::vector<Item> items;
+	items.reserve(strings.size());
+	for (auto& s : strings) {
+		Item item{ std::move(s) };
+		item.Section = item.Offset < first ? -1 : -2;
+		item.Rva = 0;
+		for (auto const& r : ranges) {
+			if (item.Offset >= r.Start && item.Offset < r.End) {
+				item.Section = r.Section;
+				item.Rva = r.Address ? r.Address + (item.Offset - r.Start) : 0;
+				break;
+			}
+		}
+		items.push_back(std::move(item));
+	}
+	m_Items.Set(std::move(items));
+}
+
+void CStringsView::ScanPE(std::vector<FoundString>&& strings) {
+	// where each string is: the headers end where the first section starts, the overlay after the last section's data
+	std::vector<Range> ranges;
+	uint32_t headersEnd = m_PE->GetFileSize(), dataEnd = 0;
+	if (auto sections = m_PE->GetSecHeaders()) {
 		int i = 0;
 		for (auto const& sec : *sections) {
 			auto const& hdr = sec.SecHdr;
@@ -119,7 +164,7 @@ void CStringsView::Scan() {
 		}
 	}
 	if (dataEnd == 0)
-		dataEnd = m_PE.GetFileSize();
+		dataEnd = m_PE->GetFileSize();
 
 	std::vector<Item> items;
 	items.reserve(strings.size());
@@ -130,7 +175,7 @@ void CStringsView::Scan() {
 		for (auto const& r : ranges) {
 			if (item.Offset >= r.Start && item.Offset < r.End) {
 				item.Section = r.Section;
-				item.Rva = r.Rva + (item.Offset - r.Start);
+				item.Rva = r.Address + (item.Offset - r.Start);
 				break;
 			}
 		}
@@ -140,7 +185,6 @@ void CStringsView::Scan() {
 		items.push_back(std::move(item));
 	}
 	m_Items.Set(std::move(items));
-	ApplyFilter();
 }
 
 void CStringsView::ApplyFilter() {
@@ -199,7 +243,7 @@ LRESULT CStringsView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 
 	auto cm = GetColumnManager(m_List);
 	cm->AddColumn(L"Offset", LVCFMT_RIGHT, 90);
-	cm->AddColumn(L"RVA", LVCFMT_RIGHT, 90);
+	cm->AddColumn(m_Elf ? L"Address" : L"RVA", LVCFMT_RIGHT, 90);
 	cm->AddColumn(L"Section", LVCFMT_LEFT, 80);
 	cm->AddColumn(L"Encoding", LVCFMT_LEFT, 70);
 	cm->AddColumn(L"Length", LVCFMT_RIGHT, 60);
@@ -287,12 +331,12 @@ LRESULT CStringsView::OnCopy(WORD, WORD, HWND, BOOL&) const {
 
 LRESULT CStringsView::OnShowInHex(WORD, WORD, HWND, BOOL&) const {
 	if (auto item = GetSelectedItem())
-		Frame()->GoToFileOffset(item->Offset, false);
+		m_Elf ? Frame()->ShowElfFileOffset(item->Offset) : Frame()->GoToFileOffset(item->Offset, false);
 	return 0;
 }
 
 LRESULT CStringsView::OnXrefs(WORD, WORD, HWND, BOOL&) const {
-	if (auto item = GetSelectedItem(); item && item->Rva)
-		Frame()->ShowXrefs(m_PE.GetImageBase() + item->Rva);
+	if (auto item = GetSelectedItem(); m_PE && item && item->Rva)
+		Frame()->ShowXrefs(m_PE->GetImageBase() + item->Rva);
 	return 0;
 }

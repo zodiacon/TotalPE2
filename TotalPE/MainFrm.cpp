@@ -82,7 +82,7 @@ void CMainFrame::UpdateUI() {
 	UIEnable(ID_PE_SECURITY, fi && fi->HasSecurity);
 	UIEnable(ID_FILE_CLOSE, fi != nullptr || m_Archive || m_Object || m_Elf);
 	m_SaveUIPage = (HWND)-1;	// Save and Export List: from the active view, on the next idle
-	UIEnable(ID_PE_STRINGS, fi != nullptr);
+	UIEnable(ID_PE_STRINGS, fi != nullptr || m_Elf);
 	UIEnable(ID_VIEW_MANIFEST, fi && m_hResManifest != nullptr);
 	UIEnable(ID_VIEW_VERSION, fi && m_hResVersion != nullptr);
 	UIEnable(ID_VIEW_OVERLAY, fi && m_hOverlay != nullptr);
@@ -874,6 +874,7 @@ void CMainFrame::BuildElfTree(int iconSize) {
 		InsertTreeItem(m_Tree, std::format(L"Relocations ({})", m_Elf.Relocations().size()).c_str(), GetTreeIcon(IDI_RELOC), TreeItemType::ElfRelocations, root);
 	if (!m_Elf.Notes().empty())
 		InsertTreeItem(m_Tree, std::format(L"Notes ({})", m_Elf.Notes().size()).c_str(), GetTreeIcon(IDI_TEXT), TreeItemType::ElfNotes, root);
+	InsertTreeItem(m_Tree, L"Strings", GetTreeIcon(IDI_TEXT), TreeItemType::Strings, root);
 	InsertTreeItem(m_Tree, L"File in Hex", GetTreeIcon(IDI_BINARY), TreeItemType::ElfFileInHex, root);
 
 	m_hRoot = root;

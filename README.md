@@ -72,6 +72,7 @@ The kind of file is recognized by its contents, not its extension. Open files fr
 * Header: class, byte order, OS/ABI, type, machine, entry point, interpreter, needed libraries, SONAME, RUNPATH, build ID
 * Program headers (with the sections in each segment), sections, symbols (`.symtab` and `.dynsym`), the dynamic section, relocations (REL, RELA and packed RELR) and notes
 * Functions and the entry point are disassembled (x86 and x64), with symbol names
+* Strings (ASCII and UTF-16) with their sections and addresses
 
 ## General
 
