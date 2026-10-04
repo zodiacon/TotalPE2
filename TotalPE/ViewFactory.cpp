@@ -40,6 +40,8 @@
 #include "FontView.h"
 #include "ResourceContent.h"
 #include "TypeLibText.h"
+#include "ObjectView.h"
+#include "GuardTableView.h"
 
 std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 	CWaitCursor wait;
@@ -223,6 +225,52 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		case TreeItemType::Anomalies:
 		{
 			auto view = new CAnomalyView(this, m_Anomalies);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::ObjectHeader:
+		case TreeItemType::ObjectSections:
+		case TreeItemType::ObjectSymbols:
+		case TreeItemType::ObjectRelocations:
+		{
+			auto item = type & TreeItemType::ItemMask;
+			auto kind = item == TreeItemType::ObjectHeader ? ObjectViewKind::Header : item == TreeItemType::ObjectSections ? ObjectViewKind::Sections :
+				item == TreeItemType::ObjectSymbols ? ObjectViewKind::Symbols : ObjectViewKind::Relocations;
+			auto view = new CObjectView(this, m_Object, kind);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		// the data of a section of an object file
+		case TreeItemType::ObjectSection:
+		{
+			auto index = (size_t)((int64_t)type >> ItemShift) - 1;
+			if (!m_Object || index >= m_Object.Sections().size())
+				return {};
+			auto const& sec = m_Object.Sections()[index];
+			auto view = new CHexView(this, CString(std::format(L"{} ({}, Section)", std::wstring(sec.Name.begin(), sec.Name.end()), index + 1).c_str()));
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			view->SetData(m_Object.SectionData(index));
+			view->ShowInspector(true);
+			return { view, view };
+		}
+
+		case TreeItemType::GuardTable:
+		{
+			auto index = (size_t)((int64_t)type >> ItemShift) - 1;
+			if (index >= m_GuardTables.size())
+				return {};
+			auto view = new CGuardTableView(this, m_PE, m_GuardTables[index]);
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};

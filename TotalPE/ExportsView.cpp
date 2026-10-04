@@ -198,7 +198,7 @@ LRESULT CExportsView::OnDissassemble(WORD, WORD, HWND, BOOL&) const {
 	ATLASSERT(m_List.GetSelectedCount() == 1);
 	auto& exp = m_Exports[m_List.GetNextItem(-1, LVNI_SELECTED)];
 
-	auto offset = m_PE.GetOffsetFromRVA(exp.FuncRVA);
+	auto offset = static_cast<uint32_t>(m_PE.GetOffsetFromRVA(exp.FuncRVA));
 	uint32_t size = 0x1000;
 	if (size + offset > m_PE.GetFileSize())
 		size = m_PE.GetFileSize() - offset;

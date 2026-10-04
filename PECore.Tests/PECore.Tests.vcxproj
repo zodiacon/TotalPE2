@@ -142,6 +142,9 @@
     <ClCompile Include="..\TotalPE\ResourceContent.cpp" />
     <ClCompile Include="..\TotalPE\TypeLibText.cpp" />
     <ClCompile Include="ResourceContentTests.cpp" />
+    <ClCompile Include="..\TotalPE\CoffObject.cpp" />
+    <ClCompile Include="..\TotalPE\GuardTables.cpp" />
+    <ClCompile Include="CoffObjectTests.cpp" />
     <ClCompile Include="VersionInfoTests.cpp" />
     <ClCompile Include="VirusTotalTests.cpp" />
   </ItemGroup>

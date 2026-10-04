@@ -237,6 +237,18 @@
     <ClCompile Include="TypeLibText.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="CoffObject.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="GuardTables.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ObjectView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
+    <ClCompile Include="GuardTableView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
     <ClCompile Include="SaveData.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -478,6 +490,18 @@
     </ClInclude>
     <ClInclude Include="TypeLibText.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CoffObject.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="GuardTables.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ObjectView.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="GuardTableView.h">
+      <Filter>Views</Filter>
     </ClInclude>
     <ClInclude Include="SaveData.h">
       <Filter>Header Files</Filter>

@@ -443,6 +443,10 @@
     <ClCompile Include="TypeLibText.cpp" />
     <ClCompile Include="FontView.cpp" />
     <ClCompile Include="SaveData.cpp" />
+    <ClCompile Include="CoffObject.cpp" />
+    <ClCompile Include="GuardTables.cpp" />
+    <ClCompile Include="ObjectView.cpp" />
+    <ClCompile Include="GuardTableView.cpp" />
     <ClCompile Include="StructView.cpp" />
     <ClCompile Include="SymbolsView.cpp" />
     <ClCompile Include="TextView.cpp" />
@@ -528,6 +532,10 @@
     <ClInclude Include="TypeLibText.h" />
     <ClInclude Include="FontView.h" />
     <ClInclude Include="SaveData.h" />
+    <ClInclude Include="CoffObject.h" />
+    <ClInclude Include="GuardTables.h" />
+    <ClInclude Include="ObjectView.h" />
+    <ClInclude Include="GuardTableView.h" />
     <ClInclude Include="StructView.h" />
     <ClInclude Include="SymbolsView.h" />
     <ClInclude Include="TextView.h" />

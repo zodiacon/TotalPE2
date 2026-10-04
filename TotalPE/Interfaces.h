@@ -74,6 +74,16 @@ enum class TreeItemType : int64_t {
 
 	Strings,
 
+	// a COFF object file
+	ObjectHeader,
+	ObjectSections,
+	ObjectSymbols,
+	ObjectRelocations,
+	ObjectSection,
+
+	// a Control Flow Guard table (the index is its position in the tables of the file)
+	GuardTable,
+
 	ItemMask = 255,
 };
 DEFINE_ENUM_FLAG_OPERATORS(TreeItemType);
@@ -117,6 +127,8 @@ struct IMainFrame abstract {
 	virtual bool ShowFlowGraph(uint64_t va) = 0;
 	// The data of a member of the library, in the hex view
 	virtual bool ShowArchiveMember(int member) = 0;
+	// The data of a section of the object file in the hex view, at an offset in the section (-1 for the start)
+	virtual bool ShowObjectSection(int section, int64_t offset) = 0;
 	// Remembers where the user is, so that Back returns to it.
 	virtual void RecordNavigation() = 0;
 	virtual bool AddToolBar(HWND tb) = 0;

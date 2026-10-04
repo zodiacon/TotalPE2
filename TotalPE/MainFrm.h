@@ -10,6 +10,8 @@
 #include <TreeViewHelper.h>
 #include <PEFile.h>
 #include "LibArchive.h"
+#include "CoffObject.h"
+#include "GuardTables.h"
 #include "Interfaces.h"
 #include "GoToDlg.h"
 #include "RecentFilesManager.h"
@@ -111,6 +113,7 @@ private:
 	bool ShowXrefs(uint64_t va) override;
 	bool ShowFlowGraph(uint64_t va) override;
 	bool ShowArchiveMember(int member) override;
+	bool ShowObjectSection(int section, int64_t offset) override;
 	void RecordNavigation() override;
 	bool AddToolBar(HWND tb) override;
 	bool DeleteTreeItem(HTREEITEM hItem) override;
@@ -129,6 +132,9 @@ private:
 	bool OpenPE(PCWSTR path);
 	bool OpenArchive(PCWSTR path);
 	void BuildArchiveTree(int iconSize);
+	bool OpenObject(PCWSTR path);
+	void BuildObjectTree(int iconSize);
+	void ResetFileState();
 	std::wstring CurrentPath() const;
 	CString DoFileOpen() const;
 	bool BuildTreeImageList(int iconSize = 16);
@@ -212,6 +218,8 @@ private:
 	CMultiPaneStatusBarCtrl m_StatusBar;
 	PEFile m_PE;
 	LibArchive m_Archive;		// a library is open instead of a PE file
+	CoffObject m_Object;		// an object file is open instead of a PE file
+	std::vector<GuardTable> m_GuardTables;	// of the PE file
 	std::vector<FlatResource> m_FlatResources;
 	CImageList m_TreeImages;
 	std::unordered_map<TreeItemType, IView*> m_Views;
