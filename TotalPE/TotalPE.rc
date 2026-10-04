@@ -574,8 +574,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,9,0,0
- PRODUCTVERSION 0,9,0,0
+ FILEVERSION 1,0,0,0
+ PRODUCTVERSION 1,0,0,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -592,12 +592,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Pavel Yosifovich"
             VALUE "FileDescription", "Total PE - PE Viewer"
-            VALUE "FileVersion", "0.9.0.0"
+            VALUE "FileVersion", "1.0.0.0"
             VALUE "InternalName", "TotalPE"
             VALUE "LegalCopyright", "©2022-2026 Pavel Yosifovich"
             VALUE "OriginalFilename", "TotalPE.exe"
             VALUE "ProductName", "Total PE"
-            VALUE "ProductVersion", "0.9.0.0"
+            VALUE "ProductVersion", "1.0.0.0"
         END
     END
     BLOCK "VarFileInfo"
@@ -744,11 +744,15 @@ END
 STRINGTABLE
 BEGIN
     ID_VIEW_OVERLAY         "\nOverlay"
-    ID_PE_STRINGS           "The ASCII and UTF-16 strings of the file\nStrings"
-    ID_DATA_SAVE            "Save the data to a file\nSave Data"
-    ID_FILE_EXPORTLIST      "Save the list of the active view as CSV or text\nExport List"
     ID_PE_VIRUSTOTAL        "\nScan the file with VirusTotal"
     ID_PE_VTAPIKEY          "\nSet the VirusTotal API key"
+    ID_PE_STRINGS           "The ASCII and UTF-16 strings of the file\nStrings"
+END
+
+STRINGTABLE
+BEGIN
+    ID_DATA_SAVE            "Save the data to a file\nSave Data"
+    ID_FILE_EXPORTLIST      "Save the list of the active view as CSV or text\nExport List"
 END
 
 #endif    // English (United States) resources

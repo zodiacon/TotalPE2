@@ -303,6 +303,14 @@ static bool SaveBytes(PCWSTR path, const void* data, size_t size) {
 	return file && ::WriteFile(file.get(), data, (DWORD)size, &written, nullptr) && written == size;
 }
 
+LRESULT CAnimatedCursorView::OnSave(WORD, WORD, HWND, BOOL&) {
+	if (auto row = m_List.GetNextItem(-1, LVNI_SELECTED); row >= 0 && row < (int)m_Ani.StepCount())
+		ExportFrame(row);
+	else
+		ExportAni();
+	return 0;
+}
+
 void CAnimatedCursorView::ExportAni() {
 	CSimpleFileDialog dlg(FALSE, L"ani", nullptr, OFN_EXPLORER | OFN_ENABLESIZING | OFN_OVERWRITEPROMPT,
 		L"Animated Cursors (*.ani)\0*.ani\0All Files\0*.*\0", m_hWnd);

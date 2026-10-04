@@ -191,3 +191,98 @@ TEST_CASE("Type libraries", "[resources][system]") {
 		CHECK_FALSE(error2.empty());
 	}
 }
+
+TEST_CASE("Icon and cursor groups are saved as multi-image files", "[resources]") {
+	auto u16 = [](Bytes& b, uint16_t v) { b.push_back((uint8_t)v); b.push_back((uint8_t)(v >> 8)); };
+	auto u32 = [&](Bytes& b, uint32_t v) { u16(b, (uint16_t)v); u16(b, (uint16_t)(v >> 16)); };
+	auto read32 = [](std::vector<std::byte> const& b, size_t at) {
+		uint32_t v;
+		memcpy(&v, b.data() + at, 4);
+		return v;
+	};
+
+	SECTION("icons, one of them missing") {
+		Bytes group;
+		u16(group, 0); u16(group, 1); u16(group, 3);
+		auto entry = [&](uint8_t size, uint16_t bits, uint32_t bytes, uint16_t id) {
+			group.push_back(size); group.push_back(size); group.push_back(0); group.push_back(0);
+			u16(group, 1); u16(group, bits); u32(group, bytes); u16(group, id);
+		};
+		entry(16, 32, 10, 1);
+		entry(0, 32, 20, 2);	// 256x256
+		entry(32, 8, 30, 3);	// not in the file
+		Bytes image1(10, 0x11), image2(20, 0x22);
+		auto file = MakeIconGroupFile(AsBytes(group), [&](uint16_t id) -> std::span<const std::byte> {
+			return id == 1 ? AsBytes(image1) : id == 2 ? AsBytes(image2) : std::span<const std::byte>();
+		});
+		REQUIRE(file.size() == 6 + 2 * 16 + 10 + 20);
+		CHECK(std::to_integer<int>(file[2]) == 1);		// icons
+		CHECK(std::to_integer<int>(file[4]) == 2);		// two of them
+		CHECK(std::to_integer<int>(file[6]) == 16);		// the first one's width
+		CHECK(std::to_integer<int>(file[12]) == 32);	// its bit count
+		CHECK(read32(file, 6 + 8) == 10);				// its size
+		CHECK(read32(file, 6 + 12) == 6 + 32);			// where it is
+		CHECK(std::to_integer<int>(file[22]) == 0);		// the second: 256
+		CHECK(read32(file, 22 + 12) == 6 + 32 + 10);
+		CHECK(std::to_integer<int>(file[6 + 32]) == 0x11);
+		CHECK(std::to_integer<int>(file[6 + 32 + 10]) == 0x22);
+	}
+	SECTION("a cursor: the hot spot moves from the image to the entry") {
+		Bytes group;
+		u16(group, 0); u16(group, 2); u16(group, 1);
+		u16(group, 32); u16(group, 64);		// width, twice the height
+		u16(group, 1); u16(group, 1); u32(group, 12); u16(group, 7);
+		Bytes image{ 5, 0, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8 };	// the hot spot, then the image
+		auto file = MakeIconGroupFile(AsBytes(group), [&](uint16_t id) -> std::span<const std::byte> {
+			return id == 7 ? AsBytes(image) : std::span<const std::byte>();
+		});
+		REQUIRE(file.size() == 6 + 16 + 8);
+		CHECK(std::to_integer<int>(file[2]) == 2);		// cursors
+		CHECK(std::to_integer<int>(file[6]) == 32);
+		CHECK(std::to_integer<int>(file[7]) == 32);		// the image's height
+		CHECK(std::to_integer<int>(file[10]) == 5);		// hot spot x
+		CHECK(std::to_integer<int>(file[12]) == 9);		// hot spot y
+		CHECK(read32(file, 14) == 8);
+		CHECK(std::to_integer<int>(file[22]) == 1);		// the image, without the hot spot
+	}
+	SECTION("not a group") {
+		Bytes junk{ 1, 2, 3 };
+		CHECK(MakeIconGroupFile(AsBytes(junk), [](uint16_t) { return std::span<const std::byte>(); }).empty());
+	}
+}
+
+TEST_CASE("An icon group of a system file makes an .ico file that Windows loads", "[resources][system]") {
+	wil::unique_hmodule exe(::LoadLibraryEx(L"C:\\Windows\\explorer.exe", nullptr, LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE));
+	REQUIRE(exe);
+	auto resource = [&](PCWSTR type, PCWSTR name) -> std::span<const std::byte> {
+		auto hRes = ::FindResource(exe.get(), name, type);
+		if (!hRes)
+			return {};
+		return { (const std::byte*)::LockResource(::LoadResource(exe.get(), hRes)), ::SizeofResource(exe.get(), hRes) };
+	};
+	// the first icon group
+	PCWSTR first = nullptr;
+	::EnumResourceNames(exe.get(), RT_GROUP_ICON, [](HMODULE, LPCWSTR, LPWSTR name, LONG_PTR param) -> BOOL {
+		*(PCWSTR*)param = IS_INTRESOURCE(name) ? name : _wcsdup(name);
+		return FALSE;
+	}, (LONG_PTR)&first);
+	REQUIRE(first);
+	auto group = resource(RT_GROUP_ICON, first);
+	REQUIRE(group.size() > 6);
+	auto count = std::to_integer<int>(group[4]) | (std::to_integer<int>(group[5]) << 8);
+
+	auto file = MakeIconGroupFile(group, [&](uint16_t id) { return resource(RT_ICON, MAKEINTRESOURCE(id)); });
+	REQUIRE(!file.empty());
+	CHECK((std::to_integer<int>(file[4]) | (std::to_integer<int>(file[5]) << 8)) == count);
+
+	WCHAR dir[MAX_PATH], path[MAX_PATH];
+	::GetTempPath(MAX_PATH, dir);
+	::GetTempFileName(dir, L"ico", 0, path);
+	{
+		std::ofstream out(path, std::ios::binary);
+		out.write((const char*)file.data(), file.size());
+	}
+	wil::unique_hicon icon((HICON)::LoadImage(nullptr, path, IMAGE_ICON, 32, 32, LR_LOADFROMFILE));
+	::DeleteFile(path);
+	CHECK(icon);
+}

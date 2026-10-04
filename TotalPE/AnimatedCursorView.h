@@ -57,6 +57,7 @@ public:
 	~CAnimatedCursorView();
 
 	CString GetTitle() const override;
+	bool CanSave() const override { return !m_Raw.empty(); }
 	// false if the data is not a usable .ani file
 	bool SetData(std::span<const std::byte> data);
 
@@ -66,6 +67,7 @@ public:
 		NOTIFY_CODE_HANDLER(NM_RCLICK, OnListRightClick)
 		CHAIN_MSG_MAP(CViewBase<CAnimatedCursorView>)
 	ALT_MSG_MAP(1)
+		COMMAND_ID_HANDLER(ID_FILE_SAVE, OnSave)
 		CHAIN_MSG_MAP_ALT(CViewBase<CAnimatedCursorView>, 1)
 	END_MSG_MAP()
 
@@ -73,6 +75,8 @@ private:
 	LRESULT OnCreate(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnListDoubleClick(int, LPNMHDR, BOOL&);
 	LRESULT OnListRightClick(int, LPNMHDR, BOOL&);
+	// the selected frame, or the whole animation if no frame is selected
+	LRESULT OnSave(WORD, WORD, HWND, BOOL&);
 	void ShowContextMenu(CPoint screen);
 	void ExportAni();
 	void ExportFrame(size_t step);

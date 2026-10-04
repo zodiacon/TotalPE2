@@ -21,8 +21,9 @@ bool WriteFileData(PCWSTR path, void const* data, size_t size);
 bool SaveListView(HWND hOwner, HWND hList, CString const& name);
 
 // Resources as files (a bitmap gets its file header, an icon is an .ico file...): one resource asks for a file name,
-// more for a folder that gets a file for each. Reports failures.
-bool SaveResourceFiles(HWND hOwner, std::vector<FlatResource const*> const& resources);
+// more for a folder that gets a file for each. Reports failures. 'all' are the resources of the file: an icon or cursor group
+// is saved with its images (which are resources of their own) as one .ico or .cur file.
+bool SaveResourceFiles(HWND hOwner, std::vector<FlatResource const*> const& resources, std::vector<FlatResource> const& all);
 
 // The data of a section in the file (its raw data)
 bool SaveSectionData(HWND hOwner, PEFile const& pe, PESectionHeader const& section);

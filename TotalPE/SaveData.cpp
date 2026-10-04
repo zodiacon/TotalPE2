@@ -141,13 +141,28 @@ bool SaveListView(HWND hOwner, HWND hList, CString const& name) {
 	return true;
 }
 
-bool SaveResourceFiles(HWND hOwner, std::vector<FlatResource const*> const& resources) {
+// A resource as a file; an icon or cursor group gets its images
+static ResourceFile MakeFile(FlatResource const& res, std::vector<FlatResource> const& all) {
+	constexpr uint16_t GroupCursor = 12, GroupIcon = 14;
+	if (res.TypeID == GroupIcon || res.TypeID == GroupCursor) {
+		uint16_t imageType = res.TypeID == GroupIcon ? 3 : 1;	// RT_ICON, RT_CURSOR
+		auto data = MakeIconGroupFile(res.Data, [&](uint16_t id) -> std::span<const std::byte> {
+			auto it = std::ranges::find_if(all, [&](auto const& r) { return r.TypeID == imageType && r.NameID == id; });
+			return it == all.end() ? std::span<const std::byte>() : it->Data;
+		});
+		if (!data.empty())
+			return { std::move(data), res.TypeID == GroupIcon ? L"ico" : L"cur" };
+	}
+	return MakeResourceFile(res.Data, res.TypeID, res.TypeStr);
+}
+
+bool SaveResourceFiles(HWND hOwner, std::vector<FlatResource const*> const& resources, std::vector<FlatResource> const& all) {
 	if (resources.empty())
 		return false;
 
 	if (resources.size() == 1) {
 		auto const& res = *resources[0];
-		auto file = MakeResourceFile(res.Data, res.TypeID, res.TypeStr);
+		auto file = MakeFile(res, all);
 		auto filter = std::format(L"{} Files (*.{})|*.{}|All Files|*.*|", CString(file.Extension.c_str()).MakeUpper().GetString(), file.Extension, file.Extension);
 		std::replace(filter.begin(), filter.end(), L'|', L'\0');
 		auto path = AskSaveFile(hOwner, L"Save Resource", file.Extension.c_str(), ResourceFileName(res, false) + L"." + file.Extension.c_str(), filter.c_str());
@@ -167,7 +182,7 @@ bool SaveResourceFiles(HWND hOwner, std::vector<FlatResource const*> const& reso
 	CWaitCursor wait;
 	int failed = 0;
 	for (auto res : resources) {
-		auto file = MakeResourceFile(res->Data, res->TypeID, res->TypeStr);
+		auto file = MakeFile(*res, all);
 		auto path = folder + L"\\" + ResourceFileName(*res, true) + L"." + file.Extension.c_str();
 		if (!WriteFileData(path, file.Data.data(), file.Data.size()))
 			failed++;

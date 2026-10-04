@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -34,6 +35,10 @@ struct ResourceFile {
 	std::wstring Extension;		// without the dot
 };
 ResourceFile MakeResourceFile(std::span<const std::byte> data, uint16_t typeId, std::wstring_view typeName);
+
+// A multi-image .ico or .cur file from a group resource (RT_GROUP_ICON, RT_GROUP_CURSOR) and the images it lists (RT_ICON, RT_CURSOR),
+// which 'image' finds by their IDs (an empty span for an image that is not there: it is left out). Empty if the group is not valid.
+std::vector<std::byte> MakeIconGroupFile(std::span<const std::byte> group, std::function<std::span<const std::byte>(uint16_t id)> const& image);
 
 // The family name of a TrueType or OpenType font (its 'name' table), or the face name of a Windows .fnt font; empty if not known
 std::wstring GetFontFaceName(std::span<const std::byte> data);

@@ -1175,7 +1175,7 @@ bool CMainFrame::SaveTreeItemData(TreeItemType type) {
 			break;
 		case TreeItemType::Resource:
 			if (index < m_FlatResources.size())
-				return SaveResourceFiles(m_hWnd, { &m_FlatResources[index] });
+				return SaveResourceFiles(m_hWnd, { &m_FlatResources[index] }, m_FlatResources);
 			break;
 	}
 	return false;

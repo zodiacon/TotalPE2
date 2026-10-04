@@ -1,6 +1,9 @@
 #include "pch.h"
 #include <wincodec.h>
+#include "resource.h"
 #include "BitmapView.h"
+#include "ResourceContent.h"
+#include "SaveData.h"
 
 #pragma comment(lib, "msimg32")
 
@@ -9,6 +12,27 @@ CBitmapView::CBitmapView(IMainFrame* frame, PCWSTR title) : CViewBase(frame), m_
 
 CString CBitmapView::GetTitle() const {
     return m_Title;
+}
+
+bool CBitmapView::CanSave() const {
+    return !m_Data.empty();
+}
+
+LRESULT CBitmapView::OnSave(WORD, WORD, HWND, BOOL&) {
+    if (m_Data.empty())
+        return 0;
+    auto file = MakeResourceFile(m_Data, m_Dib ? 2 : 10, L"");	// RT_BITMAP, or the type does not matter (RT_RCDATA)
+    auto ext = CString(file.Extension.c_str());
+    auto filter = std::format(L"{0} Images (*.{1})|*.{1}|All Files|*.*|", (PCWSTR)CString(ext).MakeUpper(), (PCWSTR)ext);
+    std::ranges::replace(filter, L'|', L'\0');
+    auto name = m_Title;
+    if (auto paren = name.Find(L" ("); paren > 0)
+        name = name.Left(paren);
+    name.Remove(L'#');
+    auto path = AskSaveFile(m_hWnd, L"Save Image", ext, ToFileName(name) + L"." + ext, filter.c_str());
+    if (!path.IsEmpty() && !WriteFileData(path, file.Data.data(), file.Data.size()))
+        AtlMessageBox(m_hWnd, L"Failed to save the image", IDR_MAINFRAME, MB_ICONERROR);
+    return 0;
 }
 
 // a bitmap resource: a DIB without its file header; anything else WIC can decode is accepted as well
@@ -20,6 +44,8 @@ bool CBitmapView::SetData(std::span<const std::byte> data) {
             m_bmp.Attach(::CreateDIBitmap(dc.m_hDC, header, CBM_INIT, data.data() + header->biSize,
                 (const BITMAPINFO*)header, header->biBitCount * header->biPlanes > 8 ? DIB_RGB_COLORS : DIB_PAL_COLORS));
             if (m_bmp) {
+                m_Data.assign(data.begin(), data.end());
+                m_Dib = true;
                 m_Width = header->biWidth;
                 m_Height = std::abs(header->biHeight);
                 m_Alpha = false;
@@ -70,6 +96,8 @@ bool CBitmapView::SetImage(std::span<const std::byte> data) {
         return false;
 
     m_bmp.Attach(bmp.Detach());
+    m_Data.assign(data.begin(), data.end());
+    m_Dib = false;
     m_Width = width;
     m_Height = height;
     m_Alpha = true;

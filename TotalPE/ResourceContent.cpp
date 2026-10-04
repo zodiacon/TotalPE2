@@ -368,6 +368,80 @@ ResourceFile MakeResourceFile(std::span<const std::byte> data, uint16_t typeId, 
 	return file;
 }
 
+// The group has a 6-byte header (reserved, type: 1 icons, 2 cursors, count) and 14-byte entries. An icon's entry has the
+// width, height, colors, reserved, planes, bit count, size and ID; a cursor's has a 16-bit width and height (twice the
+// image's height: the color and the mask) instead of the first four. A file has 16-byte entries with the offset of each
+// image instead of its ID; a cursor file has the hot spot in place of the planes and the bit count, and its images do not
+// start with the hot spot as cursor resources do.
+std::vector<std::byte> MakeIconGroupFile(std::span<const std::byte> group, std::function<std::span<const std::byte>(uint16_t id)> const& image) {
+	if (group.size() < 6 || Le16(group, 0) != 0)
+		return {};
+	auto type = Le16(group, 2);
+	if (type != 1 && type != 2)
+		return {};
+	bool cursor = type == 2;
+	auto count = Le16(group, 4);
+	if (group.size() < 6 + (size_t)count * 14)
+		return {};
+
+	struct Entry {
+		uint8_t Width, Height, Colors;
+		uint16_t PlanesOrX, BitsOrY;
+		std::span<const std::byte> Data;
+	};
+	std::vector<Entry> entries;
+	for (uint16_t i = 0; i < count; i++) {
+		size_t at = 6 + (size_t)i * 14;
+		auto data = image(Le16(group, at + 12));
+		if (data.empty())
+			continue;
+		Entry e{};
+		if (cursor) {
+			if (data.size() <= 4)
+				continue;
+			auto width = Le16(group, at), height = (uint16_t)(Le16(group, at + 2) / 2);
+			e.Width = (uint8_t)(width >= 256 ? 0 : width);
+			e.Height = (uint8_t)(height >= 256 ? 0 : height);
+			e.PlanesOrX = Le16(data, 0);	// the hot spot
+			e.BitsOrY = Le16(data, 2);
+			e.Data = data.subspan(4);
+		}
+		else {
+			e.Width = At(group, at);
+			e.Height = At(group, at + 1);
+			e.Colors = At(group, at + 2);
+			e.PlanesOrX = Le16(group, at + 4);
+			e.BitsOrY = Le16(group, at + 6);
+			e.Data = data;
+		}
+		entries.push_back(e);
+	}
+	if (entries.empty())
+		return {};
+
+	std::vector<std::byte> file;
+	auto add16 = [&](uint16_t v) { file.push_back((std::byte)(v & 0xFF)); file.push_back((std::byte)(v >> 8)); };
+	auto add32 = [&](uint32_t v) { add16((uint16_t)v); add16((uint16_t)(v >> 16)); };
+	add16(0);
+	add16(type);
+	add16((uint16_t)entries.size());
+	uint32_t offset = 6 + (uint32_t)entries.size() * 16;
+	for (auto const& e : entries) {
+		file.push_back((std::byte)e.Width);
+		file.push_back((std::byte)e.Height);
+		file.push_back((std::byte)e.Colors);
+		file.push_back((std::byte)0);
+		add16(e.PlanesOrX);
+		add16(e.BitsOrY);
+		add32((uint32_t)e.Data.size());
+		add32(offset);
+		offset += (uint32_t)e.Data.size();
+	}
+	for (auto const& e : entries)
+		file.insert(file.end(), e.Data.begin(), e.Data.end());
+	return file;
+}
+
 std::wstring GetFontFaceName(std::span<const std::byte> data) {
 	return IsSfnt(data) ? SfntFamilyName(data) : FntFaceName(data);
 }

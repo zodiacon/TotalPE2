@@ -74,7 +74,7 @@ LRESULT CResourcesView::OnSaveData(WORD, WORD, HWND, BOOL&) const {
 	std::vector<FlatResource const*> resources;
 	for (int i = m_List.GetNextItem(-1, LVNI_SELECTED); i >= 0; i = m_List.GetNextItem(i, LVNI_SELECTED))
 		resources.push_back(&m_Resources[i]);
-	SaveResourceFiles(m_hWnd, resources);
+	SaveResourceFiles(m_hWnd, resources, Frame()->GetFlatResources());
 	return 0;
 }
 
