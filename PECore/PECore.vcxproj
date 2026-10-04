@@ -238,6 +238,8 @@
   <ItemGroup>
     <ClInclude Include="pch.h" />
     <ClInclude Include="PEFile.h" />
+    <ClInclude Include="ElfDebugInfo.h" />
+    <ClInclude Include="ItaniumDemangle.h" />
     <ClInclude Include="AniFile.h" />
     <ClInclude Include="ApiSetMap.h" />
     <ClInclude Include="Authenticode.h" />
@@ -281,6 +283,8 @@
     </ClCompile>
     <ClCompile Include="PECore.cpp" />
     <ClCompile Include="PEFile.cpp" />
+    <ClCompile Include="ElfDebugInfo.cpp" />
+    <ClCompile Include="ItaniumDemangle.cpp" />
     <ClCompile Include="AniFile.cpp" />
     <ClCompile Include="ApiSetMap.cpp" />
     <ClCompile Include="Authenticode.cpp" />

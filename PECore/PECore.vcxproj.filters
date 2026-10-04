@@ -18,6 +18,12 @@
     <ClInclude Include="pch.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ItaniumDemangle.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ElfDebugInfo.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="PEFile.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -120,6 +126,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="pch.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ItaniumDemangle.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ElfDebugInfo.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="PEFile.cpp">

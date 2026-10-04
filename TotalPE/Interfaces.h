@@ -108,6 +108,11 @@ enum class TreeItemType : int64_t {
 	// a comparison with another PE file (the index tells the comparisons apart)
 	Comparison,
 
+	// the debug information of an ELF file (DWARF)
+	ElfDebugInfo,
+	ElfCompileUnits,
+	ElfFunctions,
+
 	ItemMask = 255,
 };
 DEFINE_ENUM_FLAG_OPERATORS(TreeItemType);

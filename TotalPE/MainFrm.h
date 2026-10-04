@@ -14,6 +14,7 @@
 #include "CodeViewInfo.h"
 #include "GuardTables.h"
 #include "ElfFile.h"
+#include "ElfDebugInfo.h"
 #include "Interfaces.h"
 #include "GoToDlg.h"
 #include "SearchDlg.h"
@@ -275,7 +276,8 @@ private:
 		uint64_t Address, Size;
 		std::wstring Name;
 	};
-	std::vector<ElfName> m_ElfNames;	// the functions and data of the ELF file, by address: the disassembly shows their names
+	std::vector<ElfName> m_ElfNames;
+	ElfDebugInfo m_ElfDebug;			// of the ELF file: in it, or in its debug file	// the functions and data of the ELF file, by address: the disassembly shows their names
 	int m_ElfCodeViews{ 0 };
 	std::vector<GuardTable> m_GuardTables;	// of the PE file
 	std::vector<FlatResource> m_FlatResources;

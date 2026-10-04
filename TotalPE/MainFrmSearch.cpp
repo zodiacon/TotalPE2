@@ -5,6 +5,7 @@
 #include "FileStrings.h"
 #include "PEStrings.h"
 #include "ImportAnalysis.h"
+#include "ItaniumDemangle.h"
 #include <unordered_set>
 #include <DbgHelp.h>
 
@@ -204,9 +205,13 @@ void CMainFrame::BuildSearchIndex() {
 			// functions are disassembled, data is shown in hex (as the symbols view does)
 			bool defined = sym.SectionIndex != 0 && sym.SectionIndex < 0xFF00 && sym.SectionIndex < m_Elf.Sections().size();
 			bool place = defined && (sym.Type == 1 || sym.Type == 2 || sym.Type == 6 || sym.Type == 10);
-			SearchItem item{ .Kind = SearchKind::Symbol, .Name = Widen(sym.Name),
+			// a C++ name is found by what it is in the source; the details have the symbol
+			auto demangled = DemangleItanium(sym.Name);
+			SearchItem item{ .Kind = SearchKind::Symbol, .Name = demangled.empty() ? Widen(sym.Name) : Widen(demangled),
 				.Details = std::format(L"{} {}{}", ElfFile::SymbolBindName(sym.Bind), ElfFile::SymbolTypeName(sym.Type), defined ? L"" : L", undefined"),
 				.Value = sym.Value, .Code = sym.Type == 2 || sym.Type == 10 };
+			if (!demangled.empty())
+				item.Details += L": " + Widen(sym.Name);
 			if (place) {
 				item.Location = std::format(L"0x{:X}", sym.Value);
 				// in a relocatable object the value is an offset in the section; -2: the symbol has no place
@@ -215,6 +220,21 @@ void CMainFrame::BuildSearchIndex() {
 			else
 				item.Index = -2;
 			index.Add(std::move(item));
+		}
+		// the functions of the debug information that no symbol names (a stripped file with its debug file)
+		if (!relocatable) {
+			std::unordered_set<uint64_t> named;
+			for (auto const& sym : m_Elf.Symbols())
+				if (sym.Value)
+					named.insert(sym.Value);
+			for (auto const& f : m_ElfDebug.Dwarf.Functions) {
+				if (!f.LowPc || named.contains(f.LowPc))
+					continue;
+				auto demangled = DemangleItanium(f.LinkageName);
+				auto name = !demangled.empty() ? Widen(demangled) : Widen(f.Name.empty() ? f.LinkageName : f.Name);
+				index.Add({ .Kind = SearchKind::Symbol, .Name = std::move(name), .Details = L"Function (DWARF)",
+					.Location = std::format(L"0x{:X}", f.LowPc), .Value = f.LowPc, .Index = -1, .Code = true });
+			}
 		}
 		for (auto const& dyn : m_Elf.Dynamic())
 			if (dyn.Tag == 1)	// DT_NEEDED

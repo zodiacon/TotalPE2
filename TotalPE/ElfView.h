@@ -3,9 +3,11 @@
 #include "ViewBase.h"
 #include <VirtualListView.h>
 #include "ElfFile.h"
+#include "ElfDebugInfo.h"
 
 enum class ElfViewKind {
 	Header, ProgramHeaders, Sections, Symbols, Dynamic, Relocations, Notes,
+	DebugInfo, CompileUnits, Functions,		// the debug information (DWARF), in the file or in its debug file
 };
 
 // The lists of an ELF file (see ElfFile.h). Double-click a row to see what it points to: code is disassembled (x86 and x64),
@@ -14,7 +16,7 @@ class CElfView :
 	public CViewBase<CElfView>,
 	public CVirtualListView<CElfView> {
 public:
-	CElfView(IMainFrame* frame, ElfFile const& elf, ElfViewKind kind);
+	CElfView(IMainFrame* frame, ElfFile const& elf, ElfViewKind kind, ElfDebugInfo const* debug = nullptr);
 	CString GetTitle() const override;
 
 	CString GetColumnText(HWND, int row, int col) const;
@@ -66,6 +68,9 @@ private:
 	void BuildDynamic();
 	void BuildRelocations();
 	void BuildNotes();
+	void BuildDebugInfo();
+	void BuildCompileUnits();
+	void BuildFunctions();
 	std::wstring SectionName(uint32_t index) const;
 	// the address a symbol or relocation means; relocatable objects have offsets in a section instead
 	bool IsRelocatable() const { return m_Elf.Type() == 1; }
@@ -76,6 +81,7 @@ private:
 
 	CListViewCtrl m_List;
 	ElfFile const& m_Elf;
+	ElfDebugInfo const* m_Debug;
 	ElfViewKind m_Kind;
 	std::vector<Column> m_Columns;
 	std::vector<Row> m_Rows;

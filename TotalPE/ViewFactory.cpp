@@ -310,16 +310,20 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		case TreeItemType::ElfDynamic:
 		case TreeItemType::ElfRelocations:
 		case TreeItemType::ElfNotes:
+		case TreeItemType::ElfDebugInfo:
+		case TreeItemType::ElfCompileUnits:
+		case TreeItemType::ElfFunctions:
 		{
 			static const std::pair<TreeItemType, ElfViewKind> kinds[] = {
 				{ TreeItemType::ElfHeader, ElfViewKind::Header }, { TreeItemType::ElfProgramHeaders, ElfViewKind::ProgramHeaders },
 				{ TreeItemType::ElfSections, ElfViewKind::Sections }, { TreeItemType::ElfSymbols, ElfViewKind::Symbols },
 				{ TreeItemType::ElfDynamic, ElfViewKind::Dynamic }, { TreeItemType::ElfRelocations, ElfViewKind::Relocations },
-				{ TreeItemType::ElfNotes, ElfViewKind::Notes },
+				{ TreeItemType::ElfNotes, ElfViewKind::Notes }, { TreeItemType::ElfDebugInfo, ElfViewKind::DebugInfo },
+				{ TreeItemType::ElfCompileUnits, ElfViewKind::CompileUnits }, { TreeItemType::ElfFunctions, ElfViewKind::Functions },
 			};
 			auto item = type & TreeItemType::ItemMask;
 			auto kind = std::ranges::find(kinds, item, &std::pair<TreeItemType, ElfViewKind>::first)->second;
-			auto view = new CElfView(this, m_Elf, kind);
+			auto view = new CElfView(this, m_Elf, kind, &m_ElfDebug);
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};

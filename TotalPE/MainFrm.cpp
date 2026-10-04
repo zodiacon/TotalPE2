@@ -17,6 +17,7 @@
 #include "SaveData.h"
 #include "ScintillaView.h"
 #include "CompareView.h"
+#include "ItaniumDemangle.h"
 #include <thread>
 #include <WTLHelper.h>
 
@@ -61,6 +62,18 @@ bool CMainFrame::OnTreeRightClick(HWND, HTREEITEM hItem, POINT const& pt) {
 			SaveTreeItemData(type);
 		return true;
 	}
+	if (kind == TreeItemType::ElfSection && m_Elf) {
+		auto index = (int)(((int64_t)type >> ItemShift) - 1);
+		bool x86 = m_Elf.Machine() == 3 || m_Elf.Machine() == 62;
+		if (index <= 0 || index >= (int)m_Elf.Sections().size() || !(m_Elf.Sections()[index].Flags & 4) || !x86)
+			return false;
+		CMenu menu;
+		menu.CreatePopupMenu();
+		menu.AppendMenu(MF_STRING, ID_VIEW_DISASSEMBLE, L"&Disassemble");
+		if (ShowContextMenu(menu, TPM_RETURNCMD, pt.x, pt.y, m_hWnd) == ID_VIEW_DISASSEMBLE)
+			ShowElfSection(index, 0, true);
+		return true;
+	}
 	if (kind != TreeItemType::FlowGraph)
 		return false;
 	ShowView(hItem);
@@ -72,7 +85,7 @@ bool CMainFrame::OnTreeRightClick(HWND, HTREEITEM hItem, POINT const& pt) {
 
 void CMainFrame::UpdateUI() {
 	auto const fi = m_PE ? m_PE.GetFileInfo() : nullptr;
-	UIEnable(ID_PE_DISASSEMBLEENTRYPOINT, fi != nullptr);
+	UIEnable(ID_PE_DISASSEMBLEENTRYPOINT, fi != nullptr || (m_Elf && m_Elf.Entry()));
 	UIEnable(ID_VIEW_EXPORTS, fi && fi->HasExport);
 	UIEnable(ID_VIEW_IMPORTS, fi && fi->HasImport);
 	UIEnable(ID_VIEW_RESOURCES, fi && fi->HasResource);
@@ -583,6 +596,7 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	m_MemberObjects.clear();
 	m_Elf.Close();
 	m_ElfNames.clear();
+	m_ElfDebug = {};
 
 	BuildTree(16);
 
@@ -670,6 +684,7 @@ void CMainFrame::ResetFileState() {
 	m_MemberObjects.clear();
 	m_Elf.Close();
 	m_ElfNames.clear();
+	m_ElfDebug = {};
 	m_Symbols.Close();
 	++m_SymbolGeneration;
 	m_SymbolsForModules.clear();
@@ -809,14 +824,25 @@ bool CMainFrame::OpenElf(PCWSTR path) {
 	ResetFileState();
 	m_Elf = std::move(elf);
 	m_ElfCodeViews = 0;
-	// the names the disassembly shows: in a relocatable object the values are offsets in sections, not addresses
+	m_ElfDebug = LoadElfDebugInfo(m_Elf);
+	// the names the disassembly shows: in a relocatable object the values are offsets in sections, not addresses.
+	// C++ names are demangled; the functions of the DWARF name what the symbols do not (a stripped file with its debug file)
 	if (m_Elf.Type() != 1) {
+		auto name = [](std::string const& mangled) {
+			auto d = DemangleItanium(mangled);
+			return d.empty() ? std::wstring(mangled.begin(), mangled.end()) : std::wstring(d.begin(), d.end());
+		};
 		for (auto const& s : m_Elf.Symbols()) {
 			bool defined = s.SectionIndex != 0 && s.SectionIndex < 0xFF00;
 			if (defined && s.Value && !s.Name.empty() && (s.Type == 1 || s.Type == 2 || s.Type == 10))
-				m_ElfNames.push_back({ s.Value, s.Size, std::wstring(s.Name.begin(), s.Name.end()) });
+				m_ElfNames.push_back({ s.Value, s.Size, name(s.Name) });
 		}
-		std::ranges::sort(m_ElfNames, {}, &ElfName::Address);
+		for (auto const& f : m_ElfDebug.Dwarf.Functions) {
+			if (f.LowPc && (!f.LinkageName.empty() || !f.Name.empty()))
+				m_ElfNames.push_back({ f.LowPc, f.HighPc - f.LowPc, f.LinkageName.empty() ? name(f.Name) : name(f.LinkageName) });
+		}
+		// the symbols come first at the same address
+		std::ranges::stable_sort(m_ElfNames, {}, &ElfName::Address);
 		// the same symbol is often in .symtab and .dynsym
 		auto dup = std::ranges::unique(m_ElfNames, [](auto const& a, auto const& b) { return a.Address == b.Address; });
 		m_ElfNames.erase(dup.begin(), dup.end());
@@ -868,6 +894,12 @@ void CMainFrame::BuildElfTree(int iconSize) {
 	}
 	if (!m_Elf.Symbols().empty())
 		InsertTreeItem(m_Tree, std::format(L"Symbols ({})", m_Elf.Symbols().size()).c_str(), GetTreeIcon(IDI_SYMBOLS), TreeItemType::ElfSymbols, root);
+	// the debug information: in the file, in its debug file, or where it should be
+	auto debug = InsertTreeItem(m_Tree, L"Debug Info", GetTreeIcon(IDI_DEBUG), TreeItemType::ElfDebugInfo, root);
+	if (!m_ElfDebug.Dwarf.Units.empty())
+		InsertTreeItem(m_Tree, std::format(L"Compile Units ({})", m_ElfDebug.Dwarf.Units.size()).c_str(), GetTreeIcon(IDI_TEXT), TreeItemType::ElfCompileUnits, debug);
+	if (!m_ElfDebug.Dwarf.Functions.empty())
+		InsertTreeItem(m_Tree, std::format(L"Functions ({})", m_ElfDebug.Dwarf.Functions.size()).c_str(), GetTreeIcon(IDI_FUNCTION), TreeItemType::ElfFunctions, debug);
 	if (!m_Elf.Dynamic().empty())
 		InsertTreeItem(m_Tree, std::format(L"Dynamic ({})", m_Elf.Dynamic().size()).c_str(), GetTreeIcon(IDI_DLL_IMPORT), TreeItemType::ElfDynamic, root);
 	if (!m_Elf.Relocations().empty())
@@ -1204,6 +1236,7 @@ LRESULT CMainFrame::OnFileClose(WORD, WORD, HWND, BOOL&) {
 	m_MemberObjects.clear();
 	m_Elf.Close();
 	m_ElfNames.clear();
+	m_ElfDebug = {};
 	m_GuardTables.clear();
 	++m_SymbolGeneration;	// a symbol load in progress belongs to the file that was just closed
 	m_Symbols.Close();
@@ -1555,6 +1588,11 @@ LRESULT CMainFrame::OnMenuSelect(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lPar
 }
 
 LRESULT CMainFrame::OnDisassembleEntryPoint(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
+	if (m_Elf) {
+		if (!m_Elf.Entry() || !ShowElfAddress(m_Elf.Entry(), true))
+			AtlMessageBox(m_hWnd, L"The file has no entry point", IDR_MAINFRAME, MB_ICONWARNING);
+		return 0;
+	}
 	if (!ShowView(TreeItemType::AsmEntryPoint, nullptr, IDI_BINARY))
 		AtlMessageBox(m_hWnd, L"No entry point defined for this PE", IDR_MAINFRAME, MB_ICONWARNING);
 	return 0;
@@ -1822,7 +1860,7 @@ void CMainFrame::ResetNavigation() {
 }
 
 void CMainFrame::UpdateNavigationUI() {
-	UIEnable(ID_NAV_GOTO, m_PE ? TRUE : FALSE);
+	UIEnable(ID_NAV_GOTO, m_PE || m_Elf);
 	UIEnable(ID_NAV_BACK, m_HistoryIndex > 0);
 	UIEnable(ID_NAV_FORWARD, m_HistoryIndex + 1 < (int)m_History.size());
 }
@@ -1941,11 +1979,34 @@ bool CMainFrame::ResolveGoTo(GoToOptions const& options, int64_t& offset, std::w
 }
 
 LRESULT CMainFrame::OnNavGoTo(WORD, WORD, HWND, BOOL&) {
-	if (!m_PE)
+	if (!m_PE && !m_Elf)
 		return 0;
 	CGoToDlg dlg(m_GoTo);
 	if (dlg.DoModal(m_hWnd) != IDOK)
 		return 0;
+	if (m_Elf) {
+		// an ELF file has addresses (an RVA is an address too), and offsets in the file
+		bool shown;
+		if (m_GoTo.Kind == GoToKind::FileOffset) {
+			shown = false;
+			if (m_GoTo.Disassemble) {
+				// the code at the offset: in an executable section
+				auto const& sections = m_Elf.Sections();
+				for (int i = 1; i < (int)sections.size() && !shown; i++) {
+					auto const& s = sections[i];
+					if ((s.Flags & 4) && s.Type != 8 && m_GoTo.Value >= s.Offset && m_GoTo.Value < s.Offset + s.Size)
+						shown = ShowElfSection(i, (int64_t)(m_GoTo.Value - s.Offset), true);
+				}
+			}
+			if (!shown)
+				shown = ShowElfFileOffset((int64_t)m_GoTo.Value);
+		}
+		else
+			shown = ShowElfAddress(m_GoTo.Value, m_GoTo.Disassemble);
+		if (!shown)
+			AtlMessageBox(m_hWnd, std::format(L"0x{:X} is not in the file", m_GoTo.Value).c_str(), IDR_MAINFRAME, MB_ICONWARNING);
+		return 0;
+	}
 
 	int64_t offset;
 	std::wstring error;
