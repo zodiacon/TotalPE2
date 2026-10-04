@@ -6,10 +6,14 @@ An improved version over **Total PE**, for Windows executables (EXE, DLL, SYS...
 
 As usual, it's a work in progress.
 
-![](https://github.com/zodiacon/TotalPE2/blob/master/totalpe2-1.png)
-![](https://github.com/zodiacon/TotalPE2/blob/master/totalpe2-2.png)
-![](https://github.com/zodiacon/TotalPE2/blob/master/totalpe2-3.png)
-![](https://github.com/zodiacon/TotalPE2/blob/master/totalpe2-4.png)
+![The summary of a PE file: hashes, checksum validation, import hash](https://github.com/zodiacon/TotalPE2/blob/master/totalpe2-1.png)
+![The strings of the file, filtered](https://github.com/zodiacon/TotalPE2/blob/master/totalpe2-2.png)
+![Exceptions, with the unwind information of a function](https://github.com/zodiacon/TotalPE2/blob/master/totalpe2-3.png)
+![Disassembly with symbols and cross-references](https://github.com/zodiacon/TotalPE2/blob/master/totalpe2-4.png)
+![Comparing two PE files](https://github.com/zodiacon/TotalPE2/blob/master/totalpe2-5.png)
+![Search All: imports, exports, strings, resources, symbols and sections](https://github.com/zodiacon/TotalPE2/blob/master/totalpe2-6.png)
+![An ELF file](https://github.com/zodiacon/TotalPE2/blob/master/totalpe2-7.png)
+![A COFF object file with its CodeView debug information](https://github.com/zodiacon/TotalPE2/blob/master/totalpe2-8.png)
 
 ## What it opens
 
