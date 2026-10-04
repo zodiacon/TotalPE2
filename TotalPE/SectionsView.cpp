@@ -30,8 +30,9 @@ CString CSectionsView::GetColumnText(HWND h, int row, int col) const {
 		case ColumnType::Entropy:
 			if (section.Entropy < 0)
 				return L"";
-			// above 7 or so the data is compressed or encrypted: a packed file, perhaps
-			return std::format(L"{:.2f}{}", section.Entropy, section.Entropy >= 7.2 ? L" (Compressed?)" : L"").c_str();
+			// compressed or encrypted data (a packed file, perhaps), as the anomalies have it
+			return std::format(L"{:.2f}{}", section.Entropy, IsHighEntropySection(section.Entropy, section.SecHdr.Characteristics, section.DataSize)
+				? L" (Compressed?)" : L"").c_str();
 	}
 	return CString();
 }
@@ -81,6 +82,7 @@ void CSectionsView::BuildItems() {
 		if (hdr.SizeOfRawData && hdr.PointerToRawData < fileSize) {
 			auto size = std::min<uint32_t>(hdr.SizeOfRawData, fileSize - hdr.PointerToRawData);
 			sec.Entropy = ComputeEntropy(m_PE.GetData() + hdr.PointerToRawData, size);
+			sec.DataSize = size;
 		}
 		m_Sections.push_back(std::move(sec));
 	}

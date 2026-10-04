@@ -82,6 +82,13 @@ double ComputeEntropy(const uint8_t* data, size_t size) {
 	return entropy;
 }
 
+bool IsHighEntropySection(double entropy, uint32_t characteristics, size_t size) {
+	if (size < 512)
+		return false;
+	bool executable = characteristics & (IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_CNT_CODE);
+	return entropy >= (executable ? 7.0 : 7.4);
+}
+
 uint32_t ComputeFileChecksum(PEFile const& pe) {
 	auto dos = pe.GetMSDOSHeader();
 	if (!dos || pe.GetFileSize() == 0)
@@ -238,9 +245,9 @@ std::vector<Anomaly> FindAnomalies(PEFile const& pe) {
 		// entropy: compressed or encrypted data looks like noise
 		if (h.SizeOfRawData >= 512 && (uint64_t)h.PointerToRawData + h.SizeOfRawData <= fileSize) {
 			auto entropy = ComputeEntropy(data + h.PointerToRawData, h.SizeOfRawData);
-			if (executable && entropy >= 7.0)
+			if (IsHighEntropySection(entropy, h.Characteristics, h.SizeOfRawData) && executable)
 				add(AnomalySeverity::Warning, L"Entropy", std::format(L"{} is executable and has an entropy of {:.2f} out of 8; the code is probably packed or encrypted", Widen(s.SectionName), entropy), h.PointerToRawData);
-			else if (!executable && entropy >= 7.4)
+			else if (IsHighEntropySection(entropy, h.Characteristics, h.SizeOfRawData))
 				add(AnomalySeverity::Info, L"Entropy", std::format(L"{} has an entropy of {:.2f} out of 8; it holds compressed or encrypted data", Widen(s.SectionName), entropy), h.PointerToRawData);
 		}
 		index++;

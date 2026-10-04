@@ -38,6 +38,7 @@ private:
 
 	struct Section : PESectionHeader {
 		double Entropy{ -1 };	// of the section's data in the file, 0 to 8; -1 if it has no data in the file
+		uint32_t DataSize{ 0 };	// the size of that data
 	};
 
 	CString GetTitle() const override;

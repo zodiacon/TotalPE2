@@ -26,6 +26,10 @@ PCWSTR AnomalySeverityToString(AnomalySeverity severity);
 // Shannon entropy of the bytes, 0 (all the same) to 8 (random).
 double ComputeEntropy(const uint8_t* data, size_t size);
 
+// Whether a section's entropy means compressed or encrypted data: 7 for code (real code stays well below), 7.4 for the rest
+// (resources often hold compressed images). Less than 512 bytes of data is too little to tell.
+bool IsHighEntropySection(double entropy, uint32_t characteristics, size_t size);
+
 // The checksum the Windows loader (CheckSumMappedFile) would compute. The 4 bytes at checksumOffset are ignored.
 uint32_t ComputePEChecksum(const uint8_t* data, size_t size, size_t checksumOffset);
 
