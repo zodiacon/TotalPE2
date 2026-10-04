@@ -252,6 +252,9 @@
     <ClCompile Include="SearchIndex.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="CompareView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
     <ClCompile Include="SearchDlg.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -283,9 +286,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Overlay.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="VersionInfo.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="VirusTotal.cpp">
@@ -527,6 +527,9 @@
     <ClInclude Include="SearchIndex.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="CompareView.h">
+      <Filter>Views</Filter>
+    </ClInclude>
     <ClInclude Include="SearchDlg.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -555,9 +558,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Overlay.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="VersionInfo.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="VirusTotal.h">

@@ -105,6 +105,9 @@ enum class TreeItemType : int64_t {
 	CodeViewFiles,
 	CodeViewTypes,
 
+	// a comparison with another PE file (the index tells the comparisons apart)
+	Comparison,
+
 	ItemMask = 255,
 };
 DEFINE_ENUM_FLAG_OPERATORS(TreeItemType);

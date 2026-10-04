@@ -117,7 +117,6 @@
     <ClCompile Include="..\TotalPE\Overlay.cpp" />
     <ClCompile Include="..\TotalPE\LibArchive.cpp" />
     <ClCompile Include="LibArchiveTests.cpp" />
-    <ClCompile Include="..\TotalPE\VersionInfo.cpp" />
     <ClCompile Include="..\TotalPE\VirusTotal.cpp" />
     <ClCompile Include="ClrMetadataTests.cpp" />
     <ClCompile Include="MenuTemplateTests.cpp" />
@@ -149,6 +148,7 @@
     <ClCompile Include="CodeViewTests.cpp" />
     <ClCompile Include="..\TotalPE\SearchIndex.cpp" />
     <ClCompile Include="SearchIndexTests.cpp" />
+    <ClCompile Include="PEDiffTests.cpp" />
     <ClCompile Include="..\TotalPE\ElfFile.cpp" />
     <ClCompile Include="ElfFileTests.cpp" />
     <ClCompile Include="VersionInfoTests.cpp" />

@@ -72,6 +72,7 @@ The kind of file is recognized by its contents, not its extension. Open files fr
 ## General
 
 * Tabs, a tree of everything in the file, Find in every view
+* Compare With (File menu): compares the PE file with another - file, headers, data directories, sections (and their content), imports, exports, resources, version and debug information; differences are colored, and an item opens in the file with a double-click
 * Search All (Ctrl+Shift+F): one search through the imports, exports, strings, resources, symbols and section names of the file (PE, object, library or ELF); double-click a result to go to it
 * Save (Ctrl+S) saves what the active view shows: a list as CSV or text, text, the bytes of a hex view, a flow graph as SVG
 * Export List (Ctrl+Shift+S) saves any list as CSV or tab separated text

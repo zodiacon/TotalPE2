@@ -232,6 +232,8 @@
   <ItemGroup>
     <ClInclude Include="pch.h" />
     <ClInclude Include="PEFile.h" />
+    <ClInclude Include="PEDiff.h" />
+    <ClInclude Include="VersionInfo.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -244,6 +246,8 @@
     </ClCompile>
     <ClCompile Include="PECore.cpp" />
     <ClCompile Include="PEFile.cpp" />
+    <ClCompile Include="PEDiff.cpp" />
+    <ClCompile Include="VersionInfo.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />

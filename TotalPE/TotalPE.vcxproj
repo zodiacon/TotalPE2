@@ -413,7 +413,6 @@
     <ClCompile Include="LibArchive.cpp" />
     <ClCompile Include="ArchiveView.cpp" />
     <ClCompile Include="OverlayView.cpp" />
-    <ClCompile Include="VersionInfo.cpp" />
     <ClCompile Include="VirusTotal.cpp" />
     <ClCompile Include="VtKeyDlg.cpp" />
     <ClCompile Include="XrefView.cpp" />
@@ -446,6 +445,7 @@
     <ClCompile Include="CoffObject.cpp" />
     <ClCompile Include="CodeViewInfo.cpp" />
     <ClCompile Include="SearchIndex.cpp" />
+    <ClCompile Include="CompareView.cpp" />
     <ClCompile Include="SearchDlg.cpp" />
     <ClCompile Include="MainFrmSearch.cpp" />
     <ClCompile Include="DebugInfoView.cpp" />
@@ -499,7 +499,6 @@
     <ClInclude Include="LibArchive.h" />
     <ClInclude Include="ArchiveView.h" />
     <ClInclude Include="OverlayView.h" />
-    <ClInclude Include="VersionInfo.h" />
     <ClInclude Include="VirusTotal.h" />
     <ClInclude Include="VtKeyDlg.h" />
     <ClInclude Include="XrefView.h" />
@@ -542,6 +541,7 @@
     <ClInclude Include="CoffObject.h" />
     <ClInclude Include="CodeViewInfo.h" />
     <ClInclude Include="SearchIndex.h" />
+    <ClInclude Include="CompareView.h" />
     <ClInclude Include="SearchDlg.h" />
     <ClInclude Include="DebugInfoView.h" />
     <ClInclude Include="ElfFile.h" />

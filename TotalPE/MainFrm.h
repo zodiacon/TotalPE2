@@ -50,6 +50,7 @@ public:
 		COMMAND_ID_HANDLER(ID_APP_ABOUT, OnAppAbout)
 		COMMAND_ID_HANDLER(ID_EDIT_FIND, OnEditFind)
 		COMMAND_ID_HANDLER(ID_EDIT_SEARCHALL, OnEditSearchAll)
+		COMMAND_ID_HANDLER(ID_FILE_COMPARE, OnFileCompare)
 		COMMAND_ID_HANDLER(ID_WINDOW_CLOSE, OnWindowClose)
 		COMMAND_ID_HANDLER(ID_WINDOW_CLOSE_ALL, OnWindowCloseAll)
 		COMMAND_ID_HANDLER(ID_FILE_OPEN, OnFileOpen)
@@ -221,6 +222,8 @@ private:
 	LRESULT OnSymbolSettings(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnNavGoTo(WORD, WORD, HWND, BOOL&);
 	LRESULT OnEditSearchAll(WORD, WORD, HWND, BOOL&);
+	LRESULT OnFileCompare(WORD, WORD, HWND, BOOL&);
+	int m_Comparisons{ 0 };
 
 	// Search All (see SearchDlg.h)
 	SearchIndex const& GetSearchIndex() override;

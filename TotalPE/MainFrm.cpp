@@ -16,6 +16,7 @@
 #include "VtKeyDlg.h"
 #include "SaveData.h"
 #include "ScintillaView.h"
+#include "CompareView.h"
 #include <thread>
 #include <WTLHelper.h>
 
@@ -90,6 +91,7 @@ void CMainFrame::UpdateUI() {
 	UIEnable(ID_EDIT_COPY, FALSE);
 	UIEnable(ID_EDIT_FIND, (fi || m_Archive || m_Object || m_Elf) && m_Tabs.GetActivePage() >= 0);
 	UIEnable(ID_EDIT_SEARCHALL, fi || m_Archive || m_Object || m_Elf);
+	UIEnable(ID_FILE_COMPARE, fi != nullptr);
 	UIEnable(ID_PE_ENTIREFILEINHEX, fi != nullptr);
 }
 
@@ -1153,6 +1155,43 @@ CUpdateUIBase& CMainFrame::GetUI() {
 	return *this;
 }
 
+// Compares the open PE file with another: the comparison is a view of its own (and a tree item while it is open)
+LRESULT CMainFrame::OnFileCompare(WORD, WORD, HWND, BOOL&) {
+	if (!m_PE)
+		return 0;
+	CSimpleFileDialog dlg(TRUE, nullptr, nullptr, OFN_EXPLORER | OFN_ENABLESIZING | OFN_FILEMUSTEXIST,
+		L"All PE Files\0*.exe;*.dll;*.efi;*.ocx;*.cpl;*.sys;*.mui;*.mun;*.scr\0All Files\0*.*\0");
+	dlg.m_ofn.lpstrTitle = L"Compare With";
+	WTLHelper::SuspendHook();
+	auto ok = IDOK == dlg.DoModal();
+	WTLHelper::ResumeHook();
+	if (!ok)
+		return 0;
+
+	CWaitCursor wait;
+	PEFile other;
+	if (!other.Open(dlg.m_szFileName)) {
+		AtlMessageBox(m_hWnd, L"The file is not a PE file", IDR_MAINFRAME, MB_ICONERROR);
+		return 0;
+	}
+	auto view = new CCompareView(this, this, ComparePEFiles(m_PE, other), dlg.m_szFileName);
+	if (nullptr == view->DoCreate(m_Tabs)) {
+		ATLASSERT(false);
+		return 0;
+	}
+	view->SetDeleteFromTree(true);
+	auto image = GetIconIndex(IDI_LOOK);
+	auto itemType = TreeItemWithIndex(TreeItemType::Comparison, (int64_t)(++m_Comparisons) << ItemShift);
+	auto hItem = InsertTreeItem(m_Tree, view->GetTitle(), image, itemType, m_hRoot);
+	m_Tree.EnsureVisible(hItem);
+	view->SetHTreeItem(hItem);
+	m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, view);
+	m_Views.insert({ itemType, view });
+	m_Views2.insert({ view->GetHwnd(), itemType });
+	RecordNavigation();
+	return 0;
+}
+
 LRESULT CMainFrame::OnFileClose(WORD, WORD, HWND, BOOL&) {
 	m_Tabs.RemoveAllPages();
 	m_Views.clear();
@@ -1338,7 +1377,7 @@ bool CMainFrame::BuildTreeImageList(int iconSize) {
 		IDI_THREAD, IDI_RICH_HEADER, IDI_MSDOS, IDI_FILE_HEADER, IDI_COMPONENT,
 		IDI_FUNCTION, IDI_FUNC_FORWARD, IDI_INTERFACE, IDI_DLL_IMPORT, IDI_FUNCTION2, IDI_SYMBOLS,
 		IDI_TYPE, IDI_ENUM, IDI_BITFIELD, IDI_FIELD, IDI_ARRAY, IDI_UNION, IDI_BINARY,
-		IDI_DATA, IDI_FLOW,
+		IDI_DATA, IDI_FLOW, IDI_LOOK,
 	};
 
 	bool insert = s_ImageIndices.empty();
