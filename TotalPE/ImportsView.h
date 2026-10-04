@@ -19,6 +19,7 @@ public:
 	bool OnRightClickList(HWND h, int row, int col, POINT const& pt) const;
 
 	void UpdateUI(bool first = false) const;
+	bool SelectItem(std::wstring_view name, std::wstring_view module) override;
 
 	BEGIN_MSG_MAP(CImportsView)
 		MESSAGE_HANDLER(CFindReplaceDialog::GetFindReplaceMsg(), OnFind)
@@ -41,6 +42,8 @@ private:
 	CString GetTitle() const override;
 
 	void BuildItems();
+	// lists the functions of a module
+	void ShowModule(int row);
 
 	// Handler prototypes (uncomment arguments if needed):
 	//	LRESULT MessageHandler(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)

@@ -84,23 +84,59 @@ void CImportsView::DoSort(SortInfo const* si) {
 
 void CImportsView::OnStateChanged(HWND hWnd, int from, int to, DWORD oldState, DWORD newState) {
 	if ((newState & LVIS_SELECTED) || (oldState & LVIS_SELECTED)) {
-		if (hWnd == m_ModList) {
-			int selected = m_ModList.GetSelectedCount();
-			if (selected == 1) {
-				auto const& mod = m_Modules[m_ModList.GetNextItem(-1, LVNI_SELECTED)];
-				m_Functions = mod.ImportFunc;
-				m_CurrentModule = mod.ModuleName;
-				Sort(m_FuncList);
-				m_FuncList.SetItemCount((int)m_Functions.size());
-			}
-			else {
-				m_Functions.clear();
-				m_CurrentModule.clear();
-				m_FuncList.SetItemCount(0);
-			}
-		}
+		if (hWnd == m_ModList)
+			ShowModule(m_ModList.GetSelectedCount() == 1 ? m_ModList.GetNextItem(-1, LVNI_SELECTED) : -1);
 		UpdateUI();
 	}
+}
+
+void CImportsView::ShowModule(int row) {
+	if (row >= 0 && row < (int)m_Modules.size()) {
+		if (m_CurrentModule == m_Modules[row].ModuleName && !m_Functions.empty())
+			return;
+		auto const& mod = m_Modules[row];
+		m_Functions = mod.ImportFunc;
+		m_CurrentModule = mod.ModuleName;
+		Sort(m_FuncList);
+		m_FuncList.SetItemCount((int)m_Functions.size());
+	}
+	else {
+		m_Functions.clear();
+		m_CurrentModule.clear();
+		m_FuncList.SetItemCount(0);
+	}
+}
+
+bool CImportsView::SelectItem(std::wstring_view name, std::wstring_view module) {
+	auto equal = [](std::string const& s, std::wstring_view w) {
+		return s.size() == w.size() && _wcsicmp(std::wstring(s.begin(), s.end()).c_str(), std::wstring(w).c_str()) == 0;
+	};
+	if (module.empty())
+		module = name;
+	auto it = std::ranges::find_if(m_Modules, [&](auto const& m) { return equal(m.ModuleName, module); });
+	if (it == m_Modules.end())
+		return false;
+	int row = (int)(it - m_Modules.begin());
+	m_ModList.SetItemState(-1, 0, LVIS_SELECTED);
+	m_ModList.SelectItem(row);
+	ShowModule(row);
+	if (module == name) {
+		m_ModList.SetFocus();
+		return true;
+	}
+	// a function: by its name, or "#ordinal"
+	for (int i = 0; i < (int)m_Functions.size(); i++) {
+		auto const& fn = m_Functions[i];
+		bool match = IsOrdinalImport(fn, m_Is64) ? name == std::format(L"#{}", ImportOrdinal(fn)) : equal(fn.FuncName, name);
+		if (match) {
+			m_FuncList.SetItemState(-1, 0, LVIS_SELECTED);
+			m_FuncList.SelectItem(i);
+			m_FuncList.SetFocus();
+			return true;
+		}
+	}
+	m_ModList.SetFocus();
+	return true;
 }
 
 void CImportsView::UpdateUI(bool first) const {

@@ -180,4 +180,7 @@ struct IView abstract {
 	// True if the view handles Save itself (ID_FILE_SAVE): its data, an image... Views with a list or text need not:
 	// the main frame saves those.
 	virtual bool CanSave() const { return false; }
+	// Selects the row of an item: an export ("#ordinal" or its name), an imported module, or a function of a module
+	// ("#ordinal" or its name, 'owner' is the module). False if the view has no such item.
+	virtual bool SelectItem(std::wstring_view name, std::wstring_view owner = {}) { return false; }
 };

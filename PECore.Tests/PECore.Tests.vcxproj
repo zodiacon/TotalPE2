@@ -147,6 +147,8 @@
     <ClCompile Include="CoffObjectTests.cpp" />
     <ClCompile Include="..\TotalPE\CodeViewInfo.cpp" />
     <ClCompile Include="CodeViewTests.cpp" />
+    <ClCompile Include="..\TotalPE\SearchIndex.cpp" />
+    <ClCompile Include="SearchIndexTests.cpp" />
     <ClCompile Include="..\TotalPE\ElfFile.cpp" />
     <ClCompile Include="ElfFileTests.cpp" />
     <ClCompile Include="VersionInfoTests.cpp" />

@@ -293,6 +293,7 @@ BEGIN
         MENUITEM "&Find...\tCtrl+F",            ID_EDIT_FIND
         MENUITEM "Find &Next\tF3",              ID_EDIT_FIND_NEXT
         MENUITEM "Find &Previous\tShift+F3",    ID_EDIT_FIND_PREVIOUS
+        MENUITEM "Search &All...\tCtrl+Shift+F", ID_EDIT_SEARCHALL
         MENUITEM SEPARATOR
         MENUITEM "&Disassemble...",             ID_VIEW_DISASSEMBLE
         MENUITEM SEPARATOR
@@ -514,6 +515,25 @@ BEGIN
     PUSHBUTTON      "Cancel",IDCANCEL,173,89,50,14
 END
 
+IDD_SEARCH DIALOGEX 0, 0, 440, 260
+STYLE DS_SETFONT | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MAXIMIZEBOX
+CAPTION "Search All"
+FONT 9, "Segoe UI", 0, 0, 0x0
+BEGIN
+    LTEXT           "&Find:",IDC_STATIC,7,10,22,8
+    EDITTEXT        IDC_SEARCH_TEXT,32,7,341,14,ES_AUTOHSCROLL
+    DEFPUSHBUTTON   "&Search",IDOK,379,6,54,16
+    CONTROL         "&Imports",IDC_SEARCH_IMPORTS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,27,45,10
+    CONTROL         "&Exports",IDC_SEARCH_EXPORTS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,57,27,45,10
+    CONTROL         "S&trings",IDC_SEARCH_STRINGS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,107,27,45,10
+    CONTROL         "&Resources",IDC_SEARCH_RESOURCES,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,157,27,55,10
+    CONTROL         "S&ymbols",IDC_SEARCH_SYMBOLS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,217,27,47,10
+    CONTROL         "Se&ctions",IDC_SEARCH_SECTIONS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,269,27,47,10
+    CONTROL         "Match c&ase",IDC_SEARCH_MATCHCASE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,331,27,70,10
+    CONTROL         "",IDC_SEARCH_RESULTS,"SysListView32",LVS_REPORT | LVS_SHOWSELALWAYS | LVS_SHAREIMAGELISTS | LVS_OWNERDATA | WS_BORDER | WS_TABSTOP,7,42,426,195
+    LTEXT           "",IDC_SEARCH_STATUS,7,243,426,10
+END
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -557,6 +577,7 @@ BEGIN
     VK_F6,          ID_NEXT_PANE,           VIRTKEY, NOINVERT
     VK_F6,          ID_PREV_PANE,           VIRTKEY, SHIFT, NOINVERT
     "F",            ID_EDIT_FIND,           VIRTKEY, CONTROL, NOINVERT
+    "F",            ID_EDIT_SEARCHALL,      VIRTKEY, SHIFT, CONTROL, NOINVERT
     VK_F3,          ID_EDIT_FIND_NEXT,      VIRTKEY, NOINVERT
     VK_F3,          ID_EDIT_FIND_PREVIOUS,  VIRTKEY, SHIFT, NOINVERT
     "B",            ID_HEX_BOOKMARK_TOGGLE, VIRTKEY, CONTROL, NOINVERT
@@ -753,6 +774,7 @@ STRINGTABLE
 BEGIN
     ID_DATA_SAVE            "Save the data to a file\nSave Data"
     ID_FILE_EXPORTLIST      "Save the list of the active view as CSV or text\nExport List"
+    ID_EDIT_SEARCHALL       "Search the imports, exports, strings, resources, symbols and sections of the file\nSearch All"
 END
 
 #endif    // English (United States) resources

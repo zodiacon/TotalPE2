@@ -16,6 +16,7 @@
 #include "ElfFile.h"
 #include "Interfaces.h"
 #include "GoToDlg.h"
+#include "SearchDlg.h"
 #include "RecentFilesManager.h"
 #include <Theme.h>
 #include <map>
@@ -25,6 +26,7 @@ class CMainFrame :
 	public CAutoUpdateUI<CMainFrame>,
 	public CTreeViewHelper<CMainFrame>,
 	public IMainFrame,
+	public ISearchHost,
 	public CMessageFilter, 
 	public CIdleHandler {
 public:
@@ -47,6 +49,7 @@ public:
 		COMMAND_ID_HANDLER(ID_VIEW_STATUS_BAR, OnViewStatusBar)
 		COMMAND_ID_HANDLER(ID_APP_ABOUT, OnAppAbout)
 		COMMAND_ID_HANDLER(ID_EDIT_FIND, OnEditFind)
+		COMMAND_ID_HANDLER(ID_EDIT_SEARCHALL, OnEditSearchAll)
 		COMMAND_ID_HANDLER(ID_WINDOW_CLOSE, OnWindowClose)
 		COMMAND_ID_HANDLER(ID_WINDOW_CLOSE_ALL, OnWindowCloseAll)
 		COMMAND_ID_HANDLER(ID_FILE_OPEN, OnFileOpen)
@@ -217,6 +220,19 @@ private:
 	LRESULT OnToggleDarkMode(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnSymbolSettings(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnNavGoTo(WORD, WORD, HWND, BOOL&);
+	LRESULT OnEditSearchAll(WORD, WORD, HWND, BOOL&);
+
+	// Search All (see SearchDlg.h)
+	SearchIndex const& GetSearchIndex() override;
+	bool GoToSearchItem(SearchItem const& item) override;
+	void BuildSearchIndex();
+	static int SearchItemImage(SearchItem const& item);
+	// the strings of the data; 'keep' (if any) says which can be shown
+	void AddStringsToSearchIndex(std::span<const std::byte> data, std::function<bool(uint32_t offset)> const& keep = {});
+	// the file, or what is known about it, changed: the index is built again when it is needed
+	void SearchTargetChanged();
+	// the tree item of a type (null if there is none)
+	HTREEITEM FindTreeItem(TreeItemType type) const;
 	LRESULT OnNavBack(WORD, WORD, HWND, BOOL&);
 	LRESULT OnNavForward(WORD, WORD, HWND, BOOL&);
 	LRESULT OnSymbolsLoaded(UINT, WPARAM, LPARAM, BOOL&);
@@ -287,6 +303,9 @@ private:
 	int m_HistoryIndex{ -1 };
 	bool m_Navigating{ false };
 	GoToOptions m_GoTo;
+	CSearchDlg m_SearchDlg{ this };
+	SearchIndex m_SearchIndex;
+	bool m_SearchIndexValid{ false };
 	bool NavigateHistory(int delta);
 	void UpdateNavigationUI();
 	void ResetNavigation();

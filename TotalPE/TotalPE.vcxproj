@@ -445,6 +445,9 @@
     <ClCompile Include="SaveData.cpp" />
     <ClCompile Include="CoffObject.cpp" />
     <ClCompile Include="CodeViewInfo.cpp" />
+    <ClCompile Include="SearchIndex.cpp" />
+    <ClCompile Include="SearchDlg.cpp" />
+    <ClCompile Include="MainFrmSearch.cpp" />
     <ClCompile Include="DebugInfoView.cpp" />
     <ClCompile Include="ElfFile.cpp" />
     <ClCompile Include="ElfView.cpp" />
@@ -538,6 +541,8 @@
     <ClInclude Include="SaveData.h" />
     <ClInclude Include="CoffObject.h" />
     <ClInclude Include="CodeViewInfo.h" />
+    <ClInclude Include="SearchIndex.h" />
+    <ClInclude Include="SearchDlg.h" />
     <ClInclude Include="DebugInfoView.h" />
     <ClInclude Include="ElfFile.h" />
     <ClInclude Include="ElfView.h" />

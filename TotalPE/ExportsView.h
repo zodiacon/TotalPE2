@@ -19,6 +19,7 @@ public:
 	bool OnRightClickList(HWND, int row, int col, POINT const& pt) const;
 
 	void UpdateUI(bool first = false) const;
+	bool SelectItem(std::wstring_view name, std::wstring_view) override;
 
 	BEGIN_MSG_MAP(CExportsView)
 		MESSAGE_HANDLER(CFindReplaceDialog::GetFindReplaceMsg(), OnFind)

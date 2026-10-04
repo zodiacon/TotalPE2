@@ -24,6 +24,8 @@ const int WindowMenuPosition = 5;
 BOOL CMainFrame::PreTranslateMessage(MSG* pMsg) {
 	if (m_pFindDlg && m_pFindDlg->IsDialogMessageW(pMsg))
 		return TRUE;
+	if (m_SearchDlg.IsWindow() && m_SearchDlg.IsDialogMessageW(pMsg))
+		return TRUE;
 
 	if (CFrameWindowImpl<CMainFrame>::PreTranslateMessage(pMsg))
 		return TRUE;
@@ -87,6 +89,7 @@ void CMainFrame::UpdateUI() {
 	UIEnable(ID_FILE_OPENINANEWWINDOW, fi != nullptr || m_Archive || m_Object || m_Elf);
 	UIEnable(ID_EDIT_COPY, FALSE);
 	UIEnable(ID_EDIT_FIND, (fi || m_Archive || m_Object || m_Elf) && m_Tabs.GetActivePage() >= 0);
+	UIEnable(ID_EDIT_SEARCHALL, fi || m_Archive || m_Object || m_Elf);
 	UIEnable(ID_PE_ENTIREFILEINHEX, fi != nullptr);
 }
 
@@ -267,21 +270,9 @@ bool CMainFrame::ShowView(TreeItemType data, HTREEITEM hItem, UINT icon) {
 			}
 			if (!hItem)
 				hItem = view->GetHTreeItem();
-			if (!hItem) {
-				// opened from a menu: the view belongs to the tree item of its type, which the views created under it need as their parent
-				for (auto h = m_Tree.GetRootItem(); h && !hItem;) {
-					if (m_Tree.GetItemData(h) == (DWORD_PTR)data)
-						hItem = h;
-					else if (auto child = m_Tree.GetChildItem(h))
-						h = child;
-					else {
-						while (h && !m_Tree.GetNextSiblingItem(h))
-							h = m_Tree.GetParentItem(h);
-						if (h)
-							h = m_Tree.GetNextSiblingItem(h);
-					}
-				}
-			}
+			// opened from a menu: the view belongs to the tree item of its type, which the views created under it need as their parent
+			if (!hItem)
+				hItem = FindTreeItem(data);
 			view->SetHTreeItem(hItem);
 			m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, map);
 			m_Views.insert({ data, view });
@@ -290,6 +281,22 @@ bool CMainFrame::ShowView(TreeItemType data, HTREEITEM hItem, UINT icon) {
 		}
 	}
 	return false;
+}
+
+HTREEITEM CMainFrame::FindTreeItem(TreeItemType type) const {
+	for (auto h = m_Tree.GetRootItem(); h;) {
+		if (m_Tree.GetItemData(h) == (DWORD_PTR)type)
+			return h;
+		if (auto child = m_Tree.GetChildItem(h))
+			h = child;
+		else {
+			while (h && !m_Tree.GetNextSiblingItem(h))
+				h = m_Tree.GetParentItem(h);
+			if (h)
+				h = m_Tree.GetNextSiblingItem(h);
+		}
+	}
+	return nullptr;
 }
 
 LRESULT CMainFrame::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& bHandled) {
@@ -590,6 +597,7 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 
 	ShowView(m_hRoot);
 	UpdateUI();
+	SearchTargetChanged();
 
 	return true;
 }
@@ -621,6 +629,7 @@ bool CMainFrame::OpenArchive(PCWSTR path) {
 
 	ShowView(m_hRoot);
 	UpdateUI();
+	SearchTargetChanged();
 	return true;
 }
 
@@ -701,6 +710,7 @@ bool CMainFrame::OpenObject(PCWSTR path) {
 
 	ShowView(m_hRoot);
 	UpdateUI();
+	SearchTargetChanged();
 	return true;
 }
 
@@ -824,6 +834,7 @@ bool CMainFrame::OpenElf(PCWSTR path) {
 
 	ShowView(m_hRoot);
 	UpdateUI();
+	SearchTargetChanged();
 	return true;
 }
 
@@ -1164,6 +1175,7 @@ LRESULT CMainFrame::OnFileClose(WORD, WORD, HWND, BOOL&) {
 	ResetNavigation();
 	m_Tree.DeleteAllItems();
 	UpdateUI();
+	SearchTargetChanged();
 	CString ftitle;
 	ftitle.LoadString(IDR_MAINFRAME);
 	if (SecurityHelper::IsRunningElevated())
@@ -1711,6 +1723,7 @@ LRESULT CMainFrame::OnSymbolsLoaded(UINT, WPARAM generation, LPARAM lParam, BOOL
 	m_Symbols.LoadAddress(m_PE.GetImageBase());
 	SetStatusText(0, L"Symbols loaded");
 	RefreshViews();
+	SearchTargetChanged();
 	return 0;
 }
 

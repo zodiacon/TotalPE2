@@ -249,6 +249,15 @@
     <ClCompile Include="CodeViewInfo.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="SearchIndex.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SearchDlg.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MainFrmSearch.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="DebugInfoView.cpp">
       <Filter>Views</Filter>
     </ClCompile>
@@ -513,6 +522,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="CodeViewInfo.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SearchIndex.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SearchDlg.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="DebugInfoView.h">

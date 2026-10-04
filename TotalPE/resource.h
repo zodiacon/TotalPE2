@@ -77,6 +77,7 @@
 #define IDI_ICON3                       272
 #define IDI_BOOKMARK                    272
 #define IDD_GOTO                        273
+#define IDD_SEARCH                      277
 #define IDD_VTKEY                       274
 #define IDI_ICON5                       276
 #define IDI_FLOW                        276
@@ -105,6 +106,16 @@
 #define IDC_GOTO_DISASM                 1022
 #define IDC_VT_KEY                      1023
 #define IDC_VT_GETKEY                   1024
+#define IDC_SEARCH_TEXT                 1025
+#define IDC_SEARCH_IMPORTS              1026
+#define IDC_SEARCH_EXPORTS              1027
+#define IDC_SEARCH_STRINGS              1028
+#define IDC_SEARCH_RESOURCES            1029
+#define IDC_SEARCH_SYMBOLS              1030
+#define IDC_SEARCH_SECTIONS             1031
+#define IDC_SEARCH_MATCHCASE            1032
+#define IDC_SEARCH_RESULTS              1033
+#define IDC_SEARCH_STATUS               1034
 #define ID_WINDOW_CLOSE                 32772
 #define ID_WINDOW_CLOSE_ALL             32773
 #define ID_FILE_RUNASADMINISTRATOR      32775
@@ -184,14 +195,15 @@
 #define ID_STRINGS_MINLENGTH_LAST       32857
 #define ID_DATA_SAVE                    32858
 #define ID_FILE_EXPORTLIST              32859
+#define ID_EDIT_SEARCHALL               32860
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        277
-#define _APS_NEXT_COMMAND_VALUE         32860
-#define _APS_NEXT_CONTROL_VALUE         1025
+#define _APS_NEXT_RESOURCE_VALUE        278
+#define _APS_NEXT_COMMAND_VALUE         32861
+#define _APS_NEXT_CONTROL_VALUE         1035
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

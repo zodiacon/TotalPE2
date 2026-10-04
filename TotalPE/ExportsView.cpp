@@ -113,6 +113,18 @@ CString CExportsView::GetTitle() const {
 	return L"Exports";
 }
 
+bool CExportsView::SelectItem(std::wstring_view name, std::wstring_view) {
+	auto it = std::ranges::find_if(m_Exports, [&](auto const& e) {
+		return name.starts_with(L'#') ? name == std::format(L"#{}", e.Ordinal) : e.Name == name;
+	});
+	if (it == m_Exports.end())
+		return false;
+	m_List.SetItemState(-1, 0, LVIS_SELECTED);
+	m_List.SelectItem((int)(it - m_Exports.begin()));
+	m_List.SetFocus();
+	return true;
+}
+
 void CExportsView::BuildItems() {
 	if (m_PE.GetExport()) {
 		m_Exports.reserve(m_PE.GetExport()->Funcs.size());
