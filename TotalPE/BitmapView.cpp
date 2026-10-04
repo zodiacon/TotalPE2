@@ -2,6 +2,8 @@
 #include <wincodec.h>
 #include "BitmapView.h"
 
+#pragma comment(lib, "msimg32")
+
 CBitmapView::CBitmapView(IMainFrame* frame, PCWSTR title) : CViewBase(frame), m_Title(title) {
 }
 
@@ -9,59 +11,70 @@ CString CBitmapView::GetTitle() const {
     return m_Title;
 }
 
+// a bitmap resource: a DIB without its file header; anything else WIC can decode is accepted as well
 bool CBitmapView::SetData(std::span<const std::byte> data) {
+    if (data.size() >= sizeof(BITMAPINFOHEADER)) {
+        auto header = (const BITMAPINFOHEADER*)data.data();
+        if (header->biSize >= sizeof(BITMAPINFOHEADER) && header->biSize < data.size()) {
+            CClientDC dc(m_hWnd);
+            m_bmp.Attach(::CreateDIBitmap(dc.m_hDC, header, CBM_INIT, data.data() + header->biSize,
+                (const BITMAPINFO*)header, header->biBitCount * header->biPlanes > 8 ? DIB_RGB_COLORS : DIB_PAL_COLORS));
+            if (m_bmp) {
+                m_Width = header->biWidth;
+                m_Height = std::abs(header->biHeight);
+                m_Alpha = false;
+                SetScrollSize(m_Width, m_Height);
+                Frame()->SetStatusText(2, std::format(L"{} x {}", m_Width, m_Height).c_str());
+                Invalidate();
+                return true;
+            }
+        }
+    }
+    return SetImage(data);
+}
+
+// PNG, JPEG, GIF, BMP files... (the first frame), with their transparency
+bool CBitmapView::SetImage(std::span<const std::byte> data) {
     CComPtr<IWICImagingFactory> spFactory;
     if (FAILED(spFactory.CoCreateInstance(CLSID_WICImagingFactory2)))
         return false;
 
-    auto header = (const BITMAPINFOHEADER*)data.data();
-    CClientDC dc(m_hWnd);
-    m_bmp.Attach(::CreateDIBitmap(dc.m_hDC, header, CBM_INIT,
-        data.data() + (/*header->biSizeImage && header->biBitCount * header->biPlanes > 8 ? (data.size() - header->biSizeImage) :*/ header->biSize),
-        (const BITMAPINFO*)header, header->biBitCount * header->biPlanes > 8 ? DIB_RGB_COLORS : DIB_PAL_COLORS));
-    if (m_bmp) {
-        SetScrollSize(m_Width = header->biWidth, m_Height = header->biHeight);
-    }
-    else {
-        CComPtr<IStream> spStm;
-        auto hr = ::CreateStreamOnHGlobal(nullptr, TRUE, &spStm);
-        spStm->Write(data.data(), (ULONG)data.size(), nullptr);
-        LARGE_INTEGER pos{ 0 };
-        spStm->Seek(pos, STREAM_SEEK_SET, nullptr);
-        CComPtr<IWICBitmapDecoder> spDecoder;
-        hr = spFactory->CreateDecoderFromStream(spStm, nullptr, WICDecodeMetadataCacheOnLoad, &spDecoder);
-        if (FAILED(hr))
-            return false;
+    CComPtr<IWICStream> spStm;
+    if (FAILED(spFactory->CreateStream(&spStm)) || FAILED(spStm->InitializeFromMemory((BYTE*)data.data(), (DWORD)data.size())))
+        return false;
+    CComPtr<IWICBitmapDecoder> spDecoder;
+    if (FAILED(spFactory->CreateDecoderFromStream(spStm, nullptr, WICDecodeMetadataCacheOnLoad, &spDecoder)))
+        return false;
 
-        CComPtr<IWICBitmapFrameDecode> spFrame;
-        if (FAILED(spDecoder->GetFrame(0, &spFrame)))
-            return false;
+    CComPtr<IWICBitmapFrameDecode> spFrame;
+    if (FAILED(spDecoder->GetFrame(0, &spFrame)))
+        return false;
 
-        CComQIPtr<IWICBitmapSource> spSrc(spFrame);
-        CComPtr<IWICFormatConverter> spConverter;
-        spFactory->CreateFormatConverter(&spConverter);
-        hr = spConverter->Initialize(spSrc, GUID_WICPixelFormat32bppBGR, WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeCustom);
-        if (FAILED(hr))
-            return false;
+    // premultiplied alpha, as AlphaBlend wants it
+    CComPtr<IWICFormatConverter> spConverter;
+    spFactory->CreateFormatConverter(&spConverter);
+    if (FAILED(spConverter->Initialize(spFrame, GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeCustom)))
+        return false;
 
-        CComQIPtr<IWICBitmapSource> spBitmap(spConverter);
-        ATLASSERT(spBitmap);
-        spFrame->GetSize(&m_Width, &m_Height);
-        SetScrollSize(m_Width, m_Height);
+    UINT width, height;
+    spFrame->GetSize(&width, &height);
+    BITMAPINFO bminfo = { sizeof(bminfo) };
+    bminfo.bmiHeader.biWidth = width;
+    bminfo.bmiHeader.biHeight = -(LONG)height;
+    bminfo.bmiHeader.biPlanes = 1;
+    bminfo.bmiHeader.biBitCount = 32;
+    bminfo.bmiHeader.biCompression = BI_RGB;
+    void* bits;
+    CBitmap bmp(::CreateDIBSection(nullptr, &bminfo, DIB_RGB_COLORS, &bits, nullptr, 0));
+    if (!bmp || FAILED(spConverter->CopyPixels(nullptr, width * sizeof(DWORD), width * height * sizeof(DWORD), (BYTE*)bits)))
+        return false;
 
-        BITMAPINFO bminfo = { sizeof(bminfo) };
-        bminfo.bmiHeader.biWidth = m_Width;
-        bminfo.bmiHeader.biHeight = -(LONG)m_Height;
-        bminfo.bmiHeader.biPlanes = 1;
-        bminfo.bmiHeader.biBitCount = 32;
-        bminfo.bmiHeader.biCompression = BI_RGB;
-        CDC dc(::GetDC(nullptr));
-        void* bits;
-        m_bmp.Attach(::CreateDIBSection(dc.m_hDC, &bminfo, DIB_RGB_COLORS, &bits, nullptr, 0));
-        spBitmap->CopyPixels(nullptr, m_Width * sizeof(DWORD), m_Width * m_Height * sizeof(DWORD), (BYTE*)bits);
-    }
+    m_bmp.Attach(bmp.Detach());
+    m_Width = width;
+    m_Height = height;
+    m_Alpha = true;
+    SetScrollSize(m_Width, m_Height);
     Frame()->SetStatusText(2, std::format(L"{} x {}", m_Width, m_Height).c_str());
-
     Invalidate();
     return true;
 }
@@ -71,11 +84,15 @@ void CBitmapView::DoPaint(CDCHandle dc) {
         CDC dcMem;
         dcMem.CreateCompatibleDC(dc);
         dcMem.SelectBitmap(m_bmp);
-        dc.BitBlt(0, 0, m_Width, m_Height, dcMem, 0, 0, SRCCOPY);
+        if (m_Alpha) {
+            BLENDFUNCTION blend{ AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
+            dc.AlphaBlend(0, 0, m_Width, m_Height, dcMem, 0, 0, m_Width, m_Height, blend);
+        }
+        else
+            dc.BitBlt(0, 0, m_Width, m_Height, dcMem, 0, 0, SRCCOPY);
     }
 }
 
 LRESULT CBitmapView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
     return DefWindowProc();
 }
-

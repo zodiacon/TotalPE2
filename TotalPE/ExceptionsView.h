@@ -2,9 +2,13 @@
 
 #include "ViewBase.h"
 #include <VirtualListView.h>
+#include <CustomSplitterWindow.h>
 #include "PEFile.h"
+#include "UnwindInfo.h"
 #include "resource.h"
 
+// The functions of the exception directory (x64), with their unwind information. The lower list shows how the unwinder
+// undoes the prolog of the selected function, and its exception handler. Double-click to see the code.
 class CExceptionsView :
 	public CViewBase<CExceptionsView>,
 	public CVirtualListView<CExceptionsView> {
@@ -13,8 +17,9 @@ public:
 
 	CString GetColumnText(HWND, int row, int col) const;
 	void DoSort(SortInfo const* si);
-	void OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD newState) const;
-	//int GetRowImage(HWND, int row, int) const;
+	bool IsSortable(HWND h, int col) const;
+	void OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD newState);
+	bool OnDoubleClickList(HWND, int row, int col, CPoint const& pt) const;
 
 	void UpdateUI(bool first = false) const;
 
@@ -34,22 +39,28 @@ private:
 	struct Exception : PEException {
 		std::wstring FuncName;
 		std::wstring UndecoratedName;
-		long Disp;
+		long Disp{ 0 };
+		UnwindInfo Unwind;
+		std::wstring HandlerName;
+	};
+
+	// a row of the lower list: an unwind code, or the handler or chained function
+	struct Detail {
+		std::wstring Offset, Operation, Details;
+		uint32_t Rva{ 0 };	// where a double-click goes
 	};
 
 	void BuildItems();
-
-	// Handler prototypes (uncomment arguments if needed):
-	//	LRESULT MessageHandler(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)
-	//	LRESULT CommandHandler(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
-	//	LRESULT NotifyHandler(int /*idCtrl*/, LPNMHDR /*pnmh*/, BOOL& /*bHandled*/)
+	void BuildDetails();
 
 	LRESULT OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnCopy(WORD, WORD, HWND, BOOL&) const;
 	LRESULT OnFind(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 
-	CListViewCtrl m_List;
+	CCustomHorSplitterWindow m_Splitter;
+	CListViewCtrl m_List, m_Details;
 	std::vector<Exception> m_Items;
+	std::vector<Detail> m_DetailItems;
 	PEFile const& m_PE;
+	bool m_IsX64{ false };
 };
-

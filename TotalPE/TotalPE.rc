@@ -269,6 +269,7 @@ BEGIN
         MENUITEM "&Open...\tCtrl+O",            ID_FILE_OPEN
         MENUITEM "Open in a &New Window...",    32781
         MENUITEM "&Save...\tCtrl+S",            ID_FILE_SAVE
+        MENUITEM "Export &List...\tCtrl+Shift+S", ID_FILE_EXPORTLIST
         MENUITEM "&Close",                      ID_FILE_CLOSE
         MENUITEM SEPARATOR
         POPUP "&Recent Files"
@@ -307,6 +308,7 @@ BEGIN
         MENUITEM "&Manifest",                   ID_VIEW_MANIFEST
         MENUITEM "&Version",                    ID_VIEW_VERSION
         MENUITEM "&Overlay",                    ID_VIEW_OVERLAY
+        MENUITEM "S&trings",                    ID_PE_STRINGS
         MENUITEM "&Debug",                      ID_VIEW_DEBUG
         MENUITEM "Security",                    ID_PE_SECURITY
         MENUITEM SEPARATOR
@@ -404,6 +406,19 @@ BEGIN
     POPUP "flowgraph"
     BEGIN
         MENUITEM "&Export as Image (SVG)...",   ID_ICON_EXPORT
+    END
+    POPUP "strings"
+    BEGIN
+        MENUITEM "Show in &Hex",                ID_STRINGS_HEX
+        MENUITEM "Cross-&References to the String...", ID_STRINGS_XREFS
+        MENUITEM SEPARATOR
+        MENUITEM "&Copy\tCtrl+C",               ID_EDIT_COPY
+    END
+    POPUP "data"
+    BEGIN
+        MENUITEM "&Save Data...",               ID_DATA_SAVE
+        MENUITEM SEPARATOR
+        MENUITEM "&Copy\tCtrl+C",               ID_EDIT_COPY
     END
 END
 
@@ -538,6 +553,7 @@ BEGIN
     "O",            ID_FILE_OPEN,           VIRTKEY, CONTROL, NOINVERT
     "P",            ID_FILE_PRINT,          VIRTKEY, CONTROL, NOINVERT
     "S",            ID_FILE_SAVE,           VIRTKEY, CONTROL, NOINVERT
+    "S",            ID_FILE_EXPORTLIST,     VIRTKEY, SHIFT, CONTROL, NOINVERT
     VK_F6,          ID_NEXT_PANE,           VIRTKEY, NOINVERT
     VK_F6,          ID_PREV_PANE,           VIRTKEY, SHIFT, NOINVERT
     "F",            ID_EDIT_FIND,           VIRTKEY, CONTROL, NOINVERT
@@ -578,7 +594,7 @@ BEGIN
             VALUE "FileDescription", "Total PE - PE Viewer"
             VALUE "FileVersion", "0.9.0.0"
             VALUE "InternalName", "TotalPE"
-            VALUE "LegalCopyright", "ï¿½022-2026 Pavel Yosifovich"
+            VALUE "LegalCopyright", "©2022-2026 Pavel Yosifovich"
             VALUE "OriginalFilename", "TotalPE.exe"
             VALUE "ProductName", "Total PE"
             VALUE "ProductVersion", "0.9.0.0"
@@ -627,7 +643,7 @@ BEGIN
     ID_FILE_NEW             "Create a new windowt\nNew Window"
     ID_FILE_OPEN            "Open an existing document\nOpen"
     ID_FILE_CLOSE           "Close the active document\nClose"
-    ID_FILE_SAVE            "Save the active document\nSave"
+    ID_FILE_SAVE            "Save the contents of the active view: a list as CSV or text, text, the bytes of a hex view, a flow graph as SVG\nSave"
     ID_FILE_SAVE_AS         "Save the active document with a new name\nSave As"
     ID_FILE_PAGE_SETUP      "Change the printing options\nPage Setup"
     ID_FILE_PRINT_SETUP     "Change the printer and printing options\nPrint Setup"
@@ -728,6 +744,9 @@ END
 STRINGTABLE
 BEGIN
     ID_VIEW_OVERLAY         "\nOverlay"
+    ID_PE_STRINGS           "The ASCII and UTF-16 strings of the file\nStrings"
+    ID_DATA_SAVE            "Save the data to a file\nSave Data"
+    ID_FILE_EXPORTLIST      "Save the list of the active view as CSV or text\nExport List"
     ID_PE_VIRUSTOTAL        "\nScan the file with VirusTotal"
     ID_PE_VTAPIKEY          "\nSet the VirusTotal API key"
 END

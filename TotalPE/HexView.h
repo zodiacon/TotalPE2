@@ -17,6 +17,9 @@ public:
 	CString GetTitle() const override {
 		return m_Title;
 	}
+	bool CanSave() const override {
+		return true;
+	}
 
 	void UpdateUI(bool first = false) const;
 
@@ -64,6 +67,7 @@ public:
 	ALT_MSG_MAP(1)
 		COMMAND_RANGE_HANDLER(ID_BYTESPERLINE_8, ID_BYTESPERLINE_64, OnChangeBytesPerLine)
 		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnCopy)
+		COMMAND_ID_HANDLER(ID_FILE_SAVE, OnSave)
 		COMMAND_RANGE_HANDLER(ID_HEX_COPYAS_HEX, ID_HEX_COPYAS_BASE64, OnCopyAs)
 		COMMAND_ID_HANDLER(ID_HEX_BOOKMARK_TOGGLE, OnBookmarkToggle)
 		COMMAND_ID_HANDLER(ID_HEX_BOOKMARK_NEXT, OnBookmarkNext)

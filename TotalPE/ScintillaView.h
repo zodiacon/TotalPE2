@@ -14,6 +14,8 @@ class PEFile;
 enum class LexLanguage {
 	Xml,
 	Asm,
+	Html,
+	Text,
 };
 
 class CScintillaView :
@@ -97,7 +99,7 @@ private:
 
 	CString m_Title;
 	CScintillaCtrl m_Sci;
-	LexLanguage m_Language;
+	LexLanguage m_Language{ LexLanguage::Text };
 	PEFile const& m_PE;
 	bool m_Is32Bit{ false };
 	std::vector<Line> m_Lines;						// by line of the text: what each line of the disassembly is

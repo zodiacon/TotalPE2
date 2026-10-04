@@ -16,6 +16,7 @@ public:
 	int GetRowImage(HWND, int row, int) const;
 	void DoSort(SortInfo const* si);
 	void OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD newState);
+	bool OnRightClickList(HWND, int row, int col, POINT const& pt) const;
 
 	void UpdateUI(bool first = false);
 
@@ -26,6 +27,7 @@ public:
 		CHAIN_MSG_MAP(CViewBase<CResourcesView>)
 	ALT_MSG_MAP(1)
 		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnCopy)
+		COMMAND_ID_HANDLER(ID_DATA_SAVE, OnSaveData)
 		CHAIN_MSG_MAP_ALT(CViewBase<CResourcesView>, 1)
 	END_MSG_MAP()
 
@@ -45,6 +47,7 @@ private:
 
 	LRESULT OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnCopy(WORD, WORD, HWND, BOOL&) const;
+	LRESULT OnSaveData(WORD, WORD, HWND, BOOL&) const;
 	LRESULT OnFind(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 
 	CListViewCtrl m_List;

@@ -35,6 +35,7 @@ private:
 	CString GetTitle() const override;
 
 	void BuildItems();
+	void ComputeHashes();
 	void AppendVirusTotal();
 
 	// Handler prototypes (uncomment arguments if needed):
@@ -56,4 +57,7 @@ private:
 	std::vector<DataItem> m_Items;
 	vt::Status m_Vt;
 	PEFile const& m_PE;
+	// of the whole file: computed once, as the items are rebuilt when the VirusTotal scan progresses
+	std::wstring m_Md5, m_Sha1, m_Sha256;
+	uint32_t m_FileChecksum{ 0 };
 };

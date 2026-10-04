@@ -356,6 +356,7 @@ void CScintillaView::SetLanguage(LexLanguage lang) {
 		}
 
 		case LexLanguage::Xml:
+		case LexLanguage::Html:	// the XML lexer colors the tags and attributes of HTML as well
 			m_Sci.SetLexer(lmXML.Create());
 			break;
 	}
@@ -381,6 +382,7 @@ void CScintillaView::UpdateColors() {
 			break;
 
 		case LexLanguage::Xml:
+		case LexLanguage::Html:
 			m_Sci.StyleSetFore(SCE_H_TAG, dark ? RGB(0, 128, 255) : RGB(0, 0, 240));
 			m_Sci.StyleSetFore(SCE_H_ATTRIBUTE, dark ? RGB(240, 128, 128) : RGB(128, 0, 0));
 			break;
@@ -424,7 +426,7 @@ LRESULT CScintillaView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
 	UpdateUI();
 	CMenu menu;
 	menu.LoadMenuW(IDR_CONTEXT);
-	auto result = Frame()->ShowContextMenu(menu.GetSubMenu(m_Language == LexLanguage::Xml ? 0 : 6), 0,
+	auto result = Frame()->ShowContextMenu(menu.GetSubMenu(m_Language == LexLanguage::Asm ? 6 : 0), 0,
 		x, y);
 	return result;
 }

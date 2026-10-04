@@ -135,6 +135,13 @@
     <ClCompile Include="FlowGraphTests.cpp" />
     <ClCompile Include="AuthenticodeTests.cpp" />
     <ClCompile Include="OverlayTests.cpp" />
+    <ClCompile Include="..\TotalPE\FileStrings.cpp" />
+    <ClCompile Include="FileStringsTests.cpp" />
+    <ClCompile Include="..\TotalPE\UnwindInfo.cpp" />
+    <ClCompile Include="UnwindInfoTests.cpp" />
+    <ClCompile Include="..\TotalPE\ResourceContent.cpp" />
+    <ClCompile Include="..\TotalPE\TypeLibText.cpp" />
+    <ClCompile Include="ResourceContentTests.cpp" />
     <ClCompile Include="VersionInfoTests.cpp" />
     <ClCompile Include="VirusTotalTests.cpp" />
   </ItemGroup>

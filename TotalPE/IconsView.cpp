@@ -3,6 +3,8 @@
 #include "IconsView.h"
 #include "IconWriter.h"
 #include <WTLHelper.h>
+#include "ResourceContent.h"
+#include "SaveData.h"
 
 void CIconsView::SetGroupIconData(std::span<const std::byte> data) {
 #pragma pack(push, 1)
@@ -58,9 +60,25 @@ CIconsView::CIconsView(IMainFrame* frame, PCWSTR title) : CViewBase(frame), m_Ti
 }
 
 void CIconsView::SetIconData(std::span<const std::byte> data, bool icon) {
-	m_IconSize = *(int*)(data.data() + sizeof(DWORD));
+	// a cursor starts with its hot spot; then a BITMAPINFOHEADER (the width follows its size), or a PNG image (the width is in its header)
+	size_t image = icon ? 0 : 4;
+	auto bytes = (const uint8_t*)data.data();
+	if (data.size() >= image + 24 && memcmp(bytes + image, "\x89PNG", 4) == 0)
+		m_IconSize = (bytes[image + 16] << 24) | (bytes[image + 17] << 16) | (bytes[image + 18] << 8) | bytes[image + 19];
+	else if (data.size() >= image + 8)
+		m_IconSize = *(int const*)(bytes + image + 4);
+	if (m_IconSize <= 0 || m_IconSize > 1024)
+		m_IconSize = 32;
+	m_IconData.assign(data.begin(), data.end());
+	m_IsIcon = icon;
 	m_Icon = ::CreateIconFromResourceEx((PBYTE)data.data(), (DWORD)data.size(), icon, 0x30000, m_IconSize, m_IconSize, LR_DEFAULTCOLOR);
-	SetScrollSize(500, 300);
+	m_IconRect = CRect(10, 50, 10 + m_IconSize, 50 + m_IconSize);
+	SetScrollSize(std::max<int>(500, m_IconRect.right + 10), std::max<int>(300, m_IconRect.bottom + 10));
+}
+
+// the state of Export is shared by the views (the hex view and the flow graph use the command too): it is set here for the icons
+void CIconsView::UpdateUI(bool) const {
+	Frame()->GetUI().UIEnable(ID_ICON_EXPORT, !m_Icons.empty() || m_Icon);
 }
 
 LRESULT CIconsView::OnCreate(UINT, WPARAM, LPARAM, BOOL& handled) {
@@ -74,12 +92,22 @@ LRESULT CIconsView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
 	CPoint offset;
 	GetScrollOffset(offset);
 	pt += offset;
+	if (m_Icon) {
+		if (m_IconRect.PtInRect(pt)) {
+			CMenu menu;
+			menu.LoadMenu(IDR_CONTEXT);
+			Frame()->GetUI().UIEnable(ID_ICON_EXPORT, TRUE);
+			Frame()->ShowContextMenu(menu.GetSubMenu(2), 0, pt2.x, pt2.y);
+		}
+		return 0;
+	}
 	int i = 0;
 	for (auto const& icon : m_Icons) {
 		if (icon.Rect.PtInRect(pt)) {
 			CMenu menu;
 			menu.LoadMenu(IDR_CONTEXT);
 			m_SelectedIcon = i;
+			Frame()->GetUI().UIEnable(ID_ICON_EXPORT, TRUE);
 			Frame()->ShowContextMenu(menu.GetSubMenu(2), 0, pt2.x, pt2.y);
 			break;
 		}
@@ -102,7 +130,17 @@ LRESULT CIconsView::OnEraseBkgnd(UINT, WPARAM wp, LPARAM, BOOL&) {
 }
 
 LRESULT CIconsView::OnExportIcon(WORD, WORD, HWND, BOOL&) {
-	ATLASSERT(m_SelectedIcon >= 0);
+	if (m_Icon) {
+		// the resource as an .ico or .cur file, as it is (the colors, the PNG data, the hot spot of a cursor)
+		auto file = MakeResourceFile(m_IconData, m_IsIcon ? 3 : 1, L"");
+		auto path = AskSaveFile(m_hWnd, m_IsIcon ? L"Export Icon" : L"Export Cursor", file.Extension.c_str(), nullptr,
+			m_IsIcon ? L"Icon Files (*.ico)\0*.ico\0All Files\0*.*\0" : L"Cursor Files (*.cur)\0*.cur\0All Files\0*.*\0");
+		if (!path.IsEmpty() && !WriteFileData(path, file.Data.data(), file.Data.size()))
+			AtlMessageBox(m_hWnd, m_IsIcon ? L"Failed to save icon" : L"Failed to save cursor", IDR_MAINFRAME, MB_ICONERROR);
+		return 0;
+	}
+	if (m_SelectedIcon < 0 || m_SelectedIcon >= (int)m_Icons.size())
+		return 0;
 	CSimpleFileDialog dlg(FALSE, L"ico", nullptr, OFN_EXPLORER | OFN_ENABLESIZING | OFN_OVERWRITEPROMPT,
 		L"Icon Files (*.ico)\0*.ico\0All Files\0*.*\0", m_hWnd);
 	WTLHelper::SuspendHook();

@@ -1,9 +1,11 @@
 #include "pch.h"
 #include "SectionsView.h"
 #include "PEStrings.h"
+#include "PEAnomalies.h"
 #include <SortHelper.h>
 #include <ClipboardHelper.h>
 #include <ListViewhelper.h>
+#include "SaveData.h"
 #include "resource.h"
 
 CString CSectionsView::GetTitle() const {
@@ -25,6 +27,11 @@ CString CSectionsView::GetColumnText(HWND h, int row, int col) const {
 			PEStrings::SectionCharacteristicsToString(section.SecHdr.Characteristics)).c_str();
 		case ColumnType::LineNumbers: return std::format(L"{}", section.SecHdr.NumberOfLinenumbers).c_str();
 		case ColumnType::Relocations: return std::format(L"{}", section.SecHdr.NumberOfRelocations).c_str();
+		case ColumnType::Entropy:
+			if (section.Entropy < 0)
+				return L"";
+			// above 7 or so the data is compressed or encrypted: a packed file, perhaps
+			return std::format(L"{:.2f}{}", section.Entropy, section.Entropy >= 7.2 ? L" (Compressed?)" : L"").c_str();
 	}
 	return CString();
 }
@@ -43,6 +50,7 @@ void CSectionsView::DoSort(SortInfo const* si) {
 			case ColumnType::RawData: return SortHelper::Sort(s1.SecHdr.PointerToRawData, s2.SecHdr.PointerToRawData, asc);
 			case ColumnType::RawSize: return SortHelper::Sort(s1.SecHdr.SizeOfRawData, s2.SecHdr.SizeOfRawData, asc);
 			case ColumnType::Characteristics: return SortHelper::Sort(s1.SecHdr.Characteristics, s2.SecHdr.Characteristics, asc);
+			case ColumnType::Entropy: return SortHelper::Sort(s1.Entropy, s2.Entropy, asc);
 		}
 		return false;
 	};
@@ -65,7 +73,17 @@ void CSectionsView::OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD
 }
 
 void CSectionsView::BuildItems() {
-	m_Sections = *m_PE.GetSecHeaders();
+	m_Sections.clear();
+	auto fileSize = m_PE.GetFileSize();
+	for (auto const& header : *m_PE.GetSecHeaders()) {
+		Section sec{ header };
+		auto const& hdr = header.SecHdr;
+		if (hdr.SizeOfRawData && hdr.PointerToRawData < fileSize) {
+			auto size = std::min<uint32_t>(hdr.SizeOfRawData, fileSize - hdr.PointerToRawData);
+			sec.Entropy = ComputeEntropy(m_PE.GetData() + hdr.PointerToRawData, size);
+		}
+		m_Sections.push_back(std::move(sec));
+	}
 	m_List.SetItemCount((int)m_Sections.size());
 }
 
@@ -73,6 +91,13 @@ void CSectionsView::UpdateUI(bool first) {
 	auto& ui = Frame()->GetUI();
 	auto pane = m_Splitter.GetActivePane();
 	ui.UIEnable(ID_EDIT_COPY, (pane == 0 && m_List.GetSelectedCount() > 0) || (pane == 1 && m_HexView.Hex().HasSelection()));
+	ui.UIEnable(ID_DATA_SAVE, m_List.GetSelectedCount() == 1);
+}
+
+LRESULT CSectionsView::OnSaveData(WORD, WORD, HWND, BOOL&) const {
+	if (m_List.GetSelectedCount() == 1)
+		SaveSectionData(m_hWnd, m_PE, m_Sections[m_List.GetNextItem(-1, LVNI_SELECTED)]);
+	return 0;
 }
 
 LRESULT CSectionsView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
@@ -86,6 +111,7 @@ LRESULT CSectionsView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	cm->AddColumn(L"Size", LVCFMT_RIGHT, 110, ColumnType::Size);
 	cm->AddColumn(L"Ptr to Raw Data", LVCFMT_RIGHT, 110, ColumnType::RawData);
 	cm->AddColumn(L"Size of Raw Data", LVCFMT_RIGHT, 130, ColumnType::RawSize);
+	cm->AddColumn(L"Entropy", LVCFMT_RIGHT, 120, ColumnType::Entropy);
 	//cm->AddColumn(L"Relocations", LVCFMT_RIGHT, 60, ColumnType::Relocations);
 	//cm->AddColumn(L"Ptr to Reloc", LVCFMT_RIGHT, 60, ColumnType::PointerToReloc);
 	//cm->AddColumn(L"Line Numbers", LVCFMT_RIGHT, 60, ColumnType::LineNumbers);
@@ -106,6 +132,14 @@ LRESULT CSectionsView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	m_Splitter.SetSplitterPosPct(50);
 
 	return 0;
+}
+
+bool CSectionsView::OnRightClickList(HWND, int row, int, POINT const& pt) const {
+	if (row < 0)
+		return false;
+	CMenu menu;
+	menu.LoadMenu(IDR_CONTEXT);
+	return Frame()->ShowContextMenu(menu.GetSubMenu(11), 0, pt.x, pt.y);
 }
 
 LRESULT CSectionsView::OnCopy(WORD, WORD, HWND, BOOL&) const {

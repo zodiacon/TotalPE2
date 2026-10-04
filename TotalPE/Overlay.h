@@ -25,3 +25,4 @@ std::wstring IdentifyData(std::span<const std::byte> data);
 
 // "7a3f..." for the bytes
 std::string Sha256Hex(std::span<const std::byte> data);
+std::string Sha1Hex(std::span<const std::byte> data);

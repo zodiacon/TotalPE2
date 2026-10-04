@@ -72,6 +72,8 @@ enum class TreeItemType : int64_t {
 	ArchiveImports,
 	ArchiveMember,
 
+	Strings,
+
 	ItemMask = 255,
 };
 DEFINE_ENUM_FLAG_OPERATORS(TreeItemType);
@@ -136,4 +138,7 @@ struct IView abstract {
 	virtual bool GoToAddress(uint64_t va) { return false; }
 	// The progress and the result of the VirusTotal scan, for the view that shows it
 	virtual void SetVirusTotalStatus(vt::Status const&) {}
+	// True if the view handles Save itself (ID_FILE_SAVE): its data, an image... Views with a list or text need not:
+	// the main frame saves those.
+	virtual bool CanSave() const { return false; }
 };

@@ -36,6 +36,10 @@
 #include "OverlayView.h"
 #include "FlowGraphView.h"
 #include "ArchiveView.h"
+#include "StringsView.h"
+#include "FontView.h"
+#include "ResourceContent.h"
+#include "TypeLibText.h"
 
 std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 	CWaitCursor wait;
@@ -219,6 +223,16 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		case TreeItemType::Anomalies:
 		{
 			auto view = new CAnomalyView(this, m_Anomalies);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::Strings:
+		{
+			auto view = new CStringsView(this, m_PE);
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};
@@ -530,9 +544,65 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateResourceView(TreeItemType type
 		}
 	}
 	//
+	// the other types: what the data looks like decides how it is shown
+	//
+	auto title = std::format(L"{} ({})", res.Name, res.Type);
+	auto content = DetectResourceContent(res.Data, res.TypeID, res.TypeStr);
+	auto showText = [&](std::string const& utf8, LexLanguage lang) -> std::pair<IView*, CMessageMap*> {
+		auto view = new CScintillaView(this, m_PE, title.c_str());
+		if (!view->DoCreate(m_Tabs))
+			return {};
+		view->GetCtrl().SetCodePage(SC_CP_UTF8);
+		view->SetLanguage(lang);
+		view->SetText(utf8.c_str());
+		view->GetCtrl().SetReadOnly(true);
+		return { view, view };
+	};
+	switch (content) {
+		case ResourceContent::Image:
+		{
+			auto view = new CBitmapView(this, title.c_str());
+			if (!view->DoCreate(m_Tabs))
+				return {};
+			if (view->SetImage(res.Data))
+				return { view, view };
+			view->DestroyWindow();
+			break;
+		}
+
+		case ResourceContent::Xml: return showText(ResourceTextToUtf8(res.Data), LexLanguage::Xml);
+		case ResourceContent::Html: return showText(ResourceTextToUtf8(res.Data), LexLanguage::Html);
+		case ResourceContent::Text:
+		case ResourceContent::RegistryScript:
+			return showText(ResourceTextToUtf8(res.Data), LexLanguage::Text);
+
+		case ResourceContent::TypeLib:
+		{
+			std::wstring error;
+			auto text = DescribeTypeLib(res.Data, error);
+			if (text.empty())
+				break;
+			return showText((PCSTR)CW2A(text.c_str(), CP_UTF8), LexLanguage::Text);
+		}
+
+		case ResourceContent::Font:
+		{
+			auto view = new CFontView(this, title.c_str());
+			if (!view->DoCreate(m_Tabs))
+				return {};
+			view->SetData(res.Data);	// a font that cannot be loaded says so
+			return { view, view };
+		}
+
+		case ResourceContent::Executable:
+			title = std::format(L"{} ({}, Executable)", res.Name, res.Type);
+			break;
+	}
+
+	//
 	// all other resources - use a hex view
 	//
-	auto view = new CHexView(this, std::format(L"{} ({})", res.Name, res.Type).c_str());
+	auto view = new CHexView(this, title.c_str());
 	if (!view->DoCreate(m_Tabs))
 		return {};
 

@@ -174,13 +174,23 @@
 #define ID_IMPORT_XREFS                 32841
 #define ID_ASSEMBLY_FLOWGRAPH           32842
 #define ID_EXPORT_FLOWGRAPH             32843
+#define ID_PE_STRINGS                   32844
+#define ID_STRINGS_ASCII                32845
+#define ID_STRINGS_UTF16                32846
+#define ID_STRINGS_MINLENGTH            32847
+#define ID_STRINGS_HEX                  32848
+#define ID_STRINGS_XREFS                32849
+#define ID_STRINGS_MINLENGTH_FIRST      32850
+#define ID_STRINGS_MINLENGTH_LAST       32857
+#define ID_DATA_SAVE                    32858
+#define ID_FILE_EXPORTLIST              32859
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        277
-#define _APS_NEXT_COMMAND_VALUE         32844
+#define _APS_NEXT_COMMAND_VALUE         32860
 #define _APS_NEXT_CONTROL_VALUE         1025
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

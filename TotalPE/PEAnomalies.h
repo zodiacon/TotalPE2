@@ -29,5 +29,8 @@ double ComputeEntropy(const uint8_t* data, size_t size);
 // The checksum the Windows loader (CheckSumMappedFile) would compute. The 4 bytes at checksumOffset are ignored.
 uint32_t ComputePEChecksum(const uint8_t* data, size_t size, size_t checksumOffset);
 
+// The checksum of the whole file, the value the CheckSum field of the optional header should have (0 if the headers are not in the file)
+uint32_t ComputeFileChecksum(PEFile const& pe);
+
 // The key of a Rich header: a checksum of the DOS header and the entries.
 uint32_t ComputeRichKey(const uint8_t* data, PERichHeader const& rich);

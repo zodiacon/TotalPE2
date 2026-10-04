@@ -82,6 +82,17 @@ double ComputeEntropy(const uint8_t* data, size_t size) {
 	return entropy;
 }
 
+uint32_t ComputeFileChecksum(PEFile const& pe) {
+	auto dos = pe.GetMSDOSHeader();
+	if (!dos || pe.GetFileSize() == 0)
+		return 0;
+	// CheckSum is at the same place in PE32 and PE32+
+	const uint64_t checksumOffset = (uint64_t)(uint32_t)dos->e_lfanew + 4 + sizeof(IMAGE_FILE_HEADER) + 64;
+	if (checksumOffset + 4 > pe.GetFileSize())
+		return 0;
+	return ComputePEChecksum(pe.GetData(), pe.GetFileSize(), (size_t)checksumOffset);
+}
+
 uint32_t ComputePEChecksum(const uint8_t* data, size_t size, size_t checksumOffset) {
 	uint64_t sum = 0;
 	for (size_t i = 0; i < size; i += 2) {

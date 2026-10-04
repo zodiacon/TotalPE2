@@ -28,8 +28,13 @@ public:
 		CHAIN_MSG_MAP(CViewBase<CFlowGraphView>)
 	ALT_MSG_MAP(1)
 		COMMAND_ID_HANDLER(ID_ICON_EXPORT, OnExport)
+		COMMAND_ID_HANDLER(ID_FILE_SAVE, OnExport)
 		CHAIN_MSG_MAP_ALT(CViewBase<CFlowGraphView>, 1)
 	END_MSG_MAP()
+
+	bool CanSave() const override {
+		return true;	// as SVG
+	}
 
 	LRESULT OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnSize(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);

@@ -200,7 +200,7 @@ LRESULT CHexView::OnSave(WORD, WORD, HWND, BOOL&) {
 	auto ok = IDOK == dlg.DoModal();
 	WTLHelper::ResumeHook();
 	if (ok) {
-		HANDLE hFile = ::CreateFile(dlg.m_szFileName, GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, 0, nullptr);
+		HANDLE hFile = ::CreateFile(dlg.m_szFileName, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
 		if (hFile == INVALID_HANDLE_VALUE) {
 			AtlMessageBox(m_hWnd, L"Failed to create file", IDR_MAINFRAME, MB_ICONERROR);
 			return 0;

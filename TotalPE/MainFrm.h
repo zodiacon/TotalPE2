@@ -55,6 +55,9 @@ public:
 		COMMAND_ID_HANDLER(ID_VIEW_MANIFEST, OnViewManifest)
 		COMMAND_ID_HANDLER(ID_VIEW_VERSION, OnViewVersion)
 		COMMAND_ID_HANDLER(ID_VIEW_OVERLAY, OnViewOverlay)
+		COMMAND_ID_HANDLER(ID_PE_STRINGS, OnViewStrings)
+		COMMAND_ID_HANDLER(ID_FILE_SAVE, OnFileSave)
+		COMMAND_ID_HANDLER(ID_FILE_EXPORTLIST, OnFileExportList)
 		COMMAND_ID_HANDLER(ID_PE_SECURITY, OnViewSecurity)
 		COMMAND_ID_HANDLER(ID_PE_ENTIREFILEINHEX, OnViewFileInHex)
 		COMMAND_ID_HANDLER(ID_VIEW_SECTIONS, OnViewSections)
@@ -173,6 +176,12 @@ private:
 	LRESULT OnViewManifest(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewVersion(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewOverlay(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnViewStrings(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnFileSave(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnFileExportList(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	void UpdateSaveUI();
+	bool SaveTreeItemData(TreeItemType type);
+	bool SaveText(HWND hText, CString const& name);
 	LRESULT OnDisassembleEntryPoint(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnAlwaysOnTop(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnUpdateDarkMode(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
@@ -220,6 +229,7 @@ private:
 	XrefMap m_Xrefs;
 	OverlayInfo m_Overlay;
 	HTREEITEM m_hOverlay{ nullptr };
+	HWND m_SaveUIPage{ (HWND)-1 };	// the page Save and Export List were last enabled for
 
 	// Go To, Back and Forward
 	struct NavigationEntry {

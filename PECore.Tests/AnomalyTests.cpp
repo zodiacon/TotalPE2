@@ -107,6 +107,14 @@ TEST_CASE("A clean file has no anomalies", "[anomalies]") {
 	CHECK(anomalies.empty());
 }
 
+TEST_CASE("The checksum of a system DLL is the one in its header", "[anomalies][system]") {
+	PEFile pe;
+	REQUIRE(pe.Open(L"C:\\Windows\\System32\\kernel32.dll"));
+	auto stored = pe.GetFileInfo()->IsPE64 ? pe.GetNTHeader()->NTHdr64.OptionalHeader.CheckSum : pe.GetNTHeader()->NTHdr32.OptionalHeader.CheckSum;
+	CHECK(stored != 0);
+	CHECK(ComputeFileChecksum(pe) == stored);
+}
+
 TEST_CASE("A correct header checksum is accepted, a wrong one is reported", "[anomalies]") {
 	Editor e;
 	auto optional = e.Spec.OptionalHeaderOffset();

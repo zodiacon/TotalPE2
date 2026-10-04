@@ -116,9 +116,19 @@ std::wstring IdentifyData(std::span<const std::byte> d) {
 	return L"";
 }
 
+namespace {
+	std::string HashHex(PCWSTR algorithm, std::span<const std::byte> data) {
+		std::string result;
+		for (auto b : HashBytes(algorithm, data))
+			result += std::format("{:02x}", b);
+		return result;
+	}
+}
+
 std::string Sha256Hex(std::span<const std::byte> data) {
-	std::string result;
-	for (auto b : HashBytes(BCRYPT_SHA256_ALGORITHM, data))
-		result += std::format("{:02x}", b);
-	return result;
+	return HashHex(BCRYPT_SHA256_ALGORITHM, data);
+}
+
+std::string Sha1Hex(std::span<const std::byte> data) {
+	return HashHex(BCRYPT_SHA1_ALGORITHM, data);
 }

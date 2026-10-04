@@ -8,6 +8,9 @@
 #include "PEFile.h"
 #include "PEStrings.h"
 #include "ImportAnalysis.h"
+#include "PEAnomalies.h"
+#include "Overlay.h"
+#include "Md5.h"
 #include <SortHelper.h>
 #include <ClipboardHelper.h>
 #include <ctime>
@@ -21,9 +24,20 @@ LRESULT CPEImageView::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam
 	cm->AddColumn(L"Value", LVCFMT_LEFT, 270);
 	cm->AddColumn(L"Details", LVCFMT_LEFT, 550);
 
+	ComputeHashes();
 	BuildItems();
 
 	return 0;
+}
+
+void CPEImageView::ComputeHashes() {
+	CWaitCursor wait;
+	auto data = m_PE.GetSpan(0, m_PE.GetFileSize());
+	auto wide = [](std::string const& s) { return std::wstring(s.begin(), s.end()); };
+	m_Md5 = wide(Md5Hex(data.data(), data.size()));
+	m_Sha1 = wide(Sha1Hex(data));
+	m_Sha256 = wide(Sha256Hex(data));
+	m_FileChecksum = ComputeFileChecksum(m_PE);
 }
 
 CString CPEImageView::GetTitle() const {
@@ -84,15 +98,34 @@ void CPEImageView::BuildItems() {
 	auto dllchar = is64 ? opt64.DllCharacteristics : opt32.DllCharacteristics;
 	auto file = Frame()->GetSymbols().GetSymbolFile();
 
+	// the loader checks the checksum of drivers and of some system DLLs only; most executables leave it 0
+	auto checksum = is64 ? opt64.CheckSum : opt32.CheckSum;
+	std::wstring checksumValue = std::format(L"0x{:X}", checksum), checksumDetails;
+	if (checksum == 0) {
+		checksumValue += L" (Not set)";
+		checksumDetails = std::format(L"The file's checksum is 0x{:X}", m_FileChecksum);
+	}
+	else if (checksum == m_FileChecksum) {
+		checksumValue += L" (Valid)";
+		checksumDetails = L"The checksum of the file is the one in the header";
+	}
+	else {
+		checksumValue += L" (Invalid)";
+		checksumDetails = std::format(L"The file's checksum is 0x{:X}: the file was modified after it was linked", m_FileChecksum);
+	}
+
 	auto narrowHash = ComputeImphash(m_PE);
 	std::wstring imphash(narrowHash.begin(), narrowHash.end());
 
 	m_Items = std::vector<DataItem> {
 		{ L"File Name", m_PE.GetPath().substr(m_PE.GetPath().rfind(L'\\') + 1), m_PE.GetPath() },
 		{ L"File Size", PEStrings::ToMemorySize(m_PE.GetFileSize()) },
+		{ L"MD5", m_Md5, L"Of the whole file" },
+		{ L"SHA-1", m_Sha1, L"Of the whole file" },
+		{ L"SHA-256", m_Sha256, L"Of the whole file" },
 		{ L"File Alignment", std::format(L"0x{:X}", is64 ? opt64.FileAlignment : opt32.FileAlignment) },
 		{ L"Section Alignment", std::format(L"0x{:X}", is64 ? opt64.SectionAlignment : opt32.SectionAlignment) },
-		{ L"Checksum", std::format(L"0x{:X}", is64 ? opt64.CheckSum : opt32.CheckSum) },
+		{ L"Checksum", checksumValue, checksumDetails },
 		{ L"Time/Date Stamp", std::format(L"0x{:08X}", fheader.TimeDateStamp) },
 		{ L"Machine", std::format(L"{} (0x{:X})", fheader.Machine, fheader.Machine), std::format(L"{} ({})", 
 			PEStrings::MachineTypeToString(fheader.Machine), MapFileHdrMachine.at(fheader.Machine)) },
@@ -153,7 +186,7 @@ void CPEImageView::AppendVirusTotal() {
 		return;
 
 	auto const& r = m_Vt.Results;
-	if (!m_Vt.Sha256.empty())
+	if (!m_Vt.Sha256.empty() && _wcsicmp(m_Vt.Sha256.c_str(), m_Sha256.c_str()) != 0)
 		m_Items.push_back({ L"SHA-256", m_Vt.Sha256, m_Vt.Uploaded ? L"The file was uploaded to VirusTotal" : L"VirusTotal knew the file: it was not uploaded" });
 	if (r.LastAnalysis) {
 		auto t = (time_t)r.LastAnalysis;

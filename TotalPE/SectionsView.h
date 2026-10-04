@@ -16,6 +16,7 @@ public:
 	int GetRowImage(HWND, int row, int) const;
 	void DoSort(SortInfo const* si);
 	void OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD newState);
+	bool OnRightClickList(HWND, int row, int col, POINT const& pt) const;
 
 	void UpdateUI(bool first = false);
 
@@ -26,12 +27,17 @@ public:
 		CHAIN_MSG_MAP(CViewBase<CSectionsView>)
 	ALT_MSG_MAP(1)
 		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnCopy)
+		COMMAND_ID_HANDLER(ID_DATA_SAVE, OnSaveData)
 		CHAIN_MSG_MAP_ALT(CViewBase<CSectionsView>, 1)
 	END_MSG_MAP()
 
 private:
 	enum ColumnType {
-		Name, Size, RawData, RawSize, Characteristics, Relocations, LineNumbers, PointerToLines, PointerToReloc, Address,
+		Name, Size, RawData, RawSize, Characteristics, Relocations, LineNumbers, PointerToLines, PointerToReloc, Address, Entropy,
+	};
+
+	struct Section : PESectionHeader {
+		double Entropy{ -1 };	// of the section's data in the file, 0 to 8; -1 if it has no data in the file
 	};
 
 	CString GetTitle() const override;
@@ -45,11 +51,12 @@ private:
 
 	LRESULT OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnCopy(WORD, WORD, HWND, BOOL&) const;
+	LRESULT OnSaveData(WORD, WORD, HWND, BOOL&) const;
 	LRESULT OnFind(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 
 	CListViewCtrl m_List;
 	CCustomHorSplitterWindow m_Splitter;
-	std::vector<PESectionHeader> m_Sections;
+	std::vector<Section> m_Sections;
 	PEFile const& m_PE;
 	CHexView m_HexView;
 };

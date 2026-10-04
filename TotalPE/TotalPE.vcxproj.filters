@@ -231,6 +231,24 @@
     <ClCompile Include="Authenticode.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="ResourceContent.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="TypeLibText.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SaveData.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="FontView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
+    <ClCompile Include="UnwindInfo.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="FileStrings.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="Overlay.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -453,6 +471,24 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Authenticode.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ResourceContent.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="TypeLibText.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SaveData.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FontView.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="UnwindInfo.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FileStrings.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Overlay.h">

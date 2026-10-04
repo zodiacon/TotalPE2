@@ -11,6 +11,7 @@ public:
 	void SetGroupIconData(std::span<const std::byte> data);
 	void SetIconData(std::span<const std::byte> data, bool icon);
 	void DoPaint(CDCHandle);
+	void UpdateUI(bool first = false) const;
 
 	CString GetTitle() const override;
 
@@ -39,9 +40,13 @@ private:
 	LRESULT OnEraseBkgnd(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnExportIcon(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 
+	// a single icon or cursor (RT_ICON, RT_CURSOR): its resource data is what Export saves
 	CIconHandle m_Icon;
+	std::vector<std::byte> m_IconData;
+	bool m_IsIcon{ true };
+	CRect m_IconRect;
 	CString m_Title;
-	int m_IconSize;
+	int m_IconSize{ 0 };
 	std::vector<IconData> m_Icons;
 	int m_SelectedIcon{ -1 };
 

@@ -14,6 +14,7 @@
 #include "SymbolSettingsDlg.h"
 #include "GoToDlg.h"
 #include "VtKeyDlg.h"
+#include "SaveData.h"
 #include <thread>
 #include <WTLHelper.h>
 
@@ -30,6 +31,7 @@ BOOL CMainFrame::PreTranslateMessage(MSG* pMsg) {
 }
 
 BOOL CMainFrame::OnIdle() {
+	UpdateSaveUI();
 	UIUpdateToolBar();
 	return FALSE;
 }
@@ -44,7 +46,18 @@ bool CMainFrame::OnTreeDoubleClick(HWND, HTREEITEM hItem) {
 
 // The menu of a flow graph is also that of its tree item: the item is selected, which shows the graph that the commands apply to
 bool CMainFrame::OnTreeRightClick(HWND, HTREEITEM hItem, POINT const& pt) {
-	if (((TreeItemType)m_Tree.GetItemData(hItem) & TreeItemType::ItemMask) != TreeItemType::FlowGraph)
+	auto type = (TreeItemType)m_Tree.GetItemData(hItem);
+	auto kind = type & TreeItemType::ItemMask;
+	// a section or a resource can be saved to a file
+	if (kind == TreeItemType::Section || kind == TreeItemType::Resource) {
+		CMenu menu;
+		menu.CreatePopupMenu();
+		menu.AppendMenu(MF_STRING, ID_DATA_SAVE, L"&Save Data...");
+		if (ShowContextMenu(menu, TPM_RETURNCMD, pt.x, pt.y, m_hWnd) == ID_DATA_SAVE)
+			SaveTreeItemData(type);
+		return true;
+	}
+	if (kind != TreeItemType::FlowGraph)
 		return false;
 	ShowView(hItem);
 	UIEnable(ID_ICON_EXPORT, TRUE);
@@ -64,7 +77,8 @@ void CMainFrame::UpdateUI() {
 	UIEnable(ID_VIEW_SECTIONS, fi && fi->HasSections);
 	UIEnable(ID_PE_SECURITY, fi && fi->HasSecurity);
 	UIEnable(ID_FILE_CLOSE, fi != nullptr || m_Archive);
-	UIEnable(ID_FILE_SAVE, fi != nullptr);
+	m_SaveUIPage = (HWND)-1;	// Save and Export List: from the active view, on the next idle
+	UIEnable(ID_PE_STRINGS, fi != nullptr);
 	UIEnable(ID_VIEW_MANIFEST, fi && m_hResManifest != nullptr);
 	UIEnable(ID_VIEW_VERSION, fi && m_hResVersion != nullptr);
 	UIEnable(ID_VIEW_OVERLAY, fi && m_hOverlay != nullptr);
@@ -104,6 +118,7 @@ void CMainFrame::InitMenu(HMENU hMenu) {
 		{ ID_WINDOW_CLOSE, IDI_WIN_CLOSE },
 		{ ID_WINDOW_CLOSE_ALL, IDI_WIN_CLOSEALL },
 		{ ID_EXPORT_FLOWGRAPH, IDI_FLOW },
+		{ ID_PE_STRINGS, IDI_TEXT },
 
 	};
 	WTLHelper::InitMenu(hMenu, commands, _countof(commands));
@@ -169,6 +184,7 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 		{ ID_VIEW_VERSION, IDI_VERSION },
 		{ ID_VIEW_DEBUG, IDI_DEBUG},
 		{ ID_PE_SECURITY, IDI_SECURITY },
+		{ ID_PE_STRINGS, IDI_TEXT },
 		{ 0 },
 		{ ID_EDIT_FIND, IDI_FIND},
 	};
@@ -680,6 +696,7 @@ void CMainFrame::BuildTree(int iconSize) {
 	m_hOverlay = nullptr;
 	if (!m_Overlay.Empty())
 		m_hOverlay = InsertTreeItem(m_Tree, L"Overlay", GetTreeIcon(IDI_BINARY), TreeItemType::Overlay, root);
+	InsertTreeItem(m_Tree, L"Strings", GetTreeIcon(IDI_TEXT), TreeItemType::Strings, root);
 
 	if (m_PE.GetFileInfo()->HasResource) {
 		auto resources = InsertTreeItem(m_Tree, L"Resources", GetTreeIcon(IDI_RESOURCE), TreeItemType::Resources, root);
@@ -800,6 +817,90 @@ LRESULT CMainFrame::OnFileOpenNewWindow(WORD, WORD, HWND, BOOL&) {
 			frame->SendMessage(WM_CLOSE);
 	}
 	return LRESULT();
+}
+
+// Save: a view that knows how to save what it shows does so (the hex view its bytes, a flow graph as SVG), and the command
+// does not get here; for the others, a list is saved as CSV or tab separated text and a text view as text.
+// Save is disabled in the views that have none of these (see UpdateSaveUI); the accelerator gets here anyway.
+LRESULT CMainFrame::OnFileSave(WORD, WORD, HWND, BOOL&) {
+	if (int page = m_Tabs.GetActivePage(); page >= 0) {
+		auto hView = m_Tabs.GetPageHWND(page);
+		auto name = ToFileName(m_Tabs.GetPageTitle(page));
+		if (auto hList = FindViewControl(hView, WC_LISTVIEW)) {
+			SaveListView(m_hWnd, hList, name);
+			return 0;
+		}
+		if (auto hText = FindViewControl(hView, L"Scintilla")) {
+			SaveText(hText, name);
+			return 0;
+		}
+	}
+	::MessageBeep((UINT)-1);
+	return 0;
+}
+
+// Export List: the list of the active view, whatever Save does in that view
+LRESULT CMainFrame::OnFileExportList(WORD, WORD, HWND, BOOL&) {
+	int page = m_Tabs.GetActivePage();
+	HWND hList = page >= 0 ? FindViewControl(m_Tabs.GetPageHWND(page), WC_LISTVIEW) : nullptr;
+	if (!hList) {
+		AtlMessageBox(m_hWnd, L"The active view has no list", IDR_MAINFRAME, MB_ICONINFORMATION);
+		return 0;
+	}
+	SaveListView(m_hWnd, hList, ToFileName(m_Tabs.GetPageTitle(page)));
+	return 0;
+}
+
+// Save and Export List are enabled by what the active view has: Save if the view saves what it shows (CanSave), or has a list or
+// text; Export List if it has a list. Updated when another page becomes active.
+void CMainFrame::UpdateSaveUI() {
+	int page = m_Tabs.GetActivePage();
+	auto hPage = page >= 0 ? m_Tabs.GetPageHWND(page) : nullptr;
+	if (hPage == m_SaveUIPage)
+		return;
+	m_SaveUIPage = hPage;
+
+	bool list = hPage && FindViewControl(hPage, WC_LISTVIEW);
+	bool save = list || (hPage && FindViewControl(hPage, L"Scintilla"));
+	if (!save && hPage) {
+		if (auto it = m_Views2.find(hPage); it != m_Views2.end())
+			if (auto view = m_Views.find(it->second); view != m_Views.end())
+				save = view->second->CanSave();
+	}
+	UIEnable(ID_FILE_EXPORTLIST, list);
+	UIEnable(ID_FILE_SAVE, save);
+}
+
+// Save Data on a section or a resource in the tree
+bool CMainFrame::SaveTreeItemData(TreeItemType type) {
+	auto index = (size_t)((int64_t)type >> ItemShift) - 1;
+	switch (type & TreeItemType::ItemMask) {
+		case TreeItemType::Section:
+			if (index < m_PE.GetSecHeaders()->size())
+				return SaveSectionData(m_hWnd, m_PE, m_PE.GetSecHeaders()->at(index));
+			break;
+		case TreeItemType::Resource:
+			if (index < m_FlatResources.size())
+				return SaveResourceFiles(m_hWnd, { &m_FlatResources[index] });
+			break;
+	}
+	return false;
+}
+
+bool CMainFrame::SaveText(HWND hText, CString const& name) {
+	auto path = AskSaveFile(m_hWnd, L"Save Text", L"txt", name + L".txt", L"Text Files (*.txt)\0*.txt\0Assembly Files (*.asm)\0*.asm\0All Files\0*.*\0");
+	if (path.IsEmpty())
+		return false;
+
+	auto length = (size_t)::SendMessage(hText, SCI_GETLENGTH, 0, 0);
+	std::string text(length + 1, '\0');
+	::SendMessage(hText, SCI_GETTEXT, length + 1, (LPARAM)text.data());
+	text.resize(length);
+	if (!WriteFileData(path, text.data(), text.size())) {
+		AtlMessageBox(m_hWnd, L"Failed to save the file", IDR_MAINFRAME, MB_ICONERROR);
+		return false;
+	}
+	return true;
 }
 
 CString CMainFrame::DoFileOpen() const {
@@ -958,6 +1059,11 @@ LRESULT CMainFrame::OnViewVersion(WORD, WORD, HWND, BOOL&) {
 LRESULT CMainFrame::OnViewOverlay(WORD, WORD, HWND, BOOL&) {
 	if (m_hOverlay)
 		ShowView(m_hOverlay);
+	return 0;
+}
+
+LRESULT CMainFrame::OnViewStrings(WORD, WORD, HWND, BOOL&) {
+	ShowView(TreeItemType::Strings, nullptr, IDI_TEXT);
 	return 0;
 }
 

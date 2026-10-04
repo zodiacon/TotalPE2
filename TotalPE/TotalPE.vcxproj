@@ -437,6 +437,12 @@
     <ClCompile Include="SecurityView.cpp" />
     <ClCompile Include="StringMessageTableView.cpp" />
     <ClCompile Include="StringsView.cpp" />
+    <ClCompile Include="FileStrings.cpp" />
+    <ClCompile Include="UnwindInfo.cpp" />
+    <ClCompile Include="ResourceContent.cpp" />
+    <ClCompile Include="TypeLibText.cpp" />
+    <ClCompile Include="FontView.cpp" />
+    <ClCompile Include="SaveData.cpp" />
     <ClCompile Include="StructView.cpp" />
     <ClCompile Include="SymbolsView.cpp" />
     <ClCompile Include="TextView.cpp" />
@@ -516,6 +522,12 @@
     <ClInclude Include="SecurityView.h" />
     <ClInclude Include="StringMessageTableView.h" />
     <ClInclude Include="StringsView.h" />
+    <ClInclude Include="FileStrings.h" />
+    <ClInclude Include="UnwindInfo.h" />
+    <ClInclude Include="ResourceContent.h" />
+    <ClInclude Include="TypeLibText.h" />
+    <ClInclude Include="FontView.h" />
+    <ClInclude Include="SaveData.h" />
     <ClInclude Include="StructView.h" />
     <ClInclude Include="SymbolsView.h" />
     <ClInclude Include="TextView.h" />

@@ -5,6 +5,7 @@
 #include "resource.h"
 #include <ClipboardHelper.h>
 #include <ListViewhelper.h>
+#include "SaveData.h"
 
 CResourcesView::CResourcesView(IMainFrame* frame, PEFile const& pe) : CViewBase(frame), m_PE(pe), m_HexView(frame) {
 }
@@ -65,6 +66,16 @@ void CResourcesView::UpdateUI(bool first) {
 	auto& ui = Frame()->GetUI();
 	auto pane = m_Splitter.GetActivePane();
 	ui.UIEnable(ID_EDIT_COPY, (pane == 0 && m_List.GetSelectedCount() > 0) || (pane == 1 && m_HexView.Hex().HasSelection()));
+	ui.UIEnable(ID_DATA_SAVE, m_List.GetSelectedCount() > 0);
+}
+
+// a file for one resource, a folder of files for more
+LRESULT CResourcesView::OnSaveData(WORD, WORD, HWND, BOOL&) const {
+	std::vector<FlatResource const*> resources;
+	for (int i = m_List.GetNextItem(-1, LVNI_SELECTED); i >= 0; i = m_List.GetNextItem(i, LVNI_SELECTED))
+		resources.push_back(&m_Resources[i]);
+	SaveResourceFiles(m_hWnd, resources);
+	return 0;
 }
 
 LRESULT CResourcesView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
@@ -91,6 +102,14 @@ LRESULT CResourcesView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	m_Splitter.SetSplitterPosPct(50);
 
 	return 0;
+}
+
+bool CResourcesView::OnRightClickList(HWND, int row, int, POINT const& pt) const {
+	if (row < 0)
+		return false;
+	CMenu menu;
+	menu.LoadMenu(IDR_CONTEXT);
+	return Frame()->ShowContextMenu(menu.GetSubMenu(11), 0, pt.x, pt.y);
 }
 
 LRESULT CResourcesView::OnCopy(WORD, WORD, HWND, BOOL&) const {

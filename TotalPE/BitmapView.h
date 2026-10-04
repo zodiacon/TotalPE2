@@ -11,6 +11,7 @@ public:
 	CString GetTitle() const override;
 
 	bool SetData(std::span<const std::byte> data);
+	bool SetImage(std::span<const std::byte> data);
 	void DoPaint(CDCHandle);
 
 	BEGIN_MSG_MAP(CBitmapView)
@@ -25,7 +26,8 @@ private:
 	LRESULT OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnContextMenu(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 
-	UINT m_Width, m_Height;
+	UINT m_Width{ 0 }, m_Height{ 0 };
+	bool m_Alpha{ false };
 	CBitmap m_bmp;
 	CString m_Title;
 };
