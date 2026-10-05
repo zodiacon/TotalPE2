@@ -37,6 +37,9 @@
     <Filter Include="Lexers">
       <UniqueIdentifier>{b8ac8fea-89f6-491b-bd86-f77584003461}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Views\ELF">
+      <UniqueIdentifier>{7fc82e25-64b3-48c8-acaf-9b39fcd7af80}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -156,23 +159,8 @@
     <ClCompile Include="RichHeaderView.cpp">
       <Filter>Views</Filter>
     </ClCompile>
-    <ClCompile Include="GlobalPtrView.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="MenuView.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="BoundImportView.cpp">
       <Filter>Views</Filter>
-    </ClCompile>
-    <ClCompile Include="ClrView.cpp">
-      <Filter>Views</Filter>
-    </ClCompile>
-    <ClCompile Include="DialogView.cpp">
-      <Filter>Views</Filter>
-    </ClCompile>
-    <ClCompile Include="SymbolSettingsDlg.cpp">
-      <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="HexFind.cpp">
       <Filter>Source Files</Filter>
@@ -180,23 +168,11 @@
     <ClCompile Include="HexInspector.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="AnimatedCursorView.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="AnomalyView.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="ElfView.cpp">
-      <Filter>Views</Filter>
-    </ClCompile>
     <ClCompile Include="CompareView.cpp">
       <Filter>Views</Filter>
     </ClCompile>
     <ClCompile Include="EventManifestView.cpp">
       <Filter>Views</Filter>
-    </ClCompile>
-    <ClCompile Include="SearchDlg.cpp">
-      <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="MainFrmSearch.cpp">
       <Filter>Source Files</Filter>
@@ -213,23 +189,53 @@
     <ClCompile Include="SaveData.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="FontView.cpp">
-      <Filter>Views</Filter>
-    </ClCompile>
-    <ClCompile Include="VtKeyDlg.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="XrefView.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="GoToDlg.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="OverlayView.cpp">
       <Filter>Views</Filter>
     </ClCompile>
     <ClCompile Include="FlowGraphView.cpp">
       <Filter>Views</Filter>
+    </ClCompile>
+    <ClCompile Include="ArchiveView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
+    <ClCompile Include="GoToDlg.cpp">
+      <Filter>Dialogs</Filter>
+    </ClCompile>
+    <ClCompile Include="SearchDlg.cpp">
+      <Filter>Dialogs</Filter>
+    </ClCompile>
+    <ClCompile Include="VtKeyDlg.cpp">
+      <Filter>Dialogs</Filter>
+    </ClCompile>
+    <ClCompile Include="XrefView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
+    <ClCompile Include="SymbolSettingsDlg.cpp">
+      <Filter>Dialogs</Filter>
+    </ClCompile>
+    <ClCompile Include="GlobalPtrView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
+    <ClCompile Include="AnomalyView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
+    <ClCompile Include="AnimatedCursorView.cpp">
+      <Filter>Views\Resources</Filter>
+    </ClCompile>
+    <ClCompile Include="MenuView.cpp">
+      <Filter>Views\Resources</Filter>
+    </ClCompile>
+    <ClCompile Include="DialogView.cpp">
+      <Filter>Views\Resources</Filter>
+    </ClCompile>
+    <ClCompile Include="ClrView.cpp">
+      <Filter>Views\DataDirectories</Filter>
+    </ClCompile>
+    <ClCompile Include="ElfView.cpp">
+      <Filter>Views\ELF</Filter>
+    </ClCompile>
+    <ClCompile Include="FontView.cpp">
+      <Filter>Views\Resources</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -350,23 +356,8 @@
     <ClInclude Include="RichHeaderView.h">
       <Filter>Views</Filter>
     </ClInclude>
-    <ClInclude Include="GlobalPtrView.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="MenuView.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="BoundImportView.h">
       <Filter>Views</Filter>
-    </ClInclude>
-    <ClInclude Include="ClrView.h">
-      <Filter>Views</Filter>
-    </ClInclude>
-    <ClInclude Include="DialogView.h">
-      <Filter>Views</Filter>
-    </ClInclude>
-    <ClInclude Include="SymbolSettingsDlg.h">
-      <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="HexFind.h">
       <Filter>Header Files</Filter>
@@ -374,23 +365,11 @@
     <ClInclude Include="HexInspector.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="AnimatedCursorView.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="AnomalyView.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="ElfView.h">
-      <Filter>Views</Filter>
-    </ClInclude>
     <ClInclude Include="CompareView.h">
       <Filter>Views</Filter>
     </ClInclude>
     <ClInclude Include="EventManifestView.h">
       <Filter>Views</Filter>
-    </ClInclude>
-    <ClInclude Include="SearchDlg.h">
-      <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="DebugInfoView.h">
       <Filter>Views</Filter>
@@ -404,23 +383,53 @@
     <ClInclude Include="SaveData.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="FontView.h">
-      <Filter>Views</Filter>
-    </ClInclude>
-    <ClInclude Include="VtKeyDlg.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="XrefView.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="GoToDlg.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="OverlayView.h">
       <Filter>Views</Filter>
     </ClInclude>
     <ClInclude Include="FlowGraphView.h">
       <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="ArchiveView.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="GoToDlg.h">
+      <Filter>Dialogs</Filter>
+    </ClInclude>
+    <ClInclude Include="GlobalPtrView.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="XrefView.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="VtKeyDlg.h">
+      <Filter>Dialogs</Filter>
+    </ClInclude>
+    <ClInclude Include="SearchDlg.h">
+      <Filter>Dialogs</Filter>
+    </ClInclude>
+    <ClInclude Include="AnimatedCursorView.h">
+      <Filter>Views\Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="AnomalyView.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="SymbolSettingsDlg.h">
+      <Filter>Dialogs</Filter>
+    </ClInclude>
+    <ClInclude Include="DialogView.h">
+      <Filter>Views\Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="ClrView.h">
+      <Filter>Views\DataDirectories</Filter>
+    </ClInclude>
+    <ClInclude Include="ElfView.h">
+      <Filter>Views\ELF</Filter>
+    </ClInclude>
+    <ClInclude Include="FontView.h">
+      <Filter>Views\Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="MenuView.h">
+      <Filter>Views\Resources</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
