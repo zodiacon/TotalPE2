@@ -38,6 +38,7 @@
 #include "ArchiveView.h"
 #include "StringsView.h"
 #include "FontView.h"
+#include "EventManifestView.h"
 #include "ResourceContent.h"
 #include "TypeLibText.h"
 #include "ObjectView.h"
@@ -586,92 +587,116 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 	return {};
 }
 
+namespace {
+	// The numbers of the standard resource types (the RT_ macros are pointers, which cannot be case labels)
+	enum ResourceTypeId : WORD {
+		ResCursor = 1, ResBitmap = 2, ResIcon = 3, ResMenu = 4, ResDialog = 5, ResString = 6, ResAccelerator = 9,
+		ResMessageTable = 11, ResGroupCursor = 12, ResGroupIcon = 14, ResVersion = 16, ResAniCursor = 21, ResAniIcon = 22,
+		ResManifest = 24,
+	};
+}
+
 std::pair<IView*, CMessageMap*> CMainFrame::CreateResourceView(TreeItemType type) {
 	auto& res = m_FlatResources[((uint32_t)type >> ItemShift) - 1];
-	auto const resId = MAKEINTRESOURCE(res.TypeID);
-	if (resId == RT_VERSION) {
-		auto view = new CVersionView(this, (res.Name + L" (Version)").c_str());
-		if (!view->DoCreate(m_Tabs))
-			return {};
+	switch (res.TypeID) {
+		case ResVersion:
+		{
+			auto view = new CVersionView(this, (res.Name + L" (Version)").c_str());
+			if (!view->DoCreate(m_Tabs))
+				return {};
 
-		view->SetData(res.Data);
-		return { view, view };
-	}
-	if (resId == RT_DIALOG) {
-		auto view = new CDialogView(this, (res.Name + L" (Dialog)").c_str());
-		if (!view->DoCreate(m_Tabs))
-			return {};
-
-		if (view->SetData(res.Data))
+			view->SetData(res.Data);
 			return { view, view };
-		view->DestroyWindow();
-		// malformed template - fall back to the hex view below
-	}
-	else if (resId == RT_MENU) {
-		auto view = new CMenuView(this, (res.Name + L" (Menu)").c_str());
-		if (!view->DoCreate(m_Tabs))
-			return {};
+		}
 
-		if (view->SetData(res.Data))
+		case ResDialog:
+		{
+			auto view = new CDialogView(this, (res.Name + L" (Dialog)").c_str());
+			if (!view->DoCreate(m_Tabs))
+				return {};
+
+			if (view->SetData(res.Data))
+				return { view, view };
+			view->DestroyWindow();
+			break;	// malformed template - fall back to the hex view below
+		}
+
+		case ResMenu:
+		{
+			auto view = new CMenuView(this, (res.Name + L" (Menu)").c_str());
+			if (!view->DoCreate(m_Tabs))
+				return {};
+
+			if (view->SetData(res.Data))
+				return { view, view };
+			view->DestroyWindow();
+			break;
+		}
+
+		case ResBitmap:
+		{
+			auto view = new CBitmapView(this, (res.Name + L" (Bitmap)").c_str());
+			if (!view->DoCreate(m_Tabs))
+				return {};
+
+			view->SetData(res.Data);
 			return { view, view };
-		view->DestroyWindow();
-	}
+		}
 
-	if (resId == RT_BITMAP) {
-		auto view = new CBitmapView(this, (res.Name + L" (Bitmap)").c_str());
-		if (!view->DoCreate(m_Tabs))
-			return {};
+		case ResAccelerator:
+		{
+			auto view = new CAcceleratorTableView(this, (res.Name + L" (Accel)").c_str());
+			if (!view->DoCreate(m_Tabs))
+				return {};
 
-		view->SetData(res.Data);
-		return { view, view };
-	}
-	else if (resId == RT_ACCELERATOR) {
-		auto view = new CAcceleratorTableView(this, (res.Name + L" (Accel)").c_str());
-		if (!view->DoCreate(m_Tabs))
-			return {};
-
-		view->AddAccelTable(res.Data);
-		return { view, view };
-	}
-	else if (resId == RT_MANIFEST) {
-		auto view = new CScintillaView(this, m_PE, (res.Name + L" (Manifest)").c_str());
-		if (!view->DoCreate(m_Tabs))
-			return {};
-
-		view->SetLanguage(LexLanguage::Xml);
-		view->SetText(CStringA((PCSTR)res.Data.data(), (int)res.Data.size()));
-		view->GetCtrl().SetReadOnly(true);
-		return { view, view };
-	}
-	else if (resId == RT_STRING || resId == RT_MESSAGETABLE) {
-		auto st = resId == RT_STRING;
-		auto view = new CStringMessageTableView(this, (res.Name + (st ? L" (String Table)" : L" (Manifest)")).c_str());
-		if (!view->DoCreate(m_Tabs))
-			return {};
-
-		if (st)
-			view->SetStringTableData(res.Data, res.NameID);
-		else
-			view->SetMessageTableData(res.Data);
-		return { view, view };
-
-	}
-
-	if (resId == RT_ANICURSOR || resId == RT_ANIICON) {
-		auto view = new CAnimatedCursorView(this, (res.Name + (resId == RT_ANICURSOR ? L" (Animated Cursor)" : L" (Animated Icon)")).c_str());
-		if (!view->DoCreate(m_Tabs))
-			return {};
-
-		if (view->SetData(res.Data))
+			view->AddAccelTable(res.Data);
 			return { view, view };
-		view->DestroyWindow();
-		// not a usable .ani file: it is shown as raw data below
-	}
+		}
 
-	bool icon = resId == RT_ICON || resId == RT_GROUP_ICON;
-	bool group = resId == RT_GROUP_ICON || resId == RT_GROUP_CURSOR;
-	if (icon || group || resId == RT_CURSOR) {
-		if (!group) {
+		case ResManifest:
+		{
+			auto view = new CScintillaView(this, m_PE, (res.Name + L" (Manifest)").c_str());
+			if (!view->DoCreate(m_Tabs))
+				return {};
+
+			view->SetLanguage(LexLanguage::Xml);
+			view->SetText(CStringA((PCSTR)res.Data.data(), (int)res.Data.size()));
+			view->GetCtrl().SetReadOnly(true);
+			return { view, view };
+		}
+
+		case ResString:
+		case ResMessageTable:
+		{
+			auto st = res.TypeID == ResString;
+			auto view = new CStringMessageTableView(this, (res.Name + (st ? L" (String Table)" : L" (Message Table)")).c_str());
+			if (!view->DoCreate(m_Tabs))
+				return {};
+
+			if (st)
+				view->SetStringTableData(res.Data, res.NameID);
+			else
+				view->SetMessageTableData(res.Data);
+			return { view, view };
+		}
+
+		case ResAniCursor:
+		case ResAniIcon:
+		{
+			auto view = new CAnimatedCursorView(this, (res.Name + (res.TypeID == ResAniCursor ? L" (Animated Cursor)" : L" (Animated Icon)")).c_str());
+			if (!view->DoCreate(m_Tabs))
+				return {};
+
+			if (view->SetData(res.Data))
+				return { view, view };
+			view->DestroyWindow();
+			break;	// not a usable .ani file: it is shown as raw data below
+		}
+
+		case ResIcon:
+		case ResCursor:
+		{
+			auto icon = res.TypeID == ResIcon;
 			auto view = new CIconsView(this, (res.Name + (icon ? L" (Icon)" : L" (Cursor)")).c_str());
 			if (!view->DoCreate(m_Tabs))
 				return {};
@@ -679,8 +704,11 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateResourceView(TreeItemType type
 			view->SetIconData(res.Data, icon);
 			return { view, view };
 		}
-		else {
-			auto view = new CIconsView(this, (res.Name + (icon ? L" (Icon Group)" : L" (Cursor Group)")).c_str());
+
+		case ResGroupIcon:
+		case ResGroupCursor:
+		{
+			auto view = new CIconsView(this, (res.Name + (res.TypeID == ResGroupIcon ? L" (Icon Group)" : L" (Cursor Group)")).c_str());
 			if (!view->DoCreate(m_Tabs))
 				return {};
 
@@ -688,6 +716,16 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateResourceView(TreeItemType type
 			return { view, view };
 		}
 	}
+
+	// the instrumentation manifest of ETW providers
+	if (res.TypeStr == L"WEVT_TEMPLATE")
+		if (auto manifest = ParseEventManifest(res.Data)) {
+			auto view = new CEventManifestView(this, (res.Name + L" (Event Manifest)").c_str(), std::move(*manifest), m_PE.GetPath());
+			if (!view->DoCreate(m_Tabs))
+				return {};
+			return { view, view };
+		}
+
 	//
 	// the other types: what the data looks like decides how it is shown
 	//

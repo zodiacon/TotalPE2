@@ -198,13 +198,15 @@
 #define ID_EDIT_SEARCHALL               32860
 #define ID_FILE_COMPARE                 32861
 #define ID_COMPARE_SHOWSAME             32862
+#define ID_EVENTS_FIRST                 32863
+#define ID_EVENTS_LAST                  32871
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        278
-#define _APS_NEXT_COMMAND_VALUE         32863
+#define _APS_NEXT_COMMAND_VALUE         32872
 #define _APS_NEXT_CONTROL_VALUE         1035
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

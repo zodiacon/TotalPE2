@@ -189,6 +189,9 @@
     <ClCompile Include="CompareView.cpp">
       <Filter>Views</Filter>
     </ClCompile>
+    <ClCompile Include="EventManifestView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
     <ClCompile Include="SearchDlg.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -378,6 +381,9 @@
       <Filter>Views</Filter>
     </ClInclude>
     <ClInclude Include="CompareView.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="EventManifestView.h">
       <Filter>Views</Filter>
     </ClInclude>
     <ClInclude Include="SearchDlg.h">

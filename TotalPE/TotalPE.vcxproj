@@ -419,6 +419,7 @@
     <ClCompile Include="FontView.cpp" />
     <ClCompile Include="SaveData.cpp" />
     <ClCompile Include="CompareView.cpp" />
+    <ClCompile Include="EventManifestView.cpp" />
     <ClCompile Include="SearchDlg.cpp" />
     <ClCompile Include="MainFrmSearch.cpp" />
     <ClCompile Include="DebugInfoView.cpp" />
@@ -486,6 +487,7 @@
     <ClInclude Include="FontView.h" />
     <ClInclude Include="SaveData.h" />
     <ClInclude Include="CompareView.h" />
+    <ClInclude Include="EventManifestView.h" />
     <ClInclude Include="SearchDlg.h" />
     <ClInclude Include="DebugInfoView.h" />
     <ClInclude Include="ElfView.h" />
