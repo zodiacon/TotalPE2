@@ -583,8 +583,40 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 
 		case TreeItemType::Resource:
 			return CreateResourceView(type);
+
+		case TreeItemType::ResourceHex:
+		{
+			auto index = (size_t)((int64_t)type >> ItemShift) - 1;
+			if (index >= m_FlatResources.size())
+				return {};
+			auto const& res = m_FlatResources[index];
+			auto view = new CHexView(this, std::format(L"{} ({}, Hex)", res.Name, res.Type).c_str());
+			if (!view->DoCreate(m_Tabs))
+				return {};
+
+			SetResourceHexData(*view, res);
+			auto resItem = TreeItemWithIndex(TreeItemType::Resource, (int64_t)(index + 1) << ItemShift);
+			if (auto hParent = FindTreeItem(resItem))
+				view->SetHTreeItem(InsertTreeItem(m_Tree, L"Hex", GetIconIndex(IDI_BINARY), type, hParent));
+			view->SetDeleteFromTree(true);
+			return { view, view };
+		}
 	}
 	return {};
+}
+
+// The data of a resource, at its offset in the file (so that the hex view and the inspector show where it is), or from 0 if
+// the bytes there are not those of the resource
+void CMainFrame::SetResourceHexData(CHexView& view, FlatResource const& res) const {
+	if (m_PE && !res.Data.empty()) {
+		uint64_t offset = res.Offset;
+		auto size = res.Data.size();
+		if (offset > 0 && offset + size <= m_PE.GetFileSize() && memcmp(m_PE.GetData() + offset, res.Data.data(), size) == 0) {
+			view.SetData(m_PE, (uint32_t)offset, (uint32_t)size);
+			return;
+		}
+	}
+	view.SetData(res.Data);
 }
 
 namespace {
@@ -755,6 +787,7 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateResourceView(TreeItemType type
 
 		case ResourceContent::Xml: return showText(ResourceTextToUtf8(res.Data), LexLanguage::Xml);
 		case ResourceContent::Html: return showText(ResourceTextToUtf8(res.Data), LexLanguage::Html);
+		case ResourceContent::Inf: return showText(ResourceTextToUtf8(res.Data), LexLanguage::Inf);
 		case ResourceContent::Text:
 		case ResourceContent::RegistryScript:
 			return showText(ResourceTextToUtf8(res.Data), LexLanguage::Text);
@@ -789,7 +822,7 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateResourceView(TreeItemType type
 	if (!view->DoCreate(m_Tabs))
 		return {};
 
-	view->SetData(res.Data);
+	SetResourceHexData(*view, res);
 	return { view, view };
 }
 

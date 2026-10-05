@@ -165,3 +165,25 @@ TEST_CASE("The same file opened twice gives identical results", "[system]") {
 	CHECK(a.GetRelocations()->size() == b.GetRelocations()->size());
 	CHECK(a.GetFlatResources().size() == b.GetFlatResources().size());
 }
+
+// The resources of imageres.dll (in SystemResources: the one in System32 has almost none) are many megabytes: the data of
+// each must still be valid once all of them have been read, and be the bytes of the file at its offset
+TEST_CASE("The data of resources is in the file at their offset", "[system]") {
+	WCHAR dir[MAX_PATH];
+	::GetWindowsDirectoryW(dir, MAX_PATH);
+	auto path = std::wstring(dir) + L"\\SystemResources\\imageres.dll.mun";
+	if (!std::filesystem::exists(path))
+		SKIP("no imageres.dll.mun");
+	PEFile pe;
+	REQUIRE(pe.Open(path));
+	auto& resources = pe.GetFlatResources();
+	REQUIRE_FALSE(resources.empty());
+
+	size_t total = 0;
+	for (auto& r : resources) {
+		total += r.Data.size();
+		REQUIRE(r.Offset + r.Data.size() <= pe.GetFileSize());
+		CHECK(memcmp(pe.GetData() + r.Offset, r.Data.data(), r.Data.size()) == 0);
+	}
+	CHECK(total > 4 * 1024 * 1024);
+}

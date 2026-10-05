@@ -16,6 +16,7 @@
 #include "VtKeyDlg.h"
 #include "SaveData.h"
 #include "ScintillaView.h"
+#include "HexView.h"
 #include "CompareView.h"
 #include "ItaniumDemangle.h"
 #include <thread>
@@ -53,13 +54,21 @@ bool CMainFrame::OnTreeDoubleClick(HWND, HTREEITEM hItem) {
 bool CMainFrame::OnTreeRightClick(HWND, HTREEITEM hItem, POINT const& pt) {
 	auto type = (TreeItemType)m_Tree.GetItemData(hItem);
 	auto kind = type & TreeItemType::ItemMask;
-	// a section or a resource can be saved to a file
+	// a section or a resource can be saved to a file, and a resource be shown in hex (whatever view it has)
 	if (kind == TreeItemType::Section || kind == TreeItemType::Resource) {
 		CMenu menu;
 		menu.CreatePopupMenu();
 		menu.AppendMenu(MF_STRING, ID_DATA_SAVE, L"&Save Data...");
-		if (ShowContextMenu(menu, TPM_RETURNCMD, pt.x, pt.y, m_hWnd) == ID_DATA_SAVE)
-			SaveTreeItemData(type);
+		if (kind == TreeItemType::Resource)
+			menu.AppendMenu(MF_STRING, ID_VIEW_RESOURCEHEX, L"Open as &Hex");
+		switch (ShowContextMenu(menu, TPM_RETURNCMD, pt.x, pt.y, m_hWnd)) {
+			case ID_DATA_SAVE:
+				SaveTreeItemData(type);
+				break;
+			case ID_VIEW_RESOURCEHEX:
+				ShowResourceHex((int)(((int64_t)type >> ItemShift) - 1));
+				break;
+		}
 		return true;
 	}
 	if (kind == TreeItemType::ElfSection && m_Elf) {
@@ -106,6 +115,7 @@ void CMainFrame::UpdateUI() {
 	UIEnable(ID_EDIT_SEARCHALL, fi || m_Archive || m_Object || m_Elf);
 	UIEnable(ID_FILE_COMPARE, fi != nullptr);
 	UIEnable(ID_PE_ENTIREFILEINHEX, fi != nullptr);
+	UIEnable(ID_VIEW_RESOURCEHEX, FALSE);
 }
 
 int CMainFrame::GetResourceIconIndex(WORD resType) const {
@@ -1337,6 +1347,45 @@ void CMainFrame::UpdateSaveUI() {
 	}
 	UIEnable(ID_FILE_EXPORTLIST, list);
 	UIEnable(ID_FILE_SAVE, save);
+
+	// a resource that is shown other than in hex
+	bool resource = false;
+	if (ActiveResource() >= 0)
+		resource = dynamic_cast<CHexView*>(m_Views.at(m_Views2.at(hPage))) == nullptr;
+	UIEnable(ID_VIEW_RESOURCEHEX, resource);
+}
+
+// The index of the resource that the active view shows (in m_FlatResources), -1 if it shows something else
+int CMainFrame::ActiveResource() {
+	int page = m_Tabs.GetActivePage();
+	if (page < 0)
+		return -1;
+	auto it = m_Views2.find(m_Tabs.GetPageHWND(page));
+	if (it == m_Views2.end() || (it->second & TreeItemType::ItemMask) != TreeItemType::Resource || !m_Views.contains(it->second))
+		return -1;
+	auto index = ((int64_t)it->second >> ItemShift) - 1;
+	return index >= 0 && index < (int64_t)m_FlatResources.size() ? (int)index : -1;
+}
+
+// The data of a resource in a hex view of its own, under the item of the resource while it is open
+bool CMainFrame::ShowResourceHex(int index) {
+	if (index < 0 || index >= (int)m_FlatResources.size())
+		return false;
+	auto type = TreeItemWithIndex(TreeItemType::ResourceHex, (int64_t)(index + 1) << ItemShift);
+	RecordNavigation();
+	if (!ShowView(type, nullptr, IDI_BINARY))
+		return false;
+	if (auto hItem = m_Views.at(type)->GetHTreeItem()) {
+		m_Tree.EnsureVisible(hItem);
+		m_Tree.SelectItem(hItem);
+	}
+	RecordNavigation();
+	return true;
+}
+
+LRESULT CMainFrame::OnViewResourceHex(WORD, WORD, HWND, BOOL&) {
+	ShowResourceHex(ActiveResource());
+	return 0;
 }
 
 // Save Data on a section or a resource in the tree

@@ -95,6 +95,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="ElfDebugInfoTests.cpp" />
     <ClCompile Include="EventManifestTests.cpp" />
+    <ClCompile Include="InfSyntaxTests.cpp" />
     <ClCompile Include="DemangleTests.cpp" />
     <ClCompile Include="SyntheticPE.cpp" />
     <ClCompile Include="OpenCloseTests.cpp" />

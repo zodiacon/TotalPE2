@@ -297,6 +297,7 @@ BEGIN
         MENUITEM "Search &All...\tCtrl+Shift+F", ID_EDIT_SEARCHALL
         MENUITEM SEPARATOR
         MENUITEM "&Disassemble...",             ID_VIEW_DISASSEMBLE
+        MENUITEM "Resource as &Hex\tCtrl+Shift+H", ID_VIEW_RESOURCEHEX
         MENUITEM SEPARATOR
         MENUITEM "&Status Bar",                 ID_VIEW_STATUS_BAR
     END
@@ -579,6 +580,7 @@ BEGIN
     VK_F6,          ID_PREV_PANE,           VIRTKEY, SHIFT, NOINVERT
     "F",            ID_EDIT_FIND,           VIRTKEY, CONTROL, NOINVERT
     "F",            ID_EDIT_SEARCHALL,      VIRTKEY, SHIFT, CONTROL, NOINVERT
+    "H",            ID_VIEW_RESOURCEHEX,    VIRTKEY, SHIFT, CONTROL, NOINVERT
     VK_F3,          ID_EDIT_FIND_NEXT,      VIRTKEY, NOINVERT
     VK_F3,          ID_EDIT_FIND_PREVIOUS,  VIRTKEY, SHIFT, NOINVERT
     "B",            ID_HEX_BOOKMARK_TOGGLE, VIRTKEY, CONTROL, NOINVERT

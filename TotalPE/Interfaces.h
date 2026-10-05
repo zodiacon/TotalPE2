@@ -113,6 +113,9 @@ enum class TreeItemType : int64_t {
 	ElfCompileUnits,
 	ElfFunctions,
 
+	// the data of a resource in hex (the index is that of the resource, as for Resource)
+	ResourceHex,
+
 	ItemMask = 255,
 };
 DEFINE_ENUM_FLAG_OPERATORS(TreeItemType);

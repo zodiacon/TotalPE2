@@ -27,6 +27,9 @@
     <ClInclude Include="EventManifest.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="InfSyntax.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="PEFile.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -138,6 +141,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="EventManifest.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="InfSyntax.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="PEFile.cpp">

@@ -379,6 +379,7 @@
     <ClCompile Include="ImportsView.cpp" />
     <ClCompile Include="LexAsm.cxx" />
     <ClCompile Include="LexHTML.cxx" />
+    <ClCompile Include="LexInf.cxx" />
     <ClCompile Include="LoadConfigView.cpp" />
     <ClCompile Include="MainFrm.cpp" />
     <ClCompile Include="pch.cpp">

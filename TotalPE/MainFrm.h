@@ -22,6 +22,8 @@
 #include <Theme.h>
 #include <map>
 
+class CHexView;
+
 class CMainFrame :
 	public CFrameWindowImpl<CMainFrame>,
 	public CAutoUpdateUI<CMainFrame>,
@@ -70,6 +72,7 @@ public:
 		COMMAND_ID_HANDLER(ID_FILE_EXPORTLIST, OnFileExportList)
 		COMMAND_ID_HANDLER(ID_PE_SECURITY, OnViewSecurity)
 		COMMAND_ID_HANDLER(ID_PE_ENTIREFILEINHEX, OnViewFileInHex)
+		COMMAND_ID_HANDLER(ID_VIEW_RESOURCEHEX, OnViewResourceHex)
 		COMMAND_ID_HANDLER(ID_VIEW_SECTIONS, OnViewSections)
 		COMMAND_ID_HANDLER(ID_VIEW_DIRECTORIES, OnViewDataDirs)
 		COMMAND_ID_HANDLER(ID_PE_DISASSEMBLEENTRYPOINT, OnDisassembleEntryPoint)
@@ -132,6 +135,9 @@ private:
 
 	std::pair<IView*, CMessageMap*> CreateView(TreeItemType type);
 	std::pair<IView*, CMessageMap*> CreateResourceView(TreeItemType type);
+	void SetResourceHexData(CHexView& view, FlatResource const& res) const;
+	int ActiveResource();
+	bool ShowResourceHex(int index);
 	void SetAlwaysOnTop(bool onTop);
 	void InitDarkTheme() const;
 	bool ShowView(HTREEITEM hItem);
@@ -247,6 +253,7 @@ private:
 	std::wstring GetVirusTotalKey(bool ask);
 	LRESULT OnPageActivated(int /*idCtrl*/, LPNMHDR /*pnmh*/, BOOL& /*bHandled*/);
 	LRESULT OnViewFileInHex(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnViewResourceHex(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnPageCloseButton(int /*idCtrl*/, LPNMHDR /*pnmh*/, BOOL& /*bHandled*/);
 	LRESULT OnWindowsProperties(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 

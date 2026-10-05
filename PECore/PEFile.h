@@ -145,6 +145,7 @@ struct PEResFlat {
     WORD                       TypeID{};
     WORD                       NameID{};
     WORD                       LangID{};
+    uint32_t                   Offset{};    // where the data is in the file
 };
 using PERESFLAT_VEC = std::vector<PEResFlat>;
 

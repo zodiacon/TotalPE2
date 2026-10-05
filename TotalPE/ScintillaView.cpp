@@ -12,6 +12,7 @@
 #include "PEStrings.h"
 #include "PEFile.h"
 #include "CodeAnalysis.h"
+#include "InfSyntax.h"
 
 // "address mnemonic operands (name of the target) ; bytes": an instruction that refers to a known address gets its name:
 // a branch target, a RIP-relative or absolute operand (x86, x64), the address that adrp and add or ldr make (ARM64)
@@ -408,6 +409,7 @@ static std::vector<std::string> const& KeyWords_ARM64() {
 void CScintillaView::SetLanguage(LexLanguage lang) {
 	extern LexerModule lmAsm;
 	extern LexerModule lmXML;
+	extern LexerModule lmInf;
 
 	m_Language = lang;
 
@@ -431,6 +433,10 @@ void CScintillaView::SetLanguage(LexLanguage lang) {
 		case LexLanguage::Xml:
 		case LexLanguage::Html:	// the XML lexer colors the tags and attributes of HTML as well
 			m_Sci.SetLexer(lmXML.Create());
+			break;
+
+		case LexLanguage::Inf:
+			m_Sci.SetLexer(lmInf.Create());
 			break;
 	}
 	UpdateColors();
@@ -458,6 +464,19 @@ void CScintillaView::UpdateColors() {
 		case LexLanguage::Html:
 			m_Sci.StyleSetFore(SCE_H_TAG, dark ? RGB(0, 128, 255) : RGB(0, 0, 240));
 			m_Sci.StyleSetFore(SCE_H_ATTRIBUTE, dark ? RGB(240, 128, 128) : RGB(128, 0, 0));
+			break;
+
+		case LexLanguage::Inf:
+			m_Sci.StyleSetFore((int)InfStyle::Comment, RGB(0, 128, 0));
+			m_Sci.StyleSetFore((int)InfStyle::Section, dark ? RGB(0, 128, 255) : RGB(0, 0, 240));
+			m_Sci.StyleSetBold((int)InfStyle::Section, true);
+			m_Sci.StyleSetFore((int)InfStyle::Key, dark ? RGB(240, 128, 128) : RGB(128, 0, 0));
+			m_Sci.StyleSetFore((int)InfStyle::Operator, RGB(128, 128, 128));
+			m_Sci.StyleSetFore((int)InfStyle::String, dark ? RGB(214, 157, 133) : RGB(163, 21, 21));
+			m_Sci.StyleSetFore((int)InfStyle::StringKey, dark ? RGB(200, 120, 255) : RGB(128, 0, 128));
+			m_Sci.StyleSetFore((int)InfStyle::Number, dark ? RGB(0, 255, 255) : RGB(0, 0, 255));
+			m_Sci.StyleSetFore((int)InfStyle::RootKey, dark ? RGB(255, 160, 0) : RGB(192, 96, 0));
+			m_Sci.StyleSetBold((int)InfStyle::RootKey, true);
 			break;
 	}
 }

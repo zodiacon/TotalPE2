@@ -18,6 +18,7 @@ enum class LexLanguage {
 	Asm,
 	Html,
 	Text,
+	Inf,
 };
 
 class CScintillaView :

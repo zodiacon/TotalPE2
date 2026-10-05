@@ -53,6 +53,12 @@ TEST_CASE("Text resources: XML, HTML, registry scripts and plain text", "[resour
 	CHECK(DetectResourceContent(AsBytes("Just some words\r\nand more"), RT_RCDATA_, L"") == ResourceContent::Text);
 	CHECK(MakeResourceFile(AsBytes("HKCR { }"), 0, L"REGISTRY").Extension == L"rgs");
 
+	// the INF scripts of Advanced INF Setup: by their type, or by the section that INF files start with
+	CHECK(DetectResourceContent(AsBytes("[Version]\r\nSignature=\"$CHICAGO$\"\r\n"), 0, L"REGINST") == ResourceContent::Inf);
+	CHECK(DetectResourceContent(AsBytes("[Reg]\r\nAddReg=X\r\n"), 0, L"REGINST") == ResourceContent::Inf);
+	CHECK(DetectResourceContent(AsBytes("\r\n[version]\r\nSignature=\"$Windows NT$\"\r\n"), RT_RCDATA_, L"") == ResourceContent::Inf);
+	CHECK(MakeResourceFile(AsBytes("[Version]\r\n"), 0, L"REGINST").Extension == L"inf");
+
 	SECTION("UTF-16, with and without a byte order mark") {
 		for (bool bom : { true, false }) {
 			auto data = Utf16("<?xml version=\"1.0\"?><a/>", bom);

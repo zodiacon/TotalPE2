@@ -49,10 +49,11 @@ The kind of file is recognized by its contents, not its extension. Open files fr
 * Graphical views of dialogs and menus
 * Icons and cursors (single and groups, animated ones too) - exported as `.ico` / `.cur` files
 * Bitmaps and images (PNG, JPEG, GIF), with transparency
-* Text resources (XML, HTML, registry scripts, plain text) with syntax highlighting
+* Text resources (XML, HTML, INF scripts of `REGINST` resources, registry scripts, plain text) with syntax highlighting
 * Type libraries, shown as IDL
 * Event manifests of ETW providers (`WEVT_TEMPLATE`): events, templates and their fields, channels, levels, tasks, opcodes, keywords and value maps, with their message texts
 * Fonts, with a preview
+* The raw bytes of any resource, whatever view it has: Resource as Hex (Ctrl+Shift+H) or Open as Hex on its tree item, with the offsets of the file
 * Any resource or section can be saved to a file; bitmaps get their file header, so they open as `.bmp` files
 
 ## Code

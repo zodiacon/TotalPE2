@@ -469,8 +469,8 @@ void PEFile::BuildResources() {
     auto const* root = m_Impl->binary->resources();
     if (!root) return;
 
-    m_ResRawData.reserve(4 * 1024 * 1024);
-
+    // the data of all resources is in one buffer: their spans are set once it no longer grows
+    std::vector<size_t> starts;
     for (auto const& typeNode : root->childs()) {
         std::wstring typeStr;
         WORD typeID = 0;
@@ -497,14 +497,17 @@ void PEFile::BuildResources() {
                 flat.NameStr = nameStr;
                 flat.NameID  = nameID;
                 flat.LangID  = (WORD)langNode.id();
+                flat.Offset  = data->offset();
 
                 auto const content = data->content(); // span<const uint8_t>
-                size_t base = m_ResRawData.size();
+                starts.push_back(m_ResRawData.size());
                 auto const* src = reinterpret_cast<const std::byte*>(content.data());
                 m_ResRawData.insert(m_ResRawData.end(), src, src + content.size());
-                flat.Data = std::span<const std::byte>(m_ResRawData.data() + base, content.size());
+                flat.Data = std::span<const std::byte>((const std::byte*)nullptr, content.size());
                 m_FlatResources.push_back(std::move(flat));
             }
         }
     }
+    for (size_t i = 0; i < m_FlatResources.size(); i++)
+        m_FlatResources[i].Data = { m_ResRawData.data() + starts[i], m_FlatResources[i].Data.size() };
 }

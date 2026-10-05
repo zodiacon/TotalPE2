@@ -110,6 +110,8 @@ namespace {
 			return ResourceContent::Html;
 		if (LooksLikeRegistryScript(t))
 			return ResourceContent::RegistryScript;
+		if (IStarts(t, "[Version]"))
+			return ResourceContent::Inf;
 		return ResourceContent::Text;
 	}
 
@@ -258,6 +260,7 @@ const wchar_t* ResourceContentToString(ResourceContent content) {
 		case ResourceContent::Html: return L"HTML";
 		case ResourceContent::Text: return L"Text";
 		case ResourceContent::RegistryScript: return L"Registry Script";
+		case ResourceContent::Inf: return L"INF";
 		case ResourceContent::TypeLib: return L"Type Library";
 		case ResourceContent::Font: return L"Font";
 		case ResourceContent::Executable: return L"Executable";
@@ -288,6 +291,8 @@ ResourceContent DetectResourceContent(std::span<const std::byte> data, uint16_t 
 		return ResourceContent::Html;
 	if (typeId == 0 && IEquals(typeName, L"REGISTRY"))
 		return ResourceContent::RegistryScript;
+	if (typeId == 0 && IEquals(typeName, L"REGINST"))
+		return ResourceContent::Inf;
 	return text;
 }
 
@@ -355,6 +360,7 @@ ResourceFile MakeResourceFile(std::span<const std::byte> data, uint16_t typeId, 
 		case ResourceContent::Html: file.Extension = L"html"; break;
 		case ResourceContent::Text: file.Extension = L"txt"; break;
 		case ResourceContent::RegistryScript: file.Extension = L"rgs"; break;
+		case ResourceContent::Inf: file.Extension = L"inf"; break;
 		case ResourceContent::TypeLib: file.Extension = L"tlb"; break;
 		case ResourceContent::Font: file.Extension = FontExtension(data); break;
 		case ResourceContent::Executable:

@@ -147,6 +147,9 @@
     <ClCompile Include="LexHTML.cxx">
       <Filter>Lexers</Filter>
     </ClCompile>
+    <ClCompile Include="LexInf.cxx">
+      <Filter>Lexers</Filter>
+    </ClCompile>
     <ClCompile Include="IATView.cpp">
       <Filter>Views\DataDirectories</Filter>
     </ClCompile>
