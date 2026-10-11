@@ -125,6 +125,7 @@ private:
 	bool ShowXrefs(uint64_t va) override;
 	bool ShowFlowGraph(uint64_t va) override;
 	bool DisassembleFunction(uint64_t va) override;
+	bool ShowType(DiaSymbol const& type) override;
 	bool ShowArchiveMember(int member) override;
 	bool ShowObjectSection(int section, int64_t offset, int member = -1) override;
 	bool ShowElfAddress(uint64_t address, bool code) override;

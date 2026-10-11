@@ -45,6 +45,7 @@
 #include "DebugInfoView.h"
 #include "GuardTableView.h"
 #include "ElfView.h"
+#include "TypeView.h"
 
 std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 	CWaitCursor wait;
@@ -911,6 +912,39 @@ bool CMainFrame::ShowXrefs(uint64_t va) {
 	auto image = GetIconIndex(IDI_BINARY);
 	auto itemType = TreeItemWithIndex(TreeItemType::Xrefs, (int64_t)(va - base) << ItemShift);
 	auto hItem = InsertTreeItem(m_Tree, title.c_str(), image, itemType, hParent, TVI_SORT);
+	m_Tree.EnsureVisible(hItem);
+	view->SetHTreeItem(hItem);
+	m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, view);
+	m_Views.insert({ itemType, view });
+	m_Views2.insert({ view->GetHwnd(), itemType });
+	RecordNavigation();
+	return true;
+}
+
+bool CMainFrame::ShowType(DiaSymbol const& type) {
+	if (!type)
+		return false;
+	auto itemType = TreeItemWithIndex(TreeItemType::SymbolType, (int64_t)type.Id() << ItemShift);
+	if (auto it = m_Views.find(itemType); it != m_Views.end()) {
+		ShowView(it->second->GetHTreeItem());
+		return true;
+	}
+	auto hParent = FindTreeItem(TreeItemType::Symbols);
+	if (!hParent)
+		hParent = FindTreeItem(TreeItemType::Image);
+	if (!hParent)
+		return false;
+
+	RecordNavigation();
+	auto view = new CTypeView(this, type);
+	if (nullptr == view->DoCreate(m_Tabs)) {
+		ATLASSERT(false);
+		return false;
+	}
+	view->SetDeleteFromTree(true);
+
+	auto image = GetIconIndex(CTypeView::TypeIcon(type));
+	auto hItem = InsertTreeItem(m_Tree, view->GetTitle(), image, itemType, hParent, TVI_SORT);
 	m_Tree.EnsureVisible(hItem);
 	view->SetHTreeItem(hItem);
 	m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, view);

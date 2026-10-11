@@ -23,6 +23,11 @@ extern CAppModule _Module;
 #include <atltypes.h>
 #include <atlsplit.h>
 #include <atltheme.h>
+
+// Windows 10 (1607); used by the TreeListView control
+#ifndef WM_DPICHANGED_AFTERPARENT
+#define WM_DPICHANGED_AFTERPARENT 0x02E3
+#endif
 #include <atlscrl.h>
 
 #include <vector>

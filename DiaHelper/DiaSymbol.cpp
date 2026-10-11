@@ -208,7 +208,7 @@ uint32_t DiaSymbol::Count() const {
 
 VARIANT DiaSymbol::Value() const {
 	VARIANT value;
-	::VariantClear(&value);
+	::VariantInit(&value);
 	m_spSym->get_value(&value);
 	return value;
 }

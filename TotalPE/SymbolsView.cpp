@@ -142,11 +142,18 @@ void CSymbolsView::OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD 
 		UpdateUI();
 }
 
-// The code of a function (or of a public symbol, thunk or label in code) in a view of its own
+// The layout of a type, or the code of a function (or of a public symbol, thunk or label in code), in a view of its own
 bool CSymbolsView::OnDoubleClickList(HWND, int row, int, CPoint const&) const {
 	if (row < 0 || row >= (int)m_Items.size())
 		return false;
 	auto& item = m_Items[row];
+	// a type: its layout (of a typedef, that of the type it names)
+	if (item.Tag == SymbolTag::UDT || item.Tag == SymbolTag::Enum)
+		return Frame()->ShowType(item.Symbol);
+	if (item.Tag == SymbolTag::Typedef) {
+		auto type = item.Symbol.Type();
+		return type && (type.Tag() == SymbolTag::UDT || type.Tag() == SymbolTag::Enum) && Frame()->ShowType(type);
+	}
 	if (item.Rva == 0)
 		return false;
 	switch (item.Tag) {

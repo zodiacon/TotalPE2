@@ -16,40 +16,29 @@ void CStructView::SetPEOffset(PEFile const& pe, DWORD offset) {
 }
 
 void CStructView::ShowObject(PVOID address) {
-    m_TL.GetTreeControl().DeleteAllItems();
-    auto hRoot = m_TL.GetTreeControl().InsertItem(m_Object.Name().c_str(), 0, 0, TVI_ROOT, TVI_LAST);
+    m_TL.BeginUpdate();
+    m_TL.DeleteAllItems();
+    auto hRoot = m_TL.InsertItem(TLV_ROOT, TLV_LAST, m_Object.Name().c_str(), Frame()->GetIconIndex(IDI_TYPE));
     Helpers::FillTreeListView(Frame(), m_TL, hRoot, m_Object, Frame()->GetSymbols(), address);
-    m_TL.GetTreeControl().Expand(hRoot, TVE_EXPAND);
+    // only the members of the object itself are shown at first (items are created expanded)
+    m_TL.CollapseAll(hRoot);
+    m_TL.EndUpdate();
+    m_TL.Expand(hRoot);
     m_HexView.SetData(address, (uint32_t)m_Object.Length());
 }
 
 LRESULT CStructView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
     m_hWndClient = m_Splitter.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN);
 
-    m_TL.Create(m_Splitter, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | TLVIF_FORMAT
-        | TVS_HASBUTTONS | TVS_LINESATROOT | TVS_HASLINES);
+    m_TL.Create(m_Splitter, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
 
-    m_TL.GetTreeControl().SetImageList(Frame()->GetImageList(), TVSIL_NORMAL);
-    HDITEM hdi{ HDI_TEXT | HDI_FORMAT | HDI_WIDTH };
-    hdi.fmt = LVCFMT_LEFT;
-    hdi.cxy = 250;
-    hdi.pszText = (PWSTR)L"Member";
-    m_TL.GetHeaderControl().AddItem(&hdi);
-
-    hdi.fmt = LVCFMT_RIGHT;
-    hdi.pszText = (PWSTR)L"Offset";
-    hdi.cxy = 60;
-    m_TL.GetHeaderControl().AddItem(&hdi);
-
-    hdi.fmt = LVCFMT_CENTER;
-    hdi.pszText = (PWSTR)L"Type";
-    hdi.cxy = 180;
-    m_TL.GetHeaderControl().AddItem(&hdi);
-
-    hdi.fmt = LVCFMT_RIGHT;
-    hdi.pszText = (PWSTR)L"Value";
-    hdi.cxy = 150;
-    m_TL.GetHeaderControl().AddItem(&hdi);
+    // the image list is the frame's: not to be destroyed with the control
+    m_TL.GetListCtrl().ModifyStyle(0, LVS_SHAREIMAGELISTS);
+    m_TL.SetImageList(Frame()->GetImageList(), LVSIL_SMALL);
+    m_TL.InsertColumn(0, L"Member", 250);
+    m_TL.InsertColumn(1, L"Offset", 60, LVCFMT_RIGHT);
+    m_TL.InsertColumn(2, L"Type", 180, LVCFMT_CENTER);
+    m_TL.InsertColumn(3, L"Value", 150, LVCFMT_RIGHT);
 
     m_HexView.Create(m_Splitter, rcDefault, nullptr, WS_CHILD | WS_VISIBLE);
     m_HexView.SetStatic(true);

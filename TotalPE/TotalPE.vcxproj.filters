@@ -87,6 +87,9 @@
     <ClCompile Include="StructView.cpp">
       <Filter>Views</Filter>
     </ClCompile>
+    <ClCompile Include="TypeView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
     <ClCompile Include="Helpers.cpp">
       <Filter>Helpers</Filter>
     </ClCompile>
@@ -287,10 +290,10 @@
     <ClInclude Include="ResourcesView.h">
       <Filter>Views\DataDirectories</Filter>
     </ClInclude>
-    <ClInclude Include="TreeListView.h">
-      <Filter>Controls</Filter>
-    </ClInclude>
     <ClInclude Include="StructView.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="TypeView.h">
       <Filter>Views</Filter>
     </ClInclude>
     <ClInclude Include="Helpers.h">

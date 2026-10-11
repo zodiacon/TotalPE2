@@ -119,6 +119,9 @@ enum class TreeItemType : int64_t {
 	// the node of the functions disassembled by name or address (the ones that are not exports)
 	DisassemblyFunctions,
 
+	// a type from the symbols (the index is the symbol's ID)
+	SymbolType,
+
 	ItemMask = 255,
 };
 DEFINE_ENUM_FLAG_OPERATORS(TreeItemType);
@@ -162,6 +165,8 @@ struct IMainFrame abstract {
 	virtual bool ShowFlowGraph(uint64_t va) = 0;
 	// The code of the function at an address in a view of its own: under the exports for an export, otherwise under Disassembly
 	virtual bool DisassembleFunction(uint64_t va) = 0;
+	// The layout of a type from the symbols (a struct, class, union or enum) in a view of its own, under Symbols
+	virtual bool ShowType(DiaSymbol const& type) = 0;
 	// A member of the library: an object as an object file (its header, sections...), anything else in the hex view
 	virtual bool ShowArchiveMember(int member) = 0;
 	// The data of a section of an object in the hex view, at an offset in the section (-1 for the start). The object is the object
