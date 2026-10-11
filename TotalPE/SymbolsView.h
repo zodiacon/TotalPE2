@@ -11,8 +11,10 @@ public:
 	CSymbolsView(IMainFrame* frame, DiaSession const& session, SymViewType type);
 
 	CString GetColumnText(HWND, int row, int col) const;
+	int GetRowImage(HWND, int row, int col) const;
 	void DoSort(SortInfo const* si);
-	void OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD newState);
+	void OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD newState) const;
+	bool OnDoubleClickList(HWND, int row, int col, CPoint const& pt) const;
 
 	void UpdateUI(bool first = false) const;
 
@@ -32,20 +34,29 @@ private:
 	void BuildItems();
 
 	enum ColumnType {
-		Name, Type, Value, UndecoratedName, Location, Class,
+		Name, SymType, Type, RVA, Size, Location, DataKind, UndecoratedName,
 	};
 
-	// Handler prototypes (uncomment arguments if needed):
-	//	LRESULT MessageHandler(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)
-	//	LRESULT CommandHandler(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
-	//	LRESULT NotifyHandler(int /*idCtrl*/, LPNMHDR /*pnmh*/, BOOL& /*bHandled*/)
+	// what is cheap to get is read up front; the rest when first shown (or sorted on)
+	struct Item {
+		DiaSymbol Symbol;
+		std::wstring Name;
+		SymbolTag Tag;
+		LocationKind Location;
+		uint32_t Rva;
+		uint64_t Size;
+		mutable std::wstring TypeName, Undecorated;
+		mutable bool HasDetails{ false };
+	};
+	void GetDetails(Item const& item) const;
+	static PCWSTR DataKindToString(DataItemKind kind);
 
 	LRESULT OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnCopy(WORD, WORD, HWND, BOOL&) const;
 	LRESULT OnFind(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 
 	CListViewCtrl m_List;
-	std::vector<DiaSymbol> m_Items;
+	std::vector<Item> m_Items;
 	DiaSession const& m_Session;
 	SymViewType m_Type;
 };

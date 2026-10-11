@@ -164,6 +164,12 @@ uint64_t DiaSymbol::VirtualAddress() const {
 	return address;
 }
 
+uint32_t DiaSymbol::RelativeVirtualAddress() const {
+	DWORD rva = 0;
+	m_spSym->get_relativeVirtualAddress(&rva);
+	return rva;
+}
+
 uint32_t DiaSymbol::Slot() const {
 	ATLASSERT(Location() == LocationKind::Slot);
 	DWORD slot = 0;

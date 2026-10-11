@@ -158,6 +158,9 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		case TreeItemType::SymbolsGlobalData:
 			if (symType == SymViewType::None)
 				symType = SymViewType::Data;
+		case TreeItemType::Symbols:
+			if (symType == SymViewType::None)
+				symType = SymViewType::All;
 		{
 			auto view = new CSymbolsView(this, m_Symbols, symType);
 			if (nullptr == view->DoCreate(m_Tabs)) {

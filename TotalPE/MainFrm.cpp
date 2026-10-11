@@ -1178,11 +1178,7 @@ void CMainFrame::BuildTree(int iconSize) {
 
 	if (m_Symbols) {
 		m_Symbols.LoadAddress(m_PE.GetImageBase());
-		//auto symbols = InsertTreeItem(m_Tree, L"Symbols", GetTreeIcon(IDI_SYMBOLS), TreeItemType::Symbols, root);
-		//InsertTreeItem(m_Tree, L"Functions", GetTreeIcon(IDI_FUNCTION), TreeItemType::SymbolsFunctions, symbols, TVI_SORT);
-		//InsertTreeItem(m_Tree, L"Global Data", GetTreeIcon(IDI_DATA), TreeItemType::SymbolsGlobalData, symbols, TVI_SORT);
-		//InsertTreeItem(m_Tree, L"Types", GetTreeIcon(IDI_TYPE), TreeItemType::SymbolsTypes, symbols, TVI_SORT);
-		//InsertTreeItem(m_Tree, L"Enums", GetTreeIcon(IDI_ENUM), TreeItemType::SymbolsEnums, symbols, TVI_SORT);
+		InsertTreeItem(m_Tree, L"Symbols", GetTreeIcon(IDI_SYMBOLS), TreeItemType::Symbols, root);
 	}
 
 	m_hRoot = root;
@@ -1468,7 +1464,7 @@ bool CMainFrame::BuildTreeImageList(int iconSize) {
 		IDI_THREAD, IDI_RICH_HEADER, IDI_MSDOS, IDI_FILE_HEADER, IDI_COMPONENT,
 		IDI_FUNCTION, IDI_FUNC_FORWARD, IDI_INTERFACE, IDI_DLL_IMPORT, IDI_FUNCTION2, IDI_SYMBOLS,
 		IDI_TYPE, IDI_ENUM, IDI_BITFIELD, IDI_FIELD, IDI_ARRAY, IDI_UNION, IDI_BINARY,
-		IDI_DATA, IDI_FLOW, IDI_LOOK,
+		IDI_DATA, IDI_FLOW, IDI_LOOK, IDI_CLASS,
 	};
 
 	bool insert = s_ImageIndices.empty();
@@ -1727,12 +1723,21 @@ LRESULT CMainFrame::OnDisassembleFunction(WORD /*wNotifyCode*/, WORD /*wID*/, HW
 		AtlMessageBox(m_hWnd, error.c_str(), IDR_MAINFRAME, MB_ICONWARNING);
 		return 0;
 	}
-	if (m_Elf) {
+	if (m_Elf)
 		ShowElfAddress(address, true);
-		return 0;
-	}
+	else
+		DisassembleFunction(address);
+	return 0;
+}
 
-	auto rva = (uint32_t)(address - m_PE.GetImageBase());
+bool CMainFrame::DisassembleFunction(uint64_t address) {
+	if (!m_PE)
+		return false;
+	auto base = m_PE.GetImageBase();
+	if (address < base || address - base > 0xFFFFFFFFULL)
+		return false;
+
+	auto rva = (uint32_t)(address - base);
 	PESectionHeader const* host = nullptr;
 	for (auto const& s : *m_PE.GetSecHeaders()) {
 		auto& h = s.SecHdr;
@@ -1743,12 +1748,12 @@ LRESULT CMainFrame::OnDisassembleFunction(WORD /*wNotifyCode*/, WORD /*wID*/, HW
 	}
 	if (!host || !(host->SecHdr.Characteristics & (IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_CNT_CODE))) {
 		AtlMessageBox(m_hWnd, std::format(L"0x{:X} is not in a code section.", address).c_str(), IDR_MAINFRAME, MB_ICONWARNING);
-		return 0;
+		return false;
 	}
 	auto& h = host->SecHdr;
 	if (rva - h.VirtualAddress >= h.SizeOfRawData) {
 		AtlMessageBox(m_hWnd, std::format(L"0x{:X} is not backed by data in the file.", address).c_str(), IDR_MAINFRAME, MB_ICONWARNING);
-		return 0;
+		return false;
 	}
 	auto offset = h.PointerToRawData + (rva - h.VirtualAddress);
 	// the disassembly stops at the end of the function: this is only the most that is examined
@@ -1772,15 +1777,17 @@ LRESULT CMainFrame::OnDisassembleFunction(WORD /*wNotifyCode*/, WORD /*wID*/, HW
 	if (parent == TreeItemType::DisassemblyFunctions && !FindTreeItem(parent)) {
 		auto hRoot = FindTreeItem(TreeItemType::Image);
 		if (!hRoot)
-			return 0;
+			return false;
 		InsertTreeItem(m_Tree, L"Disassembly", GetTreeIcon(IDI_BINARY), parent, hRoot);
 	}
 	RecordNavigation();
-	if (CreateAssemblyView(m_PE.GetSpan(offset, (uint32_t)size), address, rva, title.c_str(), parent))
+	if (CreateAssemblyView(m_PE.GetSpan(offset, (uint32_t)size), address, rva, title.c_str(), parent)) {
 		RecordNavigation();
-	else if (auto hFunctions = FindTreeItem(TreeItemType::DisassemblyFunctions); hFunctions && !m_Tree.GetChildItem(hFunctions))
+		return true;
+	}
+	if (auto hFunctions = FindTreeItem(TreeItemType::DisassemblyFunctions); hFunctions && !m_Tree.GetChildItem(hFunctions))
 		m_Tree.DeleteItem(hFunctions);
-	return 0;
+	return false;
 }
 
 LRESULT CMainFrame::OnAlwaysOnTop(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
@@ -1985,6 +1992,8 @@ LRESULT CMainFrame::OnSymbolsLoaded(UINT, WPARAM generation, LPARAM lParam, BOOL
 	m_Symbols = *session;
 	m_Symbols.LoadAddress(m_PE.GetImageBase());
 	SetStatusText(0, L"Symbols loaded");
+	if (auto root = FindTreeItem(TreeItemType::Image); root && !FindTreeItem(TreeItemType::Symbols))
+		InsertTreeItem(m_Tree, L"Symbols", GetTreeIcon(IDI_SYMBOLS), TreeItemType::Symbols, root);
 	RefreshViews();
 	SearchTargetChanged();
 	return 0;

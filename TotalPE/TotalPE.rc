@@ -253,6 +253,8 @@ IDI_BOOKMARK            ICON                    "res\\Bookmark.ico"
 
 IDI_FLOW                ICON                    "res\\Flow.ico"
 
+IDI_CLASS               ICON                    "res\\class.ico"
+
 
 /////////////////////////////////////////////////////////////////////////////
 //

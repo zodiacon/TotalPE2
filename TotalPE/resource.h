@@ -78,6 +78,7 @@
 #define IDI_BOOKMARK                    272
 #define IDD_GOTO                        273
 #define IDD_DISASM_FUNCTION             278
+#define IDI_CLASS                       279
 #define IDD_SEARCH                      277
 #define IDD_VTKEY                       274
 #define IDI_ICON5                       276
@@ -209,7 +210,7 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        279
+#define _APS_NEXT_RESOURCE_VALUE        280
 #define _APS_NEXT_COMMAND_VALUE         32874
 #define _APS_NEXT_CONTROL_VALUE         1036
 #define _APS_NEXT_SYMED_VALUE           101

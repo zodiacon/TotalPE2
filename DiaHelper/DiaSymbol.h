@@ -37,6 +37,7 @@ public:
     uint32_t AddressSection() const;
     uint32_t AddressOffset() const;
     uint64_t VirtualAddress() const;
+    uint32_t RelativeVirtualAddress() const;
     uint32_t Slot() const;
     uint32_t Signature() const;
     uint32_t OffsetInUdt() const;

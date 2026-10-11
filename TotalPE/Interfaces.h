@@ -124,7 +124,7 @@ enum class TreeItemType : int64_t {
 DEFINE_ENUM_FLAG_OPERATORS(TreeItemType);
 
 enum class SymViewType {
-	None, Function, Data, UDT, Enum,
+	None, Function, Data, UDT, Enum, All,
 };
 
 struct FlatResource : PEResFlat {
@@ -160,6 +160,8 @@ struct IMainFrame abstract {
 	virtual bool ShowXrefs(uint64_t va) = 0;
 	// The flow graph of the function that contains the address (the code from the address if the function is not known)
 	virtual bool ShowFlowGraph(uint64_t va) = 0;
+	// The code of the function at an address in a view of its own: under the exports for an export, otherwise under Disassembly
+	virtual bool DisassembleFunction(uint64_t va) = 0;
 	// A member of the library: an object as an object file (its header, sections...), anything else in the hex view
 	virtual bool ShowArchiveMember(int member) = 0;
 	// The data of a section of an object in the hex view, at an offset in the section (-1 for the start). The object is the object
