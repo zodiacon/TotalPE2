@@ -15,6 +15,10 @@ public:
 	void DoSort(SortInfo const* si);
 	void OnStateChanged(HWND, int from, int to, DWORD oldState, DWORD newState) const;
 	bool OnDoubleClickList(HWND, int row, int col, CPoint const& pt) const;
+	bool OnRightClickList(HWND, int row, int col, POINT const& pt) const;
+	int GetSaveColumnRange(HWND, int&) const {
+		return 1;
+	}
 
 	void UpdateUI(bool first = false) const;
 

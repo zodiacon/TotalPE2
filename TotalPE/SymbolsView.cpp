@@ -4,6 +4,7 @@
 #include <ClipboardHelper.h>
 #include "resource.h"
 #include "PEStrings.h"
+#include "TypeExporter.h"
 
 CSymbolsView::CSymbolsView(IMainFrame* frame, DiaSession const& session, SymViewType type)
 	: CViewBase(frame), m_Session(session), m_Type(type) {
@@ -169,6 +170,17 @@ bool CSymbolsView::OnDoubleClickList(HWND, int row, int, CPoint const&) const {
 			return false;
 	}
 	return Frame()->DisassembleFunction(m_Session.LoadAddress() + item.Rva);
+}
+
+// A type (or a typedef of one) can be saved as a definition
+bool CSymbolsView::OnRightClickList(HWND, int row, int, POINT const& pt) const {
+	if (row < 0 || row >= (int)m_Items.size())
+		return false;
+	auto type = TypeExporter::ExportableType(m_Items[row].Symbol);
+	if (!type)
+		return false;
+	TypeExporter::ShowMenu(Frame(), m_hWnd, type, pt);
+	return true;
 }
 
 CString CSymbolsView::GetTitle() const {

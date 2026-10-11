@@ -2,6 +2,7 @@
 #include "TypeView.h"
 #include <ClipboardHelper.h>
 #include "resource.h"
+#include "TypeExporter.h"
 
 namespace {
 	// arrays can be large: only the start is shown
@@ -248,6 +249,31 @@ LRESULT CTypeView::OnItemExpanding(int, LPNMHDR hdr, BOOL&) {
 	m_TL.EndUpdate();
 	if (!m_TL.GetChildItem(nm->hItem))
 		m_TL.SetHasChildren(nm->hItem, false);
+	return 0;
+}
+
+// The type of the item (the root is the type of the view; a member, its own type) can be saved as a definition
+LRESULT CTypeView::OnRightClick(int, LPNMHDR hdr, BOOL&) {
+	if (hdr->hwndFrom != m_TL.m_hWnd)
+		return 0;
+	POINT pt;
+	::GetCursorPos(&pt);
+	POINT client(pt);
+	m_TL.ScreenToClient(&client);
+	auto hItem = m_TL.HitTest(client);
+	if (!hItem)
+		return 0;
+	m_TL.SelectItem(hItem);
+
+	auto type = DiaSymbol::Empty;
+	if (hItem == m_TL.GetRootItem())
+		type = m_Type;
+	else if (auto index = m_TL.GetItemData(hItem); index > 0 && index <= (LPARAM)m_Nodes.size())
+		type = TypeExporter::ExportableType(m_Nodes[index - 1].Type);
+	if (!type)
+		return 0;
+
+	TypeExporter::ShowMenu(Frame(), m_hWnd, type, pt);
 	return 0;
 }
 

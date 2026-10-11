@@ -429,6 +429,7 @@
     <ClCompile Include="GuardTableView.cpp" />
     <ClCompile Include="StructView.cpp" />
     <ClCompile Include="SymbolsView.cpp" />
+    <ClCompile Include="TypeExporter.cpp" />
     <ClCompile Include="TypeView.cpp" />
     <ClCompile Include="TextView.cpp" />
     <ClCompile Include="TlsView.cpp" />
@@ -497,6 +498,7 @@
     <ClInclude Include="GuardTableView.h" />
     <ClInclude Include="StructView.h" />
     <ClInclude Include="SymbolsView.h" />
+    <ClInclude Include="TypeExporter.h" />
     <ClInclude Include="TypeView.h" />
     <ClInclude Include="TextView.h" />
     <ClInclude Include="TlsView.h" />
