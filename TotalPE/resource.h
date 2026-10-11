@@ -77,6 +77,7 @@
 #define IDI_ICON3                       272
 #define IDI_BOOKMARK                    272
 #define IDD_GOTO                        273
+#define IDD_DISASM_FUNCTION             278
 #define IDD_SEARCH                      277
 #define IDD_VTKEY                       274
 #define IDI_ICON5                       276
@@ -104,6 +105,7 @@
 #define IDC_GOTO_VA                     1020
 #define IDC_GOTO_OFFSET                 1021
 #define IDC_GOTO_DISASM                 1022
+#define IDC_DISASM_TEXT                 1035
 #define IDC_VT_KEY                      1023
 #define IDC_VT_GETKEY                   1024
 #define IDC_SEARCH_TEXT                 1025
@@ -150,6 +152,7 @@
 #define ID_EDIT_FIND_PREV               32806
 #define ID_VIEW_DISASSEMBLE             32807
 #define ID_PE_DISASSEMBLEENTRYPOINT     32808
+#define ID_PE_DISASSEMBLEFUNCTION       32873
 #define ID_IMPORT_FILEPROPERTIES        32809
 #define ID_IMPORT_GOTOFILELOCATION      32810
 #define ID_WINDOW_WINDOWS               32811
@@ -206,9 +209,9 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        278
-#define _APS_NEXT_COMMAND_VALUE         32873
-#define _APS_NEXT_CONTROL_VALUE         1035
+#define _APS_NEXT_RESOURCE_VALUE        279
+#define _APS_NEXT_COMMAND_VALUE         32874
+#define _APS_NEXT_CONTROL_VALUE         1036
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

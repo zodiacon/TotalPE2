@@ -236,7 +236,7 @@
       <DllDataFileName />
     </Midl>
     <PostBuildEvent>
-      <Command>signtool sign /i DigiCert /n Scorpio /fd sha256 $(TargetPath)</Command>
+      <Command>signtool sign /a /i DigiCert /n Scorpio /fd sha256 $(TargetPath)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseSigned|Win32'">
@@ -273,7 +273,7 @@
       </DllDataFileName>
     </Midl>
     <PostBuildEvent>
-      <Command>signtool sign /i DigiCert /n Scorpio /fd sha256 $(TargetPath)</Command>
+      <Command>signtool sign /a /i DigiCert /n Scorpio /fd sha256 $(TargetPath)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">

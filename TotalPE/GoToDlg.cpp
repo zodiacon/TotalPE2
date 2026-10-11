@@ -38,3 +38,31 @@ LRESULT CGoToDlg::OnCancel(WORD, WORD wID, HWND, BOOL&) {
 	EndDialog(wID);
 	return 0;
 }
+
+LRESULT CDisassembleFunctionDlg::OnInitDialog(UINT, WPARAM, LPARAM, BOOL&) {
+	SetDialogIcon(IDR_MAINFRAME);
+	CenterWindow(GetParent());
+
+	SetDlgItemText(IDC_DISASM_TEXT, m_Text.c_str());
+	GetDlgItem(IDC_DISASM_TEXT).SetFocus();
+	((CEdit)GetDlgItem(IDC_DISASM_TEXT)).SetSelAll();
+	return FALSE;
+}
+
+LRESULT CDisassembleFunctionDlg::OnOK(WORD, WORD wID, HWND, BOOL&) {
+	CString text;
+	GetDlgItemText(IDC_DISASM_TEXT, text);
+	text.Trim();
+	if (text.IsEmpty()) {
+		GetDlgItem(IDC_DISASM_TEXT).SetFocus();
+		return 0;
+	}
+	m_Text = (PCWSTR)text;
+	EndDialog(wID);
+	return 0;
+}
+
+LRESULT CDisassembleFunctionDlg::OnCancel(WORD, WORD wID, HWND, BOOL&) {
+	EndDialog(wID);
+	return 0;
+}

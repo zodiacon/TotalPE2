@@ -38,3 +38,26 @@ public:
 private:
 	GoToOptions& m_Options;
 };
+
+// A function to disassemble: its name or its address
+class CDisassembleFunctionDlg :
+	public CDialogImpl<CDisassembleFunctionDlg>,
+	public CDialogHelper<CDisassembleFunctionDlg> {
+public:
+	enum { IDD = IDD_DISASM_FUNCTION };
+
+	explicit CDisassembleFunctionDlg(std::wstring& text) : m_Text(text) {}
+
+	BEGIN_MSG_MAP(CDisassembleFunctionDlg)
+		MESSAGE_HANDLER(WM_INITDIALOG, OnInitDialog)
+		COMMAND_ID_HANDLER(IDOK, OnOK)
+		COMMAND_ID_HANDLER(IDCANCEL, OnCancel)
+	END_MSG_MAP()
+
+	LRESULT OnInitDialog(UINT, WPARAM, LPARAM, BOOL&);
+	LRESULT OnOK(WORD, WORD, HWND, BOOL&);
+	LRESULT OnCancel(WORD, WORD wID, HWND, BOOL&);
+
+private:
+	std::wstring& m_Text;
+};

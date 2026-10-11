@@ -95,6 +95,7 @@ bool CMainFrame::OnTreeRightClick(HWND, HTREEITEM hItem, POINT const& pt) {
 void CMainFrame::UpdateUI() {
 	auto const fi = m_PE ? m_PE.GetFileInfo() : nullptr;
 	UIEnable(ID_PE_DISASSEMBLEENTRYPOINT, fi != nullptr || (m_Elf && m_Elf.Entry()));
+	UIEnable(ID_PE_DISASSEMBLEFUNCTION, fi != nullptr || m_Elf);
 	UIEnable(ID_VIEW_EXPORTS, fi && fi->HasExport);
 	UIEnable(ID_VIEW_IMPORTS, fi && fi->HasImport);
 	UIEnable(ID_VIEW_RESOURCES, fi && fi->HasResource);
@@ -185,7 +186,12 @@ bool CMainFrame::AddToolBar(HWND tb) {
 }
 
 bool CMainFrame::DeleteTreeItem(HTREEITEM hItem) {
-	return m_Tree.DeleteItem(hItem);
+	if (!m_Tree.DeleteItem(hItem))
+		return false;
+	// the node of disassembled functions goes away with its last function
+	if (auto hFunctions = FindTreeItem(TreeItemType::DisassemblyFunctions); hFunctions && !m_Tree.GetChildItem(hFunctions))
+		m_Tree.DeleteItem(hFunctions);
+	return true;
 }
 
 LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/) {
@@ -1646,6 +1652,134 @@ LRESULT CMainFrame::OnDisassembleEntryPoint(WORD /*wNotifyCode*/, WORD /*wID*/, 
 	}
 	if (!ShowView(TreeItemType::AsmEntryPoint, nullptr, IDI_BINARY))
 		AtlMessageBox(m_hWnd, L"No entry point defined for this PE", IDR_MAINFRAME, MB_ICONWARNING);
+	return 0;
+}
+
+// A function by its name (the exports first, then the symbols) or by its address (hexadecimal):
+// in a PE, an address at the image base or above is a VA, otherwise an RVA
+bool CMainFrame::ResolveFunction(std::wstring const& text, uint64_t& address, std::wstring& error) const {
+	if (m_Elf) {
+		for (auto const& n : m_ElfNames) {
+			if (n.Name == text) {
+				address = n.Address;
+				return true;
+			}
+		}
+		if (ParseHexNumber(text, address))
+			return true;
+		error = std::format(L"No function named \"{}\" was found.", text);
+		return false;
+	}
+
+	auto base = m_PE.GetImageBase();
+	if (auto exp = m_PE.GetExport()) {
+		for (auto const& f : exp->Funcs) {
+			if (f.FuncRVA && f.ForwarderName.empty() && !f.FuncName.empty()
+				&& std::equal(f.FuncName.begin(), f.FuncName.end(), text.begin(), text.end())) {
+				address = base + f.FuncRVA;
+				return true;
+			}
+		}
+	}
+	if (m_Symbols) {
+		// functions (private symbols) first; public symbols may be decorated
+		std::pair<SymbolTag, CompareOptions> const lookups[] = {
+			{ SymbolTag::Function, CompareOptions::CaseSensitive },
+			{ SymbolTag::PublicSymbol, CompareOptions::CaseSensitive },
+			{ SymbolTag::PublicSymbol, CompareOptions::CaseSensitive | CompareOptions::UndecoratedName },
+			{ SymbolTag::Function, CompareOptions::CaseInsensitive },
+			{ SymbolTag::PublicSymbol, CompareOptions::CaseInsensitive | CompareOptions::UndecoratedName },
+		};
+		for (auto& [tag, options] : lookups) {
+			for (auto const& sym : m_Symbols.FindChildren(text.c_str(), tag, options)) {
+				if (sym.Location() == LocationKind::Static && sym.VirtualAddress()) {
+					address = sym.VirtualAddress();
+					return true;
+				}
+			}
+		}
+	}
+
+	if (!ParseHexNumber(text, address)) {
+		error = std::format(L"No function named \"{}\" was found in the exports{}.", text,
+			m_Symbols ? L" or the symbols" : L" (and no symbols are loaded)");
+		return false;
+	}
+	if (address < base)
+		address += base;	// an RVA
+	if (address - base > 0xFFFFFFFFULL) {
+		error = std::format(L"The address 0x{:X} is outside the image.", address);
+		return false;
+	}
+	return true;
+}
+
+LRESULT CMainFrame::OnDisassembleFunction(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
+	if (!m_PE && !m_Elf)
+		return 0;
+	CDisassembleFunctionDlg dlg(m_DisassembleFunction);
+	if (dlg.DoModal(m_hWnd) != IDOK)
+		return 0;
+
+	uint64_t address;
+	std::wstring error;
+	if (!ResolveFunction(m_DisassembleFunction, address, error)) {
+		AtlMessageBox(m_hWnd, error.c_str(), IDR_MAINFRAME, MB_ICONWARNING);
+		return 0;
+	}
+	if (m_Elf) {
+		ShowElfAddress(address, true);
+		return 0;
+	}
+
+	auto rva = (uint32_t)(address - m_PE.GetImageBase());
+	PESectionHeader const* host = nullptr;
+	for (auto const& s : *m_PE.GetSecHeaders()) {
+		auto& h = s.SecHdr;
+		if (rva >= h.VirtualAddress && rva < h.VirtualAddress + std::max(h.Misc.VirtualSize, h.SizeOfRawData)) {
+			host = &s;
+			break;
+		}
+	}
+	if (!host || !(host->SecHdr.Characteristics & (IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_CNT_CODE))) {
+		AtlMessageBox(m_hWnd, std::format(L"0x{:X} is not in a code section.", address).c_str(), IDR_MAINFRAME, MB_ICONWARNING);
+		return 0;
+	}
+	auto& h = host->SecHdr;
+	if (rva - h.VirtualAddress >= h.SizeOfRawData) {
+		AtlMessageBox(m_hWnd, std::format(L"0x{:X} is not backed by data in the file.", address).c_str(), IDR_MAINFRAME, MB_ICONWARNING);
+		return 0;
+	}
+	auto offset = h.PointerToRawData + (rva - h.VirtualAddress);
+	// the disassembly stops at the end of the function: this is only the most that is examined
+	auto size = std::min<uint64_t>(0x2000, (uint64_t)h.PointerToRawData + h.SizeOfRawData - offset);
+	size = std::min<uint64_t>(size, m_PE.GetFileSize() - offset);
+
+	// an export goes under the exports directory (named as the exports view names it); any other function under a node of its own
+	std::wstring name;
+	auto parent = TreeItemType::DisassemblyFunctions;
+	if (auto exp = m_PE.GetExport(); exp && FindTreeItem(TreeItemType::DirectoryExports)) {
+		auto it = std::ranges::find_if(exp->Funcs, [&](auto const& f) { return f.FuncRVA == rva && f.ForwarderName.empty(); });
+		if (it != exp->Funcs.end()) {
+			parent = TreeItemType::DirectoryExports;
+			name = std::wstring(it->FuncName.begin(), it->FuncName.end());
+		}
+	}
+	if (name.empty())
+		name = ResolveRva(rva);
+	auto title = name.empty() || name.find(L'+') != std::wstring::npos ? std::format(L"Code at 0x{:X}", address) : name;
+
+	if (parent == TreeItemType::DisassemblyFunctions && !FindTreeItem(parent)) {
+		auto hRoot = FindTreeItem(TreeItemType::Image);
+		if (!hRoot)
+			return 0;
+		InsertTreeItem(m_Tree, L"Disassembly", GetTreeIcon(IDI_BINARY), parent, hRoot);
+	}
+	RecordNavigation();
+	if (CreateAssemblyView(m_PE.GetSpan(offset, (uint32_t)size), address, rva, title.c_str(), parent))
+		RecordNavigation();
+	else if (auto hFunctions = FindTreeItem(TreeItemType::DisassemblyFunctions); hFunctions && !m_Tree.GetChildItem(hFunctions))
+		m_Tree.DeleteItem(hFunctions);
 	return 0;
 }
 

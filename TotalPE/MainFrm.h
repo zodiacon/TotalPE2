@@ -76,6 +76,7 @@ public:
 		COMMAND_ID_HANDLER(ID_VIEW_SECTIONS, OnViewSections)
 		COMMAND_ID_HANDLER(ID_VIEW_DIRECTORIES, OnViewDataDirs)
 		COMMAND_ID_HANDLER(ID_PE_DISASSEMBLEENTRYPOINT, OnDisassembleEntryPoint)
+		COMMAND_ID_HANDLER(ID_PE_DISASSEMBLEFUNCTION, OnDisassembleFunction)
 		COMMAND_ID_HANDLER(ID_FILE_NEW, OnNewWindow)
 		COMMAND_ID_HANDLER(ID_OPTIONS_ALWAYSONTOP, OnAlwaysOnTop)
 		COMMAND_ID_HANDLER(ID_HELP_ABOUTWINDOWS, OnWindowsProperties)
@@ -223,6 +224,7 @@ private:
 	bool SaveTreeItemData(TreeItemType type);
 	bool SaveText(HWND hText, CString const& name);
 	LRESULT OnDisassembleEntryPoint(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnDisassembleFunction(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnAlwaysOnTop(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnUpdateDarkMode(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnToggleDarkMode(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
@@ -322,6 +324,8 @@ private:
 	void UpdateNavigationUI();
 	void ResetNavigation();
 	bool ResolveGoTo(GoToOptions const& options, int64_t& offset, std::wstring& error) const;
+	std::wstring m_DisassembleFunction;	// the last name or address entered
+	bool ResolveFunction(std::wstring const& text, uint64_t& address, std::wstring& error) const;
 
 	// symbols are loaded on a worker thread; results of an older request are ignored
 	uint32_t m_SymbolGeneration{ 0 };

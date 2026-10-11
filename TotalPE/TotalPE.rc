@@ -316,6 +316,7 @@ BEGIN
         MENUITEM "Security",                    ID_PE_SECURITY
         MENUITEM SEPARATOR
         MENUITEM "Disassemble Entry Point",     ID_PE_DISASSEMBLEENTRYPOINT
+        MENUITEM "Disassemble &Function...",    ID_PE_DISASSEMBLEFUNCTION
         MENUITEM "Entire File in &Hex",         ID_PE_ENTIREFILEINHEX
         MENUITEM SEPARATOR
         MENUITEM "Upload to &VirusTotal...",    ID_PE_VIRUSTOTAL
@@ -517,6 +518,18 @@ BEGIN
     PUSHBUTTON      "Cancel",IDCANCEL,173,89,50,14
 END
 
+IDD_DISASM_FUNCTION DIALOGEX 0, 0, 260, 92
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Disassemble Function"
+FONT 9, "Segoe UI", 0, 0, 0x0
+BEGIN
+    LTEXT           "Function &name or address (hexadecimal):",IDC_STATIC,7,7,246,8
+    EDITTEXT        IDC_DISASM_TEXT,7,17,246,14,ES_AUTOHSCROLL
+    LTEXT           "A name is looked up in the exports and then in the symbols. An address at the image base or above is a VA; otherwise it is an RVA.",IDC_STATIC,7,37,246,26
+    DEFPUSHBUTTON   "Disassemble",IDOK,147,71,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,203,71,50,14
+END
+
 IDD_SEARCH DIALOGEX 0, 0, 440, 260
 STYLE DS_SETFONT | DS_FIXEDSYS | WS_MAXIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
 CAPTION "Search All"
@@ -598,8 +611,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,1,0,0
- PRODUCTVERSION 1,1,0,0
+ FILEVERSION 1,2,0,0
+ PRODUCTVERSION 1,2,0,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -616,12 +629,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Pavel Yosifovich"
             VALUE "FileDescription", "Total PE - PE Viewer"
-            VALUE "FileVersion", "1.1.0.0"
+            VALUE "FileVersion", "1.2.0.0"
             VALUE "InternalName", "TotalPE"
             VALUE "LegalCopyright", "©2022-2026 Pavel Yosifovich"
             VALUE "OriginalFilename", "TotalPE.exe"
             VALUE "ProductName", "Total PE"
-            VALUE "ProductVersion", "1.1.0.0"
+            VALUE "ProductVersion", "1.2.0.0"
         END
     END
     BLOCK "VarFileInfo"

@@ -116,6 +116,9 @@ enum class TreeItemType : int64_t {
 	// the data of a resource in hex (the index is that of the resource, as for Resource)
 	ResourceHex,
 
+	// the node of the functions disassembled by name or address (the ones that are not exports)
+	DisassemblyFunctions,
+
 	ItemMask = 255,
 };
 DEFINE_ENUM_FLAG_OPERATORS(TreeItemType);

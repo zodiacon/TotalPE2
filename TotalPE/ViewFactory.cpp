@@ -827,16 +827,15 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateResourceView(TreeItemType type
 }
 
 bool CMainFrame::CreateAssemblyView(std::span<const std::byte> code, uint64_t address, uint32_t rva, PCWSTR title, TreeItemType parent) {
+	//
+	// the parent is the node of an open view, or a node in the tree without one
+	//
 	auto it = m_Views.find(parent);
-	if (it == m_Views.end()) {
-		//
-		// parent node does not exist
-		//
+	auto hParent = it != m_Views.end() ? it->second->GetHTreeItem() : FindTreeItem(parent);
+	if (!hParent) {
 		ATLASSERT(false);
 		return false;
 	}
-
-	auto hParent = it->second->GetHTreeItem();
 	//
 	// check for duplicate
 	//
@@ -928,18 +927,28 @@ bool CMainFrame::ShowFlowGraph(uint64_t va) {
 	auto const& xrefs = GetXrefs();
 	auto function = FindFunctionStart(m_PE, xrefs, va);
 
-	// next to the disassembly of the function: under Exports for an exported function, otherwise under the image
-	auto parentType = TreeItemType::Image;
-	if (auto exports = m_PE.GetExport(); exports && m_Views.contains(TreeItemType::DirectoryExports))
-		for (auto const& f : exports->Funcs)
-			if (f.ForwarderName.empty() && base + f.FuncRVA == function) {
-				parentType = TreeItemType::DirectoryExports;
-				break;
-			}
-	auto parent = m_Views.find(parentType);
-	if (parent == m_Views.end())
+	// next to the disassembly of the function (of the function, or of the address the graph is asked for), wherever it is;
+	// without one: under Exports for an exported function, otherwise under the image
+	HTREEITEM hParent = nullptr;
+	for (auto address : { function, va }) {
+		if (auto hCode = FindTreeItem(TreeItemWithIndex(TreeItemType::Disassembly, (int64_t)(address - base) << ItemShift))) {
+			hParent = m_Tree.GetParentItem(hCode);
+			break;
+		}
+	}
+	if (!hParent) {
+		auto parentType = TreeItemType::Image;
+		if (auto exports = m_PE.GetExport(); exports && FindTreeItem(TreeItemType::DirectoryExports))
+			for (auto const& f : exports->Funcs)
+				if (f.ForwarderName.empty() && base + f.FuncRVA == function) {
+					parentType = TreeItemType::DirectoryExports;
+					break;
+				}
+		auto parent = m_Views.find(parentType);
+		hParent = parent != m_Views.end() ? parent->second->GetHTreeItem() : FindTreeItem(parentType);
+	}
+	if (!hParent)
 		return false;
-	auto hParent = parent->second->GetHTreeItem();
 
 	// the graph of the function may be open already: found by its item, not by its title (the disassembly of an export
 	// has the same title, under the same parent)
