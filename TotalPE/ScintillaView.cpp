@@ -611,6 +611,8 @@ LRESULT CScintillaView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
 				if (ch == L'&')
 					ch = L'+';	// not a mnemonic
 			sub.InsertMenu(0, MF_BYPOSITION | MF_SEPARATOR);
+			sub.InsertMenu(0, MF_BYPOSITION | MF_STRING, ID_CODE_DISASSEMBLE_HERE, (L"Disassemble " + shown + L" in sa&me window").c_str());
+			sub.InsertMenu(0, MF_BYPOSITION | MF_STRING, ID_CODE_DECOMPILE_HERE, (L"Decompile " + shown + L" in &same window").c_str());
 			sub.InsertMenu(0, MF_BYPOSITION | MF_STRING, ID_CODE_DISASSEMBLE, (L"Dis&assemble " + shown).c_str());
 			sub.InsertMenu(0, MF_BYPOSITION | MF_STRING, ID_CODE_DECOMPILE, (L"&Decompile " + shown).c_str());
 		}
@@ -702,12 +704,18 @@ uint64_t CScintillaView::FunctionOf(std::wstring const& name) const {
 	return 0;
 }
 
+// In a view of its own, or in place of this one ("in same window": this view is destroyed then, so nothing of it is used
+// after the frame is called)
 LRESULT CScintillaView::OnCodeLink(WORD, WORD id, HWND, BOOL&) {
-	if (m_LinkAddress) {
-		if (id == ID_CODE_DECOMPILE)
-			Frame()->DecompileFunction(m_LinkAddress);
-		else
-			Frame()->DisassembleFunction(m_LinkAddress);
+	auto address = m_LinkAddress;
+	auto frame = Frame();
+	if (!address)
+		return 0;
+	switch (id) {
+		case ID_CODE_DECOMPILE: frame->DecompileFunction(address); break;
+		case ID_CODE_DISASSEMBLE: frame->DisassembleFunction(address); break;
+		case ID_CODE_DECOMPILE_HERE: frame->ReplaceView(m_hWnd, [=] { return frame->DecompileFunction(address); }); break;
+		case ID_CODE_DISASSEMBLE_HERE: frame->ReplaceView(m_hWnd, [=] { return frame->DisassembleFunction(address); }); break;
 	}
 	return 0;
 }

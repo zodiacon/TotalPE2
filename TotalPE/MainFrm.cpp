@@ -2322,6 +2322,28 @@ bool CMainFrame::DecompileFunction(uint64_t address) {
 	return true;
 }
 
+bool CMainFrame::ReplaceView(HWND hView, std::function<bool()> const& open) {
+	auto pageOf = [&](HWND hWnd) {
+		for (int i = 0; i < m_Tabs.GetPageCount(); i++)
+			if (m_Tabs.GetPageHWND(i) == hWnd)
+				return i;
+		return -1;
+	};
+	if (pageOf(hView) < 0)
+		return open();
+	if (!open())
+		return false;
+	int page = m_Tabs.GetActivePage();
+	if (page < 0 || m_Tabs.GetPageHWND(page) == hView)
+		return true;		// the view itself (it is what was asked for): it stays
+	// into the place of the view (the new one is added last), then the view goes
+	m_Tabs.MoveToPlaceOf(page, pageOf(hView));
+	int old = pageOf(hView);
+	CloseTab(old);
+	m_Tabs.RemovePage(old);
+	return true;
+}
+
 LRESULT CMainFrame::OnDisassembleFunction(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
 	if (!m_PE && !m_Elf)
 		return 0;

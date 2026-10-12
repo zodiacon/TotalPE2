@@ -48,6 +48,8 @@ public:
 		return m_Active;
 	}
 	void SetActivePage(int page);
+	// a page into the place of another: in its group, at its tab (the other is to be removed then)
+	void MoveToPlaceOf(int page, int other);
 	HWND GetPageHWND(int page) const;
 	PCWSTR GetPageTitle(int page) const;
 	void* GetPageData(int page) const;

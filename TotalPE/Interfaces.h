@@ -178,6 +178,9 @@ struct IMainFrame abstract {
 	virtual bool DisassembleFunction(uint64_t va) = 0;
 	// The function at an address as C (decompiled), in a view of its own next to where its disassembly goes
 	virtual bool DecompileFunction(uint64_t va) = 0;
+	// A view in place of another ("in the same window"): 'open' opens it (as DecompileFunction does), then it takes the
+	// place of the view, which is closed. Nothing is closed if 'open' fails, or brings up the view itself.
+	virtual bool ReplaceView(HWND hView, std::function<bool()> const& open) = 0;
 	// The layout of a type from the symbols (a struct, class, union or enum) in a view of its own, under Symbols
 	virtual bool ShowType(DiaSymbol const& type) = 0;
 	// The definition of a type from the symbols as source (C, C++ or C#) in a view of its own, under Symbols

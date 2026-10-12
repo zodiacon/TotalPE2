@@ -260,6 +260,7 @@ private:
 	LRESULT OnDecompileFunction(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	// The function at an address as C (Ghidra's decompiler), in a view of its own next to where its disassembly goes
 	bool DecompileFunction(uint64_t va) override;
+	bool ReplaceView(HWND hView, std::function<bool()> const& open) override;
 	// the decompiler of the PE file (made on first use); null, with the reason, if there is none for its machine
 	GhidraDecompiler* Decompiler(std::wstring& error);
 	// the PE image as it is in memory: the headers, and the sections at their addresses (zeros past their data)

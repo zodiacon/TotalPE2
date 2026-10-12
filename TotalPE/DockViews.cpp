@@ -129,6 +129,24 @@ void CDockViews::SetActivePage(int page) {
 	}
 }
 
+void CDockViews::MoveToPlaceOf(int page, int other) {
+	if (page < 0 || page >= (int)m_Pages.size() || other < 0 || other >= (int)m_Pages.size() || page == other)
+		return;
+	auto pane = m_Pages[page].Pane;
+	auto target = m_Pages[other].Pane;
+	auto group = target->Group();
+	if (!group)
+		return;
+	auto const& panes = group->Panes();
+	auto index = (int)(std::ranges::find(panes, target) - panes.begin());
+	auto& layout = m_Dock.Layout();
+	if (pane->Group() == group)
+		layout.ReorderTab(pane, index);
+	else
+		layout.DockTo(pane, group, DockPosition::Tab, index);
+	m_Dock.ActivatePane(pane);
+}
+
 HWND CDockViews::GetPageHWND(int page) const {
 	return page >= 0 && page < (int)m_Pages.size() ? m_Pages[page].Pane->hWnd : nullptr;
 }
