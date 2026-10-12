@@ -1,9 +1,9 @@
 #pragma once
 
 // Change these values to use different versions
-#define WINVER		0x0601
-#define _WIN32_WINNT	0x0601
-#define _WIN32_IE	0x0700
+#define WINVER		0x0A00
+#define _WIN32_WINNT	0x0A00
+#define _WIN32_IE	0x0A00
 #define _RICHEDIT_VER	0x0500
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
@@ -23,11 +23,6 @@ extern CAppModule _Module;
 #include <atltypes.h>
 #include <atlsplit.h>
 #include <atltheme.h>
-
-// Windows 10 (1607); used by the TreeListView control
-#ifndef WM_DPICHANGED_AFTERPARENT
-#define WM_DPICHANGED_AFTERPARENT 0x02E3
-#endif
 #include <atlscrl.h>
 
 #include <vector>

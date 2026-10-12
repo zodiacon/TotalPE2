@@ -916,7 +916,7 @@ bool CMainFrame::ShowXrefs(uint64_t va) {
 	auto hItem = InsertTreeItem(m_Tree, title.c_str(), image, itemType, hParent, TVI_SORT);
 	m_Tree.EnsureVisible(hItem);
 	view->SetHTreeItem(hItem);
-	m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, view);
+	m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, view, CDockViews::Placement::Tool);
 	m_Views.insert({ itemType, view });
 	m_Views2.insert({ view->GetHwnd(), itemType });
 	RecordNavigation();

@@ -31,10 +31,11 @@ BOOL CMainFrame::PreTranslateMessage(MSG* pMsg) {
 	if (m_SearchDlg.IsWindow() && m_SearchDlg.IsDialogMessageW(pMsg))
 		return TRUE;
 
-	if (CFrameWindowImpl<CMainFrame>::PreTranslateMessage(pMsg))
+	// the docking area's shortcuts (Ctrl+Tab, Ctrl+F4, Ctrl+F6...) before the accelerators
+	if (m_Tabs.PreTranslateMessage(pMsg))
 		return TRUE;
 
-	return m_Tabs.PreTranslateMessage(pMsg);
+	return CFrameWindowImpl<CMainFrame>::PreTranslateMessage(pMsg);
 }
 
 BOOL CMainFrame::OnIdle() {
@@ -230,13 +231,11 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 	AddSimpleReBarBand(tb);
 	UIAddToolBar(tb);
 
-	m_hWndClient = m_Splitter.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN, WS_EX_CLIENTEDGE);
-	m_Tabs.m_bTabCloseButton = true;
-	m_Tabs.Create(m_Splitter, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN);
-	m_Tree.Create(m_Splitter, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT);
-
-	m_Splitter.SetSplitterPanes(m_Tree, m_Tabs);
-	m_Splitter.SetSplitterPosPct(15);
+	// the tree and the views in a docking area. The tree is made a child of the frame: a tree view sends its notifications
+	// (double click, right click...) to the window it was created in, whichever window of the docking area holds it later.
+	m_hWndClient = m_Tabs.Create(m_hWnd);
+	m_Tree.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT);
+	m_Tabs.SetExplorer(m_Tree, L"Explorer");
 
 	// register object for message filtering and idle updates
 	auto pLoop = _Module.GetMessageLoop();
@@ -306,7 +305,8 @@ bool CMainFrame::ShowView(TreeItemType data, HTREEITEM hItem, UINT icon) {
 			if (!hItem)
 				hItem = FindTreeItem(data);
 			view->SetHTreeItem(hItem);
-			m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, map);
+			m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, map,
+				IsToolView(data) ? CDockViews::Placement::Tool : CDockViews::Placement::Document);
 			m_Views.insert({ data, view });
 			m_Views2.insert({ view->GetHwnd(), data });
 			return true;
@@ -395,6 +395,21 @@ LRESULT CMainFrame::OnWindowClose(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWn
 		::MessageBeep((UINT)-1);
 
 	return 0;
+}
+
+bool CMainFrame::IsToolView(TreeItemType type) {
+	switch (type & TreeItemType::ItemMask) {
+		case TreeItemType::Symbols:
+		case TreeItemType::SymbolsFunctions:
+		case TreeItemType::SymbolsClasses:
+		case TreeItemType::SymbolsStructs:
+		case TreeItemType::SymbolsEnums:
+		case TreeItemType::SymbolsTypes:
+		case TreeItemType::SymbolsGlobalData:
+		case TreeItemType::Xrefs:
+			return true;
+	}
+	return false;
 }
 
 int CMainFrame::GetTreeIcon(UINT id) {

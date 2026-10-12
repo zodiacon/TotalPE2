@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include <NativeCustomTabView.h>
+#include "DockViews.h"
 #include <TabViewHelper.h>
 #include <CustomSplitterWindow.h>
 #include <TreeViewHelper.h>
@@ -185,6 +185,8 @@ private:
 	static int ResourceTypeToIcon(WORD resType);
 	static int DirectoryIndexToIcon(int index);
 	static TreeItemType GetIndex(TreeItemType value);
+	// the views of lists to come back to (symbols, references) are tool panes, not documents
+	static bool IsToolView(TreeItemType type);
 
 	// Handler prototypes (uncomment arguments if needed):
 	//	LRESULT MessageHandler(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)
@@ -267,8 +269,7 @@ private:
 		int SubMenu;
 	};
 
-	CNativeCustomTabView m_Tabs;
-	CCustomSplitterWindow m_Splitter;
+	CDockViews m_Tabs;	// the views, in a docking area (with the tree)
 	CTreeViewCtrl m_Tree;
 	CMultiPaneStatusBarCtrl m_StatusBar;
 	PEFile m_PE;

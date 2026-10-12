@@ -144,7 +144,7 @@
       <PreprocessorDefinitions>_WINDOWS;STRICT;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\WTLHelper\TreeListView\include;..\WTLHelper\WTLHelper;..\WTLHelper\WTL;..\WTLHelper\NodeGraphControl\include;..\PECore;..\HexControl;..\DiaHelper;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\WTLHelper\TreeListView\include;..\WTLHelper\WTLDock\include;..\WTLHelper\WTLHelper;..\WTLHelper\WTL;..\WTLHelper\NodeGraphControl\include;..\PECore;..\HexControl;..\DiaHelper;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -181,7 +181,7 @@
       <PreprocessorDefinitions>WIN32;_WINDOWS;STRICT;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\WTLHelper\TreeListView\include;..\WTLHelper\WTLHelper;..\WTLHelper\WTL;..\WTLHelper\NodeGraphControl\include;..\PECore;..\HexControl;..\DiaHelper;..\Scintilla\Include;..\Lexilla\lexers;..\Lexilla\Include;..\Lexilla\lexlib</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\WTLHelper\TreeListView\include;..\WTLHelper\WTLDock\include;..\WTLHelper\WTLHelper;..\WTLHelper\WTL;..\WTLHelper\NodeGraphControl\include;..\PECore;..\HexControl;..\DiaHelper;..\Scintilla\Include;..\Lexilla\lexers;..\Lexilla\Include;..\Lexilla\lexlib</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -214,7 +214,7 @@
       <PreprocessorDefinitions>WIN32;_WINDOWS;STRICT;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\WTLHelper\TreeListView\include;..\WTLHelper\WTLHelper;..\WTLHelper\WTL;..\WTLHelper\NodeGraphControl\include;..\PECore;..\HexControl;..\DiaHelper;..\Scintilla\Include;..\Lexilla\lexers;..\Lexilla\Include;..\Lexilla\lexlib</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\WTLHelper\TreeListView\include;..\WTLHelper\WTLDock\include;..\WTLHelper\WTLHelper;..\WTLHelper\WTL;..\WTLHelper\NodeGraphControl\include;..\PECore;..\HexControl;..\DiaHelper;..\Scintilla\Include;..\Lexilla\lexers;..\Lexilla\Include;..\Lexilla\lexlib</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -250,7 +250,7 @@
       <PreprocessorDefinitions>WIN32;_WINDOWS;STRICT;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\WTLHelper\TreeListView\include;..\WTLHelper\WTLHelper;..\WTLHelper\WTL;..\WTLHelper\NodeGraphControl\include;..\PECore;..\HexControl;..\DiaHelper;..\Scintilla\Include;..\Lexilla\lexers;..\Lexilla\Include;..\Lexilla\lexlib</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\WTLHelper\TreeListView\include;..\WTLHelper\WTLDock\include;..\WTLHelper\WTLHelper;..\WTLHelper\WTL;..\WTLHelper\NodeGraphControl\include;..\PECore;..\HexControl;..\DiaHelper;..\Scintilla\Include;..\Lexilla\lexers;..\Lexilla\Include;..\Lexilla\lexlib</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -286,7 +286,7 @@
       <PreprocessorDefinitions>_WINDOWS;STRICT;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\WTLHelper\TreeListView\include;..\WTLHelper\WTLHelper;..\WTLHelper\WTL;..\WTLHelper\NodeGraphControl\include;..\PECore;..\HexControl;..\DiaHelper;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\WTLHelper\TreeListView\include;..\WTLHelper\WTLDock\include;..\WTLHelper\WTLHelper;..\WTLHelper\WTL;..\WTLHelper\NodeGraphControl\include;..\PECore;..\HexControl;..\DiaHelper;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -330,7 +330,7 @@
       <PreprocessorDefinitions>_WINDOWS;STRICT;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\WTLHelper\TreeListView\include;..\WTLHelper\WTLHelper;..\WTLHelper\WTL;..\WTLHelper\NodeGraphControl\include;..\PECore;..\HexControl;..\DiaHelper;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\WTLHelper\TreeListView\include;..\WTLHelper\WTLDock\include;..\WTLHelper\WTLHelper;..\WTLHelper\WTL;..\WTLHelper\NodeGraphControl\include;..\PECore;..\HexControl;..\DiaHelper;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -368,6 +368,7 @@
     <ClCompile Include="AppSettings.cpp" />
     <ClCompile Include="BitmapView.cpp" />
     <ClCompile Include="DataDirectoriesView.cpp" />
+    <ClCompile Include="DockViews.cpp" />
     <ClCompile Include="DebugView.cpp" />
     <ClCompile Include="DelayImportView.cpp" />
     <ClCompile Include="ExceptionsView.cpp" />
@@ -444,6 +445,7 @@
     <ClInclude Include="AppSettings.h" />
     <ClInclude Include="BitmapView.h" />
     <ClInclude Include="DataDirectoriesView.h" />
+    <ClInclude Include="DockViews.h" />
     <ClInclude Include="DebugView.h" />
     <ClInclude Include="DelayImportView.h" />
     <ClInclude Include="ExceptionsView.h" />
@@ -589,6 +591,9 @@
     </ProjectReference>
     <ProjectReference Include="..\HexControl\HexControl.vcxproj">
       <Project>{ef5c2f6b-5fcd-446c-be8d-1485407cd65a}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\WTLHelper\WTLDock\WTLDock.vcxproj">
+      <Project>{ea1678ad-f74b-43e4-b44a-c56901c33c19}</Project>
     </ProjectReference>
     <ProjectReference Include="..\WTLHelper\TreeListView\TreeListView.vcxproj">
       <Project>{4ae29f49-dd58-4307-bae5-0bc9e4f81bca}</Project>

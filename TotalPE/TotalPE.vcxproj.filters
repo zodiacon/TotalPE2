@@ -42,6 +42,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="DockViews.cpp" />
     <ClCompile Include="pch.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -243,6 +244,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="DockViews.h" />
     <ClInclude Include="pch.h">
       <Filter>Header Files</Filter>
     </ClInclude>
