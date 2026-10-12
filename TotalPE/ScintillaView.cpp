@@ -144,6 +144,10 @@ namespace {
 void CScintillaView::UpdateUI(bool first) {
 	auto& ui = Frame()->GetUI();
 	ui.UIEnable(ID_EDIT_COPY, !m_Sci.IsSelectionEmpty());
+	ui.UIEnable(ID_EDIT_CUT, !m_Sci.IsReadOnly() && !m_Sci.IsSelectionEmpty());
+	ui.UIEnable(ID_EDIT_PASTE, !m_Sci.IsReadOnly());
+	ui.UIEnable(ID_EDIT_UNDO, !m_Sci.IsReadOnly());
+	ui.UIEnable(ID_EDIT_REDO, !m_Sci.IsReadOnly());
 	auto text = m_Sci.GetSelText();
 	uint64_t value;
 	auto address = ParseHexAddress(text, value);
@@ -410,6 +414,7 @@ void CScintillaView::SetLanguage(LexLanguage lang) {
 	extern LexerModule lmAsm;
 	extern LexerModule lmXML;
 	extern LexerModule lmInf;
+	extern const LexerModule lmCPP;	// C, C++ and C# (from the Lexilla library, where it is const): the keywords tell them apart
 
 	m_Language = lang;
 
@@ -438,6 +443,42 @@ void CScintillaView::SetLanguage(LexLanguage lang) {
 		case LexLanguage::Inf:
 			m_Sci.SetLexer(lmInf.Create());
 			break;
+
+		case LexLanguage::C:
+		case LexLanguage::Cpp:
+		case LexLanguage::CSharp:
+		{
+			static const char* const keywords[] = {
+				// C
+				"auto break case char const continue default do double else enum extern float for goto if inline int long "
+				"register restrict return short signed sizeof static struct switch typedef union unsigned void volatile while "
+				"_Bool _Static_assert",
+				// C++
+				"alignas alignof bool break case catch char char8_t char16_t char32_t class const constexpr continue decltype "
+				"default delete do double else enum explicit extern false float for friend goto if inline int long mutable "
+				"namespace new noexcept nullptr operator private protected public return short signed sizeof static "
+				"static_assert struct switch template this throw true try typedef typename union unsigned using virtual void "
+				"volatile wchar_t while override final",
+				// C#
+				"abstract as base bool break byte case catch char checked class const continue decimal default delegate do "
+				"double else enum event explicit extern false finally fixed float for foreach get goto if implicit in int "
+				"interface internal is lock long namespace new null object operator out override params private protected "
+				"public readonly ref return sbyte sealed set short sizeof stackalloc static string struct switch this throw "
+				"true try typeof uint ulong unchecked unsafe ushort using value virtual void volatile while",
+			};
+			// the types of <stdint.h> and <stddef.h> (and C#'s attributes) as the second set
+			static const char* const types[] = {
+				"int8_t int16_t int32_t int64_t uint8_t uint16_t uint32_t uint64_t size_t ptrdiff_t wchar_t",
+				"int8_t int16_t int32_t int64_t uint8_t uint16_t uint32_t uint64_t size_t ptrdiff_t",
+				"StructLayout LayoutKind Explicit FieldOffset Size",
+			};
+			auto index = lang == LexLanguage::C ? 0 : lang == LexLanguage::Cpp ? 1 : 2;
+			auto lexer = lmCPP.Create();
+			m_Sci.SetLexer(lexer);
+			lexer->WordListSet(0, keywords[index]);
+			lexer->WordListSet(1, types[index]);
+			break;
+		}
 	}
 	UpdateColors();
 }
@@ -449,6 +490,22 @@ void CScintillaView::UpdateColors() {
 	m_Sci.StyleSetFore(STYLE_DEFAULT, ::GetSysColor(COLOR_WINDOWTEXT));
 	m_Sci.StyleSetBack(STYLE_DEFAULT, ::GetSysColor(COLOR_WINDOW));
 	m_Sci.StyleClearAll();
+
+	// the selection and the caret: Scintilla's own colors are for a light background
+	using Scintilla::Element;
+	auto opaque = [](COLORREF color) { return (int)(color | 0xFF000000); };
+	if (dark) {
+		for (auto element : { Element::SelectionBack, Element::SelectionAdditionalBack, Element::SelectionSecondaryBack })
+			m_Sci.Execute(SCI_SETELEMENTCOLOUR, (WPARAM)element, opaque(RGB(38, 79, 120)));
+		for (auto element : { Element::SelectionInactiveBack })
+			m_Sci.Execute(SCI_SETELEMENTCOLOUR, (WPARAM)element, opaque(RGB(58, 61, 65)));
+		m_Sci.Execute(SCI_SETELEMENTCOLOUR, (WPARAM)Element::Caret, opaque(RGB(240, 240, 240)));
+	}
+	else {
+		for (auto element : { Element::SelectionBack, Element::SelectionAdditionalBack, Element::SelectionSecondaryBack,
+			Element::SelectionInactiveBack, Element::Caret })
+			m_Sci.Execute(SCI_RESETELEMENTCOLOUR, (WPARAM)element);
+	}
 
 	switch (m_Language) {
 		case LexLanguage::Asm:
@@ -477,6 +534,20 @@ void CScintillaView::UpdateColors() {
 			m_Sci.StyleSetFore((int)InfStyle::Number, dark ? RGB(0, 255, 255) : RGB(0, 0, 255));
 			m_Sci.StyleSetFore((int)InfStyle::RootKey, dark ? RGB(255, 160, 0) : RGB(192, 96, 0));
 			m_Sci.StyleSetBold((int)InfStyle::RootKey, true);
+			break;
+
+		case LexLanguage::C:
+		case LexLanguage::Cpp:
+		case LexLanguage::CSharp:
+			for (auto style : { SCE_C_COMMENT, SCE_C_COMMENTLINE, SCE_C_COMMENTDOC, SCE_C_COMMENTLINEDOC })
+				m_Sci.StyleSetFore(style, dark ? RGB(87, 166, 74) : RGB(0, 128, 0));
+			m_Sci.StyleSetFore(SCE_C_WORD, dark ? RGB(86, 156, 214) : RGB(0, 0, 255));
+			m_Sci.StyleSetFore(SCE_C_WORD2, dark ? RGB(78, 201, 176) : RGB(43, 145, 175));
+			m_Sci.StyleSetFore(SCE_C_NUMBER, dark ? RGB(181, 206, 168) : RGB(9, 134, 88));
+			m_Sci.StyleSetFore(SCE_C_STRING, dark ? RGB(214, 157, 133) : RGB(163, 21, 21));
+			m_Sci.StyleSetFore(SCE_C_CHARACTER, dark ? RGB(214, 157, 133) : RGB(163, 21, 21));
+			m_Sci.StyleSetFore(SCE_C_PREPROCESSOR, RGB(128, 128, 128));
+			m_Sci.StyleSetFore(SCE_C_OPERATOR, dark ? RGB(180, 180, 180) : RGB(64, 64, 64));
 			break;
 	}
 }
@@ -553,6 +624,19 @@ LRESULT CScintillaView::OnDisassembleAtEnd(WORD, WORD, HWND, BOOL&) {
 	m_Sci.AppendText(text.GetLength(), text);
 	m_Sci.SetReadOnly(true);
 
+	return 0;
+}
+
+// Editing, when the text is not read only (the frame's accelerators send these: the keys do not reach the control)
+LRESULT CScintillaView::OnEdit(WORD, WORD id, HWND, BOOL&) {
+	if (m_Sci.IsReadOnly())
+		return 0;
+	switch (id) {
+		case ID_EDIT_CUT: m_Sci.Cut(); break;
+		case ID_EDIT_PASTE: m_Sci.Paste(); break;
+		case ID_EDIT_UNDO: m_Sci.Undo(); break;
+		case ID_EDIT_REDO: m_Sci.Redo(); break;
+	}
 	return 0;
 }
 

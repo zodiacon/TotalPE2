@@ -19,6 +19,9 @@ enum class LexLanguage {
 	Html,
 	Text,
 	Inf,
+	C,
+	Cpp,
+	CSharp,
 };
 
 class CScintillaView :
@@ -60,6 +63,10 @@ public:
 		COMMAND_ID_HANDLER(ID_ASSEMBLY_DISASSEMBLEATTHEEND, OnDisassembleAtEnd)
 		COMMAND_ID_HANDLER(ID_ASSEMBLY_DISASSEMBLEINANEWTAB, OnDisassembleNewTab)
 		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnEditCopy)
+		COMMAND_ID_HANDLER(ID_EDIT_CUT, OnEdit)
+		COMMAND_ID_HANDLER(ID_EDIT_PASTE, OnEdit)
+		COMMAND_ID_HANDLER(ID_EDIT_UNDO, OnEdit)
+		COMMAND_ID_HANDLER(ID_EDIT_REDO, OnEdit)
 		CHAIN_MSG_MAP_ALT(CViewBase<CScintillaView>, 1)
 	END_MSG_MAP()
 
@@ -93,6 +100,7 @@ private:
 	LRESULT OnGoToAddress(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnDisassembleNewTab(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnDisassembleAtEnd(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnEdit(WORD, WORD id, HWND, BOOL&);
 	LRESULT OnEditCopy(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnDoubleClick(int /*idCtrl*/, LPNMHDR /*pnmh*/, BOOL& /*bHandled*/);
 	LRESULT OnFollow(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);

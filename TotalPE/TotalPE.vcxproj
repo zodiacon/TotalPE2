@@ -516,6 +516,7 @@
     <Image Include="res\Bookmark.ico" />
     <Image Include="res\check.ico" />
     <Image Include="res\circle.ico" />
+    <Image Include="res\class.ico" />
     <Image Include="res\Close.ico" />
     <Image Include="res\Collapsed.ico" />
     <Image Include="res\Collapsed2.ico" />

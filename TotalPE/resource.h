@@ -157,6 +157,12 @@
 #define ID_TYPE_SAVEASC                 32874
 #define ID_TYPE_SAVEASCPP               32875
 #define ID_TYPE_SAVEASCS                32876
+#define ID_TYPE_COPYC                   32877
+#define ID_TYPE_COPYCPP                 32878
+#define ID_TYPE_COPYCS                  32879
+#define ID_TYPE_OPENC                   32880
+#define ID_TYPE_OPENCPP                 32881
+#define ID_TYPE_OPENCS                  32882
 #define ID_IMPORT_FILEPROPERTIES        32809
 #define ID_IMPORT_GOTOFILELOCATION      32810
 #define ID_WINDOW_WINDOWS               32811
@@ -214,7 +220,7 @@
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        280
-#define _APS_NEXT_COMMAND_VALUE         32877
+#define _APS_NEXT_COMMAND_VALUE         32883
 #define _APS_NEXT_CONTROL_VALUE         1036
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

@@ -126,6 +126,7 @@ private:
 	bool ShowFlowGraph(uint64_t va) override;
 	bool DisassembleFunction(uint64_t va) override;
 	bool ShowType(DiaSymbol const& type) override;
+	bool ShowTypeDefinition(DiaSymbol const& type, TypeFormat format) override;
 	bool ShowArchiveMember(int member) override;
 	bool ShowObjectSection(int section, int64_t offset, int member = -1) override;
 	bool ShowElfAddress(uint64_t address, bool code) override;
@@ -328,6 +329,8 @@ private:
 	bool ResolveGoTo(GoToOptions const& options, int64_t& offset, std::wstring& error) const;
 	std::wstring m_DisassembleFunction;	// the last name or address entered
 	bool ResolveFunction(std::wstring const& text, uint64_t& address, std::wstring& error) const;
+	void InsertSymbolsNode(HTREEITEM hRoot);
+	HTREEITEM TypeGroupItem(DiaSymbol const& type) const;
 
 	// symbols are loaded on a worker thread; results of an older request are ignored
 	uint32_t m_SymbolGeneration{ 0 };

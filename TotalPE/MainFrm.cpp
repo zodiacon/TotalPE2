@@ -13,6 +13,7 @@
 #include "AppSettings.h"
 #include "SymbolSettingsDlg.h"
 #include "GoToDlg.h"
+#include "SymbolsView.h"
 #include "VtKeyDlg.h"
 #include "SaveData.h"
 #include "ScintillaView.h"
@@ -1178,7 +1179,7 @@ void CMainFrame::BuildTree(int iconSize) {
 
 	if (m_Symbols) {
 		m_Symbols.LoadAddress(m_PE.GetImageBase());
-		InsertTreeItem(m_Tree, L"Symbols", GetTreeIcon(IDI_SYMBOLS), TreeItemType::Symbols, root);
+		InsertSymbolsNode(root);
 	}
 
 	m_hRoot = root;
@@ -1980,6 +1981,27 @@ void CMainFrame::StartSymbolLoad(std::wstring path) {
 	}).detach();
 }
 
+// All the symbols, and those of a kind under them (in a list of their own, for searching and filtering): a kind
+// the symbols have none of has no node
+void CMainFrame::InsertSymbolsNode(HTREEITEM hRoot) {
+	auto hSymbols = InsertTreeItem(m_Tree, L"Symbols", GetTreeIcon(IDI_SYMBOLS), TreeItemType::Symbols, hRoot);
+	struct {
+		PCWSTR Name;
+		UINT Icon;
+		TreeItemType Type;
+		SymViewType Kind;
+	} const kinds[] = {
+		{ L"Class", IDI_CLASS, TreeItemType::SymbolsClasses, SymViewType::Class },
+		{ L"Struct", IDI_TYPE, TreeItemType::SymbolsStructs, SymViewType::Struct },
+		{ L"Function", IDI_FUNCTION, TreeItemType::SymbolsFunctions, SymViewType::Function },
+		{ L"Enum", IDI_ENUM, TreeItemType::SymbolsEnums, SymViewType::Enum },
+	};
+	CWaitCursor wait;
+	for (auto& k : kinds)
+		if (CSymbolsView::HasSymbols(m_Symbols, k.Kind))
+			InsertTreeItem(m_Tree, k.Name, GetTreeIcon(k.Icon), k.Type, hSymbols);
+}
+
 LRESULT CMainFrame::OnSymbolsLoaded(UINT, WPARAM generation, LPARAM lParam, BOOL&) {
 	std::unique_ptr<DiaSession> session((DiaSession*)lParam);
 	if ((uint32_t)generation != m_SymbolGeneration || !m_PE)
@@ -1993,7 +2015,7 @@ LRESULT CMainFrame::OnSymbolsLoaded(UINT, WPARAM generation, LPARAM lParam, BOOL
 	m_Symbols.LoadAddress(m_PE.GetImageBase());
 	SetStatusText(0, L"Symbols loaded");
 	if (auto root = FindTreeItem(TreeItemType::Image); root && !FindTreeItem(TreeItemType::Symbols))
-		InsertTreeItem(m_Tree, L"Symbols", GetTreeIcon(IDI_SYMBOLS), TreeItemType::Symbols, root);
+		InsertSymbolsNode(root);
 	RefreshViews();
 	SearchTargetChanged();
 	return 0;

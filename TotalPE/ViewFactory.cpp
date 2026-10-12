@@ -148,21 +148,23 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 			return { view, view };
 		}
 
-		case TreeItemType::SymbolsFunctions:
-			symType = SymViewType::Function;
-		case TreeItemType::SymbolsTypes:
-			if (symType == SymViewType::None)
-				symType = SymViewType::UDT;
-		case TreeItemType::SymbolsEnums:
-			if (symType == SymViewType::None)
-				symType = SymViewType::Enum;
-		case TreeItemType::SymbolsGlobalData:
-			if (symType == SymViewType::None)
-				symType = SymViewType::Data;
 		case TreeItemType::Symbols:
-			if (symType == SymViewType::None)
-				symType = SymViewType::All;
+		case TreeItemType::SymbolsFunctions:
+		case TreeItemType::SymbolsClasses:
+		case TreeItemType::SymbolsStructs:
+		case TreeItemType::SymbolsEnums:
+		case TreeItemType::SymbolsTypes:
+		case TreeItemType::SymbolsGlobalData:
 		{
+			switch (type & TreeItemType::ItemMask) {
+				case TreeItemType::SymbolsFunctions: symType = SymViewType::Function; break;
+				case TreeItemType::SymbolsClasses: symType = SymViewType::Class; break;
+				case TreeItemType::SymbolsStructs: symType = SymViewType::Struct; break;
+				case TreeItemType::SymbolsEnums: symType = SymViewType::Enum; break;
+				case TreeItemType::SymbolsTypes: symType = SymViewType::UDT; break;
+				case TreeItemType::SymbolsGlobalData: symType = SymViewType::Data; break;
+				default: symType = SymViewType::All; break;
+			}
 			auto view = new CSymbolsView(this, m_Symbols, symType);
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
@@ -921,6 +923,16 @@ bool CMainFrame::ShowXrefs(uint64_t va) {
 	return true;
 }
 
+// The tree item of the views of a type: the node of its kind (a union is with the structs), or else Symbols
+HTREEITEM CMainFrame::TypeGroupItem(DiaSymbol const& type) const {
+	auto group = type.Tag() == SymbolTag::Enum ? TreeItemType::SymbolsEnums
+		: type.UdtKind() == UdtType::Class ? TreeItemType::SymbolsClasses : TreeItemType::SymbolsStructs;
+	for (auto item : { group, TreeItemType::Symbols, TreeItemType::Image })
+		if (auto hItem = FindTreeItem(item))
+			return hItem;
+	return nullptr;
+}
+
 bool CMainFrame::ShowType(DiaSymbol const& type) {
 	if (!type)
 		return false;
@@ -929,9 +941,7 @@ bool CMainFrame::ShowType(DiaSymbol const& type) {
 		ShowView(it->second->GetHTreeItem());
 		return true;
 	}
-	auto hParent = FindTreeItem(TreeItemType::Symbols);
-	if (!hParent)
-		hParent = FindTreeItem(TreeItemType::Image);
+	auto hParent = TypeGroupItem(type);
 	if (!hParent)
 		return false;
 
@@ -945,6 +955,53 @@ bool CMainFrame::ShowType(DiaSymbol const& type) {
 
 	auto image = GetIconIndex(CTypeView::TypeIcon(type));
 	auto hItem = InsertTreeItem(m_Tree, view->GetTitle(), image, itemType, hParent, TVI_SORT);
+	m_Tree.EnsureVisible(hItem);
+	view->SetHTreeItem(hItem);
+	m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, view);
+	m_Views.insert({ itemType, view });
+	m_Views2.insert({ view->GetHwnd(), itemType });
+	RecordNavigation();
+	return true;
+}
+
+bool CMainFrame::ShowTypeDefinition(DiaSymbol const& type, TypeFormat format) {
+	if (!type)
+		return false;
+	auto itemType = TreeItemWithIndex(TreeItemType::TypeDefinition, ((int64_t)type.Id() * 4 + (int)format) << ItemShift);
+	if (auto it = m_Views.find(itemType); it != m_Views.end()) {
+		ShowView(it->second->GetHTreeItem());
+		return true;
+	}
+	auto hParent = TypeGroupItem(type);
+	if (!hParent)
+		return false;
+
+	PCWSTR language = L"C";
+	auto lexer = LexLanguage::C;
+	switch (format) {
+		case TypeFormat::Cpp: language = L"C++"; lexer = LexLanguage::Cpp; break;
+		case TypeFormat::CSharp: language = L"C#"; lexer = LexLanguage::CSharp; break;
+	}
+	std::wstring text;
+	{
+		CWaitCursor wait;
+		text = TypeExporter::ToText(type, format);
+	}
+
+	RecordNavigation();
+	auto title = std::format(L"{} ({})", type.Name(), language);
+	auto view = new CScintillaView(this, m_PE, title.c_str());
+	if (nullptr == view->DoCreate(m_Tabs)) {
+		ATLASSERT(false);
+		return false;
+	}
+	view->SetLanguage(lexer);
+	view->SetText((PCSTR)CW2A(text.c_str(), CP_UTF8));
+	view->GetCtrl().EmptyUndoBuffer();	// the source can be edited: undo goes back to it, not to an empty document
+	view->SetDeleteFromTree(true);
+
+	auto image = GetIconIndex(CTypeView::TypeIcon(type));	// as the type's own view
+	auto hItem = InsertTreeItem(m_Tree, title.c_str(), image, itemType, hParent, TVI_SORT);
 	m_Tree.EnsureVisible(hItem);
 	view->SetHTreeItem(hItem);
 	m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, view);

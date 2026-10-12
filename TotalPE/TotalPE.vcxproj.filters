@@ -647,6 +647,9 @@
     <Image Include="res\Flow.ico">
       <Filter>Resource Files\Icons</Filter>
     </Image>
+    <Image Include="res\class.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <None Include="res\symsrv.dll" />

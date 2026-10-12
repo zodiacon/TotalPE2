@@ -613,8 +613,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,2,0,0
- PRODUCTVERSION 1,2,0,0
+ FILEVERSION 1,3,0,0
+ PRODUCTVERSION 1,3,0,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -631,12 +631,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Pavel Yosifovich"
             VALUE "FileDescription", "Total PE - PE Viewer"
-            VALUE "FileVersion", "1.2.0.0"
+            VALUE "FileVersion", "1.3.0.0"
             VALUE "InternalName", "TotalPE"
             VALUE "LegalCopyright", "©2022-2026 Pavel Yosifovich"
             VALUE "OriginalFilename", "TotalPE.exe"
             VALUE "ProductName", "Total PE"
-            VALUE "ProductVersion", "1.2.0.0"
+            VALUE "ProductVersion", "1.3.0.0"
         END
     END
     BLOCK "VarFileInfo"

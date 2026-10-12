@@ -5,6 +5,7 @@
 #include "resource.h"
 #include <set>
 #include <unordered_set>
+#include <ClipboardHelper.h>
 
 namespace {
 	// A member of a struct as far as its layout goes: base classes and the vtable pointer are members too (but not in C++)
@@ -778,15 +779,39 @@ bool TypeExporter::Save(HWND hOwner, DiaSymbol const& type, TypeFormat format) {
 	return true;
 }
 
+bool TypeExporter::Copy(HWND hOwner, DiaSymbol const& type, TypeFormat format) {
+	std::wstring text;
+	{
+		CWaitCursor wait;
+		text = ToText(type, format);
+	}
+	return ClipboardHelper::CopyText(hOwner, text.c_str());
+}
+
 void TypeExporter::ShowMenu(IMainFrame* frame, HWND hOwner, DiaSymbol const& type, POINT const& pt) {
+	// the same formats in each submenu; a submenu is destroyed with its parent
+	auto formats = [](UINT c, UINT cpp, UINT cs, PCWSTR dots) {
+		CMenu sub;
+		sub.CreatePopupMenu();
+		sub.AppendMenu(MF_STRING, c, (std::wstring(L"&C") + dots).c_str());
+		sub.AppendMenu(MF_STRING, cpp, (std::wstring(L"C&++") + dots).c_str());
+		sub.AppendMenu(MF_STRING, cs, (std::wstring(L"C&#") + dots).c_str());
+		return sub.Detach();
+	};
 	CMenu menu;
 	menu.CreatePopupMenu();
-	menu.AppendMenu(MF_STRING, ID_TYPE_SAVEASC, L"Save as &C Definition...");
-	menu.AppendMenu(MF_STRING, ID_TYPE_SAVEASCPP, L"Save as C&++ Definition...");
-	menu.AppendMenu(MF_STRING, ID_TYPE_SAVEASCS, L"Save as C&# Definition...");
+	menu.AppendMenu(MF_POPUP, (UINT_PTR)formats(ID_TYPE_SAVEASC, ID_TYPE_SAVEASCPP, ID_TYPE_SAVEASCS, L"..."), L"&Save As");
+	menu.AppendMenu(MF_POPUP, (UINT_PTR)formats(ID_TYPE_COPYC, ID_TYPE_COPYCPP, ID_TYPE_COPYCS, L""), L"&Copy");
+	menu.AppendMenu(MF_POPUP, (UINT_PTR)formats(ID_TYPE_OPENC, ID_TYPE_OPENCPP, ID_TYPE_OPENCS, L""), L"&Open As");
 	switch (frame->ShowContextMenu(menu, TPM_RETURNCMD, pt.x, pt.y, hOwner)) {
 		case ID_TYPE_SAVEASC: Save(hOwner, type, TypeFormat::C); break;
 		case ID_TYPE_SAVEASCPP: Save(hOwner, type, TypeFormat::Cpp); break;
 		case ID_TYPE_SAVEASCS: Save(hOwner, type, TypeFormat::CSharp); break;
+		case ID_TYPE_COPYC: Copy(hOwner, type, TypeFormat::C); break;
+		case ID_TYPE_COPYCPP: Copy(hOwner, type, TypeFormat::Cpp); break;
+		case ID_TYPE_COPYCS: Copy(hOwner, type, TypeFormat::CSharp); break;
+		case ID_TYPE_OPENC: frame->ShowTypeDefinition(type, TypeFormat::C); break;
+		case ID_TYPE_OPENCPP: frame->ShowTypeDefinition(type, TypeFormat::Cpp); break;
+		case ID_TYPE_OPENCS: frame->ShowTypeDefinition(type, TypeFormat::CSharp); break;
 	}
 }

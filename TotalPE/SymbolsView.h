@@ -22,6 +22,9 @@ public:
 
 	void UpdateUI(bool first = false) const;
 
+	// Whether the list of the symbols of a kind would have any
+	static bool HasSymbols(DiaSession const& session, SymViewType type);
+
 	BEGIN_MSG_MAP(CSymbolsView)
 		MESSAGE_HANDLER(CFindReplaceDialog::GetFindReplaceMsg(), OnFind)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
@@ -36,6 +39,8 @@ private:
 	CString GetTitle() const override;
 
 	void BuildItems();
+	static std::vector<SymbolTag> Tags(SymViewType type);
+	static bool Includes(SymViewType type, SymbolTag tag, DiaSymbol const& sym);
 
 	enum ColumnType {
 		Name, SymType, Type, RVA, Size, Location, DataKind, UndecoratedName,

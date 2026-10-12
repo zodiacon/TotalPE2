@@ -5,6 +5,7 @@
 #include "resource.h"
 #include "PEStrings.h"
 #include "TypeExporter.h"
+#include <unordered_set>
 
 CSymbolsView::CSymbolsView(IMainFrame* frame, DiaSession const& session, SymViewType type)
 	: CViewBase(frame), m_Session(session), m_Type(type) {
@@ -186,9 +187,11 @@ bool CSymbolsView::OnRightClickList(HWND, int row, int, POINT const& pt) const {
 CString CSymbolsView::GetTitle() const {
 	switch (m_Type) {
 		case SymViewType::All: return L"Symbols";
-		case SymViewType::Function: return L"Functions";
+		case SymViewType::Class: return L"Class";
+		case SymViewType::Struct: return L"Struct";
+		case SymViewType::Function: return L"Function";
 		case SymViewType::Data: return L"Data";
-		case SymViewType::Enum: return L"Enums";
+		case SymViewType::Enum: return L"Enum";
 		case SymViewType::UDT: return L"Types";
 	}
 	ATLASSERT(false);
@@ -242,22 +245,48 @@ LRESULT CSymbolsView::OnFind(UINT, WPARAM, LPARAM, BOOL&) {
 	return 0;
 }
 
-void CSymbolsView::BuildItems() {
-	std::vector<SymbolTag> tags;
-	switch (m_Type) {
-		case SymViewType::Function: tags = { SymbolTag::Function }; break;
-		case SymViewType::UDT: tags = { SymbolTag::UDT }; break;
-		case SymViewType::Enum: tags = { SymbolTag::Enum }; break;
-		case SymViewType::Data: tags = { SymbolTag::Data }; break;
+// The kinds of symbols of the global scope a list has
+std::vector<SymbolTag> CSymbolsView::Tags(SymViewType type) {
+	switch (type) {
+		// public symbols too: symbols without private information (such as Microsoft's) have no functions
+		case SymViewType::Function: return { SymbolTag::Function, SymbolTag::Thunk, SymbolTag::PublicSymbol };
+		case SymViewType::UDT: case SymViewType::Class: case SymViewType::Struct: return { SymbolTag::UDT };
+		case SymViewType::Enum: return { SymbolTag::Enum };
+		case SymViewType::Data: return { SymbolTag::Data };
 		// the named things of the global scope (not compilands, or types such as pointers and arrays)
 		case SymViewType::All:
-			tags = { SymbolTag::Function, SymbolTag::Data, SymbolTag::PublicSymbol, SymbolTag::Thunk,
+			return { SymbolTag::Function, SymbolTag::Data, SymbolTag::PublicSymbol, SymbolTag::Thunk,
 				SymbolTag::Label, SymbolTag::UDT, SymbolTag::Enum, SymbolTag::Typedef };
-			break;
 	}
+	return {};
+}
 
-	for (auto tag : tags) {
+// Whether a symbol of one of the kinds belongs in the list
+bool CSymbolsView::Includes(SymViewType type, SymbolTag tag, DiaSymbol const& sym) {
+	switch (type) {
+		case SymViewType::Class: return sym.UdtKind() == UdtType::Class;
+		case SymViewType::Struct: return sym.UdtKind() == UdtType::Struct || sym.UdtKind() == UdtType::Union;
+		case SymViewType::Function: return tag != SymbolTag::PublicSymbol || sym.IsCode();
+	}
+	return true;
+}
+
+bool CSymbolsView::HasSymbols(DiaSession const& session, SymViewType type) {
+	for (auto tag : Tags(type))
+		for (auto const& sym : session.FindChildren(nullptr, tag))
+			if (Includes(type, tag, sym))
+				return true;
+	return false;
+}
+
+void CSymbolsView::BuildItems() {
+	std::unordered_set<uint32_t> functions;	// the RVAs of functions: their public symbols are not listed again
+	for (auto tag : Tags(m_Type)) {
 		for (auto& sym : m_Session.FindChildren(nullptr, tag)) {
+			if (!Includes(m_Type, tag, sym))
+				continue;
+			if (m_Type == SymViewType::Function && tag == SymbolTag::PublicSymbol && functions.contains(sym.RelativeVirtualAddress()))
+				continue;
 			Item item{ sym };
 			item.Name = sym.Name();
 			item.Tag = tag;
@@ -265,6 +294,8 @@ void CSymbolsView::BuildItems() {
 			item.Rva = item.Location == LocationKind::Static ? sym.RelativeVirtualAddress() : 0;
 			// the size of a typedef is that of its type: not of interest
 			item.Size = tag == SymbolTag::Typedef ? 0 : sym.Length();
+			if (m_Type == SymViewType::Function && tag != SymbolTag::PublicSymbol)
+				functions.insert(item.Rva);
 			m_Items.push_back(std::move(item));
 		}
 	}

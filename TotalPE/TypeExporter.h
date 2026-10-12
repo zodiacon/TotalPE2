@@ -26,6 +26,9 @@ struct TypeExporter abstract final {
 	// Asks for a file name and saves the definition as UTF-8; reports failures
 	static bool Save(HWND hOwner, DiaSymbol const& type, TypeFormat format);
 
+	// Copies the definition to the clipboard
+	static bool Copy(HWND hOwner, DiaSymbol const& type, TypeFormat format);
+
 	// The menu of a type (at a point on the screen): saving it in the formats there are
 	static void ShowMenu(IMainFrame* frame, HWND hOwner, DiaSymbol const& type, POINT const& pt);
 };

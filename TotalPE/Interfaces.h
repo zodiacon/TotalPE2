@@ -6,6 +6,7 @@
 #include "CodeAnalysis.h"
 #include "Overlay.h"
 #include "VirusTotal.h"
+#include "TypeExporter.h"
 
 static const UINT WM_UPDATE_DARKMODE = WM_APP + 56;
 // posted by the symbol loading thread: wParam is the generation of the request, lParam a DiaSession* (or null)
@@ -122,12 +123,19 @@ enum class TreeItemType : int64_t {
 	// a type from the symbols (the index is the symbol's ID)
 	SymbolType,
 
+	// the symbols of a kind, under Symbols (functions and enums have their own above)
+	SymbolsClasses,
+	SymbolsStructs,
+
+	// the definition of a type from the symbols as source (the index is the symbol's ID and the format)
+	TypeDefinition,
+
 	ItemMask = 255,
 };
 DEFINE_ENUM_FLAG_OPERATORS(TreeItemType);
 
 enum class SymViewType {
-	None, Function, Data, UDT, Enum, All,
+	None, Function, Data, UDT, Enum, All, Class, Struct,
 };
 
 struct FlatResource : PEResFlat {
@@ -167,6 +175,8 @@ struct IMainFrame abstract {
 	virtual bool DisassembleFunction(uint64_t va) = 0;
 	// The layout of a type from the symbols (a struct, class, union or enum) in a view of its own, under Symbols
 	virtual bool ShowType(DiaSymbol const& type) = 0;
+	// The definition of a type from the symbols as source (C, C++ or C#) in a view of its own, under Symbols
+	virtual bool ShowTypeDefinition(DiaSymbol const& type, TypeFormat format) = 0;
 	// A member of the library: an object as an object file (its header, sections...), anything else in the hex view
 	virtual bool ShowArchiveMember(int member) = 0;
 	// The data of a section of an object in the hex view, at an offset in the section (-1 for the start). The object is the object
