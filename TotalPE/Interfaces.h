@@ -13,6 +13,10 @@ static const UINT WM_UPDATE_DARKMODE = WM_APP + 56;
 static const UINT WM_SYMBOLS_LOADED = WM_APP + 57;
 // posted by the VirusTotal thread: wParam is the generation of the scan, lParam a vt::Status* that the receiver deletes
 static const UINT WM_VT_STATUS = WM_APP + 58;
+// sent by the decompiler's thread: lParam is a std::function<void()> to call (what the decompiler asks of the frame)
+static const UINT WM_DECOMPILER_ASK = WM_APP + 59;
+// posted by the decompiler's thread: lParam is the result of a function's decompilation, that the receiver deletes
+static const UINT WM_DECOMPILED = WM_APP + 60;
 
 constexpr uint32_t ItemShift = 8;
 

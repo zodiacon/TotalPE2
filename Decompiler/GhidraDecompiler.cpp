@@ -115,11 +115,22 @@ struct GhidraDecompiler::Impl {
 	TypeSource Types;
 	PrototypeSource Prototypes;
 	NameSource Names;
+	LocalSource Locals;
 	std::unordered_map<uint32_t, Datatype*> Converted;	// the decompiler's types of the caller's ids
 	std::unordered_set<uint64_t> Prototyped;			// the functions whose prototypes were asked for
+	std::unordered_set<uint64_t> Localized;				// the functions whose local variables were asked for
+	std::unordered_map<std::string, std::string> Fixups;	// the call fixups of the compiler, by the names of the functions they replace
 
 	Datatype* Unknown(uint32_t size);
-	void DefineFields(Datatype* type, char const* metatype, uint32_t size, int4 alignment, std::vector<TypeField> const& fields);
+	// a field of a struct or union as it is defined: a bit field has bits
+	struct Member {
+		std::string Name;
+		int4 Offset;		// in bytes (of a bit field: of its first byte)
+		Datatype* Type;
+		int4 Bits{ 0 };		// of a bit field: its size, and its first bit in the byte at the offset
+		int4 First{ 0 };
+	};
+	void DefineFields(Datatype* type, char const* metatype, uint32_t size, int4 alignment, std::vector<Member> const& fields);
 	Datatype* DefineEnum(std::string const& name, uint32_t size, bool isSigned, std::vector<std::pair<std::string, uint64_t>> const& values);
 	// a named type of a kind that is there already (the symbols describe a type more than once: const and not); a name
 	// that a type of another kind has gets the id after it
@@ -129,6 +140,8 @@ struct GhidraDecompiler::Impl {
 	// real type (structs and unions end their own recursion, by name)
 	static constexpr int MaxDepth = 1000;
 	bool ApplyPrototype(Funcdata* fd);
+	void ApplyLocals(Funcdata* fd);
+	bool ApplyFixup(Funcdata* fd);
 };
 
 // Bytes of a size: the core type of the size, or an array of bytes
@@ -141,7 +154,7 @@ Datatype* GhidraDecompiler::Impl::Unknown(uint32_t size) {
 
 // The fields of a struct or union that is defined by name only (a stub). The library sets fields from a description in
 // its own format only (as Ghidra sends types): the description is written, and read back.
-void GhidraDecompiler::Impl::DefineFields(Datatype* type, char const* metatype, uint32_t size, int4 alignment, std::vector<TypeField> const& fields) {
+void GhidraDecompiler::Impl::DefineFields(Datatype* type, char const* metatype, uint32_t size, int4 alignment, std::vector<Member> const& fields) {
 	std::ostringstream xml;
 	XmlEncode encoder(xml);
 	encoder.openElement(ELEM_TYPE);
@@ -150,14 +163,21 @@ void GhidraDecompiler::Impl::DefineFields(Datatype* type, char const* metatype, 
 	encoder.writeSignedInteger(ATTRIB_SIZE, (int4)size);
 	encoder.writeString(ATTRIB_METATYPE, metatype);
 	encoder.writeSignedInteger(ATTRIB_ALIGNMENT, alignment);
-	for (auto const& f : fields) {
-		encoder.openElement(ELEM_FIELD);
-		encoder.writeString(ATTRIB_NAME, f.name);
-		encoder.writeSignedInteger(ATTRIB_OFFSET, f.offset);
-		if (f.ident != f.offset)
-			encoder.writeSignedInteger(ATTRIB_ID, f.ident);
-		f.type->encodeRef(encoder);
-		encoder.closeElement(ELEM_FIELD);
+	for (size_t i = 0; i < fields.size(); i++) {
+		auto const& f = fields[i];
+		auto& element = f.Bits ? ELEM_BITFIELD : ELEM_FIELD;
+		encoder.openElement(element);
+		encoder.writeString(ATTRIB_NAME, f.Name);
+		encoder.writeSignedInteger(ATTRIB_OFFSET, f.Offset);
+		if (f.Bits) {
+			encoder.writeSignedInteger(ATTRIB_ID, (int4)i);
+			encoder.writeSignedInteger(ATTRIB_SIZE, f.Bits);
+			encoder.writeSignedInteger(ATTRIB_FIRST, f.First);
+		}
+		else if ((int4)i != f.Offset)
+			encoder.writeSignedInteger(ATTRIB_ID, (int4)i);
+		f.Type->encodeRef(encoder);
+		encoder.closeElement(element);
 	}
 	encoder.closeElement(ELEM_TYPE);
 
@@ -272,21 +292,38 @@ Datatype* GhidraDecompiler::Impl::Convert(uint32_t id, int depth) {
 				auto st = types->getTypeStruct(name);
 				Converted[id] = st;
 				if (st->isIncomplete() && t.Size > 0) {
-					// in order, without overlaps (the members of unions without names are flat), inside the struct
+					// in order, without overlaps (the members of unions without names are flat), inside the struct; bit
+					// fields by their bits
+					auto firstBit = [](Type::Field const& f) { return f.Offset * 8ULL + (f.Bits ? f.BitPosition : 0); };
 					std::vector<Type::Field> sorted = t.Fields;
-					std::stable_sort(sorted.begin(), sorted.end(), [](auto& a, auto& b) { return a.Offset < b.Offset; });
-					std::vector<TypeField> fields;
+					std::stable_sort(sorted.begin(), sorted.end(), [&](auto& a, auto& b) { return firstBit(a) < firstBit(b); });
+					std::vector<Member> fields;
 					int4 alignment = 1;
-					uint32_t end = 0;
+					uint64_t end = 0;	// in bits
 					for (auto const& f : sorted) {
-						if (f.Offset < end)
+						if (firstBit(f) < end)
 							continue;
 						auto ft = Convert(f.Type, depth + 1);
-						if (ft->getSize() <= 0 || f.Offset + (uint32_t)ft->getSize() > t.Size)
+						if (ft->getSize() <= 0)
 							continue;
-						fields.emplace_back((int4)fields.size(), (int4)f.Offset, f.Name, ft);
 						alignment = std::max(alignment, ft->getAlignment());
-						end = f.Offset + (uint32_t)ft->getSize();
+						if (f.Bits) {
+							// of an integer (or a bool or an enum) only
+							auto meta = ft->getMetatype();
+							if (meta != TYPE_INT && meta != TYPE_UINT && meta != TYPE_BOOL && meta != TYPE_ENUM_INT && meta != TYPE_ENUM_UINT)
+								continue;
+							auto bit = firstBit(f);
+							if ((bit + f.Bits + 7) / 8 > t.Size)
+								continue;
+							fields.push_back({ f.Name, (int4)(bit / 8), ft, (int4)f.Bits, (int4)(bit % 8) });
+							end = bit + f.Bits;
+						}
+						else {
+							if (f.Offset + (uint32_t)ft->getSize() > t.Size)
+								continue;
+							fields.push_back({ f.Name, (int4)f.Offset, ft });
+							end = (f.Offset + (uint64_t)ft->getSize()) * 8;
+						}
 					}
 					DefineFields(st, "struct", t.Size, alignment, fields);
 				}
@@ -304,13 +341,15 @@ Datatype* GhidraDecompiler::Impl::Convert(uint32_t id, int depth) {
 				auto ut = types->getTypeUnion(name);
 				Converted[id] = ut;
 				if (ut->isIncomplete() && t.Size > 0) {
-					std::vector<TypeField> fields;
+					std::vector<Member> fields;
 					int4 alignment = 1;
 					for (auto const& f : t.Fields) {
+						if (f.Bits)
+							continue;	// (a union's bit fields are rare: not shown)
 						auto ft = Convert(f.Type, depth + 1);
 						if (ft->getSize() <= 0 || f.Offset + (uint32_t)ft->getSize() > t.Size)
 							continue;
-						fields.emplace_back((int4)fields.size(), (int4)f.Offset, f.Name, ft);
+						fields.push_back({ f.Name, (int4)f.Offset, ft });
 						alignment = std::max(alignment, ft->getAlignment());
 					}
 					DefineFields(ut, "union", t.Size, alignment, fields);
@@ -409,6 +448,54 @@ bool GhidraDecompiler::Impl::ApplyPrototype(Funcdata* fd) {
 	}
 }
 
+// The local variables of a function from the caller (once per function): symbols of the function's scope on the stack,
+// their names and types locked, as Ghidra's own symbols from a PDB are. One that overlaps another (a variable of an inner
+// block in the same place as one of another block) is left out.
+void GhidraDecompiler::Impl::ApplyLocals(Funcdata* fd) {
+	auto address = fd->getAddress().getOffset();
+	if (!Locals || !Localized.insert(address).second)
+		return;
+	std::vector<Local> locals;
+	if (!Locals(address, locals))
+		return;
+	auto stack = Arch->getStackSpace();
+	if (!stack)
+		return;
+	auto scope = fd->getScopeLocal();
+	for (auto const& local : locals) {
+		if (local.Name.empty())
+			continue;
+		try {
+			auto type = Convert(local.Type);
+			if (type->getSize() <= 0)
+				continue;
+			Address addr(stack, stack->wrapOffset((uintb)local.Offset));
+			std::vector<Symbol*> named;
+			scope->findByName(local.Name, named);
+			if (!named.empty() || scope->findOverlap(addr, type->getSize()))
+				continue;
+			auto sym = scope->addSymbol(local.Name, type, addr, Address())->getSymbol();
+			scope->setAttribute(sym, Varnode::namelock | Varnode::typelock);
+		}
+		catch (LowlevelError const&) {
+			// one the decompiler does not take: the variable gets a name of its own
+		}
+	}
+}
+
+// A function that the compiler's specification replaces at its calls (by p-code of what the call does: one that moves the
+// stack pointer, a prologue that is called...): true if it was not replaced before
+bool GhidraDecompiler::Impl::ApplyFixup(Funcdata* fd) {
+	auto it = Fixups.find(fd->getName());
+	if (it == Fixups.end() || fd->getFuncProto().isInline())
+		return false;
+	auto id = Arch->pcodeinjectlib->getPayloadId(InjectPayload::CALLFIXUP_TYPE, it->second);
+	if (id < 0)
+		return false;
+	fd->getFuncProto().setInjectId(id);
+	return true;
+}
+
 bool GhidraDecompiler::Initialize(std::wstring const& languagesFolder, std::string& error) {
 	if (s_Initialized)
 		return true;
@@ -453,6 +540,22 @@ bool GhidraDecompiler::Open(std::string& error) {
 		auto arch = std::make_unique<CallbackArchitecture>(m_Impl->Target, m_Impl->Read, &m_Impl->Messages);
 		DocumentStorage store;
 		arch->init(store);
+		// The functions that the compiler's call fixups are for: the library registers the fixups by their names only
+		// (Ghidra itself gives them to the functions by name)
+		if (auto spec = store.getTag("compiler_spec")) {
+			for (auto fixup : spec->getChildren()) {
+				if (fixup->getName() != "callfixup")
+					continue;
+				try {
+					auto const& name = fixup->getAttributeValue("name");
+					for (auto target : fixup->getChildren())
+						if (target->getName() == "target")
+							m_Impl->Fixups[target->getAttributeValue("name")] = name;
+				}
+				catch (DecoderError const&) {
+				}
+			}
+		}
 		m_Impl->Arch = std::move(arch);
 		return true;
 	}
@@ -515,6 +618,10 @@ void GhidraDecompiler::SetPrototypeSource(PrototypeSource source) {
 
 void GhidraDecompiler::SetNameSource(NameSource source) {
 	m_Impl->Names = std::move(source);
+}
+
+void GhidraDecompiler::SetLocalSource(LocalSource source) {
+	m_Impl->Locals = std::move(source);
 }
 
 void GhidraDecompiler::AddGlobal(uint64_t address, std::string const& name, uint32_t type) {
@@ -620,6 +727,7 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 			arch->clearAnalysis(fd);
 		m_Impl->Messages.str({});		// what is said about this function
 		m_Impl->ApplyPrototype(fd);
+		m_Impl->ApplyLocals(fd);
 
 		auto action = arch->allacts.getCurrent();
 		action->reset(*fd);
@@ -644,6 +752,8 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 				}
 			}
 			if (callee && m_Impl->ApplyPrototype(callee))
+				more = true;
+			if (callee && m_Impl->ApplyFixup(callee))
 				more = true;
 		}
 		if (more) {

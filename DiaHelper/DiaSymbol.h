@@ -66,6 +66,8 @@ public:
     VARIANT Value() const;
     uint32_t TypeId() const;
     uint32_t BitPosition() const;
+    uint32_t RegisterId() const;
+    uint32_t FrameSize() const;
     UdtType UdtKind() const;
     SimpleType Simple() const;
     std::wstring TypeName() const;

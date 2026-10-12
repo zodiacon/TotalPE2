@@ -22,6 +22,8 @@
 #include "RecentFilesManager.h"
 #include <Theme.h>
 #include <map>
+#include <atomic>
+#include <shared_mutex>
 
 class CHexView;
 
@@ -99,6 +101,8 @@ public:
 		COMMAND_ID_HANDLER(ID_NAV_BACK, OnNavBack)
 		COMMAND_ID_HANDLER(ID_NAV_FORWARD, OnNavForward)
 		MESSAGE_HANDLER(WM_SYMBOLS_LOADED, OnSymbolsLoaded)
+		MESSAGE_HANDLER(WM_DECOMPILER_ASK, OnDecompilerAsk)
+		MESSAGE_HANDLER(WM_DECOMPILED, OnDecompiled)
 		MESSAGE_HANDLER(WM_VT_STATUS, OnVirusTotalStatus)
 		COMMAND_ID_HANDLER(ID_PE_VIRUSTOTAL, OnVirusTotal)
 		COMMAND_ID_HANDLER(ID_PE_VTAPIKEY, OnVirusTotalKey)
@@ -268,18 +272,76 @@ private:
 	std::unordered_map<std::wstring, uint64_t> FunctionLinks(GhidraDecompiler::FunctionRefs const& functions) const;
 	bool FunctionCode(uint64_t address, std::span<const std::byte>& code);
 	bool ReplaceView(HWND hView, std::function<bool()> const& open) override;
-	// the decompiler of the PE file (made on first use); null, with the reason, if there is none for its machine
-	GhidraDecompiler* Decompiler(std::wstring& error);
+	// The decompiler of an open PE file. It is used on the decompiler's thread, and made there when it is first used, from
+	// what is prepared here (on the frame's thread): the functions, imports and global variables it is told of. What it asks
+	// for while it decompiles (names, and from the symbols, which are the frame thread's, types, prototypes and locals) is
+	// asked of the frame's thread; the image is read on the decompiler's thread, as long as the file is open.
+	struct DecompilerSession {
+		CMainFrame* Frame;
+		HWND Window;
+		std::string Target;
+		std::wstring Languages;		// the folder of the language definitions
+		std::vector<std::pair<uint64_t, std::string>> Functions;	// the exports
+		uint64_t ExternalArea{ 0 };
+		std::vector<std::pair<uint64_t, std::string>> Imports;	// by the slots of the import address tables
+		struct Global {
+			uint64_t Address;
+			std::string Name;
+			uint32_t Type;
+		};
+		std::vector<Global> Globals;
+		bool Symbols{ false };		// the types, prototypes and locals of the symbols are asked for
+		std::unique_ptr<GhidraDecompiler> Decompiler;
+		std::string Error;			// why it could not be made
+		std::atomic<bool> Closed{ false };	// the file is closed: nothing more is read or asked
+		bool Stale{ false };		// the symbols changed: their types are not asked for (by their ids in the symbols before)
+		std::shared_mutex Image;	// held (shared) while the image is read, (exclusive) when the file is closed
+
+		// on the decompiler's thread
+		GhidraDecompiler* Open(std::string& error);
+		// runs 'ask' on the frame's thread (unless the file was closed); false if it did not run
+		bool Ask(std::function<void()> const& ask);
+	};
+	// the decompiler of the PE file; null, with the reason, if there is none for its machine
+	std::shared_ptr<DecompilerSession> Decompiler(std::wstring& error);
+	// the file is closed (or what the decompiler was told of changes): the decompiler's work in progress reads nothing
+	// more of it, and the decompiler is destroyed on its thread
+	void CloseDecompiler(bool closed = true);
+	// A function decompiled on the decompiler's thread: 'done' is called on the frame's thread with the result, if the
+	// view it is for is still there then
+	struct Decompiled {
+		uint64_t Id;
+		bool Ok{ false };
+		std::string Code, Error;
+		GhidraDecompiler::FunctionRefs Functions;
+		GhidraDecompiler::LineAddresses Lines;
+	};
+	void DecompileAsync(uint64_t address, std::string const& name, bool lines, HWND hView, std::function<void(Decompiled&)> done);
+	static std::string DecompilingText(uint64_t address, std::wstring const& name);
+	static std::string NotDecompiledText(uint64_t address, std::string const& error);
+	struct PendingDecompile {
+		HWND View;
+		std::function<void(Decompiled&)> Done;
+	};
+	std::unordered_map<uint64_t, PendingDecompile> m_PendingDecompiles;
+	uint64_t m_LastDecompile{ 0 };
+	LRESULT OnDecompilerAsk(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
+	LRESULT OnDecompiled(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	// the PE image as it is in memory: the headers, and the sections at their addresses (zeros past their data)
 	bool ReadImage(uint64_t va, uint8_t* buffer, size_t size) const;
 	// the decompiler's types and prototypes from the symbols: a type by its symbol's id, the prototype of a function
 	bool DescribeType(uint32_t id, GhidraDecompiler::Type& type) const;
 	bool FunctionPrototype(uint64_t va, uint32_t& type, std::vector<std::string>& parameterNames) const;
+	// the local variables of a function on the stack, from the symbols (of private symbols)
+	bool FunctionLocals(uint64_t va, std::vector<GhidraDecompiler::Local>& locals) const;
+	// the frame an x64 function's prologue makes, from its unwind information: its size (what is pushed and allocated), and
+	// the frame register (its CodeView number; 0 if there is none) and its offset from the stack pointer at the entry
+	bool X64Frame(uint32_t rva, uint32_t& size, uint32_t& frameRegister, int64_t& frameOffset) const;
 	// the name of the function at an address for the decompiler (of an incremental linking stub, the function it jumps to)
 	std::string DecompilerFunctionName(uint64_t va) const;
 	// the target of an incremental linking stub ("jmp rel32") at an address; 0 if it is not one
 	uint64_t StubTarget(uint64_t va) const;
-	std::unique_ptr<GhidraDecompiler> m_Decompiler;
+	std::shared_ptr<DecompilerSession> m_Decompiler;
 	LRESULT OnAlwaysOnTop(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnUpdateDarkMode(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnToggleDarkMode(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);

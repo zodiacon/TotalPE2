@@ -1074,7 +1074,7 @@ bool BitFieldPullTransform::PullRecord::operator<(const PullRecord &op2) const
       return (readOp->getSeqNum() < op2.readOp->getSeqNum());
   }
   else if (readOp == (PcodeOp *)0)
-    return true;
+    return (op2.readOp != (PcodeOp *)0);	// (TotalPE: was 'true', which makes two records without a read each less than the other)
   else if (op2.readOp == (PcodeOp *)0)
     return false;
   return false;

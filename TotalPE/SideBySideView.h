@@ -16,8 +16,10 @@ public:
 	CSideBySideView(IMainFrame* frame, PEFile const& pe, PCWSTR title);
 
 	CString GetTitle() const override;
-	bool SetCode(std::span<const std::byte> code, uint64_t address, CpuArch arch, std::string const& c,
-		GhidraDecompiler::LineAddresses lines, std::unordered_map<std::wstring, uint64_t> links);
+	// the disassembly of the function, then its C (again when it changes: the C of a function is made on another thread),
+	// with the addresses of the instructions of each line
+	bool SetAsm(std::span<const std::byte> code, uint64_t address, CpuArch arch);
+	void SetC(std::string const& c, GhidraDecompiler::LineAddresses lines, std::unordered_map<std::wstring, uint64_t> links);
 
 	int64_t GetNavigationPosition() const override;
 	void SetNavigationPosition(int64_t va) override;

@@ -219,6 +219,18 @@ uint32_t DiaSymbol::TypeId() const {
 	return id;
 }
 
+uint32_t DiaSymbol::RegisterId() const {
+	DWORD reg = 0;
+	m_spSym->get_registerId(&reg);
+	return reg;
+}
+
+uint32_t DiaSymbol::FrameSize() const {
+	DWORD size = 0;
+	m_spSym->get_frameSize(&size);
+	return size;
+}
+
 uint32_t DiaSymbol::BitPosition() const {
 	DWORD pos;
 	m_spSym->get_bitPosition(&pos);

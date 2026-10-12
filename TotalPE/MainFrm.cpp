@@ -18,6 +18,7 @@
 #include "SaveData.h"
 #include "ScintillaView.h"
 #include "SideBySideView.h"
+#include "DecompilerThread.h"
 #include "HexView.h"
 #include "CompareView.h"
 #include "ItaniumDemangle.h"
@@ -338,6 +339,7 @@ HTREEITEM CMainFrame::FindTreeItem(TreeItemType type) const {
 }
 
 LRESULT CMainFrame::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& bHandled) {
+	CloseDecompiler();
 	m_Tabs.SaveLayout(LayoutPath());	// the docking area still has its windows (they go after the frame's WM_DESTROY)
 
 	if (--s_Frames == 0) {
@@ -765,6 +767,7 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	CWaitCursor wait;
 	int bitness = (m_PE && m_PE.GetFileInfo()->IsPE64) * 2 + (m_PE && m_PE.GetFileInfo()->IsPE32);
 
+	CloseDecompiler();	// (before the file it reads goes)
 	m_PE.Close();
 	if (!m_PE.Open(path)) {
 		AtlMessageBox(m_hWnd, L"Error parsing file", IDR_MAINFRAME, MB_ICONERROR);
@@ -789,7 +792,6 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	m_Views.clear();
 	m_Views2.clear();
 	m_Tabs.RemoveAllPages();
-	m_Decompiler.reset();
 	m_Archive.Close();
 	m_Object.Close();
 	m_ObjectCodeView = {};
@@ -875,7 +877,7 @@ void CMainFrame::BuildArchiveTree(int iconSize) {
 // What a PE file leaves behind, when a library or an object file is opened instead
 void CMainFrame::ResetFileState() {
 	m_Tabs.RemoveAllPages();
-	m_Decompiler.reset();
+	CloseDecompiler();
 	m_Views.clear();
 	m_Views2.clear();
 	m_PE.Close();
@@ -1432,7 +1434,7 @@ LRESULT CMainFrame::OnFileCompare(WORD, WORD, HWND, BOOL&) {
 
 LRESULT CMainFrame::OnFileClose(WORD, WORD, HWND, BOOL&) {
 	m_Tabs.RemoveAllPages();
-	m_Decompiler.reset();
+	CloseDecompiler();
 	m_Views.clear();
 	m_Views2.clear();
 	m_PE.Close();
@@ -2032,13 +2034,19 @@ bool CMainFrame::DescribeType(uint32_t id, GhidraDecompiler::Type& type) const {
 		case SymbolTag::UDT:
 			type.Kind = sym.UdtKind() == UdtType::Union ? Kind::Union : Kind::Struct;
 			type.Name = Narrow(sym.Name());
-			// the data members (not static, not bit fields), the base classes and the vtable pointer
+			// the data members (not static), the base classes and the vtable pointer
 			for (auto const& child : sym.FindChildren()) {
 				switch (child.Tag()) {
 					case SymbolTag::Data:
-						if (child.Location() == LocationKind::ThisRel)
+						if (child.Location() == LocationKind::ThisRel) {
 							if (auto ft = child.Type())
 								type.Fields.push_back({ Narrow(child.Name()), (uint32_t)child.Offset(), ft.Id() });
+						}
+						else if (child.Location() == LocationKind::BitField) {
+							if (auto ft = child.Type())
+								type.Fields.push_back({ Narrow(child.Name()), (uint32_t)child.Offset(), ft.Id(), (uint32_t)child.Length(),
+									child.BitPosition() });
+						}
 						break;
 					case SymbolTag::BaseClass:
 						if (!child.IsVirtual()) {
@@ -2152,86 +2160,353 @@ bool CMainFrame::FunctionPrototype(uint64_t va, uint32_t& type, std::vector<std:
 	return true;
 }
 
-GhidraDecompiler* CMainFrame::Decompiler(std::wstring& error) {
+bool CMainFrame::X64Frame(uint32_t rva, uint32_t& size, uint32_t& frameRegister, int64_t& frameOffset) const {
+	auto exceptions = m_PE.GetExceptions();
+	if (!exceptions)
+		return false;
+	auto it = std::ranges::find_if(*exceptions, [&](auto const& e) { return e.RuntimeFuncEntry.BeginAddress == rva; });
+	if (it == exceptions->end() || it->RuntimeFuncEntry.UnwindInfoAddress == 0)
+		return false;
+	auto base = m_PE.GetImageBase();
+	uint64_t info = base + it->RuntimeFuncEntry.UnwindInfoAddress;
+	uint8_t header[4];
+	if (!ReadImage(info, header, sizeof(header)))
+		return false;
+	int version = header[0] & 7;
+	int count = header[2];
+	std::vector<uint16_t> codes(count);
+	if (count && !ReadImage(info + 4, (uint8_t*)codes.data(), count * sizeof(uint16_t)))
+		return false;
+
+	// the codes are in the reverse order of the prologue: what is allocated before the frame register is set is after its code
+	uint32_t total = 0, beforeFrame = 0;
+	bool frameSet = false;
+	for (int i = 0; i < count; ) {
+		int op = (codes[i] >> 8) & 0xF, opInfo = codes[i] >> 12;
+		uint32_t allocated = 0;
+		int slots = 1;
+		switch (op) {
+			case 0: allocated = 8; break;													// UWOP_PUSH_NONVOL
+			case 1:																			// UWOP_ALLOC_LARGE
+				if (opInfo == 0) {
+					slots = 2;
+					allocated = i + 1 < count ? codes[i + 1] * 8u : 0;
+				}
+				else {
+					slots = 3;
+					allocated = i + 2 < count ? codes[i + 1] | ((uint32_t)codes[i + 2] << 16) : 0;
+				}
+				break;
+			case 2: allocated = opInfo * 8 + 8; break;										// UWOP_ALLOC_SMALL
+			case 3: frameSet = true; break;													// UWOP_SET_FPREG
+			case 4: slots = 2; break;														// UWOP_SAVE_NONVOL
+			case 5: slots = 3; break;														// UWOP_SAVE_NONVOL_FAR
+			case 6: slots = version >= 2 ? 1 : 2; break;									// UWOP_EPILOG (2), UWOP_SAVE_XMM (1)
+			case 7: slots = version >= 2 ? 1 : 3; break;									// UWOP_SPARE_CODE (2), UWOP_SAVE_XMM_FAR (1)
+			case 8: slots = 2; break;														// UWOP_SAVE_XMM128
+			case 9: slots = 3; break;														// UWOP_SAVE_XMM128_FAR
+			case 10: allocated = opInfo ? 48 : 40; break;									// UWOP_PUSH_MACHFRAME
+			default: return false;
+		}
+		total += allocated;
+		if (frameSet && op != 3)
+			beforeFrame += allocated;
+		i += slots;
+	}
+	size = total;
+	frameRegister = 0;
+	frameOffset = 0;
+	if (int reg = header[3] & 0xF; reg && frameSet) {
+		// the unwind numbers of the registers (RAX, RCX, RDX, RBX, RSP, RBP, RSI, RDI, R8...) as CodeView numbers
+		static constexpr uint32_t registers[] = { 328, 330, 331, 329, 335, 334, 332, 333 };
+		frameRegister = reg < 8 ? registers[reg] : 336 + (reg - 8);
+		frameOffset = -(int64_t)beforeFrame + (header[3] >> 4) * 16;
+	}
+	return true;
+}
+
+// Only the locals the stack pointer (or the frame pointer) locates are given (not those in registers): with their offsets
+// from the stack pointer at the entry, which the frame the prologue makes tells
+bool CMainFrame::FunctionLocals(uint64_t va, std::vector<GhidraDecompiler::Local>& locals) const {
+	auto base = m_PE.GetImageBase();
+	if (!m_Symbols || va < base || va - base > 0xFFFFFFFFULL)
+		return false;
+	auto rva = (uint32_t)(va - base);
+	long displacement = 0;
+	auto function = m_Symbols.GetSymbolByRVA(rva, SymbolTag::Function, &displacement);
+	if (!function || displacement != 0)
+		return false;
+
+	// the stack pointer at the entry, relative to the register that locals are relative to
+	auto machine = m_PE.GetFileInfo()->IsPE64 ? m_PE.GetNTHeader()->NTHdr64.FileHeader.Machine : m_PE.GetNTHeader()->NTHdr32.FileHeader.Machine;
+	std::unordered_map<uint32_t, int64_t> origins;
+	switch (machine) {
+		case IMAGE_FILE_MACHINE_AMD64:
+		{
+			uint32_t size, frameRegister;
+			int64_t frameOffset;
+			if (!X64Frame(rva, size, frameRegister, frameOffset))
+				return false;
+			origins[CV_AMD64_RSP] = -(int64_t)size;
+			if (frameRegister)
+				origins[frameRegister] = frameOffset;
+			break;
+		}
+		case IMAGE_FILE_MACHINE_I386:
+			// EBP after "push ebp, mov ebp, esp", and the frame that the symbols describe as one of EBP when there is none
+			origins[CV_REG_EBP] = -4;
+			origins[CV_ALLREG_VFRAME] = -4;
+			break;
+		case IMAGE_FILE_MACHINE_ARM64:
+			// the frame of the symbols is all that the prologue allocates, the registers it saves too
+			if (auto size = function.FrameSize())
+				origins[CV_ARM64_SP] = -(int64_t)size;
+			break;
+		default:
+			return false;
+	}
+
+	// those of the function and of its blocks (an inner block's local may be in the place of another's)
+	std::function<void(DiaSymbol const&)> collect = [&](DiaSymbol const& parent) {
+		for (auto const& child : parent.FindChildren()) {
+			if (child.Tag() == SymbolTag::Block) {
+				collect(child);
+				continue;
+			}
+			if (child.Tag() != SymbolTag::Data || child.Kind() != DataItemKind::Local || child.Location() != LocationKind::RegRel)
+				continue;
+			auto origin = origins.find(child.RegisterId());
+			auto type = child.Type();
+			if (origin == origins.end() || !type)
+				continue;
+			locals.push_back({ Narrow(child.Name()), type.Id(), (int64_t)child.Offset() + origin->second });
+		}
+	};
+	collect(function);
+	return !locals.empty();
+}
+
+std::shared_ptr<CMainFrame::DecompilerSession> CMainFrame::Decompiler(std::wstring& error) {
 	if (m_Decompiler)
-		return m_Decompiler.get();
+		return m_Decompiler;
 
 	auto machine = m_PE.GetFileInfo()->IsPE64 ? m_PE.GetNTHeader()->NTHdr64.FileHeader.Machine : m_PE.GetNTHeader()->NTHdr32.FileHeader.Machine;
 	PCSTR target;
 	switch (machine) {
 		case IMAGE_FILE_MACHINE_AMD64: target = "x86:LE:64:default:windows"; break;
 		case IMAGE_FILE_MACHINE_I386: target = "x86:LE:32:default:windows"; break;
+		case IMAGE_FILE_MACHINE_ARM64: target = "AARCH64:LE:64:v8A:windows"; break;
 		default:
-			error = L"The decompiler handles x64 and x86 code only.";
+			error = L"The decompiler handles x64, x86 and ARM64 code only.";
 			return nullptr;
 	}
 
+	auto session = std::make_shared<DecompilerSession>();
+	session->Frame = this;
+	session->Window = m_hWnd;
+	session->Target = target;
 	// the language definitions are next to the executable
 	WCHAR folder[MAX_PATH];
 	::GetModuleFileName(nullptr, folder, _countof(folder));
 	*wcsrchr(folder, L'\\') = 0;
-	std::string reason;
-	if (!GhidraDecompiler::Initialize(std::wstring(folder) + L"\\Decompiler\\languages", reason)) {
-		error = L"The decompiler could not start: " + std::wstring(CA2W(reason.c_str()));
-		return nullptr;
-	}
-	auto decompiler = std::make_unique<GhidraDecompiler>(target, [this](uint64_t va, uint8_t* buffer, size_t size) {
-		return ReadImage(va, buffer, size);
-		});
-	if (!decompiler->Open(reason)) {
-		error = L"The decompiler could not start: " + std::wstring(CA2W(reason.c_str()));
-		return nullptr;
-	}
+	session->Languages = std::wstring(folder) + L"\\Decompiler\\languages";
+
 	// Calls by name: of the functions the symbols know (asked for when a call is seen: a debug build has hundreds of
 	// thousands), of the exports, and of the imports (through their entries in the import address table)
 	auto base = m_PE.GetImageBase();
-	decompiler->SetNameSource([this](uint64_t va) { return DecompilerFunctionName(va); });
 	if (auto exp = m_PE.GetExport()) {
 		for (auto const& f : exp->Funcs)
 			if (f.FuncRVA && f.ForwarderName.empty() && !f.FuncName.empty())
-				decompiler->AddFunction(base + f.FuncRVA, f.FuncName);
+				session->Functions.emplace_back(base + f.FuncRVA, f.FuncName);
 	}
-	if (auto imports = m_PE.GetImport()) {
+	auto imports = m_PE.GetImport();
+	auto delayImports = m_PE.GetDelayImport();
+	if ((imports && !imports->empty()) || (delayImports && !delayImports->empty())) {
 		bool pe64 = m_PE.GetFileInfo()->IsPE64;
 		uint64_t imageSize = pe64 ? m_PE.GetNTHeader()->NTHdr64.OptionalHeader.SizeOfImage : m_PE.GetNTHeader()->NTHdr32.OptionalHeader.SizeOfImage;
-		decompiler->SetExternalArea(base + ((imageSize + 0xFFFF) & ~0xFFFFULL));	// past the image
-		for (auto const& imp : *imports) {
-			uint64_t slot = imp.ImportDesc.FirstThunk;
-			if (slot == 0)
-				continue;
-			// an import by ordinal: named after its module ("WS2_32_Ordinal_23")
-			auto module = imp.ModuleName.substr(0, imp.ModuleName.rfind('.'));
+		session->ExternalArea = base + ((imageSize + 0xFFFF) & ~0xFFFFULL);	// past the image
+		// an import by ordinal: named after its module ("WS2_32_Ordinal_23")
+		auto moduleOf = [](std::string const& moduleName) {
+			auto module = moduleName.substr(0, moduleName.rfind('.'));
 			for (auto& ch : module)
 				if (!isalnum((unsigned char)ch))
 					ch = '_';
-			for (auto const& fn : imp.ImportFunc) {
-				auto name = fn.FuncName;
-				if (name.empty()) {
-					auto ordinal = pe64 ? fn.unThunk.Thunk64.u1.Ordinal & 0xFFFF : fn.unThunk.Thunk32.u1.Ordinal & 0xFFFF;
-					name = module + "_Ordinal_" + std::to_string(ordinal);
+			return module;
+		};
+		if (imports) {
+			for (auto const& imp : *imports) {
+				uint64_t slot = imp.ImportDesc.FirstThunk;
+				if (slot == 0)
+					continue;
+				auto module = moduleOf(imp.ModuleName);
+				for (auto const& fn : imp.ImportFunc) {
+					auto name = fn.FuncName;
+					if (name.empty()) {
+						auto ordinal = pe64 ? fn.unThunk.Thunk64.u1.Ordinal & 0xFFFF : fn.unThunk.Thunk32.u1.Ordinal & 0xFFFF;
+						name = module + "_Ordinal_" + std::to_string(ordinal);
+					}
+					session->Imports.emplace_back(base + slot, name);
+					slot += pe64 ? 8 : 4;
 				}
-				decompiler->AddImport(base + slot, name);
-				slot += pe64 ? 8 : 4;
+			}
+		}
+		// Delay loaded imports: a call through an entry of the delay load import address table (which points to the code
+		// that loads the module, until it is loaded) is a call of the function
+		if (delayImports) {
+			for (auto const& imp : *delayImports) {
+				auto const& desc = imp.DelayImpDesc;
+				// the addresses of a descriptor of the oldest kind are virtual addresses, not relative
+				uint64_t rebase = (desc.grAttrs & dlattrRva) ? 0 : base;
+				if (desc.rvaIAT == 0 || desc.rvaIAT < rebase)
+					continue;
+				uint64_t slot = desc.rvaIAT - rebase, names = desc.rvaINT ? desc.rvaINT - rebase : 0;
+				auto module = moduleOf(imp.ModuleName);
+				for (auto const& fn : imp.DelayImpFunc) {
+					auto name = fn.FuncName;
+					if (name.empty() && names) {
+						// the import name table has the ordinal
+						uint64_t entry = 0;
+						if (ReadImage(base + names, (uint8_t*)&entry, pe64 ? 8 : 4))
+							name = module + "_Ordinal_" + std::to_string(entry & 0xFFFF);
+					}
+					if (!name.empty())
+						session->Imports.emplace_back(base + slot, name);
+					slot += pe64 ? 8 : 4;
+					if (names)
+						names += pe64 ? 8 : 4;
+				}
 			}
 		}
 	}
-	// the types of the symbols (of private symbols: prototypes, and the types of global variables)
+	// the types of the symbols (of private symbols: prototypes, locals, and the types of global variables)
 	if (m_Symbols) {
-		decompiler->SetTypeSource([this](uint32_t id, GhidraDecompiler::Type& type) { return DescribeType(id, type); });
-		decompiler->SetPrototypeSource([this](uint64_t va, uint32_t& type, std::vector<std::string>& names) {
-			return FunctionPrototype(va, type, names);
-			});
+		session->Symbols = true;
 		for (auto const& sym : m_Symbols.FindChildren(nullptr, SymbolTag::Data)) {
 			if (sym.Location() != LocationKind::Static)
 				continue;
 			auto type = sym.Type();
 			auto rva = sym.RelativeVirtualAddress();
 			if (type && rva)
-				decompiler->AddGlobal(base + rva, Narrow(sym.Name()), type.Id());
+				session->Globals.push_back({ base + rva, Narrow(sym.Name()), type.Id() });
 		}
 	}
-	m_Decompiler = std::move(decompiler);
-	return m_Decompiler.get();
+	m_Decompiler = std::move(session);
+	return m_Decompiler;
+}
+
+GhidraDecompiler* CMainFrame::DecompilerSession::Open(std::string& error) {
+	if (Decompiler)
+		return Decompiler.get();
+	if (!Error.empty()) {
+		error = Error;
+		return nullptr;
+	}
+	auto fail = [&](std::string const& reason) -> GhidraDecompiler* {
+		error = Error = "The decompiler could not start: " + reason;
+		return nullptr;
+	};
+	std::string reason;
+	if (!GhidraDecompiler::Initialize(Languages, reason))
+		return fail(reason);
+	auto decompiler = std::make_unique<GhidraDecompiler>(Target, [this](uint64_t va, uint8_t* buffer, size_t size) {
+		std::shared_lock lock(Image);
+		return !Closed && Frame->ReadImage(va, buffer, size);
+		});
+	if (!decompiler->Open(reason))
+		return fail(reason);
+
+	decompiler->SetNameSource([this](uint64_t va) {
+		std::string name;
+		Ask([&] { name = Frame->DecompilerFunctionName(va); });
+		return name;
+		});
+	for (auto const& [va, name] : Functions)
+		decompiler->AddFunction(va, name);
+	if (ExternalArea) {
+		decompiler->SetExternalArea(ExternalArea);
+		for (auto const& [slot, name] : Imports)
+			decompiler->AddImport(slot, name);
+	}
+	if (Symbols) {
+		decompiler->SetTypeSource([this](uint32_t id, GhidraDecompiler::Type& type) {
+			bool known = false;
+			Ask([&] { known = !Stale && Frame->DescribeType(id, type); });
+			return known;
+			});
+		decompiler->SetPrototypeSource([this](uint64_t va, uint32_t& type, std::vector<std::string>& names) {
+			bool known = false;
+			Ask([&] { known = !Stale && Frame->FunctionPrototype(va, type, names); });
+			return known;
+			});
+		decompiler->SetLocalSource([this](uint64_t va, std::vector<GhidraDecompiler::Local>& locals) {
+			bool known = false;
+			Ask([&] { known = !Stale && Frame->FunctionLocals(va, locals); });
+			return known;
+			});
+		for (auto const& g : Globals)
+			decompiler->AddGlobal(g.Address, g.Name, g.Type);
+	}
+	Decompiler = std::move(decompiler);
+	return Decompiler.get();
+}
+
+bool CMainFrame::DecompilerSession::Ask(std::function<void()> const& ask) {
+	if (Closed)
+		return false;
+	// (the frame's thread closes the file: what runs there sees whether it is closed)
+	std::function<void()> call = [&] {
+		if (!Closed)
+			ask();
+	};
+	return ::SendMessage(Window, WM_DECOMPILER_ASK, 0, (LPARAM)&call) != 0;
+}
+
+LRESULT CMainFrame::OnDecompilerAsk(UINT, WPARAM, LPARAM lParam, BOOL&) {
+	(*reinterpret_cast<std::function<void()>*>(lParam))();
+	return TRUE;
+}
+
+void CMainFrame::CloseDecompiler(bool closed) {
+	if (closed)
+		m_PendingDecompiles.clear();
+	if (!m_Decompiler)
+		return;
+	if (closed) {
+		std::unique_lock lock(m_Decompiler->Image);
+		m_Decompiler->Closed = true;
+	}
+	else
+		m_Decompiler->Stale = true;
+	// the work in progress (and the work posted) has references of its own: the last one goes on the decompiler's thread
+	DecompilerThread::Get().Post([session = std::move(m_Decompiler)]() mutable { session.reset(); });
+}
+
+void CMainFrame::DecompileAsync(uint64_t address, std::string const& name, bool lines, HWND hView, std::function<void(Decompiled&)> done) {
+	auto id = ++m_LastDecompile;
+	m_PendingDecompiles[id] = { hView, std::move(done) };
+	DecompilerThread::Get().Post([session = m_Decompiler, hWnd = m_hWnd, id, address, name, lines] {
+		auto result = std::make_unique<Decompiled>();
+		result->Id = id;
+		std::string error;
+		if (auto decompiler = session->Open(error))
+			result->Ok = decompiler->Decompile(address, name, result->Code, result->Error, &result->Functions, lines ? &result->Lines : nullptr);
+		else
+			result->Error = error;
+		if (!session->Closed && ::PostMessage(hWnd, WM_DECOMPILED, 0, (LPARAM)result.get()))
+			result.release();
+		});
+}
+
+LRESULT CMainFrame::OnDecompiled(UINT, WPARAM, LPARAM lParam, BOOL&) {
+	std::unique_ptr<Decompiled> result(reinterpret_cast<Decompiled*>(lParam));
+	auto it = m_PendingDecompiles.find(result->Id);
+	if (it == m_PendingDecompiles.end())
+		return 0;
+	auto pending = std::move(it->second);
+	m_PendingDecompiles.erase(it);
+	if (::IsWindow(pending.View) && m_Views2.contains(pending.View))
+		pending.Done(*result);
+	return 0;
 }
 
 bool CMainFrame::DecompileFunction(uint64_t address) {
@@ -2258,22 +2533,12 @@ bool CMainFrame::DecompileFunction(uint64_t address) {
 	std::wstring name;
 	auto parent = FunctionPlace(rva, name);
 
-	std::string code, reason;
-	GhidraDecompiler::FunctionRefs functions;
-	{
-		CWaitCursor wait;
-		if (!decompiler->Decompile(address, std::string(CW2A(name.c_str())), code, reason, &functions)) {
-			AtlMessageBox(m_hWnd, (std::format(L"0x{:X} could not be decompiled: ", address) + std::wstring(CA2W(reason.c_str()))).c_str(),
-				IDR_MAINFRAME, MB_ICONWARNING);
-			return false;
-		}
-	}
-
 	auto hParent = PlaceItem(parent);
 	if (!hParent)
 		return false;
 	auto title = std::format(L"{} (C)", name.empty() ? std::format(L"0x{:X}", address) : name);
 
+	// the view is there at once: the code comes when the decompiler's thread is done with it
 	RecordNavigation();
 	auto view = new CScintillaView(this, m_PE, title.c_str());
 	if (nullptr == view->DoCreate(m_Tabs)) {
@@ -2281,11 +2546,22 @@ bool CMainFrame::DecompileFunction(uint64_t address) {
 		return false;
 	}
 	view->SetLanguage(LexLanguage::C);
-	view->SetText(code.c_str());
-	view->SetFunctionLinks(FunctionLinks(functions));
+	view->SetText(DecompilingText(address, name).c_str());
 	view->SetFunctionAddress(address);
 	view->GetCtrl().SetReadOnly(true);
 	view->SetDeleteFromTree(true);
+	DecompileAsync(address, std::string(CW2A(name.c_str())), false, view->GetHwnd(), [=](Decompiled& result) {
+		auto& ctrl = view->GetCtrl();
+		ctrl.SetReadOnly(false);
+		if (result.Ok) {
+			view->SetText(result.Code.c_str());
+			view->SetFunctionLinks(FunctionLinks(result.Functions));
+		}
+		else
+			view->SetText(NotDecompiledText(address, result.Error).c_str());
+		ctrl.SetReadOnly(true);
+		ctrl.EmptyUndoBuffer();
+		});
 
 	auto image = GetIconIndex(IDI_FUNCTION);
 	auto hItem = InsertTreeItem(m_Tree, title.c_str(), image, itemType, hParent, TVI_SORT);
@@ -2296,6 +2572,15 @@ bool CMainFrame::DecompileFunction(uint64_t address) {
 	m_Views2.insert({ view->GetHwnd(), itemType });
 	RecordNavigation();
 	return true;
+}
+
+// What the view of a function's C shows while it is decompiled, and if it could not be
+std::string CMainFrame::DecompilingText(uint64_t address, std::wstring const& name) {
+	return std::format("/* Decompiling {}... */\n", name.empty() ? std::format("0x{:X}", address) : std::string(CW2A(name.c_str())));
+}
+
+std::string CMainFrame::NotDecompiledText(uint64_t address, std::string const& error) {
+	return std::format("/* 0x{:X} could not be decompiled: {} */\n", address, error);
 }
 
 // Where the views of a function go, and its name (without its signature; empty if it has none): an export under the
@@ -2404,17 +2689,6 @@ bool CMainFrame::ShowSideBySide(uint64_t address) {
 
 	std::wstring name;
 	auto parent = FunctionPlace(rva, name);
-	std::string code, reason;
-	GhidraDecompiler::FunctionRefs functions;
-	GhidraDecompiler::LineAddresses lines;
-	{
-		CWaitCursor wait;
-		if (!decompiler->Decompile(address, std::string(CW2A(name.c_str())), code, reason, &functions, &lines)) {
-			AtlMessageBox(m_hWnd, (std::format(L"0x{:X} could not be decompiled: ", address) + std::wstring(CA2W(reason.c_str()))).c_str(),
-				IDR_MAINFRAME, MB_ICONWARNING);
-			return false;
-		}
-	}
 	auto hParent = PlaceItem(parent);
 	if (!hParent)
 		return false;
@@ -2426,8 +2700,16 @@ bool CMainFrame::ShowSideBySide(uint64_t address) {
 		ATLASSERT(false);
 		return false;
 	}
-	view->SetCode(asmCode, address, *arch, code, std::move(lines), FunctionLinks(functions));
+	// the disassembly at once, the C when the decompiler's thread is done with it
+	view->SetAsm(asmCode, address, *arch);
+	view->SetC(DecompilingText(address, name), {}, {});
 	view->SetDeleteFromTree(true);
+	DecompileAsync(address, std::string(CW2A(name.c_str())), true, view->GetHwnd(), [=](Decompiled& result) {
+		if (result.Ok)
+			view->SetC(result.Code, std::move(result.Lines), FunctionLinks(result.Functions));
+		else
+			view->SetC(NotDecompiledText(address, result.Error), {}, {});
+		});
 
 	auto image = GetIconIndex(IDI_FUNCTION);
 	auto hItem = InsertTreeItem(m_Tree, title.c_str(), image, itemType, hParent, TVI_SORT);
@@ -2765,7 +3047,7 @@ LRESULT CMainFrame::OnSymbolsLoaded(UINT, WPARAM generation, LPARAM lParam, BOOL
 	}
 	m_Symbols = *session;
 	m_Symbols.LoadAddress(m_PE.GetImageBase());
-	m_Decompiler.reset();	// made again when it is used: with the names the symbols have
+	CloseDecompiler(false);	// made again when it is used: with the names and types the symbols have (the work in progress ends as it began)
 	SetStatusText(0, L"Symbols loaded");
 	if (auto root = FindTreeItem(TreeItemType::Image); root && !FindTreeItem(TreeItemType::Symbols))
 		InsertSymbolsNode(root);

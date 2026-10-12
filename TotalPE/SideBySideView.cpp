@@ -46,19 +46,28 @@ LRESULT CSideBySideView::OnForward(UINT msg, WPARAM wp, LPARAM lp, BOOL&) {
 	return m_Active ? m_Active->SendMessage(msg, wp, lp) : 0;
 }
 
-bool CSideBySideView::SetCode(std::span<const std::byte> code, uint64_t address, CpuArch arch, std::string const& c,
-	GhidraDecompiler::LineAddresses lines, std::unordered_map<std::wstring, uint64_t> links) {
+bool CSideBySideView::SetAsm(std::span<const std::byte> code, uint64_t address, CpuArch arch) {
 	m_Asm->SetLanguage(LexLanguage::Asm);
 	m_Asm->SetAsmCode(code, address, arch);
 	m_Asm->GetCtrl().SetReadOnly(true);
 	m_C->SetLanguage(LexLanguage::C);
-	m_C->SetText(c.c_str());
-	m_C->SetFunctionLinks(std::move(links));
 	m_C->SetFunctionAddress(address);
 	m_C->GetCtrl().SetReadOnly(true);
+	return true;
+}
+
+void CSideBySideView::SetC(std::string const& c, GhidraDecompiler::LineAddresses lines, std::unordered_map<std::wstring, uint64_t> links) {
+	auto& ctrl = m_C->GetCtrl();
+	ctrl.SetReadOnly(false);
+	m_C->SetText(c.c_str());
+	ctrl.SetReadOnly(true);
+	ctrl.EmptyUndoBuffer();
+	m_C->SetFunctionLinks(std::move(links));
 	m_Lines = std::move(lines);
 	Align();
-	return true;
+	// the caret's line on the side the user is in marks the other side's lines
+	if (m_Active)
+		LinkFrom(*m_Active);
 }
 
 // Each line of the C goes on the row of the first instruction it was made from. Rows can only be added (blank lines of

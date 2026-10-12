@@ -7,6 +7,7 @@
 #include "Helpers.h"
 #include "AppSettings.h"
 #include <WTLHelper.h>
+#include "DecompilerThread.h"
 
 CAppModule _Module;
 AppSettings g_Settings;
@@ -59,6 +60,11 @@ int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPTSTR lp
 
 	int nRet = Run(lpstrCmdLine, nCmdShow);
 	settings.Save();
+
+	// a function that is still decompiled (the decompiler cannot be stopped, and its objects go with the process's): the
+	// process ends without it
+	if (!DecompilerThread::Shutdown(2000))
+		::ExitProcess(nRet);
 
 	_Module.Term();
 	::CoUninitialize();
