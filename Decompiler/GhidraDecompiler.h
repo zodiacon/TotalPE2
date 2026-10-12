@@ -93,8 +93,12 @@ public:
 
 	// The function at an address as C; 'name' is used if the function has none yet. 'functions' (if given) gets the
 	// functions the code refers to (the function itself and those it calls), by the names it shows, and their addresses.
+	// 'lines' (if given) gets, for each line of the code, the addresses of the instructions it was made from (none for
+	// a line of declarations or braces).
 	using FunctionRefs = std::vector<std::pair<std::string, uint64_t>>;
-	bool Decompile(uint64_t address, std::string const& name, std::string& code, std::string& error, FunctionRefs* functions = nullptr);
+	using LineAddresses = std::vector<std::vector<uint64_t>>;
+	bool Decompile(uint64_t address, std::string const& name, std::string& code, std::string& error, FunctionRefs* functions = nullptr,
+		LineAddresses* lines = nullptr);
 
 private:
 	struct Impl;

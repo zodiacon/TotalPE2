@@ -413,6 +413,7 @@
     <ClCompile Include="RichHeaderView.cpp" />
     <ClCompile Include="ResourcesView.cpp" />
     <ClCompile Include="ScintillaView.cpp" />
+    <ClCompile Include="SideBySideView.cpp" />
     <ClCompile Include="SectionsView.cpp" />
     <ClCompile Include="SecurityHelper.cpp" />
     <ClCompile Include="SecurityView.cpp" />
@@ -483,6 +484,7 @@
     <ClInclude Include="ResourcesView.h" />
     <ClInclude Include="ScintillaCtrl.h" />
     <ClInclude Include="ScintillaView.h" />
+    <ClInclude Include="SideBySideView.h" />
     <ClInclude Include="SectionsView.h" />
     <ClInclude Include="SecurityHelper.h" />
     <ClInclude Include="PEImageView.h" />

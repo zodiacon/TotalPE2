@@ -87,6 +87,7 @@ public:
 		COMMAND_ID_HANDLER(ID_PE_DISASSEMBLEENTRYPOINT, OnDisassembleEntryPoint)
 		COMMAND_ID_HANDLER(ID_PE_DISASSEMBLEFUNCTION, OnDisassembleFunction)
 		COMMAND_ID_HANDLER(ID_PE_DECOMPILEFUNCTION, OnDecompileFunction)
+		COMMAND_ID_HANDLER(ID_PE_SIDEBYSIDE, OnSideBySide)
 		COMMAND_ID_HANDLER(ID_FILE_NEW, OnNewWindow)
 		COMMAND_ID_HANDLER(ID_OPTIONS_ALWAYSONTOP, OnAlwaysOnTop)
 		COMMAND_ID_HANDLER(ID_HELP_ABOUTWINDOWS, OnWindowsProperties)
@@ -260,6 +261,12 @@ private:
 	LRESULT OnDecompileFunction(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	// The function at an address as C (Ghidra's decompiler), in a view of its own next to where its disassembly goes
 	bool DecompileFunction(uint64_t va) override;
+	bool ShowSideBySide(uint64_t va) override;
+	LRESULT OnSideBySide(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	TreeItemType FunctionPlace(uint32_t rva, std::wstring& name) const;
+	HTREEITEM PlaceItem(TreeItemType parent);
+	std::unordered_map<std::wstring, uint64_t> FunctionLinks(GhidraDecompiler::FunctionRefs const& functions) const;
+	bool FunctionCode(uint64_t address, std::span<const std::byte>& code);
 	bool ReplaceView(HWND hView, std::function<bool()> const& open) override;
 	// the decompiler of the PE file (made on first use); null, with the reason, if there is none for its machine
 	GhidraDecompiler* Decompiler(std::wstring& error);

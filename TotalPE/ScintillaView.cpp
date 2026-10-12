@@ -246,6 +246,8 @@ bool CScintillaView::SetAsmCode(std::span<const std::byte> code, uint64_t addres
 	m_Lines.clear();
 	m_LineOfVa.clear();
 	m_Sci.SetText(Disassemble(code, address));
+	if (!m_Function)
+		m_Function = address;
 	return true;
 }
 
@@ -279,7 +281,8 @@ void CScintillaView::SetNavigationPosition(int64_t va) {
 void CScintillaView::ShowLine(int line) {
 	auto start = (intptr_t)m_Sci.SendMessage(SCI_POSITIONFROMLINE, line);
 	auto onScreen = (int)m_Sci.SendMessage(SCI_LINESONSCREEN);
-	m_Sci.SendMessage(SCI_SETFIRSTVISIBLELINE, std::max(0, line - onScreen / 3));
+	auto row = (int)m_Sci.SendMessage(SCI_VISIBLEFROMDOCLINE, line);
+	m_Sci.SendMessage(SCI_SETFIRSTVISIBLELINE, std::max(0, row - onScreen / 3));
 	m_Sci.SendMessage(SCI_SETSEL, start, m_Sci.SendMessage(SCI_GETLINEENDPOSITION, line));
 }
 
@@ -491,6 +494,10 @@ void CScintillaView::UpdateColors() {
 	m_Sci.StyleSetBack(STYLE_DEFAULT, ::GetSysColor(COLOR_WINDOW));
 	m_Sci.StyleClearAll();
 
+	// the lines marked as related to the other side of a side-by-side view
+	m_Sci.SendMessage(SCI_MARKERDEFINE, MarkerRelated, SC_MARK_BACKGROUND);
+	m_Sci.SendMessage(SCI_MARKERSETBACK, MarkerRelated, dark ? RGB(70, 60, 20) : RGB(255, 240, 170));
+
 	// the selection and the caret: Scintilla's own colors are for a light background
 	using Scintilla::Element;
 	auto opaque = [](COLORREF color) { return (int)(color | 0xFF000000); };
@@ -617,12 +624,54 @@ LRESULT CScintillaView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
 			sub.InsertMenu(0, MF_BYPOSITION | MF_STRING, ID_CODE_DECOMPILE, (L"&Decompile " + shown).c_str());
 		}
 	}
+	// the function of the view: its disassembly and C side by side
+	if (m_Function && !m_Notify && (m_Language == LexLanguage::Asm || m_Language == LexLanguage::C)) {
+		sub.AppendMenu(MF_SEPARATOR);
+		sub.AppendMenu(MF_STRING, ID_CODE_SIDEBYSIDE, m_Language == LexLanguage::Asm ? L"Side by Side with &C" : L"Side by Side with Disassembl&y");
+	}
 	auto result = Frame()->ShowContextMenu(sub, 0, x, y);
 	return result;
 }
 
 void CScintillaView::SetFunctionLinks(std::unordered_map<std::wstring, uint64_t> links) {
 	m_Links = std::move(links);
+}
+
+void CScintillaView::SetFunctionAddress(uint64_t address) {
+	m_Function = address;
+}
+
+uint64_t CScintillaView::LineAddress(int line) const {
+	auto info = GetLine(line);
+	return info ? info->Va : 0;
+}
+
+int CScintillaView::LineOfAddress(uint64_t va) const {
+	auto it = m_LineOfVa.find(va);
+	return it == m_LineOfVa.end() ? -1 : it->second;
+}
+
+void CScintillaView::MarkLines(std::vector<int> const& lines) {
+	m_Sci.SendMessage(SCI_MARKERDELETEALL, MarkerRelated);
+	for (auto line : lines)
+		m_Sci.SendMessage(SCI_MARKERADD, line, MarkerRelated);
+}
+
+void CScintillaView::SetNotify(Notify notify) {
+	m_Notify = std::move(notify);
+}
+
+LRESULT CScintillaView::OnSciNotify(int, LPNMHDR hdr, BOOL& handled) {
+	if (m_Notify)
+		m_Notify(*this, *(SCNotification*)hdr);
+	handled = FALSE;
+	return 0;
+}
+
+LRESULT CScintillaView::OnSideBySide(WORD, WORD, HWND, BOOL&) {
+	if (m_Function)
+		Frame()->ShowSideBySide(m_Function);
+	return 0;
 }
 
 // A name around a position: letters, digits and the characters of C++ names (scopes, destructors, decorated parts),

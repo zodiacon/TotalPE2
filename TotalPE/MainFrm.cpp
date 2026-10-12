@@ -17,6 +17,7 @@
 #include "VtKeyDlg.h"
 #include "SaveData.h"
 #include "ScintillaView.h"
+#include "SideBySideView.h"
 #include "HexView.h"
 #include "CompareView.h"
 #include "ItaniumDemangle.h"
@@ -101,6 +102,7 @@ void CMainFrame::UpdateUI() {
 	UIEnable(ID_PE_DISASSEMBLEENTRYPOINT, fi != nullptr || (m_Elf && m_Elf.Entry()));
 	UIEnable(ID_PE_DISASSEMBLEFUNCTION, fi != nullptr || m_Elf);
 	UIEnable(ID_PE_DECOMPILEFUNCTION, fi != nullptr);
+	UIEnable(ID_PE_SIDEBYSIDE, fi != nullptr);
 	UIEnable(ID_VIEW_EXPORTS, fi && fi->HasExport);
 	UIEnable(ID_VIEW_IMPORTS, fi && fi->HasImport);
 	UIEnable(ID_VIEW_RESOURCES, fi && fi->HasResource);
@@ -2252,21 +2254,9 @@ bool CMainFrame::DecompileFunction(uint64_t address) {
 		return true;
 	}
 
-	// named as its disassembly is, and next to it: an export under the exports, any other function under Disassembly
+	// named as its disassembly is, and next to it
 	std::wstring name;
-	auto parent = TreeItemType::DisassemblyFunctions;
-	if (auto exp = m_PE.GetExport(); exp && FindTreeItem(TreeItemType::DirectoryExports)) {
-		auto it = std::ranges::find_if(exp->Funcs, [&](auto const& f) { return f.FuncRVA == rva && f.ForwarderName.empty(); });
-		if (it != exp->Funcs.end()) {
-			parent = TreeItemType::DirectoryExports;
-			name = std::wstring(it->FuncName.begin(), it->FuncName.end());
-		}
-	}
-	if (name.empty())
-		name = ResolveRva(rva);
-	if (name.find(L'+') != std::wstring::npos)
-		name.clear();	// inside a function
-	name = name.empty() ? std::wstring() : FunctionName(name);
+	auto parent = FunctionPlace(rva, name);
 
 	std::string code, reason;
 	GhidraDecompiler::FunctionRefs functions;
@@ -2279,13 +2269,9 @@ bool CMainFrame::DecompileFunction(uint64_t address) {
 		}
 	}
 
-	if (parent == TreeItemType::DisassemblyFunctions && !FindTreeItem(parent)) {
-		auto hRoot = FindTreeItem(TreeItemType::Image);
-		if (!hRoot)
-			return false;
-		InsertTreeItem(m_Tree, L"Disassembly", GetTreeIcon(IDI_BINARY), parent, hRoot);
-	}
-	auto hParent = FindTreeItem(parent);
+	auto hParent = PlaceItem(parent);
+	if (!hParent)
+		return false;
 	auto title = std::format(L"{} (C)", name.empty() ? std::format(L"0x{:X}", address) : name);
 
 	RecordNavigation();
@@ -2296,18 +2282,8 @@ bool CMainFrame::DecompileFunction(uint64_t address) {
 	}
 	view->SetLanguage(LexLanguage::C);
 	view->SetText(code.c_str());
-	// the functions the code refers to, for its context menu: those in the image (an import is not), an incremental
-	// linking stub as the function it jumps to
-	std::unordered_map<std::wstring, uint64_t> links;
-	auto pe64 = m_PE.GetFileInfo()->IsPE64;
-	uint64_t imageSize = pe64 ? m_PE.GetNTHeader()->NTHdr64.OptionalHeader.SizeOfImage : m_PE.GetNTHeader()->NTHdr32.OptionalHeader.SizeOfImage;
-	for (auto const& [fname, va] : functions) {
-		if (va < base || va - base >= imageSize)
-			continue;
-		auto target = StubTarget(va);
-		links.try_emplace(std::wstring(CA2W(fname.c_str(), CP_UTF8)), target ? target : va);
-	}
-	view->SetFunctionLinks(std::move(links));
+	view->SetFunctionLinks(FunctionLinks(functions));
+	view->SetFunctionAddress(address);
 	view->GetCtrl().SetReadOnly(true);
 	view->SetDeleteFromTree(true);
 
@@ -2322,13 +2298,174 @@ bool CMainFrame::DecompileFunction(uint64_t address) {
 	return true;
 }
 
+// Where the views of a function go, and its name (without its signature; empty if it has none): an export under the
+// exports (named as the exports view names it), any other function under Disassembly
+TreeItemType CMainFrame::FunctionPlace(uint32_t rva, std::wstring& name) const {
+	auto parent = TreeItemType::DisassemblyFunctions;
+	name.clear();
+	if (auto exp = m_PE.GetExport(); exp && FindTreeItem(TreeItemType::DirectoryExports)) {
+		auto it = std::ranges::find_if(exp->Funcs, [&](auto const& f) { return f.FuncRVA == rva && f.ForwarderName.empty(); });
+		if (it != exp->Funcs.end()) {
+			parent = TreeItemType::DirectoryExports;
+			name = std::wstring(it->FuncName.begin(), it->FuncName.end());
+		}
+	}
+	if (name.empty())
+		name = ResolveRva(rva);
+	if (name.find(L'+') != std::wstring::npos)
+		name.clear();	// inside a function
+	name = name.empty() ? std::wstring() : FunctionName(name);
+	return parent;
+}
+
+// The tree item of a place of functions' views (Disassembly is made when it is first needed)
+HTREEITEM CMainFrame::PlaceItem(TreeItemType parent) {
+	if (parent == TreeItemType::DisassemblyFunctions && !FindTreeItem(parent)) {
+		auto hRoot = FindTreeItem(TreeItemType::Image);
+		if (!hRoot)
+			return nullptr;
+		InsertTreeItem(m_Tree, L"Disassembly", GetTreeIcon(IDI_BINARY), parent, hRoot);
+	}
+	return FindTreeItem(parent);
+}
+
+// The functions decompiled code refers to, for its context menu: those in the image (an import is not), an incremental
+// linking stub as the function it jumps to
+std::unordered_map<std::wstring, uint64_t> CMainFrame::FunctionLinks(GhidraDecompiler::FunctionRefs const& functions) const {
+	std::unordered_map<std::wstring, uint64_t> links;
+	auto base = m_PE.GetImageBase();
+	auto pe64 = m_PE.GetFileInfo()->IsPE64;
+	uint64_t imageSize = pe64 ? m_PE.GetNTHeader()->NTHdr64.OptionalHeader.SizeOfImage : m_PE.GetNTHeader()->NTHdr32.OptionalHeader.SizeOfImage;
+	for (auto const& [fname, va] : functions) {
+		if (va < base || va - base >= imageSize)
+			continue;
+		auto target = StubTarget(va);
+		links.try_emplace(std::wstring(CA2W(fname.c_str(), CP_UTF8)), target ? target : va);
+	}
+	return links;
+}
+
+// The bytes of the code at an address (as much as the disassembly of a function examines); false (and the user is
+// told why) if the address is not in code that the file has
+bool CMainFrame::FunctionCode(uint64_t address, std::span<const std::byte>& code) {
+	auto base = m_PE.GetImageBase();
+	if (address < base || address - base > 0xFFFFFFFFULL)
+		return false;
+	auto rva = (uint32_t)(address - base);
+	PESectionHeader const* host = nullptr;
+	for (auto const& s : *m_PE.GetSecHeaders()) {
+		auto& h = s.SecHdr;
+		if (rva >= h.VirtualAddress && rva < h.VirtualAddress + std::max(h.Misc.VirtualSize, h.SizeOfRawData)) {
+			host = &s;
+			break;
+		}
+	}
+	if (!host || !(host->SecHdr.Characteristics & (IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_CNT_CODE))) {
+		AtlMessageBox(m_hWnd, std::format(L"0x{:X} is not in a code section.", address).c_str(), IDR_MAINFRAME, MB_ICONWARNING);
+		return false;
+	}
+	auto& h = host->SecHdr;
+	if (rva - h.VirtualAddress >= h.SizeOfRawData) {
+		AtlMessageBox(m_hWnd, std::format(L"0x{:X} is not backed by data in the file.", address).c_str(), IDR_MAINFRAME, MB_ICONWARNING);
+		return false;
+	}
+	auto offset = h.PointerToRawData + (rva - h.VirtualAddress);
+	// the disassembly stops at the end of the function: this is only the most that is examined
+	auto size = std::min<uint64_t>(0x2000, (uint64_t)h.PointerToRawData + h.SizeOfRawData - offset);
+	size = std::min<uint64_t>(size, m_PE.GetFileSize() - offset);
+	code = m_PE.GetSpan(offset, (uint32_t)size);
+	return true;
+}
+
+bool CMainFrame::ShowSideBySide(uint64_t address) {
+	if (!m_PE)
+		return false;
+	auto base = m_PE.GetImageBase();
+	if (address < base || address - base > 0xFFFFFFFFULL)
+		return false;
+	auto rva = (uint32_t)(address - base);
+	auto itemType = TreeItemWithIndex(TreeItemType::SideBySide, (int64_t)rva << ItemShift);
+	if (auto it = m_Views.find(itemType); it != m_Views.end()) {
+		ShowView(it->second->GetHTreeItem());
+		return true;
+	}
+
+	auto arch = ArchOf(m_PE);
+	std::wstring error;
+	auto decompiler = Decompiler(error);
+	if (!decompiler || !arch) {
+		AtlMessageBox(m_hWnd, decompiler ? L"The code of this machine is not disassembled (x86, x64 and ARM64 are)" : error.c_str(),
+			IDR_MAINFRAME, MB_ICONWARNING);
+		return false;
+	}
+	std::span<const std::byte> asmCode;
+	if (!FunctionCode(address, asmCode))
+		return false;
+
+	std::wstring name;
+	auto parent = FunctionPlace(rva, name);
+	std::string code, reason;
+	GhidraDecompiler::FunctionRefs functions;
+	GhidraDecompiler::LineAddresses lines;
+	{
+		CWaitCursor wait;
+		if (!decompiler->Decompile(address, std::string(CW2A(name.c_str())), code, reason, &functions, &lines)) {
+			AtlMessageBox(m_hWnd, (std::format(L"0x{:X} could not be decompiled: ", address) + std::wstring(CA2W(reason.c_str()))).c_str(),
+				IDR_MAINFRAME, MB_ICONWARNING);
+			return false;
+		}
+	}
+	auto hParent = PlaceItem(parent);
+	if (!hParent)
+		return false;
+	auto title = std::format(L"{} (Side by Side)", name.empty() ? std::format(L"0x{:X}", address) : name);
+
+	RecordNavigation();
+	auto view = new CSideBySideView(this, m_PE, title.c_str());
+	if (nullptr == view->DoCreate(m_Tabs)) {
+		ATLASSERT(false);
+		return false;
+	}
+	view->SetCode(asmCode, address, *arch, code, std::move(lines), FunctionLinks(functions));
+	view->SetDeleteFromTree(true);
+
+	auto image = GetIconIndex(IDI_FUNCTION);
+	auto hItem = InsertTreeItem(m_Tree, title.c_str(), image, itemType, hParent, TVI_SORT);
+	m_Tree.EnsureVisible(hItem);
+	view->SetHTreeItem(hItem);
+	m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, view);
+	m_Views.insert({ itemType, view });
+	m_Views2.insert({ view->GetHwnd(), itemType });
+	RecordNavigation();
+	return true;
+}
+
+LRESULT CMainFrame::OnSideBySide(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
+	if (!m_PE)
+		return 0;
+	CDisassembleFunctionDlg dlg(m_DisassembleFunction, L"Disassembly and C Side by Side", L"Show");
+	if (dlg.DoModal(m_hWnd) != IDOK)
+		return 0;
+	uint64_t address;
+	std::wstring error;
+	if (!ResolveFunction(m_DisassembleFunction, address, error)) {
+		AtlMessageBox(m_hWnd, error.c_str(), IDR_MAINFRAME, MB_ICONWARNING);
+		return 0;
+	}
+	ShowSideBySide(address);
+	return 0;
+}
+
+// A view (or a window in one: a side of a side-by-side view) is replaced by the one that 'open' brings up
 bool CMainFrame::ReplaceView(HWND hView, std::function<bool()> const& open) {
 	auto pageOf = [&](HWND hWnd) {
 		for (int i = 0; i < m_Tabs.GetPageCount(); i++)
-			if (m_Tabs.GetPageHWND(i) == hWnd)
+			if (auto hPage = m_Tabs.GetPageHWND(i); hPage == hWnd || ::IsChild(hPage, hWnd))
 				return i;
 		return -1;
 	};
+	if (auto page = pageOf(hView); page >= 0)
+		hView = m_Tabs.GetPageHWND(page);
 	if (pageOf(hView) < 0)
 		return open();
 	if (!open())
@@ -2372,27 +2509,9 @@ bool CMainFrame::DisassembleFunction(uint64_t address) {
 		return false;
 
 	auto rva = (uint32_t)(address - base);
-	PESectionHeader const* host = nullptr;
-	for (auto const& s : *m_PE.GetSecHeaders()) {
-		auto& h = s.SecHdr;
-		if (rva >= h.VirtualAddress && rva < h.VirtualAddress + std::max(h.Misc.VirtualSize, h.SizeOfRawData)) {
-			host = &s;
-			break;
-		}
-	}
-	if (!host || !(host->SecHdr.Characteristics & (IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_CNT_CODE))) {
-		AtlMessageBox(m_hWnd, std::format(L"0x{:X} is not in a code section.", address).c_str(), IDR_MAINFRAME, MB_ICONWARNING);
+	std::span<const std::byte> code;
+	if (!FunctionCode(address, code))
 		return false;
-	}
-	auto& h = host->SecHdr;
-	if (rva - h.VirtualAddress >= h.SizeOfRawData) {
-		AtlMessageBox(m_hWnd, std::format(L"0x{:X} is not backed by data in the file.", address).c_str(), IDR_MAINFRAME, MB_ICONWARNING);
-		return false;
-	}
-	auto offset = h.PointerToRawData + (rva - h.VirtualAddress);
-	// the disassembly stops at the end of the function: this is only the most that is examined
-	auto size = std::min<uint64_t>(0x2000, (uint64_t)h.PointerToRawData + h.SizeOfRawData - offset);
-	size = std::min<uint64_t>(size, m_PE.GetFileSize() - offset);
 
 	// an export goes under the exports directory (named as the exports view names it); any other function under a node of its own
 	std::wstring name;
@@ -2415,7 +2534,7 @@ bool CMainFrame::DisassembleFunction(uint64_t address) {
 		InsertTreeItem(m_Tree, L"Disassembly", GetTreeIcon(IDI_BINARY), parent, hRoot);
 	}
 	RecordNavigation();
-	if (CreateAssemblyView(m_PE.GetSpan(offset, (uint32_t)size), address, rva, title.c_str(), parent)) {
+	if (CreateAssemblyView(code, address, rva, title.c_str(), parent)) {
 		RecordNavigation();
 		return true;
 	}

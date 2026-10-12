@@ -187,9 +187,11 @@ bool CSymbolsView::OnRightClickList(HWND, int row, int, POINT const& pt) const {
 		menu.CreatePopupMenu();
 		menu.AppendMenu(MF_STRING, ID_VIEW_DISASSEMBLE, L"&Disassemble");
 		menu.AppendMenu(MF_STRING, ID_EXPORT_DECOMPILE, L"De&compile");
+		menu.AppendMenu(MF_STRING, ID_EXPORT_SIDEBYSIDE, L"Side by &Side");
 		switch (Frame()->ShowContextMenu(menu, TPM_RETURNCMD, pt.x, pt.y, m_hWnd)) {
 			case ID_VIEW_DISASSEMBLE: Frame()->DisassembleFunction(address); break;
 			case ID_EXPORT_DECOMPILE: Frame()->DecompileFunction(address); break;
+			case ID_EXPORT_SIDEBYSIDE: Frame()->ShowSideBySide(address); break;
 		}
 		return true;
 	}

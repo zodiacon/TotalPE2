@@ -537,7 +537,68 @@ void GhidraDecompiler::AddGlobal(uint64_t address, std::string const& name, uint
 	}
 }
 
-bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std::string& code, std::string& error, FunctionRefs* functions) {
+namespace {
+	// The code as the printer marks it up (packed: each token an element, the operation it shows by its time), as text and the
+	// addresses of each line: those of the operations, labels and comments of the line; the prototype is at the entry.
+	class MarkupReader {
+	public:
+		MarkupReader(Funcdata const* fd, std::string& text, GhidraDecompiler::LineAddresses& lines) : m_Text(text), m_Lines(lines) {
+			for (auto it = fd->beginOpAll(); it != fd->endOpAll(); ++it)
+				m_OpAddress.emplace(it->second->getTime(), it->second->getAddr().getOffset());
+			m_Entry = fd->getAddress().getOffset();
+			m_Lines.emplace_back();
+		}
+
+		// an element (a token, or a part of the code: a statement, a block...) and what is in it
+		void Read(Decoder& decoder, bool proto = false) {
+			auto id = decoder.openElement();
+			if (id == ELEM_BREAK.getId()) {
+				int indent = 0;
+				for (uint4 attr; (attr = decoder.getNextAttributeId()) != 0; )
+					if (attr == ATTRIB_INDENT.getId())
+						indent = (int)decoder.readSignedInteger();
+				m_Text += '\n';
+				m_Lines.emplace_back();
+				m_Text.append((size_t)std::max(0, indent), ' ');
+				decoder.closeElement(id);
+				return;
+			}
+			proto |= id == ELEM_FUNCPROTO.getId();
+			bool located = id == ELEM_LABEL.getId() || id == ELEM_COMMENT.getId();
+			for (uint4 attr; (attr = decoder.getNextAttributeId()) != 0; ) {
+				if (attr == ATTRIB_OPREF.getId()) {
+					if (auto it = m_OpAddress.find((uintm)decoder.readUnsignedInteger()); it != m_OpAddress.end())
+						Add(it->second);
+				}
+				else if (attr == ATTRIB_OFF.getId() && located)
+					Add(decoder.readUnsignedInteger());
+				else if (attr == ATTRIB_CONTENT.getId()) {
+					m_Text += decoder.readString();
+					if (proto)
+						Add(m_Entry);
+				}
+			}
+			while (decoder.peekElement() != 0)
+				Read(decoder, proto);
+			decoder.closeElement(id);
+		}
+
+	private:
+		void Add(uint64_t address) {
+			auto& line = m_Lines.back();
+			if (std::find(line.begin(), line.end(), address) == line.end())
+				line.push_back(address);
+		}
+
+		std::string& m_Text;
+		GhidraDecompiler::LineAddresses& m_Lines;
+		std::unordered_map<uintm, uint64_t> m_OpAddress;
+		uint64_t m_Entry;
+	};
+}
+
+bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std::string& code, std::string& error, FunctionRefs* functions,
+	LineAddresses* lines) {
 	if (!Open(error))
 		return false;
 	auto arch = m_Impl->Arch.get();
@@ -603,9 +664,42 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 					out << " * " << line << "\n";
 			out << " */\n";
 		}
-		arch->print->setOutputStream(&out);
-		arch->print->docFunction(fd);
-		code = out.str();
+		if (lines) {
+			// marked up: the text is read back from it, with the addresses of its lines (the lines of the comment above have none)
+			lines->clear();
+			auto header = out.str();
+			for (auto ch : header)
+				if (ch == '\n')
+					lines->emplace_back();
+			std::ostringstream markup;
+			arch->print->setMarkup(true);
+			arch->print->setOutputStream(&markup);
+			try {
+				arch->print->docFunction(fd);
+			}
+			catch (...) {
+				arch->print->setMarkup(false);
+				throw;
+			}
+			arch->print->setMarkup(false);
+			std::istringstream in(markup.str());
+			PackedDecode decoder(arch);
+			decoder.ingestStream(in);
+			std::string text;
+			GhidraDecompiler::LineAddresses body;
+			MarkupReader reader(fd, text, body);
+			while (decoder.peekElement() != 0)
+				reader.Read(decoder);
+			code = header + text;
+			if (!code.empty() && code.back() != '\n')
+				code += '\n';
+			lines->insert(lines->end(), body.begin(), body.end());
+		}
+		else {
+			arch->print->setOutputStream(&out);
+			arch->print->docFunction(fd);
+			code = out.str();
+		}
 
 		if (functions) {
 			functions->clear();

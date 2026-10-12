@@ -132,6 +132,8 @@ enum class TreeItemType : int64_t {
 
 	// a function decompiled (the index is its RVA)
 	Decompiled,
+	// a function's disassembly and C side by side (the index is its RVA)
+	SideBySide,
 
 	ItemMask = 255,
 };
@@ -178,6 +180,8 @@ struct IMainFrame abstract {
 	virtual bool DisassembleFunction(uint64_t va) = 0;
 	// The function at an address as C (decompiled), in a view of its own next to where its disassembly goes
 	virtual bool DecompileFunction(uint64_t va) = 0;
+	// The function's disassembly and C side by side, aligned, in a view of its own (next to where its disassembly goes)
+	virtual bool ShowSideBySide(uint64_t va) = 0;
 	// A view in place of another ("in the same window"): 'open' opens it (as DecompileFunction does), then it takes the
 	// place of the view, which is closed. Nothing is closed if 'open' fails, or brings up the view itself.
 	virtual bool ReplaceView(HWND hView, std::function<bool()> const& open) = 0;

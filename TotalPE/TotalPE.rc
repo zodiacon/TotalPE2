@@ -321,6 +321,7 @@ BEGIN
         MENUITEM "Disassemble Entry Point",     ID_PE_DISASSEMBLEENTRYPOINT
         MENUITEM "Disassemble &Function...",    ID_PE_DISASSEMBLEFUNCTION
         MENUITEM "De&compile Function...",      ID_PE_DECOMPILEFUNCTION
+        MENUITEM "Disassembly and C Side &by Side...", ID_PE_SIDEBYSIDE
         MENUITEM "Entire File in &Hex",         ID_PE_ENTIREFILEINHEX
         MENUITEM SEPARATOR
         MENUITEM "Upload to &VirusTotal...",    ID_PE_VIRUSTOTAL
@@ -380,6 +381,7 @@ BEGIN
     BEGIN
         MENUITEM "&Disassemble",                ID_VIEW_DISASSEMBLE
         MENUITEM "De&compile",                  ID_EXPORT_DECOMPILE
+        MENUITEM "Side by &Side",               ID_EXPORT_SIDEBYSIDE
         MENUITEM "Cross-&References...",        ID_EXPORT_XREFS
         MENUITEM "Flow &Graph...",              ID_EXPORT_FLOWGRAPH
         MENUITEM SEPARATOR

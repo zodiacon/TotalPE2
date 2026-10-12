@@ -9,6 +9,7 @@
 #include "ScintillaCtrl.h"
 #include "ViewBase.h"
 #include <optional>
+#include <functional>
 #include <unordered_map>
 
 class PEFile;
@@ -45,6 +46,19 @@ public:
 	// The functions the text refers to (decompiled code), by the names it shows: the one whose name is under the mouse can
 	// be decompiled or disassembled from the context menu
 	void SetFunctionLinks(std::unordered_map<std::wstring, uint64_t> links);
+	// The function the view shows: its disassembly and C can be shown side by side (from the context menu). Set by the
+	// disassembly to the address it starts at.
+	void SetFunctionAddress(uint64_t address);
+
+	// The disassembly's lines: the address of a line's instruction (0 if it is not one), the line of an instruction (-1)
+	uint64_t LineAddress(int line) const;
+	int LineOfAddress(uint64_t va) const;
+	// Lines marked (a background) as related to something elsewhere; none clears the marks
+	void MarkLines(std::vector<int> const& lines);
+	// A side of a side-by-side view: the control's notifications of scrolling, the caret, zoom and focus go to it, and the
+	// view does not offer to be shown side by side
+	using Notify = std::function<void(CScintillaView&, SCNotification const&)>;
+	void SetNotify(Notify notify);
 
 	int64_t GetNavigationPosition() const override;
 	void SetNavigationPosition(int64_t va) override;
@@ -56,6 +70,9 @@ public:
 		MESSAGE_HANDLER(::RegisterWindowMessage(L"WTLHelperUpdateTheme"), OnUpdateTheme)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
 		NOTIFY_CODE_HANDLER(SCN_DOUBLECLICK, OnDoubleClick)
+		NOTIFY_CODE_HANDLER(SCN_UPDATEUI, OnSciNotify)
+		NOTIFY_CODE_HANDLER(SCN_ZOOM, OnSciNotify)
+		NOTIFY_CODE_HANDLER(SCN_FOCUSIN, OnSciNotify)
 		CHAIN_MSG_MAP(CViewBase<CScintillaView>)
 	ALT_MSG_MAP(1)
 		COMMAND_ID_HANDLER(ID_ASSEMBLY_GOTOADDRESS, OnGoToAddress)
@@ -70,6 +87,7 @@ public:
 		COMMAND_ID_HANDLER(ID_CODE_DISASSEMBLE, OnCodeLink)
 		COMMAND_ID_HANDLER(ID_CODE_DECOMPILE_HERE, OnCodeLink)
 		COMMAND_ID_HANDLER(ID_CODE_DISASSEMBLE_HERE, OnCodeLink)
+		COMMAND_ID_HANDLER(ID_CODE_SIDEBYSIDE, OnSideBySide)
 		COMMAND_ID_HANDLER(ID_EDIT_CUT, OnEdit)
 		COMMAND_ID_HANDLER(ID_EDIT_PASTE, OnEdit)
 		COMMAND_ID_HANDLER(ID_EDIT_UNDO, OnEdit)
@@ -109,6 +127,10 @@ private:
 	LRESULT OnDisassembleAtEnd(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnEdit(WORD, WORD id, HWND, BOOL&);
 	LRESULT OnCodeLink(WORD, WORD id, HWND, BOOL&);
+	LRESULT OnSideBySide(WORD, WORD, HWND, BOOL&);
+	LRESULT OnSciNotify(int, LPNMHDR, BOOL&);
+	Notify m_Notify;
+	uint64_t m_Function{ 0 };
 	// the name (of a function: with its scopes and template arguments) at a position of the text, empty if none
 	std::wstring NameAt(intptr_t pos) const;
 	// the function of a name that the text shows (0 if it is not one)
@@ -132,4 +154,5 @@ private:
 	std::vector<Line> m_Lines;						// by line of the text: what each line of the disassembly is
 	std::unordered_map<uint64_t, int> m_LineOfVa;	// the line of each instruction
 	int m_ContextLine{ -1 };						// the line the context menu was opened on
+	static constexpr int MarkerRelated = 1;
 };
