@@ -17,6 +17,9 @@ static const UINT WM_VT_STATUS = WM_APP + 58;
 static const UINT WM_DECOMPILER_ASK = WM_APP + 59;
 // posted by the decompiler's thread: lParam is the result of a function's decompilation, that the receiver deletes
 static const UINT WM_DECOMPILED = WM_APP + 60;
+// posted by the thread that finds the cross-references: wParam is the generation of the request, lParam an XrefMap* (null
+// if there are none) that the receiver deletes
+static const UINT WM_XREFS_BUILT = WM_APP + 61;
 
 constexpr uint32_t ItemShift = 8;
 
@@ -138,6 +141,8 @@ enum class TreeItemType : int64_t {
 	Decompiled,
 	// a function's disassembly and C side by side (the index is its RVA)
 	SideBySide,
+	// the functions of the image
+	Functions,
 
 	ItemMask = 255,
 };
@@ -174,8 +179,10 @@ struct IMainFrame abstract {
 	// Shows an address (a virtual address): in a disassembly view that already contains it, in a new one if it is in a code
 	// section, or in the hex view.
 	virtual bool GoToVa(uint64_t va) = 0;
-	// The places in the code that refer to addresses. Built from the whole file on first use.
+	// The places in the code that refer to addresses. Found from the whole file on a thread of its own, when the file is
+	// opened: empty until then (views are told when they are there: IView::XrefsChanged).
 	virtual XrefMap const& GetXrefs() = 0;
+	virtual bool XrefsReady() const = 0;
 	// Lists the references to an address in a view of its own.
 	virtual bool ShowXrefs(uint64_t va) = 0;
 	// The flow graph of the function that contains the address (the code from the address if the function is not known)
@@ -230,4 +237,7 @@ struct IView abstract {
 	// Selects the row of an item: an export ("#ordinal" or its name), an imported module, or a function of a module
 	// ("#ordinal" or its name, 'owner' is the module). False if the view has no such item.
 	virtual bool SelectItem(std::wstring_view name, std::wstring_view owner = {}) { return false; }
+	// The cross-references were found (on a thread of their own, after the file was opened): a view that shows them shows
+	// itself again.
+	virtual void XrefsChanged() {}
 };

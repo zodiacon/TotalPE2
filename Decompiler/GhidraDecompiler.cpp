@@ -6,6 +6,7 @@
 #include "funcdata.hh"
 #include "database.hh"
 #include "printlanguage.hh"
+#include "printc.hh"
 #include "marshal.hh"
 #include "xml.hh"
 
@@ -85,6 +86,83 @@ namespace {
 	private:
 		GhidraDecompiler::ReadMemory m_Read;
 		std::string m_Target;
+	};
+
+	// The C printer, with strings: a constant that is not known to point to characters (a pointer-sized integer, or a
+	// pointer to anything), but points into read-only memory at a string, is printed as the string. Ghidra does that for
+	// pointers to characters only (its own analysis types the strings of a program first).
+	class StringPrintC : public PrintC {
+	public:
+		using PrintC::PrintC;
+
+	protected:
+		void pushConstant(uintb val, const Datatype* ct, tagtype tag, const Varnode* vn, const PcodeOp* op, uint4 displayFormat) override {
+			if (val != 0 && LooksLikePointer(ct)) {
+				Datatype* charType = nullptr;
+				Address addr;
+				if (FindString(val, op, addr, charType)) {
+					std::ostringstream str;
+					if (printCharacterConstant(str, addr, charType)) {
+						pushAtom(Atom(str.str(), vartoken, EmitMarkup::const_color, op, vn));
+						return;
+					}
+				}
+			}
+			PrintC::pushConstant(val, ct, tag, vn, op, displayFormat);
+		}
+
+	private:
+		bool LooksLikePointer(const Datatype* ct) const {
+			auto size = glb->getDefaultDataSpace()->getAddrSize();
+			switch (ct->getMetatype()) {
+				case TYPE_UNKNOWN: case TYPE_INT: case TYPE_UINT:
+					return ct->getSize() == size;
+				case TYPE_PTR:
+				{
+					auto to = static_cast<const TypePointer*>(ct)->getPtrTo()->getMetatype();
+					return to == TYPE_UNKNOWN || to == TYPE_VOID;
+				}
+				default:
+					return false;
+			}
+		}
+
+		// A string of at least a few printable characters (UTF-16 or 8 bit), terminated, in read-only memory
+		bool FindString(uintb val, const PcodeOp* op, Address& addr, Datatype*& charType) const {
+			auto space = glb->getDefaultDataSpace();
+			uintb encoding;
+			addr = glb->resolveConstant(space, val, space->getAddrSize(), op ? op->getAddr() : Address(), encoding);
+			if (addr.isInvalid() || !glb->symboltab->getGlobalScope()->isReadOnly(addr, 1, Address()))
+				return false;
+			uint1 bytes[512];
+			int4 size = 0;
+			try {
+				// as much as there is, up to the buffer's size
+				for (int4 chunk = 64; size < (int4)sizeof(bytes); size += chunk)
+					glb->loader->loadFill(bytes + size, chunk, addr + size);
+			}
+			catch (DataUnavailError const&) {
+			}
+			bool wide = size >= 4 && bytes[0] != 0 && bytes[1] == 0;
+			int count = 0;
+			bool terminated = false;
+			for (int4 i = 0; i + (wide ? 1 : 0) < size; i += wide ? 2 : 1) {
+				unsigned ch = wide ? bytes[i] | (bytes[i + 1] << 8) : bytes[i];
+				if (ch == 0) {
+					terminated = true;
+					break;
+				}
+				bool printable = ch == '\t' || ch == '\r' || ch == '\n' || (ch >= 0x20 && ch < 0x7F) ||
+					(wide && ch >= 0xA0 && (ch < 0xD800 || ch > 0xDFFF) && ch < 0xFFFE);
+				if (!printable)
+					return false;
+				count++;
+			}
+			if (!terminated || count < 3)
+				return false;
+			charType = wide ? glb->types->findByName("wchar_t") : glb->types->getBase(1, TYPE_INT);
+			return charType != nullptr;
+		}
 	};
 
 	bool s_Initialized = false;
@@ -540,6 +618,14 @@ bool GhidraDecompiler::Open(std::string& error) {
 		auto arch = std::make_unique<CallbackArchitecture>(m_Impl->Target, m_Impl->Read, &m_Impl->Messages);
 		DocumentStorage store;
 		arch->init(store);
+		// the printer of C with strings, in the place of Ghidra's (with its settings)
+		auto print = new StringPrintC(arch.get(), "c-language");
+		print->setOutputStream(arch->print->getOutputStream());
+		print->initializeFromArchitecture();
+		print->setBraceFormatFunction(Emit::next_line);	// the function's brace right below its declaration (not after a blank line)
+		arch->printlist.push_back(print);
+		arch->print = print;
+		print->adjustTypeOperators();
 		// The functions that the compiler's call fixups are for: the library registers the fixups by their names only
 		// (Ghidra itself gives them to the functions by name)
 		if (auto spec = store.getTag("compiler_spec")) {
@@ -584,6 +670,14 @@ void GhidraDecompiler::AddFunction(uint64_t address, std::string const& name) {
 	catch (LowlevelError const&) {
 		// a name the decompiler does not take: the function keeps a name of its own
 	}
+}
+
+void GhidraDecompiler::AddReadOnly(uint64_t address, uint64_t size) {
+	auto arch = m_Impl->Arch.get();
+	if (!arch || size == 0)
+		return;
+	auto space = arch->getDefaultDataSpace();
+	arch->symboltab->setPropertyRange(Varnode::readonly, Range(space, address, address + size - 1));
 }
 
 void GhidraDecompiler::SetExternalArea(uint64_t address) {

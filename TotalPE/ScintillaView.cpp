@@ -243,12 +243,33 @@ bool CScintillaView::SetAsmCode(std::span<const std::byte> code, uint64_t addres
 		if (m_Language == LexLanguage::Asm)
 			SetLanguage(LexLanguage::Asm);	// the words of the instruction set
 	}
+	m_Code = code;
+	m_CodeAddress = address;
 	m_Lines.clear();
 	m_LineOfVa.clear();
 	m_Sci.SetText(Disassemble(code, address));
 	if (!m_Function)
 		m_Function = address;
 	return true;
+}
+
+void CScintillaView::XrefsChanged() {
+	if (m_Language != LexLanguage::Asm || m_Code.empty())
+		return;
+	// the instructions of the caret and of the first line shown, which the labels move
+	auto caret = GetNavigationPosition();
+	auto top = GetLine(InstructionLine((int)m_Sci.SendMessage(SCI_DOCLINEFROMVISIBLE, m_Sci.SendMessage(SCI_GETFIRSTVISIBLELINE))));
+	uint64_t topVa = top ? top->Va : 0;
+	bool readOnly = m_Sci.IsReadOnly();
+	m_Sci.SetReadOnly(false);
+	SetAsmCode(m_Code, m_CodeAddress, m_Arch);
+	m_Sci.SetReadOnly(readOnly);
+	m_Sci.EmptyUndoBuffer();
+	if (auto it = m_LineOfVa.find(topVa); it != m_LineOfVa.end())
+		m_Sci.SendMessage(SCI_SETFIRSTVISIBLELINE, m_Sci.SendMessage(SCI_VISIBLEFROMDOCLINE, it->second));
+	if (caret > 0)
+		if (auto it = m_LineOfVa.find((uint64_t)caret); it != m_LineOfVa.end())
+			m_Sci.GotoPos(m_Sci.PositionFromLine(it->second));
 }
 
 int CScintillaView::CurrentLine() const {

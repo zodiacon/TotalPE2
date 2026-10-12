@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -75,8 +76,9 @@ struct Xref {
 // do not exist, and code that is only reachable through computed jumps is still covered, as it is part of the sweep.
 class XrefMap {
 public:
-	// Replaces the contents with the references of 'pe'. False for a file that is not x86, x64 or ARM64, or has no code.
-	bool Build(PEFile const& pe);
+	// Replaces the contents with the references of 'pe'. False for a file that is not x86, x64 or ARM64, or has no code, or
+	// if 'cancel' was set (from another thread) before the work was done: the contents are then empty.
+	bool Build(PEFile const& pe, std::atomic<bool> const* cancel = nullptr);
 	void Clear();
 
 	bool Built() const { return m_Built; }

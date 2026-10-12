@@ -313,7 +313,7 @@ void XrefMap::Clear() {
 	m_Built = false;
 }
 
-bool XrefMap::Build(PEFile const& pe) {
+bool XrefMap::Build(PEFile const& pe, std::atomic<bool> const* cancel) {
 	Clear();
 	auto info = pe.GetFileInfo();
 	auto nt = pe.GetNTHeader();
@@ -392,7 +392,14 @@ bool XrefMap::Build(PEFile const& pe) {
 		auto bytes = (const uint8_t*)span.data();
 		size_t left = span.size();
 		uint64_t address = imageBase + h.VirtualAddress;
+		uint32_t steps = 0;
 		while (left > 0) {
+			if (cancel && (++steps & 0xFFF) == 0 && cancel->load(std::memory_order_relaxed)) {
+				cs_free(inst, 1);
+				cs_close(&handle);
+				Clear();
+				return false;
+			}
 			// a table found earlier: skip it
 			if (auto it = data.upper_bound(address); it != data.begin()) {
 				--it;

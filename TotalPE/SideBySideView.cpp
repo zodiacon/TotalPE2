@@ -204,3 +204,13 @@ void CSideBySideView::SetNavigationPosition(int64_t va) {
 bool CSideBySideView::GoToAddress(uint64_t va) {
 	return m_Asm && m_Asm->GoToAddress(va);
 }
+
+// the disassembly has the labels of cross-references now: its lines moved
+void CSideBySideView::XrefsChanged() {
+	if (!m_Asm)
+		return;
+	m_Asm->XrefsChanged();
+	Align();
+	if (m_Active)
+		LinkFrom(*m_Active);
+}

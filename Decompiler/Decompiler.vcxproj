@@ -227,6 +227,8 @@
   <ItemGroup>
     <ClCompile Include="GhidraDecompiler.cpp">
       <WarningLevel>Level3</WarningLevel>
+      <!-- Ghidra's headers declare ParameterPieces and PrototypePieces as classes ahead, and define them as structs -->
+      <DisableSpecificWarnings>4099;%(DisableSpecificWarnings)</DisableSpecificWarnings>
     </ClCompile>
     <ClCompile Include="ghidra\cpp\action.cc" />
     <ClCompile Include="ghidra\cpp\address.cc" />

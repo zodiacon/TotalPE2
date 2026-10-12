@@ -36,6 +36,7 @@
 #include "OverlayView.h"
 #include "FlowGraphView.h"
 #include "ArchiveView.h"
+#include "FunctionsView.h"
 #include "StringsView.h"
 #include "FontView.h"
 #include "EventManifestView.h"
@@ -385,6 +386,16 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		case TreeItemType::Strings:
 		{
 			auto view = m_Elf ? new CStringsView(this, m_Elf) : new CStringsView(this, m_PE);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::Functions:
+		{
+			auto view = new CFunctionsView(this, m_PE);
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};
@@ -887,6 +898,10 @@ bool CMainFrame::ShowXrefs(uint64_t va) {
 	auto base = m_PE.GetImageBase();
 	if (va < base || va - base > 0xFFFFFFFFULL)
 		return false;
+	if (!m_XrefsReady) {
+		WithXrefs([=] { ShowXrefs(va); });	// when they are found (the status bar says so)
+		return true;
+	}
 
 	auto refs = GetXrefs().To(va);
 	if (refs.empty()) {
@@ -1019,6 +1034,10 @@ bool CMainFrame::ShowFlowGraph(uint64_t va) {
 	auto base = m_PE.GetImageBase();
 	if (va < base || va - base > 0xFFFFFFFFULL)
 		return false;
+	if (!m_XrefsReady) {
+		WithXrefs([=] { ShowFlowGraph(va); });	// the graph follows jumps the cross-references know of
+		return true;
+	}
 
 	auto const& xrefs = GetXrefs();
 	auto function = FindFunctionStart(m_PE, xrefs, va);

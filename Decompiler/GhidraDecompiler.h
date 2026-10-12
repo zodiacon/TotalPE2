@@ -87,6 +87,9 @@ public:
 	bool Open(std::string& error);
 	// a function at an address gets a name (a C identifier, or a qualified C++ name)
 	void AddFunction(uint64_t address, std::string const& name);
+	// Memory that does not change (constant data, code): what is read there is known, and a pointer into it at a string is
+	// shown as the string
+	void AddReadOnly(uint64_t address, uint64_t size);
 	// Imports: a call through the pointer at 'slot' (an entry of the import address table) is a call of the function
 	// 'name', which is outside the image. Each such function gets an address in an area that the image does not use,
 	// which is set first.

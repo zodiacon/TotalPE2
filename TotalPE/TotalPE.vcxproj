@@ -415,6 +415,7 @@
     <ClCompile Include="ScintillaView.cpp" />
     <ClCompile Include="SideBySideView.cpp" />
     <ClCompile Include="DecompilerThread.cpp" />
+    <ClCompile Include="FunctionsView.cpp" />
     <ClCompile Include="SectionsView.cpp" />
     <ClCompile Include="SecurityHelper.cpp" />
     <ClCompile Include="SecurityView.cpp" />
@@ -487,6 +488,7 @@
     <ClInclude Include="ScintillaView.h" />
     <ClInclude Include="SideBySideView.h" />
     <ClInclude Include="DecompilerThread.h" />
+    <ClInclude Include="FunctionsView.h" />
     <ClInclude Include="SectionsView.h" />
     <ClInclude Include="SecurityHelper.h" />
     <ClInclude Include="PEImageView.h" />

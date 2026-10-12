@@ -24,6 +24,7 @@ public:
 	int64_t GetNavigationPosition() const override;
 	void SetNavigationPosition(int64_t va) override;
 	bool GoToAddress(uint64_t va) override;
+	void XrefsChanged() override;
 
 	BEGIN_MSG_MAP(CSideBySideView)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)

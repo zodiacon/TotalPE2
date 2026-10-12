@@ -24,6 +24,7 @@
 #include <map>
 #include <atomic>
 #include <shared_mutex>
+#include <thread>
 
 class CHexView;
 
@@ -79,6 +80,7 @@ public:
 		COMMAND_ID_HANDLER(ID_VIEW_VERSION, OnViewVersion)
 		COMMAND_ID_HANDLER(ID_VIEW_OVERLAY, OnViewOverlay)
 		COMMAND_ID_HANDLER(ID_PE_STRINGS, OnViewStrings)
+		COMMAND_ID_HANDLER(ID_PE_FUNCTIONS, OnViewFunctions)
 		COMMAND_ID_HANDLER(ID_FILE_SAVE, OnFileSave)
 		COMMAND_ID_HANDLER(ID_FILE_EXPORTLIST, OnFileExportList)
 		COMMAND_ID_HANDLER(ID_PE_SECURITY, OnViewSecurity)
@@ -103,6 +105,7 @@ public:
 		MESSAGE_HANDLER(WM_SYMBOLS_LOADED, OnSymbolsLoaded)
 		MESSAGE_HANDLER(WM_DECOMPILER_ASK, OnDecompilerAsk)
 		MESSAGE_HANDLER(WM_DECOMPILED, OnDecompiled)
+		MESSAGE_HANDLER(WM_XREFS_BUILT, OnXrefsBuilt)
 		MESSAGE_HANDLER(WM_VT_STATUS, OnVirusTotalStatus)
 		COMMAND_ID_HANDLER(ID_PE_VIRUSTOTAL, OnVirusTotal)
 		COMMAND_ID_HANDLER(ID_PE_VTAPIKEY, OnVirusTotalKey)
@@ -137,6 +140,9 @@ private:
 	bool GoToFileOffset(int64_t offset, bool disassemble = false) override;
 	bool GoToVa(uint64_t va) override;
 	XrefMap const& GetXrefs() override;
+	bool XrefsReady() const override {
+		return m_XrefsReady;
+	}
 	bool ShowXrefs(uint64_t va) override;
 	bool ShowFlowGraph(uint64_t va) override;
 	bool DisassembleFunction(uint64_t va) override;
@@ -255,6 +261,7 @@ private:
 	LRESULT OnViewVersion(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewOverlay(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewStrings(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnViewFunctions(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnFileSave(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnFileExportList(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	void UpdateSaveUI();
@@ -284,6 +291,7 @@ private:
 		std::vector<std::pair<uint64_t, std::string>> Functions;	// the exports
 		uint64_t ExternalArea{ 0 };
 		std::vector<std::pair<uint64_t, std::string>> Imports;	// by the slots of the import address tables
+		std::vector<std::pair<uint64_t, uint64_t>> ReadOnly;	// the sections that are not written (address, size)
 		struct Global {
 			uint64_t Address;
 			std::string Name;
@@ -316,13 +324,17 @@ private:
 		GhidraDecompiler::FunctionRefs Functions;
 		GhidraDecompiler::LineAddresses Lines;
 	};
-	void DecompileAsync(uint64_t address, std::string const& name, bool lines, HWND hView, std::function<void(Decompiled&)> done);
+	void DecompileAsync(uint64_t address, std::wstring const& name, bool lines, HWND hView, std::function<void(Decompiled&)> done);
 	static std::string DecompilingText(uint64_t address, std::wstring const& name);
 	static std::string NotDecompiledText(uint64_t address, std::string const& error);
 	struct PendingDecompile {
 		HWND View;
+		std::wstring Name;
 		std::function<void(Decompiled&)> Done;
 	};
+	// the status bar's panes of the work in the background: the decompiling, the cross-references
+	static constexpr int DecompilerPane = 3, XrefsPane = 4;
+	void UpdateDecompilerStatus();
 	std::unordered_map<uint64_t, PendingDecompile> m_PendingDecompiles;
 	uint64_t m_LastDecompile{ 0 };
 	LRESULT OnDecompilerAsk(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
@@ -420,7 +432,20 @@ private:
 	mutable std::unordered_map<std::wstring, DiaSession> m_SymbolsForModules;
 	std::vector<std::pair<DWORD, std::wstring>> m_NamedRvas;	// exports, import slots; sorted by RVA
 	std::vector<Anomaly> m_Anomalies;
+	// The cross-references of the PE file, found on a thread of their own when it is opened (a large file takes seconds).
+	// What needs them before they are there is done when they are.
 	XrefMap m_Xrefs;
+	bool m_XrefsReady{ false };		// found (or there are none to find)
+	std::thread m_XrefThread;
+	std::shared_ptr<std::atomic<bool>> m_XrefCancel;
+	uint32_t m_XrefGeneration{ 0 };
+	std::vector<std::function<void()>> m_AfterXrefs;
+	void StartXrefs();
+	// before the file goes: the thread ends (and what waits for the cross-references is not done)
+	void CancelXrefs();
+	// 'action' now if the cross-references are there, otherwise when they are; true if it was done now
+	bool WithXrefs(std::function<void()> action);
+	LRESULT OnXrefsBuilt(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	OverlayInfo m_Overlay;
 	HTREEITEM m_hOverlay{ nullptr };
 	HWND m_SaveUIPage{ (HWND)-1 };	// the page Save and Export List were last enabled for

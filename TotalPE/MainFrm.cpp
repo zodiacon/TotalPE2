@@ -114,6 +114,7 @@ void CMainFrame::UpdateUI() {
 	UIEnable(ID_FILE_CLOSE, fi != nullptr || m_Archive || m_Object || m_Elf);
 	m_SaveUIPage = (HWND)-1;	// Save and Export List: from the active view, on the next idle
 	UIEnable(ID_PE_STRINGS, fi != nullptr || m_Elf);
+	UIEnable(ID_PE_FUNCTIONS, fi && ArchOf(m_PE));
 	UIEnable(ID_VIEW_MANIFEST, fi && m_hResManifest != nullptr);
 	UIEnable(ID_VIEW_VERSION, fi && m_hResVersion != nullptr);
 	UIEnable(ID_VIEW_OVERLAY, fi && m_hOverlay != nullptr);
@@ -210,7 +211,7 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 
 	CreateSimpleStatusBar();
 	m_StatusBar.SubclassWindow(m_hWndStatusBar);
-	int parts[] = { 200, 560, 760, 960, 1160 };
+	int parts[] = { 200, 560, 760, 1160, -1 };	// (the last two: the work in the background)
 	m_StatusBar.SetParts(_countof(parts), parts);
 
 	ToolBarButtonInfo const buttons[] = {
@@ -340,6 +341,7 @@ HTREEITEM CMainFrame::FindTreeItem(TreeItemType type) const {
 
 LRESULT CMainFrame::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& bHandled) {
 	CloseDecompiler();
+	CancelXrefs();
 	m_Tabs.SaveLayout(LayoutPath());	// the docking area still has its windows (they go after the frame's WM_DESTROY)
 
 	if (--s_Frames == 0) {
@@ -768,6 +770,7 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	int bitness = (m_PE && m_PE.GetFileInfo()->IsPE64) * 2 + (m_PE && m_PE.GetFileInfo()->IsPE32);
 
 	CloseDecompiler();	// (before the file it reads goes)
+	CancelXrefs();
 	m_PE.Close();
 	if (!m_PE.Open(path)) {
 		AtlMessageBox(m_hWnd, L"Error parsing file", IDR_MAINFRAME, MB_ICONERROR);
@@ -786,7 +789,7 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	CancelVirusTotal();
 	m_Overlay = FindOverlay(m_PE);
 	m_GuardTables = ReadGuardTables(m_PE);
-	m_Xrefs.Clear();
+	StartXrefs();
 	ResetNavigation();
 	StartSymbolLoad(path);	// the window is usable at once; symbols arrive later (WM_SYMBOLS_LOADED)
 	m_Views.clear();
@@ -878,6 +881,7 @@ void CMainFrame::BuildArchiveTree(int iconSize) {
 void CMainFrame::ResetFileState() {
 	m_Tabs.RemoveAllPages();
 	CloseDecompiler();
+	CancelXrefs();
 	m_Views.clear();
 	m_Views2.clear();
 	m_PE.Close();
@@ -1329,6 +1333,8 @@ void CMainFrame::BuildTree(int iconSize) {
 	if (!m_Overlay.Empty())
 		m_hOverlay = InsertTreeItem(m_Tree, L"Overlay", GetTreeIcon(IDI_BINARY), TreeItemType::Overlay, root);
 	InsertTreeItem(m_Tree, L"Strings", GetTreeIcon(IDI_TEXT), TreeItemType::Strings, root);
+	if (ArchOf(m_PE))
+		InsertTreeItem(m_Tree, L"Functions", GetTreeIcon(IDI_FUNCTION), TreeItemType::Functions, root);
 
 	if (m_PE.GetFileInfo()->HasResource) {
 		auto resources = InsertTreeItem(m_Tree, L"Resources", GetTreeIcon(IDI_RESOURCE), TreeItemType::Resources, root);
@@ -1435,6 +1441,7 @@ LRESULT CMainFrame::OnFileCompare(WORD, WORD, HWND, BOOL&) {
 LRESULT CMainFrame::OnFileClose(WORD, WORD, HWND, BOOL&) {
 	m_Tabs.RemoveAllPages();
 	CloseDecompiler();
+	CancelXrefs();
 	m_Views.clear();
 	m_Views2.clear();
 	m_PE.Close();
@@ -1777,6 +1784,12 @@ LRESULT CMainFrame::OnViewOverlay(WORD, WORD, HWND, BOOL&) {
 
 LRESULT CMainFrame::OnViewStrings(WORD, WORD, HWND, BOOL&) {
 	ShowView(TreeItemType::Strings, nullptr, IDI_TEXT);
+	return 0;
+}
+
+LRESULT CMainFrame::OnViewFunctions(WORD, WORD, HWND, BOOL&) {
+	if (auto hItem = FindTreeItem(TreeItemType::Functions))
+		ShowView(hItem);
 	return 0;
 }
 
@@ -2378,6 +2391,28 @@ std::shared_ptr<CMainFrame::DecompilerSession> CMainFrame::Decompiler(std::wstri
 			}
 		}
 	}
+	// What is read in the sections that are not written is known (strings, constants), but for the import address table,
+	// which the loader writes (calls through it are calls of the imports)
+	{
+		auto const& dirs = m_PE.GetFileInfo()->IsPE64 ? m_PE.GetNTHeader()->NTHdr64.OptionalHeader.DataDirectory : m_PE.GetNTHeader()->NTHdr32.OptionalHeader.DataDirectory;
+		uint64_t iat = dirs[IMAGE_DIRECTORY_ENTRY_IAT].VirtualAddress, iatEnd = iat + dirs[IMAGE_DIRECTORY_ENTRY_IAT].Size;
+		for (auto const& sec : *m_PE.GetSecHeaders()) {
+			auto const& h = sec.SecHdr;
+			if (h.Characteristics & IMAGE_SCN_MEM_WRITE)
+				continue;
+			uint64_t start = h.VirtualAddress, end = start + std::max(h.Misc.VirtualSize, h.SizeOfRawData);
+			auto add = [&](uint64_t from, uint64_t to) {
+				if (to > from)
+					session->ReadOnly.emplace_back(base + from, to - from);
+			};
+			if (iat < iatEnd && iat < end && iatEnd > start) {
+				add(start, iat);
+				add(iatEnd, end);
+			}
+			else
+				add(start, end);
+		}
+	}
 	// the types of the symbols (of private symbols: prototypes, locals, and the types of global variables)
 	if (m_Symbols) {
 		session->Symbols = true;
@@ -2422,6 +2457,8 @@ GhidraDecompiler* CMainFrame::DecompilerSession::Open(std::string& error) {
 		});
 	for (auto const& [va, name] : Functions)
 		decompiler->AddFunction(va, name);
+	for (auto const& [va, size] : ReadOnly)
+		decompiler->AddReadOnly(va, size);
 	if (ExternalArea) {
 		decompiler->SetExternalArea(ExternalArea);
 		for (auto const& [slot, name] : Imports)
@@ -2467,8 +2504,10 @@ LRESULT CMainFrame::OnDecompilerAsk(UINT, WPARAM, LPARAM lParam, BOOL&) {
 }
 
 void CMainFrame::CloseDecompiler(bool closed) {
-	if (closed)
+	if (closed) {
 		m_PendingDecompiles.clear();
+		UpdateDecompilerStatus();
+	}
 	if (!m_Decompiler)
 		return;
 	if (closed) {
@@ -2481,10 +2520,11 @@ void CMainFrame::CloseDecompiler(bool closed) {
 	DecompilerThread::Get().Post([session = std::move(m_Decompiler)]() mutable { session.reset(); });
 }
 
-void CMainFrame::DecompileAsync(uint64_t address, std::string const& name, bool lines, HWND hView, std::function<void(Decompiled&)> done) {
+void CMainFrame::DecompileAsync(uint64_t address, std::wstring const& name, bool lines, HWND hView, std::function<void(Decompiled&)> done) {
 	auto id = ++m_LastDecompile;
-	m_PendingDecompiles[id] = { hView, std::move(done) };
-	DecompilerThread::Get().Post([session = m_Decompiler, hWnd = m_hWnd, id, address, name, lines] {
+	m_PendingDecompiles[id] = { hView, name.empty() ? std::format(L"0x{:X}", address) : name, std::move(done) };
+	UpdateDecompilerStatus();
+	DecompilerThread::Get().Post([session = m_Decompiler, hWnd = m_hWnd, id, address, name = std::string(CW2A(name.c_str())), lines] {
 		auto result = std::make_unique<Decompiled>();
 		result->Id = id;
 		std::string error;
@@ -2497,6 +2537,19 @@ void CMainFrame::DecompileAsync(uint64_t address, std::string const& name, bool 
 		});
 }
 
+// The function that is decompiled now (the decompiler's thread takes them in order), and how many wait
+void CMainFrame::UpdateDecompilerStatus() {
+	if (m_PendingDecompiles.empty()) {
+		SetStatusText(DecompilerPane, L"");
+		return;
+	}
+	auto first = std::ranges::min_element(m_PendingDecompiles, {}, [](auto const& p) { return p.first; });
+	auto text = std::format(L"Decompiling {}...", first->second.Name);
+	if (m_PendingDecompiles.size() > 1)
+		text += std::format(L" (+{} more)", m_PendingDecompiles.size() - 1);
+	SetStatusText(DecompilerPane, text.c_str());
+}
+
 LRESULT CMainFrame::OnDecompiled(UINT, WPARAM, LPARAM lParam, BOOL&) {
 	std::unique_ptr<Decompiled> result(reinterpret_cast<Decompiled*>(lParam));
 	auto it = m_PendingDecompiles.find(result->Id);
@@ -2504,6 +2557,7 @@ LRESULT CMainFrame::OnDecompiled(UINT, WPARAM, LPARAM lParam, BOOL&) {
 		return 0;
 	auto pending = std::move(it->second);
 	m_PendingDecompiles.erase(it);
+	UpdateDecompilerStatus();
 	if (::IsWindow(pending.View) && m_Views2.contains(pending.View))
 		pending.Done(*result);
 	return 0;
@@ -2550,7 +2604,7 @@ bool CMainFrame::DecompileFunction(uint64_t address) {
 	view->SetFunctionAddress(address);
 	view->GetCtrl().SetReadOnly(true);
 	view->SetDeleteFromTree(true);
-	DecompileAsync(address, std::string(CW2A(name.c_str())), false, view->GetHwnd(), [=](Decompiled& result) {
+	DecompileAsync(address, name, false, view->GetHwnd(), [=](Decompiled& result) {
 		auto& ctrl = view->GetCtrl();
 		ctrl.SetReadOnly(false);
 		if (result.Ok) {
@@ -2704,7 +2758,7 @@ bool CMainFrame::ShowSideBySide(uint64_t address) {
 	view->SetAsm(asmCode, address, *arch);
 	view->SetC(DecompilingText(address, name), {}, {});
 	view->SetDeleteFromTree(true);
-	DecompileAsync(address, std::string(CW2A(name.c_str())), true, view->GetHwnd(), [=](Decompiled& result) {
+	DecompileAsync(address, name, true, view->GetHwnd(), [=](Decompiled& result) {
 		if (result.Ok)
 			view->SetC(result.Code, std::move(result.Lines), FunctionLinks(result.Functions));
 		else
@@ -3308,11 +3362,71 @@ bool CMainFrame::GoToFileOffset(int64_t offset, bool disassemble) {
 }
 
 XrefMap const& CMainFrame::GetXrefs() {
-	if (m_PE && !m_Xrefs.Built()) {
-		CWaitCursor wait;
-		m_Xrefs.Build(m_PE);
-	}
+	// (empty until they are found: views that show them are told when they are, by XrefsChanged)
+	if (m_PE && !m_XrefsReady && !m_XrefThread.joinable())
+		StartXrefs();
 	return m_Xrefs;
+}
+
+void CMainFrame::StartXrefs() {
+	CancelXrefs();
+	if (!m_PE)
+		return;
+	auto cancel = std::make_shared<std::atomic<bool>>(false);
+	m_XrefCancel = cancel;
+	SetStatusText(XrefsPane, L"Finding cross-references...");
+	m_XrefThread = std::thread([pe = &m_PE, cancel, hWnd = m_hWnd, generation = ++m_XrefGeneration] {
+		::SetThreadDescription(::GetCurrentThread(), L"Cross-references");
+		::SetThreadPriority(::GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+		auto map = std::make_unique<XrefMap>();
+		bool built = map->Build(*pe, cancel.get());
+		if (*cancel)
+			return;
+		if (::PostMessage(hWnd, WM_XREFS_BUILT, generation, (LPARAM)(built ? map.get() : nullptr)) && built)
+			map.release();
+		});
+}
+
+void CMainFrame::CancelXrefs() {
+	if (m_XrefThread.joinable()) {
+		*m_XrefCancel = true;
+		m_XrefThread.join();	// (it looks at the flag often: a moment)
+	}
+	++m_XrefGeneration;		// a result that was posted is not this file's
+	m_XrefCancel.reset();
+	m_Xrefs.Clear();
+	m_XrefsReady = false;
+	m_AfterXrefs.clear();
+	if (m_StatusBar)
+		SetStatusText(XrefsPane, L"");
+}
+
+bool CMainFrame::WithXrefs(std::function<void()> action) {
+	GetXrefs();
+	if (m_XrefsReady) {
+		action();
+		return true;
+	}
+	m_AfterXrefs.push_back(std::move(action));
+	return false;
+}
+
+LRESULT CMainFrame::OnXrefsBuilt(UINT, WPARAM wParam, LPARAM lParam, BOOL&) {
+	std::unique_ptr<XrefMap> map(reinterpret_cast<XrefMap*>(lParam));
+	if ((uint32_t)wParam != m_XrefGeneration)
+		return 0;	// of a file that was closed
+	if (m_XrefThread.joinable())
+		m_XrefThread.join();
+	if (map)
+		m_Xrefs = std::move(*map);
+	m_XrefsReady = true;
+	SetStatusText(XrefsPane, m_Xrefs.Built() ? std::format(L"{} cross-references", m_Xrefs.Count()).c_str() : L"");
+	for (auto const& [type, view] : m_Views)
+		view->XrefsChanged();
+	auto actions = std::move(m_AfterXrefs);
+	for (auto& action : actions)
+		action();
+	return 0;
 }
 
 bool CMainFrame::GoToVa(uint64_t va) {

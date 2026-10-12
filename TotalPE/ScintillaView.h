@@ -63,6 +63,8 @@ public:
 	int64_t GetNavigationPosition() const override;
 	void SetNavigationPosition(int64_t va) override;
 	bool GoToAddress(uint64_t va) override;
+	// the disassembly again, with the labels of the cross-references (where the user was stays in view)
+	void XrefsChanged() override;
 
 	BEGIN_MSG_MAP(CScintillaView)
 		MESSAGE_HANDLER(WM_SETFOCUS, OnSetFocus)
@@ -151,6 +153,8 @@ private:
 	LexLanguage m_Language{ LexLanguage::Text };
 	PEFile const& m_PE;
 	CpuArch m_Arch{ CpuArch::X64 };
+	std::span<const std::byte> m_Code;				// what the disassembly is of, and its address
+	uint64_t m_CodeAddress{ 0 };
 	std::vector<Line> m_Lines;						// by line of the text: what each line of the disassembly is
 	std::unordered_map<uint64_t, int> m_LineOfVa;	// the line of each instruction
 	int m_ContextLine{ -1 };						// the line the context menu was opened on

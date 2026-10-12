@@ -315,6 +315,7 @@ BEGIN
         MENUITEM "&Version",                    ID_VIEW_VERSION
         MENUITEM "&Overlay",                    ID_VIEW_OVERLAY
         MENUITEM "S&trings",                    ID_PE_STRINGS
+        MENUITEM "F&unctions",                  ID_PE_FUNCTIONS
         MENUITEM "&Debug",                      ID_VIEW_DEBUG
         MENUITEM "Security",                    ID_PE_SECURITY
         MENUITEM SEPARATOR
