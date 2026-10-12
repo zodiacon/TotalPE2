@@ -103,6 +103,7 @@ void CExportsView::UpdateUI(bool first) const {
 	int selected = m_List.GetSelectedCount();
 	ui.UIEnable(ID_EDIT_COPY, selected > 0);
 	ui.UIEnable(ID_VIEW_DISASSEMBLE, selected == 1 && m_Exports[m_List.GetNextItem(-1, LVNI_SELECTED)].ForwarderName.empty());
+	ui.UIEnable(ID_EXPORT_DECOMPILE, selected == 1 && m_Exports[m_List.GetNextItem(-1, LVNI_SELECTED)].ForwarderName.empty());
 	ui.UIEnable(ID_EXPORT_XREFS, selected == 1 && m_Exports[m_List.GetNextItem(-1, LVNI_SELECTED)].ForwarderName.empty());
 	ui.UIEnable(ID_EXPORT_FLOWGRAPH, selected == 1 && m_Exports[m_List.GetNextItem(-1, LVNI_SELECTED)].ForwarderName.empty());
 	if(first)
@@ -203,6 +204,13 @@ LRESULT CExportsView::OnFlowGraph(WORD, WORD, HWND, BOOL&) const {
 	ATLASSERT(m_List.GetSelectedCount() == 1);
 	auto& exp = m_Exports[m_List.GetNextItem(-1, LVNI_SELECTED)];
 	Frame()->ShowFlowGraph(m_PE.GetImageBase() + exp.FuncRVA);
+	return 0;
+}
+
+LRESULT CExportsView::OnDecompile(WORD, WORD, HWND, BOOL&) const {
+	ATLASSERT(m_List.GetSelectedCount() == 1);
+	auto& exp = m_Exports[m_List.GetNextItem(-1, LVNI_SELECTED)];
+	Frame()->DecompileFunction(m_PE.GetImageBase() + exp.FuncRVA);
 	return 0;
 }
 

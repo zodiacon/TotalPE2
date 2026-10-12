@@ -1,0 +1,329 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>18.0</VCProjectVersion>
+    <ProjectGuid>{F03072FA-719C-4100-BDB4-EE4CA7FD1D09}</ProjectGuid>
+    <RootNamespace>Decompiler</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <VcpkgEnabled>false</VcpkgEnabled>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <CharacterSet>NotSet</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>NotSet</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <CharacterSet>NotSet</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>NotSet</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup>
+    <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
+    <ClCompile>
+      <!-- Ghidra's sources: as Ghidra builds them on Windows, optimized also in Debug (decompiling is slow otherwise) -->
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <PreprocessorDefinitions>WINDOWS;_WINDOWS;WIN32;_WIN32;LOCAL_ZLIB;NO_GZIP;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(Platform)'=='x64'">WIN64;_WIN64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ProjectDir)ghidra\cpp;$(ProjectDir)ghidra\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <Optimization>MaxSpeed</Optimization>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
+    <ClCompile>
+      <!-- Ghidra's sources: as Ghidra builds them on Windows, optimized also in Debug (decompiling is slow otherwise) -->
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <PreprocessorDefinitions>WINDOWS;_WINDOWS;WIN32;_WIN32;LOCAL_ZLIB;NO_GZIP;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(Platform)'=='x64'">WIN64;_WIN64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ProjectDir)ghidra\cpp;$(ProjectDir)ghidra\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <Optimization>MaxSpeed</Optimization>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+    </ClCompile>
+    <Lib>
+      <LinkTimeCodeGeneration>true</LinkTimeCodeGeneration>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="GhidraDecompiler.h" />
+    <ClInclude Include="ghidra\cpp\action.hh" />
+    <ClInclude Include="ghidra\cpp\address.hh" />
+    <ClInclude Include="ghidra\cpp\analyzesigs.hh" />
+    <ClInclude Include="ghidra\cpp\architecture.hh" />
+    <ClInclude Include="ghidra\cpp\bfd_arch.hh" />
+    <ClInclude Include="ghidra\cpp\bitfield.hh" />
+    <ClInclude Include="ghidra\cpp\block.hh" />
+    <ClInclude Include="ghidra\cpp\blockaction.hh" />
+    <ClInclude Include="ghidra\cpp\callgraph.hh" />
+    <ClInclude Include="ghidra\cpp\capability.hh" />
+    <ClInclude Include="ghidra\cpp\cast.hh" />
+    <ClInclude Include="ghidra\cpp\codedata.hh" />
+    <ClInclude Include="ghidra\cpp\comment.hh" />
+    <ClInclude Include="ghidra\cpp\comment_ghidra.hh" />
+    <ClInclude Include="ghidra\cpp\compression.hh" />
+    <ClInclude Include="ghidra\cpp\condexe.hh" />
+    <ClInclude Include="ghidra\cpp\constseq.hh" />
+    <ClInclude Include="ghidra\cpp\context.hh" />
+    <ClInclude Include="ghidra\cpp\coreaction.hh" />
+    <ClInclude Include="ghidra\cpp\cover.hh" />
+    <ClInclude Include="ghidra\cpp\cpool.hh" />
+    <ClInclude Include="ghidra\cpp\cpool_ghidra.hh" />
+    <ClInclude Include="ghidra\cpp\crc32.hh" />
+    <ClInclude Include="ghidra\cpp\database.hh" />
+    <ClInclude Include="ghidra\cpp\database_ghidra.hh" />
+    <ClInclude Include="ghidra\cpp\doccore.hh" />
+    <ClInclude Include="ghidra\cpp\docmain.hh" />
+    <ClInclude Include="ghidra\cpp\double.hh" />
+    <ClInclude Include="ghidra\cpp\dynamic.hh" />
+    <ClInclude Include="ghidra\cpp\emulate.hh" />
+    <ClInclude Include="ghidra\cpp\emulateutil.hh" />
+    <ClInclude Include="ghidra\cpp\error.hh" />
+    <ClInclude Include="ghidra\cpp\expression.hh" />
+    <ClInclude Include="ghidra\cpp\filemanage.hh" />
+    <ClInclude Include="ghidra\cpp\float.hh" />
+    <ClInclude Include="ghidra\cpp\flow.hh" />
+    <ClInclude Include="ghidra\cpp\fspec.hh" />
+    <ClInclude Include="ghidra\cpp\funcdata.hh" />
+    <ClInclude Include="ghidra\cpp\ghidra_arch.hh" />
+    <ClInclude Include="ghidra\cpp\ghidra_context.hh" />
+    <ClInclude Include="ghidra\cpp\ghidra_process.hh" />
+    <ClInclude Include="ghidra\cpp\ghidra_translate.hh" />
+    <ClInclude Include="ghidra\cpp\globalcontext.hh" />
+    <ClInclude Include="ghidra\cpp\grammar.hh" />
+    <ClInclude Include="ghidra\cpp\graph.hh" />
+    <ClInclude Include="ghidra\cpp\heritage.hh" />
+    <ClInclude Include="ghidra\cpp\ifacedecomp.hh" />
+    <ClInclude Include="ghidra\cpp\ifaceterm.hh" />
+    <ClInclude Include="ghidra\cpp\inject_ghidra.hh" />
+    <ClInclude Include="ghidra\cpp\inject_sleigh.hh" />
+    <ClInclude Include="ghidra\cpp\interface.hh" />
+    <ClInclude Include="ghidra\cpp\jumptable.hh" />
+    <ClInclude Include="ghidra\cpp\libdecomp.hh" />
+    <ClInclude Include="ghidra\cpp\loadimage.hh" />
+    <ClInclude Include="ghidra\cpp\loadimage_bfd.hh" />
+    <ClInclude Include="ghidra\cpp\loadimage_ghidra.hh" />
+    <ClInclude Include="ghidra\cpp\loadimage_xml.hh" />
+    <ClInclude Include="ghidra\cpp\marshal.hh" />
+    <ClInclude Include="ghidra\cpp\memstate.hh" />
+    <ClInclude Include="ghidra\cpp\merge.hh" />
+    <ClInclude Include="ghidra\cpp\modelrules.hh" />
+    <ClInclude Include="ghidra\cpp\multiprecision.hh" />
+    <ClInclude Include="ghidra\cpp\op.hh" />
+    <ClInclude Include="ghidra\cpp\opbehavior.hh" />
+    <ClInclude Include="ghidra\cpp\opcodes.hh" />
+    <ClInclude Include="ghidra\cpp\options.hh" />
+    <ClInclude Include="ghidra\cpp\override.hh" />
+    <ClInclude Include="ghidra\cpp\paramid.hh" />
+    <ClInclude Include="ghidra\cpp\partmap.hh" />
+    <ClInclude Include="ghidra\cpp\pcodecompile.hh" />
+    <ClInclude Include="ghidra\cpp\pcodeinject.hh" />
+    <ClInclude Include="ghidra\cpp\pcodeparse.hh" />
+    <ClInclude Include="ghidra\cpp\pcoderaw.hh" />
+    <ClInclude Include="ghidra\cpp\prefersplit.hh" />
+    <ClInclude Include="ghidra\cpp\prettyprint.hh" />
+    <ClInclude Include="ghidra\cpp\printc.hh" />
+    <ClInclude Include="ghidra\cpp\printjava.hh" />
+    <ClInclude Include="ghidra\cpp\printlanguage.hh" />
+    <ClInclude Include="ghidra\cpp\rangemap.hh" />
+    <ClInclude Include="ghidra\cpp\rangeutil.hh" />
+    <ClInclude Include="ghidra\cpp\raw_arch.hh" />
+    <ClInclude Include="ghidra\cpp\ruleaction.hh" />
+    <ClInclude Include="ghidra\cpp\rulecompile.hh" />
+    <ClInclude Include="ghidra\cpp\semantics.hh" />
+    <ClInclude Include="ghidra\cpp\signature.hh" />
+    <ClInclude Include="ghidra\cpp\signature_ghidra.hh" />
+    <ClInclude Include="ghidra\cpp\slaformat.hh" />
+    <ClInclude Include="ghidra\cpp\sleigh.hh" />
+    <ClInclude Include="ghidra\cpp\sleigh_arch.hh" />
+    <ClInclude Include="ghidra\cpp\sleighbase.hh" />
+    <ClInclude Include="ghidra\cpp\slgh_compile.hh" />
+    <ClInclude Include="ghidra\cpp\slghparse.hh" />
+    <ClInclude Include="ghidra\cpp\slghpatexpress.hh" />
+    <ClInclude Include="ghidra\cpp\slghpattern.hh" />
+    <ClInclude Include="ghidra\cpp\slghsymbol.hh" />
+    <ClInclude Include="ghidra\cpp\space.hh" />
+    <ClInclude Include="ghidra\cpp\string_ghidra.hh" />
+    <ClInclude Include="ghidra\cpp\stringmanage.hh" />
+    <ClInclude Include="ghidra\cpp\subflow.hh" />
+    <ClInclude Include="ghidra\cpp\test.hh" />
+    <ClInclude Include="ghidra\cpp\testfunction.hh" />
+    <ClInclude Include="ghidra\cpp\transform.hh" />
+    <ClInclude Include="ghidra\cpp\translate.hh" />
+    <ClInclude Include="ghidra\cpp\type.hh" />
+    <ClInclude Include="ghidra\cpp\typegrp_ghidra.hh" />
+    <ClInclude Include="ghidra\cpp\typeop.hh" />
+    <ClInclude Include="ghidra\cpp\unify.hh" />
+    <ClInclude Include="ghidra\cpp\unionresolve.hh" />
+    <ClInclude Include="ghidra\cpp\userop.hh" />
+    <ClInclude Include="ghidra\cpp\variable.hh" />
+    <ClInclude Include="ghidra\cpp\varmap.hh" />
+    <ClInclude Include="ghidra\cpp\varnode.hh" />
+    <ClInclude Include="ghidra\cpp\xml.hh" />
+    <ClInclude Include="ghidra\cpp\xml_arch.hh" />
+    <ClInclude Include="ghidra\zlib\deflate.h" />
+    <ClInclude Include="ghidra\zlib\gzguts.h" />
+    <ClInclude Include="ghidra\zlib\inffast.h" />
+    <ClInclude Include="ghidra\zlib\inffixed.h" />
+    <ClInclude Include="ghidra\zlib\inflate.h" />
+    <ClInclude Include="ghidra\zlib\inftrees.h" />
+    <ClInclude Include="ghidra\zlib\trees.h" />
+    <ClInclude Include="ghidra\zlib\zconf.h" />
+    <ClInclude Include="ghidra\zlib\zlib.h" />
+    <ClInclude Include="ghidra\zlib\zutil.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="GhidraDecompiler.cpp">
+      <WarningLevel>Level3</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="ghidra\cpp\action.cc" />
+    <ClCompile Include="ghidra\cpp\address.cc" />
+    <ClCompile Include="ghidra\cpp\architecture.cc" />
+    <ClCompile Include="ghidra\cpp\bitfield.cc" />
+    <ClCompile Include="ghidra\cpp\block.cc" />
+    <ClCompile Include="ghidra\cpp\blockaction.cc" />
+    <ClCompile Include="ghidra\cpp\capability.cc" />
+    <ClCompile Include="ghidra\cpp\cast.cc" />
+    <ClCompile Include="ghidra\cpp\comment.cc" />
+    <ClCompile Include="ghidra\cpp\compression.cc" />
+    <ClCompile Include="ghidra\cpp\condexe.cc" />
+    <ClCompile Include="ghidra\cpp\constseq.cc" />
+    <ClCompile Include="ghidra\cpp\context.cc" />
+    <ClCompile Include="ghidra\cpp\coreaction.cc" />
+    <ClCompile Include="ghidra\cpp\cover.cc" />
+    <ClCompile Include="ghidra\cpp\cpool.cc" />
+    <ClCompile Include="ghidra\cpp\crc32.cc" />
+    <ClCompile Include="ghidra\cpp\database.cc" />
+    <ClCompile Include="ghidra\cpp\double.cc" />
+    <ClCompile Include="ghidra\cpp\dynamic.cc" />
+    <ClCompile Include="ghidra\cpp\emulate.cc" />
+    <ClCompile Include="ghidra\cpp\emulateutil.cc" />
+    <ClCompile Include="ghidra\cpp\expression.cc" />
+    <ClCompile Include="ghidra\cpp\filemanage.cc" />
+    <ClCompile Include="ghidra\cpp\float.cc" />
+    <ClCompile Include="ghidra\cpp\flow.cc" />
+    <ClCompile Include="ghidra\cpp\fspec.cc" />
+    <ClCompile Include="ghidra\cpp\funcdata.cc" />
+    <ClCompile Include="ghidra\cpp\funcdata_block.cc" />
+    <ClCompile Include="ghidra\cpp\funcdata_op.cc" />
+    <ClCompile Include="ghidra\cpp\funcdata_varnode.cc" />
+    <ClCompile Include="ghidra\cpp\globalcontext.cc" />
+    <ClCompile Include="ghidra\cpp\grammar.cc" />
+    <ClCompile Include="ghidra\cpp\graph.cc" />
+    <ClCompile Include="ghidra\cpp\heritage.cc" />
+    <ClCompile Include="ghidra\cpp\inject_sleigh.cc" />
+    <ClCompile Include="ghidra\cpp\jumptable.cc" />
+    <ClCompile Include="ghidra\cpp\libdecomp.cc" />
+    <ClCompile Include="ghidra\cpp\loadimage.cc" />
+    <ClCompile Include="ghidra\cpp\loadimage_xml.cc" />
+    <ClCompile Include="ghidra\cpp\marshal.cc" />
+    <ClCompile Include="ghidra\cpp\memstate.cc" />
+    <ClCompile Include="ghidra\cpp\merge.cc" />
+    <ClCompile Include="ghidra\cpp\modelrules.cc" />
+    <ClCompile Include="ghidra\cpp\multiprecision.cc" />
+    <ClCompile Include="ghidra\cpp\op.cc" />
+    <ClCompile Include="ghidra\cpp\opbehavior.cc" />
+    <ClCompile Include="ghidra\cpp\opcodes.cc" />
+    <ClCompile Include="ghidra\cpp\options.cc" />
+    <ClCompile Include="ghidra\cpp\override.cc" />
+    <ClCompile Include="ghidra\cpp\paramid.cc" />
+    <ClCompile Include="ghidra\cpp\pcodecompile.cc" />
+    <ClCompile Include="ghidra\cpp\pcodeinject.cc" />
+    <ClCompile Include="ghidra\cpp\pcodeparse.cc" />
+    <ClCompile Include="ghidra\cpp\pcoderaw.cc" />
+    <ClCompile Include="ghidra\cpp\prefersplit.cc" />
+    <ClCompile Include="ghidra\cpp\prettyprint.cc" />
+    <ClCompile Include="ghidra\cpp\printc.cc" />
+    <ClCompile Include="ghidra\cpp\printjava.cc" />
+    <ClCompile Include="ghidra\cpp\printlanguage.cc" />
+    <ClCompile Include="ghidra\cpp\rangeutil.cc" />
+    <ClCompile Include="ghidra\cpp\raw_arch.cc" />
+    <ClCompile Include="ghidra\cpp\ruleaction.cc" />
+    <ClCompile Include="ghidra\cpp\semantics.cc" />
+    <ClCompile Include="ghidra\cpp\signature.cc" />
+    <ClCompile Include="ghidra\cpp\slaformat.cc" />
+    <ClCompile Include="ghidra\cpp\sleigh.cc" />
+    <ClCompile Include="ghidra\cpp\sleigh_arch.cc" />
+    <ClCompile Include="ghidra\cpp\sleighbase.cc" />
+    <ClCompile Include="ghidra\cpp\slghpatexpress.cc" />
+    <ClCompile Include="ghidra\cpp\slghpattern.cc" />
+    <ClCompile Include="ghidra\cpp\slghsymbol.cc" />
+    <ClCompile Include="ghidra\cpp\space.cc" />
+    <ClCompile Include="ghidra\cpp\stringmanage.cc" />
+    <ClCompile Include="ghidra\cpp\subflow.cc" />
+    <ClCompile Include="ghidra\cpp\transform.cc" />
+    <ClCompile Include="ghidra\cpp\translate.cc" />
+    <ClCompile Include="ghidra\cpp\type.cc" />
+    <ClCompile Include="ghidra\cpp\typeop.cc" />
+    <ClCompile Include="ghidra\cpp\unionresolve.cc" />
+    <ClCompile Include="ghidra\cpp\userop.cc" />
+    <ClCompile Include="ghidra\cpp\variable.cc" />
+    <ClCompile Include="ghidra\cpp\varmap.cc" />
+    <ClCompile Include="ghidra\cpp\varnode.cc" />
+    <ClCompile Include="ghidra\cpp\xml.cc" />
+    <ClCompile Include="ghidra\cpp\xml_arch.cc" />
+    <ClCompile Include="ghidra\zlib\adler32.c" />
+    <ClCompile Include="ghidra\zlib\deflate.c" />
+    <ClCompile Include="ghidra\zlib\inffast.c" />
+    <ClCompile Include="ghidra\zlib\inflate.c" />
+    <ClCompile Include="ghidra\zlib\inftrees.c" />
+    <ClCompile Include="ghidra\zlib\trees.c" />
+    <ClCompile Include="ghidra\zlib\zutil.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="README.md" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

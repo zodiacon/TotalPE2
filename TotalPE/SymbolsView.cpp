@@ -156,8 +156,13 @@ bool CSymbolsView::OnDoubleClickList(HWND, int row, int, CPoint const&) const {
 		auto type = item.Symbol.Type();
 		return type && (type.Tag() == SymbolTag::UDT || type.Tag() == SymbolTag::Enum) && Frame()->ShowType(type);
 	}
+	auto address = CodeAddress(item);
+	return address && Frame()->DisassembleFunction(address);
+}
+
+uint64_t CSymbolsView::CodeAddress(Item const& item) const {
 	if (item.Rva == 0)
-		return false;
+		return 0;
 	switch (item.Tag) {
 		case SymbolTag::Function:
 		case SymbolTag::Thunk:
@@ -165,18 +170,29 @@ bool CSymbolsView::OnDoubleClickList(HWND, int row, int, CPoint const&) const {
 		case SymbolTag::PublicSymbol:
 		case SymbolTag::Label:
 			if (!item.Symbol.IsCode())
-				return false;
+				return 0;
 			break;
 		default:
-			return false;
+			return 0;
 	}
-	return Frame()->DisassembleFunction(m_Session.LoadAddress() + item.Rva);
+	return m_Session.LoadAddress() + item.Rva;
 }
 
-// A type (or a typedef of one) can be saved as a definition
+// A function can be disassembled or decompiled; a type (or a typedef of one) saved as a definition
 bool CSymbolsView::OnRightClickList(HWND, int row, int, POINT const& pt) const {
 	if (row < 0 || row >= (int)m_Items.size())
 		return false;
+	if (auto address = CodeAddress(m_Items[row])) {
+		CMenu menu;
+		menu.CreatePopupMenu();
+		menu.AppendMenu(MF_STRING, ID_VIEW_DISASSEMBLE, L"&Disassemble");
+		menu.AppendMenu(MF_STRING, ID_EXPORT_DECOMPILE, L"De&compile");
+		switch (Frame()->ShowContextMenu(menu, TPM_RETURNCMD, pt.x, pt.y, m_hWnd)) {
+			case ID_VIEW_DISASSEMBLE: Frame()->DisassembleFunction(address); break;
+			case ID_EXPORT_DECOMPILE: Frame()->DecompileFunction(address); break;
+		}
+		return true;
+	}
 	auto type = TypeExporter::ExportableType(m_Items[row].Symbol);
 	if (!type)
 		return false;

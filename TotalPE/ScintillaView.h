@@ -42,6 +42,9 @@ public:
 	void SetText(PCWSTR text);
 	void SetText(PCSTR text);
 	void SetLanguage(LexLanguage lang);
+	// The functions the text refers to (decompiled code), by the names it shows: the one whose name is under the mouse can
+	// be decompiled or disassembled from the context menu
+	void SetFunctionLinks(std::unordered_map<std::wstring, uint64_t> links);
 
 	int64_t GetNavigationPosition() const override;
 	void SetNavigationPosition(int64_t va) override;
@@ -63,6 +66,8 @@ public:
 		COMMAND_ID_HANDLER(ID_ASSEMBLY_DISASSEMBLEATTHEEND, OnDisassembleAtEnd)
 		COMMAND_ID_HANDLER(ID_ASSEMBLY_DISASSEMBLEINANEWTAB, OnDisassembleNewTab)
 		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnEditCopy)
+		COMMAND_ID_HANDLER(ID_CODE_DECOMPILE, OnCodeLink)
+		COMMAND_ID_HANDLER(ID_CODE_DISASSEMBLE, OnCodeLink)
 		COMMAND_ID_HANDLER(ID_EDIT_CUT, OnEdit)
 		COMMAND_ID_HANDLER(ID_EDIT_PASTE, OnEdit)
 		COMMAND_ID_HANDLER(ID_EDIT_UNDO, OnEdit)
@@ -101,6 +106,13 @@ private:
 	LRESULT OnDisassembleNewTab(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnDisassembleAtEnd(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnEdit(WORD, WORD id, HWND, BOOL&);
+	LRESULT OnCodeLink(WORD, WORD id, HWND, BOOL&);
+	// the name (of a function: with its scopes and template arguments) at a position of the text, empty if none
+	std::wstring NameAt(intptr_t pos) const;
+	// the function of a name that the text shows (0 if it is not one)
+	uint64_t FunctionOf(std::wstring const& name) const;
+	std::unordered_map<std::wstring, uint64_t> m_Links;
+	uint64_t m_LinkAddress{ 0 };	// the function of the context menu
 	LRESULT OnEditCopy(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnDoubleClick(int /*idCtrl*/, LPNMHDR /*pnmh*/, BOOL& /*bHandled*/);
 	LRESULT OnFollow(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);

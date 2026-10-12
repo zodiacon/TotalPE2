@@ -58,6 +58,8 @@ private:
 		mutable bool HasDetails{ false };
 	};
 	void GetDetails(Item const& item) const;
+	// a function (or code that a public symbol, a thunk or a label names): the VA of its code, 0 if it is not one
+	uint64_t CodeAddress(Item const& item) const;
 	static PCWSTR DataKindToString(DataItemKind kind);
 
 	LRESULT OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);

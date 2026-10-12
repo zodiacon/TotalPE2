@@ -843,13 +843,16 @@ bool CMainFrame::CreateAssemblyView(std::span<const std::byte> code, uint64_t ad
 		return false;
 	}
 	//
-	// check for duplicate
+	// open already: found by the address of the code (functions that are overloads have the same title)
 	//
-	auto hItem = FindChild(m_Tree, hParent, title);
-	if (hItem) {
-		ShowView(hItem);
+	auto itemType = TreeItemWithIndex(TreeItemType::Disassembly, (int64_t)rva << ItemShift);
+	if (auto view = m_Views.find(itemType); view != m_Views.end()) {
+		ShowView(view->second->GetHTreeItem());
 		return true;
 	}
+	// the title of a function is its name, without its signature
+	auto name = FunctionName(title);
+	title = name.c_str();
 
 	auto arch = ArchOf(m_PE);
 	if (!arch) {
@@ -868,8 +871,7 @@ bool CMainFrame::CreateAssemblyView(std::span<const std::byte> code, uint64_t ad
 	view->SetDeleteFromTree(true);
 
 	auto image = GetIconIndex(IDI_BINARY);
-	auto itemType = TreeItemWithIndex(TreeItemType::Disassembly, (int64_t)rva << ItemShift);
-	hItem = InsertTreeItem(m_Tree, title, image, itemType, hParent, TVI_SORT);
+	auto hItem = InsertTreeItem(m_Tree, title, image, itemType, hParent, TVI_SORT);
 	m_Tree.EnsureVisible(hItem);
 	view->SetHTreeItem(hItem);
 	m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, view);
@@ -1053,7 +1055,7 @@ bool CMainFrame::ShowFlowGraph(uint64_t va) {
 	}
 
 	auto name = ResolveVa(function);
-	auto title = std::format(L"{}", name.empty() ? std::format(L"0x{:X}", function) : name);
+	auto title = name.empty() ? std::format(L"0x{:X}", function) : FunctionName(name);	// the name, without the signature
 
 	auto view = new CFlowGraphView(this, m_PE, function, title.c_str());
 	if (nullptr == view->DoCreate(m_Tabs)) {

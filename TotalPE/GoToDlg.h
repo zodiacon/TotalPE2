@@ -46,7 +46,9 @@ class CDisassembleFunctionDlg :
 public:
 	enum { IDD = IDD_DISASM_FUNCTION };
 
-	explicit CDisassembleFunctionDlg(std::wstring& text) : m_Text(text) {}
+	// 'caption' and 'button': the dialog's title and the text of its OK button, if not those of disassembling
+	explicit CDisassembleFunctionDlg(std::wstring& text, PCWSTR caption = nullptr, PCWSTR button = nullptr)
+		: m_Text(text), m_Caption(caption), m_Button(button) {}
 
 	BEGIN_MSG_MAP(CDisassembleFunctionDlg)
 		MESSAGE_HANDLER(WM_INITDIALOG, OnInitDialog)
@@ -60,4 +62,6 @@ public:
 
 private:
 	std::wstring& m_Text;
+	PCWSTR m_Caption;
+	PCWSTR m_Button;
 };

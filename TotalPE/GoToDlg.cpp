@@ -42,6 +42,10 @@ LRESULT CGoToDlg::OnCancel(WORD, WORD wID, HWND, BOOL&) {
 LRESULT CDisassembleFunctionDlg::OnInitDialog(UINT, WPARAM, LPARAM, BOOL&) {
 	SetDialogIcon(IDR_MAINFRAME);
 	CenterWindow(GetParent());
+	if (m_Caption)
+		SetWindowText(m_Caption);
+	if (m_Button)
+		SetDlgItemText(IDOK, m_Button);
 
 	SetDlgItemText(IDC_DISASM_TEXT, m_Text.c_str());
 	GetDlgItem(IDC_DISASM_TEXT).SetFocus();

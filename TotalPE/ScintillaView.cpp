@@ -579,19 +579,137 @@ LRESULT CScintillaView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
 	// the line under the mouse: a right click does not move the caret
 	m_ContextLine = -1;
 	int x = GET_X_LPARAM(lp), y = GET_Y_LPARAM(lp);
-	if (m_Language == LexLanguage::Asm && x != -1 && y != -1) {
+	intptr_t pos = -1;
+	if (x != -1 && y != -1) {
 		CPoint pt(x, y);
 		::ScreenToClient(m_Sci, &pt);
-		auto pos = (intptr_t)m_Sci.SendMessage(SCI_POSITIONFROMPOINT, pt.x, pt.y);
-		if (pos >= 0)
-			m_ContextLine = (int)m_Sci.LineFromPosition(pos);
+		pos = (intptr_t)m_Sci.SendMessage(SCI_POSITIONFROMPOINT, pt.x, pt.y);
 	}
+	else {
+		// from the keyboard: at the caret
+		pos = m_Sci.GetCurrentPos();
+		CPoint pt((int)m_Sci.SendMessage(SCI_POINTXFROMPOSITION, 0, pos), (int)m_Sci.SendMessage(SCI_POINTYFROMPOSITION, 0, pos));
+		::ClientToScreen(m_Sci, &pt);
+		x = pt.x;
+		y = pt.y;
+	}
+	if (m_Language == LexLanguage::Asm && pos >= 0)
+		m_ContextLine = (int)m_Sci.LineFromPosition(pos);
 	UpdateUI();
 	CMenu menu;
 	menu.LoadMenuW(IDR_CONTEXT);
-	auto result = Frame()->ShowContextMenu(menu.GetSubMenu(m_Language == LexLanguage::Asm ? 6 : 0), 0,
-		x, y);
+	CMenuHandle sub = menu.GetSubMenu(m_Language == LexLanguage::Asm ? 6 : 0);
+
+	// a function under the mouse: it can be decompiled or disassembled
+	m_LinkAddress = 0;
+	if (!m_Links.empty() && pos >= 0) {
+		auto name = NameAt(pos);
+		if (auto address = FunctionOf(name)) {
+			m_LinkAddress = address;
+			auto shown = name.size() > 60 ? name.substr(0, 57) + L"..." : name;
+			for (auto& ch : shown)
+				if (ch == L'&')
+					ch = L'+';	// not a mnemonic
+			sub.InsertMenu(0, MF_BYPOSITION | MF_SEPARATOR);
+			sub.InsertMenu(0, MF_BYPOSITION | MF_STRING, ID_CODE_DISASSEMBLE, (L"Dis&assemble " + shown).c_str());
+			sub.InsertMenu(0, MF_BYPOSITION | MF_STRING, ID_CODE_DECOMPILE, (L"&Decompile " + shown).c_str());
+		}
+	}
+	auto result = Frame()->ShowContextMenu(sub, 0, x, y);
 	return result;
+}
+
+void CScintillaView::SetFunctionLinks(std::unordered_map<std::wstring, uint64_t> links) {
+	m_Links = std::move(links);
+}
+
+// A name around a position: letters, digits and the characters of C++ names (scopes, destructors, decorated parts),
+// with balanced template arguments ("std::min<unsigned __int64>")
+std::wstring CScintillaView::NameAt(intptr_t pos) const {
+	auto line = m_Sci.LineFromPosition(pos);
+	auto text = m_Sci.GetLine(line);
+	auto index = (size_t)(pos - m_Sci.PositionFromLine(line));
+	if (index > text.size())
+		return {};
+	auto isName = [](char ch) {
+		return isalnum((unsigned char)ch) || ch == '_' || ch == ':' || ch == '~' || ch == '$' || ch == '@' || ch == '`' || ch == '\'';
+	};
+	// from a '<' (or '>') to the one that closes (opens) it
+	auto match = [&](size_t at, int step) -> size_t {
+		int depth = 0;
+		for (auto i = (intptr_t)at; i >= 0 && i < (intptr_t)text.size(); i += step) {
+			if (text[i] == '<')
+				depth += step;
+			else if (text[i] == '>')
+				depth -= step;
+			if (depth == 0)
+				return (size_t)i;
+		}
+		return std::string::npos;
+	};
+	// inside template arguments ("std::pair<int, char>" at "char"): from the name they belong to (the outermost)
+	for (auto i = (intptr_t)index - 1, depth = (intptr_t)0; i >= 0; i--) {
+		auto ch = text[i];
+		if (ch == '>')
+			depth++;
+		else if (ch == '<') {
+			if (depth > 0)
+				depth--;
+			else if (i > 0 && isName(text[i - 1]))
+				index = (size_t)i - 1;		// the name before the arguments
+			else
+				break;
+		}
+		else if (depth == 0 && (ch == '(' || ch == ')' || ch == ';' || ch == '=' || ch == '{' || ch == '}'))
+			break;
+	}
+	size_t start = index, end = index;
+	while (start > 0) {
+		if (isName(text[start - 1]))
+			start--;
+		else if (text[start - 1] == '>' && (start = match(start - 1, -1)) != std::string::npos)
+			continue;
+		else
+			break;
+		if (start == std::string::npos)
+			return {};
+	}
+	while (end < text.size()) {
+		if (isName(text[end]))
+			end++;
+		else if (text[end] == '<') {
+			auto close = match(end, 1);
+			if (close == std::string::npos)
+				break;
+			end = close + 1;
+		}
+		else
+			break;
+	}
+	if (start == std::string::npos || end <= start)
+		return {};
+	return (PCWSTR)CA2W(text.substr(start, end - start).c_str(), CP_UTF8);
+}
+
+uint64_t CScintillaView::FunctionOf(std::wstring const& name) const {
+	if (name.empty())
+		return 0;
+	if (auto it = m_Links.find(name); it != m_Links.end())
+		return it->second;
+	// a function without a name: its address is in it
+	if (name.starts_with(L"func_0x"))
+		return wcstoull(name.c_str() + 7, nullptr, 16);
+	return 0;
+}
+
+LRESULT CScintillaView::OnCodeLink(WORD, WORD id, HWND, BOOL&) {
+	if (m_LinkAddress) {
+		if (id == ID_CODE_DECOMPILE)
+			Frame()->DecompileFunction(m_LinkAddress);
+		else
+			Frame()->DisassembleFunction(m_LinkAddress);
+	}
+	return 0;
 }
 
 LRESULT CScintillaView::OnGoToAddress(WORD, WORD, HWND, BOOL&) {

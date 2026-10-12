@@ -20,6 +20,7 @@
 #include "HexView.h"
 #include "CompareView.h"
 #include "ItaniumDemangle.h"
+#include <DbgHelp.h>
 #include <thread>
 #include <WTLHelper.h>
 
@@ -40,6 +41,7 @@ BOOL CMainFrame::PreTranslateMessage(MSG* pMsg) {
 
 BOOL CMainFrame::OnIdle() {
 	UpdateSaveUI();
+	UpdateDockUI();
 	UIUpdateToolBar();
 	return FALSE;
 }
@@ -98,6 +100,7 @@ void CMainFrame::UpdateUI() {
 	auto const fi = m_PE ? m_PE.GetFileInfo() : nullptr;
 	UIEnable(ID_PE_DISASSEMBLEENTRYPOINT, fi != nullptr || (m_Elf && m_Elf.Entry()));
 	UIEnable(ID_PE_DISASSEMBLEFUNCTION, fi != nullptr || m_Elf);
+	UIEnable(ID_PE_DECOMPILEFUNCTION, fi != nullptr);
 	UIEnable(ID_VIEW_EXPORTS, fi && fi->HasExport);
 	UIEnable(ID_VIEW_IMPORTS, fi && fi->HasImport);
 	UIEnable(ID_VIEW_RESOURCES, fi && fi->HasResource);
@@ -236,6 +239,7 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 	m_hWndClient = m_Tabs.Create(m_hWnd);
 	m_Tree.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT);
 	m_Tabs.SetExplorer(m_Tree, L"Explorer");
+	m_Tabs.LoadLayout(LayoutPath(), ToolViewTitle);	// as the window was last arranged (the default if there is no file)
 
 	// register object for message filtering and idle updates
 	auto pLoop = _Module.GetMessageLoop();
@@ -306,7 +310,7 @@ bool CMainFrame::ShowView(TreeItemType data, HTREEITEM hItem, UINT icon) {
 				hItem = FindTreeItem(data);
 			view->SetHTreeItem(hItem);
 			m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, map,
-				IsToolView(data) ? CDockViews::Placement::Tool : CDockViews::Placement::Document);
+				IsToolView(data) ? CDockViews::Placement::Tool : CDockViews::Placement::Document, ToolViewId(data));
 			m_Views.insert({ data, view });
 			m_Views2.insert({ view->GetHwnd(), data });
 			return true;
@@ -332,6 +336,8 @@ HTREEITEM CMainFrame::FindTreeItem(TreeItemType type) const {
 }
 
 LRESULT CMainFrame::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& bHandled) {
+	m_Tabs.SaveLayout(LayoutPath());	// the docking area still has its windows (they go after the frame's WM_DESTROY)
+
 	if (--s_Frames == 0) {
 		WINDOWPLACEMENT wp{ sizeof(wp) };
 		GetWindowPlacement(&wp);
@@ -410,6 +416,165 @@ bool CMainFrame::IsToolView(TreeItemType type) {
 			return true;
 	}
 	return false;
+}
+
+namespace {
+	struct ToolKind {
+		TreeItemType Type;
+		PCWSTR Id;
+		PCWSTR Title;
+	};
+	ToolKind const ToolKinds[] = {
+		{ TreeItemType::Symbols, L"tool:symbols", L"Symbols" },
+		{ TreeItemType::SymbolsClasses, L"tool:class", L"Class" },
+		{ TreeItemType::SymbolsStructs, L"tool:struct", L"Struct" },
+		{ TreeItemType::SymbolsFunctions, L"tool:function", L"Function" },
+		{ TreeItemType::SymbolsEnums, L"tool:enum", L"Enum" },
+		{ TreeItemType::SymbolsTypes, L"tool:types", L"Types" },
+		{ TreeItemType::SymbolsGlobalData, L"tool:data", L"Data" },
+	};
+}
+
+std::wstring CMainFrame::FunctionName(std::wstring const& name) {
+	if (name.starts_with(L'?')) {
+		WCHAR undecorated[1024];
+		if (::UnDecorateSymbolNameW(name.c_str(), undecorated, _countof(undecorated), UNDNAME_NAME_ONLY))
+			return undecorated;
+		return name;
+	}
+	auto text = name;
+	if (name.starts_with(L"_Z")) {
+		std::string mangled;	// ASCII
+		for (auto ch : name)
+			mangled += (char)ch;
+		auto demangled = DemangleItanium(mangled);
+		if (!demangled.empty())
+			text = std::wstring(demangled.begin(), demangled.end());
+	}
+
+	// "operator" at a position: the start of an operator's name ("operator()", "operator new", "operator int"...)
+	auto isOperator = [&](size_t pos) {
+		return text.compare(pos, 8, L"operator") == 0 && (pos == 0 || text[pos - 1] == L' ' || text[pos - 1] == L':')
+			&& (pos + 8 == text.size() || !iswalnum(text[pos + 8]) && text[pos + 8] != L'_');
+	};
+
+	// the parameters: the first '(' outside template arguments and quoted names, but not the one of "operator()"
+	int depth = 0;
+	size_t end = std::wstring::npos;
+	for (size_t i = 0; i < text.size() && end == std::wstring::npos; i++) {
+		switch (text[i]) {
+			case L'<': case L'`': depth++; break;
+			case L'>': case L'\'': if (depth > 0) depth--; break;
+			case L'(':
+				if (depth == 0) {
+					auto before = text.find_last_not_of(L' ', i == 0 ? 0 : i - 1);
+					if (before != std::wstring::npos && before >= 7 && isOperator(before - 7) && text.compare(i, 2, L"()") == 0)
+						i++;	// "operator()": its parameters follow
+					else
+						end = i;
+				}
+				break;
+		}
+	}
+	if (end == std::wstring::npos)
+		return text;	// no signature: a name as it is ("Code at 0x..." as well)
+	text = text.substr(0, end);
+	while (!text.empty() && text.back() == L' ')
+		text.pop_back();
+
+	// what comes before the name: the last space outside template arguments, unless the name is an operator's
+	depth = 0;
+	size_t start = 0, operatorAt = std::wstring::npos;
+	for (size_t i = 0; i < text.size(); i++) {
+		switch (text[i]) {
+			case L'<': case L'`': depth++; break;
+			case L'>': case L'\'': if (depth > 0) depth--; break;
+			case L' ':
+				if (depth == 0 && operatorAt == std::wstring::npos)
+					start = i + 1;
+				break;
+			default:
+				if (depth == 0 && operatorAt == std::wstring::npos && isOperator(i))
+					operatorAt = i;
+				break;
+		}
+	}
+	auto result = text.substr(start);
+	while (!result.empty() && (result.front() == L'*' || result.front() == L'&'))
+		result.erase(0, 1);
+	return result.empty() ? name : result;
+}
+
+std::wstring CMainFrame::ToolViewId(TreeItemType type) {
+	for (auto& kind : ToolKinds)
+		if (kind.Type == (type & TreeItemType::ItemMask))
+			return kind.Id;
+	return {};
+}
+
+std::wstring CMainFrame::ToolViewTitle(std::wstring const& id) {
+	for (auto& kind : ToolKinds)
+		if (id == kind.Id)
+			return kind.Title;
+	return id;
+}
+
+std::wstring CMainFrame::LayoutPath() {
+	WCHAR folder[MAX_PATH];
+	::ExpandEnvironmentStrings(L"%LOCALAPPDATA%\\TotalPE", folder, _countof(folder));
+	::CreateDirectory(folder, nullptr);
+	return std::wstring(folder) + L"\\Layout.json";
+}
+
+void CMainFrame::UpdateDockUI() {
+	using WTLDock::DockCommand;
+	int pages = m_Tabs.GetPageCount();
+	UIEnable(ID_WINDOW_CLOSEOTHERS, pages > 1 && m_Tabs.GetActivePage() >= 0);
+	UIEnable(ID_WINDOW_NEWHGROUP, m_Tabs.CanExecute(DockCommand::NewHorizontalGroup));
+	UIEnable(ID_WINDOW_NEWVGROUP, m_Tabs.CanExecute(DockCommand::NewVerticalGroup));
+	UIEnable(ID_WINDOW_NEXTGROUP, m_Tabs.CanExecute(DockCommand::MoveToNextGroup));
+	UIEnable(ID_WINDOW_PREVGROUP, m_Tabs.CanExecute(DockCommand::MoveToPreviousGroup));
+	UIEnable(ID_WINDOW_WINDOWS, pages > 0);
+}
+
+// All the views but the active one
+LRESULT CMainFrame::OnWindowCloseOthers(WORD, WORD, HWND, BOOL&) {
+	int active = m_Tabs.GetActivePage();
+	if (active < 0) {
+		::MessageBeep((UINT)-1);
+		return 0;
+	}
+	for (int page = m_Tabs.GetPageCount() - 1; page >= 0; page--) {
+		if (page != active) {
+			CloseTab(page);
+			m_Tabs.RemovePage(page);
+		}
+	}
+	return 0;
+}
+
+LRESULT CMainFrame::OnWindowDockCommand(WORD, WORD id, HWND, BOOL&) {
+	using WTLDock::DockCommand;
+	auto command = id == ID_WINDOW_NEWHGROUP ? DockCommand::NewHorizontalGroup : id == ID_WINDOW_NEWVGROUP ? DockCommand::NewVerticalGroup
+		: id == ID_WINDOW_NEXTGROUP ? DockCommand::MoveToNextGroup : DockCommand::MoveToPreviousGroup;
+	if (!m_Tabs.Execute(command))
+		::MessageBeep((UINT)-1);
+	return 0;
+}
+
+LRESULT CMainFrame::OnWindowWindows(WORD, WORD, HWND, BOOL&) {
+	m_Tabs.ShowWindowsDialog(m_hWnd);
+	return 0;
+}
+
+LRESULT CMainFrame::OnWindowResetLayout(WORD, WORD, HWND, BOOL&) {
+	m_Tabs.ResetLayout();
+	return 0;
+}
+
+LRESULT CMainFrame::OnViewExplorer(WORD, WORD, HWND, BOOL&) {
+	m_Tabs.ShowExplorer();
+	return 0;
 }
 
 int CMainFrame::GetTreeIcon(UINT id) {
@@ -622,6 +787,7 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	m_Views.clear();
 	m_Views2.clear();
 	m_Tabs.RemoveAllPages();
+	m_Decompiler.reset();
 	m_Archive.Close();
 	m_Object.Close();
 	m_ObjectCodeView = {};
@@ -707,6 +873,7 @@ void CMainFrame::BuildArchiveTree(int iconSize) {
 // What a PE file leaves behind, when a library or an object file is opened instead
 void CMainFrame::ResetFileState() {
 	m_Tabs.RemoveAllPages();
+	m_Decompiler.reset();
 	m_Views.clear();
 	m_Views2.clear();
 	m_PE.Close();
@@ -856,6 +1023,7 @@ bool CMainFrame::OpenElf(PCWSTR path) {
 	ResetFileState();
 	m_Elf = std::move(elf);
 	m_ElfCodeViews = 0;
+	m_ElfCodeItems.clear();
 	m_ElfDebug = LoadElfDebugInfo(m_Elf);
 	// the names the disassembly shows: in a relocatable object the values are offsets in sections, not addresses.
 	// C++ names are demangled; the functions of the DWARF name what the symbols do not (a stripped file with its debug file)
@@ -1006,10 +1174,14 @@ bool CMainFrame::ShowElfCode(int section, uint64_t offset) {
 	auto address = sec.Address + offset;
 	auto name = ResolveVa(address);
 	std::wstring title = m_Elf.Type() == 1 ? std::format(L"{}+0x{:X}", std::wstring(sec.Name.begin(), sec.Name.end()), offset)
-		: name.empty() || name.find(L'+') != std::wstring::npos ? std::format(L"Code at 0x{:X}", address) : name;
-	if (auto hItem = FindChild(m_Tree, m_hRoot, title.c_str())) {
-		ShowView(hItem);
-		return true;
+		: name.empty() || name.find(L'+') != std::wstring::npos ? std::format(L"Code at 0x{:X}", address) : FunctionName(name);
+	// open already: found by its address (functions that are overloads have the same title)
+	if (auto it = m_ElfCodeItems.find(address); it != m_ElfCodeItems.end()) {
+		if (auto view = m_Views.find(it->second); view != m_Views.end()) {
+			ShowView(view->second->GetHTreeItem());
+			return true;
+		}
+		m_ElfCodeItems.erase(it);
 	}
 
 	RecordNavigation();
@@ -1025,6 +1197,7 @@ bool CMainFrame::ShowElfCode(int section, uint64_t offset) {
 
 	auto image = GetIconIndex(IDI_BINARY);
 	auto itemType = TreeItemWithIndex(TreeItemType::ElfCode, (int64_t)(++m_ElfCodeViews) << ItemShift);
+	m_ElfCodeItems[address] = itemType;
 	auto hItem = InsertTreeItem(m_Tree, title.c_str(), image, itemType, m_hRoot, TVI_SORT);
 	m_Tree.EnsureVisible(hItem);
 	view->SetHTreeItem(hItem);
@@ -1257,6 +1430,7 @@ LRESULT CMainFrame::OnFileCompare(WORD, WORD, HWND, BOOL&) {
 
 LRESULT CMainFrame::OnFileClose(WORD, WORD, HWND, BOOL&) {
 	m_Tabs.RemoveAllPages();
+	m_Decompiler.reset();
 	m_Views.clear();
 	m_Views2.clear();
 	m_PE.Close();
@@ -1726,6 +1900,428 @@ bool CMainFrame::ResolveFunction(std::wstring const& text, uint64_t& address, st
 	return true;
 }
 
+LRESULT CMainFrame::OnDecompileFunction(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
+	if (!m_PE)
+		return 0;
+	CDisassembleFunctionDlg dlg(m_DisassembleFunction, L"Decompile Function", L"Decompile");
+	if (dlg.DoModal(m_hWnd) != IDOK)
+		return 0;
+
+	uint64_t address;
+	std::wstring error;
+	if (!ResolveFunction(m_DisassembleFunction, address, error)) {
+		AtlMessageBox(m_hWnd, error.c_str(), IDR_MAINFRAME, MB_ICONWARNING);
+		return 0;
+	}
+	DecompileFunction(address);
+	return 0;
+}
+
+bool CMainFrame::ReadImage(uint64_t va, uint8_t* buffer, size_t size) const {
+	auto base = m_PE.GetImageBase();
+	auto const& nt = *m_PE.GetNTHeader();
+	bool pe64 = m_PE.GetFileInfo()->IsPE64;
+	uint64_t imageSize = pe64 ? nt.NTHdr64.OptionalHeader.SizeOfImage : nt.NTHdr32.OptionalHeader.SizeOfImage;
+	uint64_t headers = pe64 ? nt.NTHdr64.OptionalHeader.SizeOfHeaders : nt.NTHdr32.OptionalHeader.SizeOfHeaders;
+	if (va < base || va - base + size > imageSize)
+		return false;
+
+	uint64_t fileSize = m_PE.GetFileSize();
+	// the bytes of a part of the image: in the file up to its size, zeros after
+	auto copy = [&](uint64_t fileOffset, uint64_t available, uint64_t count, uint8_t* out) {
+		uint64_t inFile = std::min(count, available);
+		if (fileOffset >= fileSize)
+			inFile = 0;
+		else
+			inFile = std::min(inFile, fileSize - fileOffset);
+		if (inFile)
+			memcpy(out, m_PE.GetData() + fileOffset, (size_t)inFile);
+		memset(out + inFile, 0, (size_t)(count - inFile));
+	};
+
+	uint64_t rva = va - base;
+	while (size > 0) {
+		uint64_t count = 0;
+		if (rva < headers) {
+			count = std::min<uint64_t>(size, headers - rva);
+			copy(rva, headers - rva, count, buffer);
+		}
+		else {
+			for (auto const& s : *m_PE.GetSecHeaders()) {
+				auto const& h = s.SecHdr;
+				uint64_t extent = std::max(h.Misc.VirtualSize, h.SizeOfRawData);
+				if (rva >= h.VirtualAddress && rva < h.VirtualAddress + extent) {
+					uint64_t offset = rva - h.VirtualAddress;
+					count = std::min<uint64_t>(size, extent - offset);
+					copy(h.PointerToRawData + offset, h.SizeOfRawData > offset ? h.SizeOfRawData - offset : 0, count, buffer);
+					break;
+				}
+			}
+			if (count == 0)
+				return false;	// between sections: nothing there
+		}
+		buffer += count;
+		rva += count;
+		size -= (size_t)count;
+	}
+	return true;
+}
+
+namespace {
+	std::string Narrow(std::wstring const& text) {
+		return std::string(CW2A(text.c_str(), CP_UTF8));
+	}
+
+	// the value of an enum's constant as its bits
+	uint64_t EnumBits(VARIANT const& value) {
+		switch (value.vt) {
+			case VT_I1: return (uint64_t)(int64_t)value.cVal;
+			case VT_I2: return (uint64_t)(int64_t)value.iVal;
+			case VT_I4: case VT_INT: return (uint64_t)(int64_t)value.lVal;
+			case VT_I8: return (uint64_t)value.llVal;
+			case VT_UI1: return value.bVal;
+			case VT_UI2: return value.uiVal;
+			case VT_UI4: case VT_UINT: return value.ulVal;
+			case VT_UI8: return value.ullVal;
+		}
+		return 0;
+	}
+}
+
+bool CMainFrame::DescribeType(uint32_t id, GhidraDecompiler::Type& type) const {
+	using Kind = GhidraDecompiler::TypeKind;
+	auto sym = m_Symbols.GetSymbolById(id);
+	if (!sym)
+		return false;
+	type.Size = (uint32_t)sym.Length();
+	switch (sym.Tag()) {
+		case SymbolTag::BaseType:
+			switch (sym.Simple()) {
+				case SimpleType::Void: type.Kind = Kind::Void; break;
+				case SimpleType::Char: case SimpleType::Char8: case SimpleType::WChar: case SimpleType::Char16: case SimpleType::Char32:
+					type.Kind = Kind::Char;
+					break;
+				case SimpleType::Bool: type.Kind = Kind::Boolean; break;
+				case SimpleType::Float: type.Kind = Kind::Float; break;
+				case SimpleType::Int: case SimpleType::Int4B: case SimpleType::Hresult:
+					type.Kind = Kind::Integer;
+					break;
+				case SimpleType::UInt: case SimpleType::UInt4B:
+					type.Kind = Kind::Integer;
+					type.Signed = false;
+					break;
+				default: type.Kind = Kind::Unknown; break;
+			}
+			break;
+
+		case SymbolTag::PointerType:
+			type.Kind = Kind::Pointer;		// a reference too
+			if (auto target = sym.Type())
+				type.Target = target.Id();
+			break;
+
+		case SymbolTag::ArrayType:
+			type.Kind = Kind::Array;
+			type.Count = sym.Count();
+			if (auto element = sym.Type())
+				type.Target = element.Id();
+			break;
+
+		case SymbolTag::UDT:
+			type.Kind = sym.UdtKind() == UdtType::Union ? Kind::Union : Kind::Struct;
+			type.Name = Narrow(sym.Name());
+			// the data members (not static, not bit fields), the base classes and the vtable pointer
+			for (auto const& child : sym.FindChildren()) {
+				switch (child.Tag()) {
+					case SymbolTag::Data:
+						if (child.Location() == LocationKind::ThisRel)
+							if (auto ft = child.Type())
+								type.Fields.push_back({ Narrow(child.Name()), (uint32_t)child.Offset(), ft.Id() });
+						break;
+					case SymbolTag::BaseClass:
+						if (!child.IsVirtual()) {
+							auto base = child.Type() ? child.Type() : child;
+							type.Fields.push_back({ "__base_" + Narrow(base.Name()), (uint32_t)child.Offset(), base.Id() });
+						}
+						break;
+					case SymbolTag::VTable:
+						if (auto vt = child.Type())
+							type.Fields.push_back({ "__vftable", (uint32_t)child.Offset(), vt.Id() });
+						break;
+				}
+			}
+			break;
+
+		case SymbolTag::Enum:
+			type.Kind = Kind::Enum;
+			type.Name = Narrow(sym.Name());
+			if (auto underlying = sym.Type()) {
+				auto simple = underlying.Simple();
+				type.Signed = simple == SimpleType::Int || simple == SimpleType::Int4B || simple == SimpleType::Char;
+			}
+			for (auto const& value : sym.FindChildren(nullptr, SymbolTag::Data)) {
+				auto v = value.Value();
+				type.Values.emplace_back(Narrow(value.Name()), EnumBits(v));
+				::VariantClear(&v);
+			}
+			break;
+
+		case SymbolTag::Typedef:
+			type.Kind = Kind::Typedef;
+			type.Name = Narrow(sym.Name());
+			if (auto target = sym.Type())
+				type.Target = target.Id();
+			break;
+
+		case SymbolTag::FunctionType:
+			type.Kind = Kind::Function;
+			if (auto ret = sym.Type())
+				type.Target = ret.Id();
+			if (auto self = sym.ObjectPointerType())	// a member function: "this" first
+				type.Parameters.push_back(self.Id());
+			for (auto const& arg : sym.FindChildren(nullptr, SymbolTag::FunctionArgType)) {
+				auto at = arg.Type();
+				if (at && at.Tag() == SymbolTag::BaseType && at.Simple() == SimpleType::NoType)
+					type.Variadic = true;	// "..."
+				else if (at)
+					type.Parameters.push_back(at.Id());
+			}
+			break;
+
+		default:
+			type.Kind = Kind::Unknown;
+			break;
+	}
+	return true;
+}
+
+uint64_t CMainFrame::StubTarget(uint64_t va) const {
+	uint8_t code[5];
+	if (!ReadImage(va, code, sizeof(code)) || code[0] != 0xE9)
+		return 0;
+	int32_t displacement;
+	memcpy(&displacement, code + 1, sizeof(displacement));
+	return va + 5 + displacement;
+}
+
+// The name of a function from its symbol (a public symbol's undecorated), or the name of an export. An incremental linking
+// stub ("@ILT+1234(name)") is the function it jumps to.
+std::string CMainFrame::DecompilerFunctionName(uint64_t va) const {
+	auto base = m_PE.GetImageBase();
+	if (va < base || va - base > 0xFFFFFFFFULL)
+		return {};
+	auto name = ResolveRva((DWORD)(va - base));
+	if (name.starts_with(L"@ILT+")) {
+		auto open = name.find(L'('), close = name.rfind(L')');
+		name = open != std::wstring::npos && close > open ? name.substr(open + 1, close - open - 1) : std::wstring();
+	}
+	if (name.empty() || name[0] == L'<' || name.find(L"+0x") != std::wstring::npos)
+		return {};		// none, a marker ("<entry point>") or a place inside a function
+	return Narrow(FunctionName(name));
+}
+
+// The prototype of a function the symbols have (with types: private symbols): its type, and the names of its parameters
+// ("this" of a member function first). An incremental linking stub has the prototype of the function it jumps to.
+bool CMainFrame::FunctionPrototype(uint64_t va, uint32_t& type, std::vector<std::string>& parameterNames) const {
+	auto base = m_PE.GetImageBase();
+	if (!m_Symbols || va < base || va - base > 0xFFFFFFFFULL)
+		return false;
+	long displacement = 0;
+	auto function = m_Symbols.GetSymbolByRVA((DWORD)(va - base), SymbolTag::Function, &displacement);
+	if (!function || displacement != 0) {
+		auto target = StubTarget(va);
+		if (target && target != va && target - base <= 0xFFFFFFFFULL) {
+			function = m_Symbols.GetSymbolByRVA((DWORD)(target - base), SymbolTag::Function, &displacement);
+			if (function && displacement != 0)
+				return false;
+		}
+	}
+	if (!function || displacement != 0)
+		return false;
+	auto ft = function.Type();
+	if (!ft || ft.Tag() != SymbolTag::FunctionType)
+		return false;
+	type = ft.Id();
+	for (auto const& data : function.FindChildren(nullptr, SymbolTag::Data)) {
+		auto kind = data.Kind();
+		if (kind == DataItemKind::ObjectPtr || kind == DataItemKind::Param)
+			parameterNames.push_back(Narrow(data.Name()));
+	}
+	return true;
+}
+
+GhidraDecompiler* CMainFrame::Decompiler(std::wstring& error) {
+	if (m_Decompiler)
+		return m_Decompiler.get();
+
+	auto machine = m_PE.GetFileInfo()->IsPE64 ? m_PE.GetNTHeader()->NTHdr64.FileHeader.Machine : m_PE.GetNTHeader()->NTHdr32.FileHeader.Machine;
+	PCSTR target;
+	switch (machine) {
+		case IMAGE_FILE_MACHINE_AMD64: target = "x86:LE:64:default:windows"; break;
+		case IMAGE_FILE_MACHINE_I386: target = "x86:LE:32:default:windows"; break;
+		default:
+			error = L"The decompiler handles x64 and x86 code only.";
+			return nullptr;
+	}
+
+	// the language definitions are next to the executable
+	WCHAR folder[MAX_PATH];
+	::GetModuleFileName(nullptr, folder, _countof(folder));
+	*wcsrchr(folder, L'\\') = 0;
+	std::string reason;
+	if (!GhidraDecompiler::Initialize(std::wstring(folder) + L"\\Decompiler\\languages", reason)) {
+		error = L"The decompiler could not start: " + std::wstring(CA2W(reason.c_str()));
+		return nullptr;
+	}
+	auto decompiler = std::make_unique<GhidraDecompiler>(target, [this](uint64_t va, uint8_t* buffer, size_t size) {
+		return ReadImage(va, buffer, size);
+		});
+	if (!decompiler->Open(reason)) {
+		error = L"The decompiler could not start: " + std::wstring(CA2W(reason.c_str()));
+		return nullptr;
+	}
+	// Calls by name: of the functions the symbols know (asked for when a call is seen: a debug build has hundreds of
+	// thousands), of the exports, and of the imports (through their entries in the import address table)
+	auto base = m_PE.GetImageBase();
+	decompiler->SetNameSource([this](uint64_t va) { return DecompilerFunctionName(va); });
+	if (auto exp = m_PE.GetExport()) {
+		for (auto const& f : exp->Funcs)
+			if (f.FuncRVA && f.ForwarderName.empty() && !f.FuncName.empty())
+				decompiler->AddFunction(base + f.FuncRVA, f.FuncName);
+	}
+	if (auto imports = m_PE.GetImport()) {
+		bool pe64 = m_PE.GetFileInfo()->IsPE64;
+		uint64_t imageSize = pe64 ? m_PE.GetNTHeader()->NTHdr64.OptionalHeader.SizeOfImage : m_PE.GetNTHeader()->NTHdr32.OptionalHeader.SizeOfImage;
+		decompiler->SetExternalArea(base + ((imageSize + 0xFFFF) & ~0xFFFFULL));	// past the image
+		for (auto const& imp : *imports) {
+			uint64_t slot = imp.ImportDesc.FirstThunk;
+			if (slot == 0)
+				continue;
+			// an import by ordinal: named after its module ("WS2_32_Ordinal_23")
+			auto module = imp.ModuleName.substr(0, imp.ModuleName.rfind('.'));
+			for (auto& ch : module)
+				if (!isalnum((unsigned char)ch))
+					ch = '_';
+			for (auto const& fn : imp.ImportFunc) {
+				auto name = fn.FuncName;
+				if (name.empty()) {
+					auto ordinal = pe64 ? fn.unThunk.Thunk64.u1.Ordinal & 0xFFFF : fn.unThunk.Thunk32.u1.Ordinal & 0xFFFF;
+					name = module + "_Ordinal_" + std::to_string(ordinal);
+				}
+				decompiler->AddImport(base + slot, name);
+				slot += pe64 ? 8 : 4;
+			}
+		}
+	}
+	// the types of the symbols (of private symbols: prototypes, and the types of global variables)
+	if (m_Symbols) {
+		decompiler->SetTypeSource([this](uint32_t id, GhidraDecompiler::Type& type) { return DescribeType(id, type); });
+		decompiler->SetPrototypeSource([this](uint64_t va, uint32_t& type, std::vector<std::string>& names) {
+			return FunctionPrototype(va, type, names);
+			});
+		for (auto const& sym : m_Symbols.FindChildren(nullptr, SymbolTag::Data)) {
+			if (sym.Location() != LocationKind::Static)
+				continue;
+			auto type = sym.Type();
+			auto rva = sym.RelativeVirtualAddress();
+			if (type && rva)
+				decompiler->AddGlobal(base + rva, Narrow(sym.Name()), type.Id());
+		}
+	}
+	m_Decompiler = std::move(decompiler);
+	return m_Decompiler.get();
+}
+
+bool CMainFrame::DecompileFunction(uint64_t address) {
+	if (!m_PE)
+		return false;
+	std::wstring error;
+	auto decompiler = Decompiler(error);
+	if (!decompiler) {
+		AtlMessageBox(m_hWnd, error.c_str(), IDR_MAINFRAME, MB_ICONWARNING);
+		return false;
+	}
+	auto base = m_PE.GetImageBase();
+	if (address < base || address - base > 0xFFFFFFFFULL)
+		return false;
+	auto rva = (uint32_t)(address - base);
+
+	auto itemType = TreeItemWithIndex(TreeItemType::Decompiled, (int64_t)rva << ItemShift);
+	if (auto it = m_Views.find(itemType); it != m_Views.end()) {
+		ShowView(it->second->GetHTreeItem());
+		return true;
+	}
+
+	// named as its disassembly is, and next to it: an export under the exports, any other function under Disassembly
+	std::wstring name;
+	auto parent = TreeItemType::DisassemblyFunctions;
+	if (auto exp = m_PE.GetExport(); exp && FindTreeItem(TreeItemType::DirectoryExports)) {
+		auto it = std::ranges::find_if(exp->Funcs, [&](auto const& f) { return f.FuncRVA == rva && f.ForwarderName.empty(); });
+		if (it != exp->Funcs.end()) {
+			parent = TreeItemType::DirectoryExports;
+			name = std::wstring(it->FuncName.begin(), it->FuncName.end());
+		}
+	}
+	if (name.empty())
+		name = ResolveRva(rva);
+	if (name.find(L'+') != std::wstring::npos)
+		name.clear();	// inside a function
+	name = name.empty() ? std::wstring() : FunctionName(name);
+
+	std::string code, reason;
+	GhidraDecompiler::FunctionRefs functions;
+	{
+		CWaitCursor wait;
+		if (!decompiler->Decompile(address, std::string(CW2A(name.c_str())), code, reason, &functions)) {
+			AtlMessageBox(m_hWnd, (std::format(L"0x{:X} could not be decompiled: ", address) + std::wstring(CA2W(reason.c_str()))).c_str(),
+				IDR_MAINFRAME, MB_ICONWARNING);
+			return false;
+		}
+	}
+
+	if (parent == TreeItemType::DisassemblyFunctions && !FindTreeItem(parent)) {
+		auto hRoot = FindTreeItem(TreeItemType::Image);
+		if (!hRoot)
+			return false;
+		InsertTreeItem(m_Tree, L"Disassembly", GetTreeIcon(IDI_BINARY), parent, hRoot);
+	}
+	auto hParent = FindTreeItem(parent);
+	auto title = std::format(L"{} (C)", name.empty() ? std::format(L"0x{:X}", address) : name);
+
+	RecordNavigation();
+	auto view = new CScintillaView(this, m_PE, title.c_str());
+	if (nullptr == view->DoCreate(m_Tabs)) {
+		ATLASSERT(false);
+		return false;
+	}
+	view->SetLanguage(LexLanguage::C);
+	view->SetText(code.c_str());
+	// the functions the code refers to, for its context menu: those in the image (an import is not), an incremental
+	// linking stub as the function it jumps to
+	std::unordered_map<std::wstring, uint64_t> links;
+	auto pe64 = m_PE.GetFileInfo()->IsPE64;
+	uint64_t imageSize = pe64 ? m_PE.GetNTHeader()->NTHdr64.OptionalHeader.SizeOfImage : m_PE.GetNTHeader()->NTHdr32.OptionalHeader.SizeOfImage;
+	for (auto const& [fname, va] : functions) {
+		if (va < base || va - base >= imageSize)
+			continue;
+		auto target = StubTarget(va);
+		links.try_emplace(std::wstring(CA2W(fname.c_str(), CP_UTF8)), target ? target : va);
+	}
+	view->SetFunctionLinks(std::move(links));
+	view->GetCtrl().SetReadOnly(true);
+	view->SetDeleteFromTree(true);
+
+	auto image = GetIconIndex(IDI_FUNCTION);
+	auto hItem = InsertTreeItem(m_Tree, title.c_str(), image, itemType, hParent, TVI_SORT);
+	m_Tree.EnsureVisible(hItem);
+	view->SetHTreeItem(hItem);
+	m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, view);
+	m_Views.insert({ itemType, view });
+	m_Views2.insert({ view->GetHwnd(), itemType });
+	RecordNavigation();
+	return true;
+}
+
 LRESULT CMainFrame::OnDisassembleFunction(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
 	if (!m_PE && !m_Elf)
 		return 0;
@@ -2028,6 +2624,7 @@ LRESULT CMainFrame::OnSymbolsLoaded(UINT, WPARAM generation, LPARAM lParam, BOOL
 	}
 	m_Symbols = *session;
 	m_Symbols.LoadAddress(m_PE.GetImageBase());
+	m_Decompiler.reset();	// made again when it is used: with the names the symbols have
 	SetStatusText(0, L"Symbols loaded");
 	if (auto root = FindTreeItem(TreeItemType::Image); root && !FindTreeItem(TreeItemType::Symbols))
 		InsertSymbolsNode(root);

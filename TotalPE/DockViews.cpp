@@ -26,37 +26,42 @@ void CDockViews::SetExplorer(HWND hTree, PCWSTR title) {
 	m_Dock.Layout().Show(m_Explorer);
 }
 
-bool CDockViews::AddPage(HWND hWnd, PCWSTR title, int image, void* data, Placement where) {
-	PaneDesc desc;
-	desc.Id = std::format(L"view{}", ++m_NextId);
-	desc.Title = title;
-	desc.hWnd = hWnd;
-	desc.Icon = IconOf(image);
-	if (where == Placement::Tool) {
-		desc.Kind = PaneKind::Tool;
-		desc.DefaultSide = DockSide::Bottom;
-		desc.PreferredSize = { 600, 260 };
+bool CDockViews::AddPage(HWND hWnd, PCWSTR title, int image, void* data, Placement where, std::wstring const& toolId) {
+	auto& layout = m_Dock.Layout();
+	bool ownId = where == Placement::Tool && IsToolId(toolId);
+
+	// a tool page of a kind that was open before goes back where it was
+	DockPane* pane = ownId ? layout.FindPane(toolId) : nullptr;
+	if (pane && pane->hWnd) {
+		pane = nullptr;		// open already: this one is a page of its own
+		ownId = false;
+	}
+	if (pane) {
+		pane->hWnd = hWnd;
+		pane->Title = title;
+		pane->Icon = IconOf(image);
+		if (!layout.Show(pane))
+			Place(pane);
 	}
 	else {
-		desc.Kind = PaneKind::Document;
-	}
-	auto& layout = m_Dock.Layout();
-	auto pane = layout.AddPane(desc);
-	if (!pane)
-		return false;
-
-	// a tool page joins the one that is docked already, as a tab
-	bool placed = false;
-	if (where == Placement::Tool) {
-		for (auto const& p : m_Pages) {
-			if (p.Pane->Kind() == PaneKind::Tool && p.Pane->State() == PaneState::Docked && p.Pane->Group()) {
-				placed = layout.DockTo(pane, p.Pane->Group(), DockPosition::Tab);
-				break;
-			}
+		PaneDesc desc;
+		desc.Id = ownId ? toolId : std::format(L"view{}", ++m_NextId);
+		desc.Title = title;
+		desc.hWnd = hWnd;
+		desc.Icon = IconOf(image);
+		if (where == Placement::Tool) {
+			desc.Kind = PaneKind::Tool;
+			desc.DefaultSide = DockSide::Bottom;
+			desc.PreferredSize = { 600, 260 };
 		}
+		else {
+			desc.Kind = PaneKind::Document;
+		}
+		pane = layout.AddPane(desc);
+		if (!pane)
+			return false;
+		Place(pane);
 	}
-	if (!placed)
-		layout.Show(pane);
 
 	m_Pages.push_back({ pane, data, image });
 	SetActivePage((int)m_Pages.size() - 1);
@@ -76,9 +81,13 @@ void CDockViews::RemovePage(int page) {
 	else if (m_Active > page)
 		m_Active--;
 
+	// a tool pane of its own kind stays, without a window, so that its list comes back where it was
 	m_Removing = true;
 	m_Dock.Layout().Hide(pane);
-	m_Dock.Layout().RemovePane(pane);
+	if (IsToolId(pane->Id()))
+		pane->hWnd = nullptr;
+	else
+		m_Dock.Layout().RemovePane(pane);
 	m_Removing = false;
 	::DestroyWindow(hWnd);
 
@@ -95,7 +104,10 @@ void CDockViews::RemoveAllPages() {
 	for (auto const& page : pages) {
 		auto hWnd = page.Pane->hWnd;
 		m_Dock.Layout().Hide(page.Pane);
-		m_Dock.Layout().RemovePane(page.Pane);
+		if (IsToolId(page.Pane->Id()))
+			page.Pane->hWnd = nullptr;
+		else
+			m_Dock.Layout().RemovePane(page.Pane);
 		::DestroyWindow(hWnd);
 	}
 	m_Removing = false;
@@ -159,6 +171,100 @@ void CDockViews::SetWindowMenu(HMENU menu) {
 
 BOOL CDockViews::PreTranslateMessage(MSG* msg) {
 	return m_Dock.m_hWnd && m_Dock.PreTranslateMessage(msg);
+}
+
+void CDockViews::Place(DockPane* pane) {
+	auto& layout = m_Dock.Layout();
+	// a tool page joins one that is docked already, as a tab
+	if (pane->Kind() == PaneKind::Tool) {
+		for (auto const& p : m_Pages) {
+			if (p.Pane != pane && p.Pane->Kind() == PaneKind::Tool && p.Pane->State() == PaneState::Docked && p.Pane->Group()) {
+				if (layout.DockTo(pane, p.Pane->Group(), DockPosition::Tab))
+					return;
+				break;
+			}
+		}
+	}
+	layout.Show(pane);
+}
+
+DockPane* CDockViews::MakeToolPane(DockLayout& layout, std::wstring const& id) {
+	if (!IsToolId(id))
+		return nullptr;		// a view of a file that was open: not restored
+	PaneDesc desc;
+	desc.Id = id;
+	desc.Title = m_ToolTitle ? m_ToolTitle(id) : id.substr(5);
+	desc.Kind = PaneKind::Tool;
+	desc.DefaultSide = DockSide::Bottom;
+	desc.PreferredSize = { 600, 260 };
+	return layout.AddPane(desc);
+}
+
+void CDockViews::HideEmptyToolPanes() {
+	auto& layout = m_Dock.Layout();
+	std::vector<DockPane*> empty;
+	for (auto const& pane : layout.Panes())
+		if (IsToolId(pane->Id()) && !pane->hWnd && pane->State() != PaneState::Hidden)
+			empty.push_back(pane.get());
+	for (auto pane : empty)
+		layout.Hide(pane);
+}
+
+bool CDockViews::LoadLayout(std::wstring const& path, std::function<std::wstring(std::wstring const& id)> toolTitle) {
+	m_ToolTitle = std::move(toolTitle);
+	m_Dock.SetPaneFactory([this](DockLayout& layout, std::wstring const& id) { return MakeToolPane(layout, id); });
+	m_Dock.CaptureDefaultLayout();
+
+	if (::GetFileAttributes(path.c_str()) == INVALID_FILE_ATTRIBUTES)
+		return false;
+	// atomic: a file that cannot be used changes nothing (the window's placement is the application's)
+	if (!m_Dock.LoadStateFromFile(path, {}, nullptr, false))
+		return false;
+	HideEmptyToolPanes();
+	return true;
+}
+
+bool CDockViews::SaveLayout(std::wstring const& path) const {
+	return m_Dock.SaveStateToFile(path, false);
+}
+
+void CDockViews::ResetLayout() {
+	m_Removing = true;
+	m_Dock.ResetLayout();
+	// the pages are not in the default layout: placed again as if they were new
+	for (auto const& page : m_Pages)
+		Place(page.Pane);
+	HideEmptyToolPanes();
+	m_Removing = false;
+	if (auto pane = ActivePagePane()) {
+		m_Dock.ShowPane(pane);
+		m_Dock.ActivatePane(pane);
+	}
+}
+
+void CDockViews::ShowExplorer() {
+	if (m_Explorer) {
+		m_Dock.ShowPane(m_Explorer);
+		m_Dock.ActivatePane(m_Explorer);
+	}
+}
+
+DockPane* CDockViews::ActivePagePane() const {
+	return m_Active >= 0 && m_Active < (int)m_Pages.size() ? m_Pages[m_Active].Pane : nullptr;
+}
+
+bool CDockViews::CanExecute(DockCommand command) const {
+	auto pane = ActivePagePane();
+	return pane && m_Dock.CanExecute(command, pane);
+}
+
+bool CDockViews::Execute(DockCommand command) {
+	auto pane = ActivePagePane();
+	return pane && m_Dock.Execute(command, pane);
+}
+
+void CDockViews::ShowWindowsDialog(HWND hOwner) {
+	m_Dock.ShowWindowsDialog(hOwner);
 }
 
 int CDockViews::FindPage(DockPane const* pane) const {

@@ -301,6 +301,7 @@ BEGIN
         MENUITEM "&Disassemble...",             ID_VIEW_DISASSEMBLE
         MENUITEM "Resource as &Hex\tCtrl+Shift+H", ID_VIEW_RESOURCEHEX
         MENUITEM SEPARATOR
+        MENUITEM "E&xplorer",                   ID_VIEW_EXPLORER
         MENUITEM "&Status Bar",                 ID_VIEW_STATUS_BAR
     END
     POPUP "&PE"
@@ -319,6 +320,7 @@ BEGIN
         MENUITEM SEPARATOR
         MENUITEM "Disassemble Entry Point",     ID_PE_DISASSEMBLEENTRYPOINT
         MENUITEM "Disassemble &Function...",    ID_PE_DISASSEMBLEFUNCTION
+        MENUITEM "De&compile Function...",      ID_PE_DECOMPILEFUNCTION
         MENUITEM "Entire File in &Hex",         ID_PE_ENTIREFILEINHEX
         MENUITEM SEPARATOR
         MENUITEM "Upload to &VirusTotal...",    ID_PE_VIRUSTOTAL
@@ -335,6 +337,16 @@ BEGIN
     BEGIN
         MENUITEM "&Close\tCtrl+F4",             ID_WINDOW_CLOSE
         MENUITEM "Close &All",                  ID_WINDOW_CLOSE_ALL
+        MENUITEM "Close All &But This",         ID_WINDOW_CLOSEOTHERS
+        MENUITEM SEPARATOR
+        MENUITEM "New &Horizontal Tab Group",   ID_WINDOW_NEWHGROUP
+        MENUITEM "New &Vertical Tab Group",     ID_WINDOW_NEWVGROUP
+        MENUITEM "Move to Ne&xt Tab Group",     ID_WINDOW_NEXTGROUP
+        MENUITEM "Move to &Previous Tab Group", ID_WINDOW_PREVGROUP
+        MENUITEM SEPARATOR
+        MENUITEM "&Windows...",                 ID_WINDOW_WINDOWS
+        MENUITEM "&Reset Window Layout",        ID_WINDOW_RESETLAYOUT
+        MENUITEM SEPARATOR
         MENUITEM "&New Window\tCtrl+N",         ID_FILE_NEW
     END
     POPUP "&Help"
@@ -366,7 +378,8 @@ BEGIN
     END
     POPUP "export"
     BEGIN
-        MENUITEM "&Disassemble...",             ID_VIEW_DISASSEMBLE
+        MENUITEM "&Disassemble",                ID_VIEW_DISASSEMBLE
+        MENUITEM "De&compile",                  ID_EXPORT_DECOMPILE
         MENUITEM "Cross-&References...",        ID_EXPORT_XREFS
         MENUITEM "Flow &Graph...",              ID_EXPORT_FLOWGRAPH
         MENUITEM SEPARATOR

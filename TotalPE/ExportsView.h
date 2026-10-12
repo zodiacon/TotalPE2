@@ -29,6 +29,7 @@ public:
 	ALT_MSG_MAP(1)
 		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnCopy)
 		COMMAND_ID_HANDLER(ID_VIEW_DISASSEMBLE, OnDissassemble)
+		COMMAND_ID_HANDLER(ID_EXPORT_DECOMPILE, OnDecompile)
 		COMMAND_ID_HANDLER(ID_EXPORT_XREFS, OnXrefs)
 		COMMAND_ID_HANDLER(ID_EXPORT_FLOWGRAPH, OnFlowGraph)
 		CHAIN_MSG_MAP_ALT(CViewBase<CExportsView>, 1)
@@ -57,6 +58,7 @@ private:
 	LRESULT OnCopy(WORD, WORD, HWND, BOOL&) const;
 	LRESULT OnFind(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnDissassemble(WORD, WORD, HWND, BOOL&) const;
+	LRESULT OnDecompile(WORD, WORD, HWND, BOOL&) const;
 	LRESULT OnXrefs(WORD, WORD, HWND, BOOL&) const;
 	LRESULT OnFlowGraph(WORD, WORD, HWND, BOOL&) const;
 

@@ -130,6 +130,9 @@ enum class TreeItemType : int64_t {
 	// the definition of a type from the symbols as source (the index is the symbol's ID and the format)
 	TypeDefinition,
 
+	// a function decompiled (the index is its RVA)
+	Decompiled,
+
 	ItemMask = 255,
 };
 DEFINE_ENUM_FLAG_OPERATORS(TreeItemType);
@@ -173,6 +176,8 @@ struct IMainFrame abstract {
 	virtual bool ShowFlowGraph(uint64_t va) = 0;
 	// The code of the function at an address in a view of its own: under the exports for an export, otherwise under Disassembly
 	virtual bool DisassembleFunction(uint64_t va) = 0;
+	// The function at an address as C (decompiled), in a view of its own next to where its disassembly goes
+	virtual bool DecompileFunction(uint64_t va) = 0;
 	// The layout of a type from the symbols (a struct, class, union or enum) in a view of its own, under Symbols
 	virtual bool ShowType(DiaSymbol const& type) = 0;
 	// The definition of a type from the symbols as source (C, C++ or C#) in a view of its own, under Symbols

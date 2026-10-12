@@ -163,6 +163,17 @@
 #define ID_TYPE_OPENC                   32880
 #define ID_TYPE_OPENCPP                 32881
 #define ID_TYPE_OPENCS                  32882
+#define ID_WINDOW_CLOSEOTHERS           32883
+#define ID_WINDOW_NEWHGROUP             32884
+#define ID_WINDOW_NEWVGROUP             32885
+#define ID_WINDOW_NEXTGROUP             32886
+#define ID_WINDOW_PREVGROUP             32887
+#define ID_WINDOW_RESETLAYOUT           32889
+#define ID_VIEW_EXPLORER                32890
+#define ID_PE_DECOMPILEFUNCTION         32891
+#define ID_EXPORT_DECOMPILE             32892
+#define ID_CODE_DECOMPILE               32893
+#define ID_CODE_DISASSEMBLE             32894
 #define ID_IMPORT_FILEPROPERTIES        32809
 #define ID_IMPORT_GOTOFILELOCATION      32810
 #define ID_WINDOW_WINDOWS               32811
@@ -220,7 +231,7 @@
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        280
-#define _APS_NEXT_COMMAND_VALUE         32883
+#define _APS_NEXT_COMMAND_VALUE         32895
 #define _APS_NEXT_CONTROL_VALUE         1036
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

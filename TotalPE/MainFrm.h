@@ -5,6 +5,7 @@
 #pragma once
 
 #include "DockViews.h"
+#include <GhidraDecompiler.h>
 #include <TabViewHelper.h>
 #include <CustomSplitterWindow.h>
 #include <TreeViewHelper.h>
@@ -56,6 +57,14 @@ public:
 		COMMAND_ID_HANDLER(ID_FILE_COMPARE, OnFileCompare)
 		COMMAND_ID_HANDLER(ID_WINDOW_CLOSE, OnWindowClose)
 		COMMAND_ID_HANDLER(ID_WINDOW_CLOSE_ALL, OnWindowCloseAll)
+		COMMAND_ID_HANDLER(ID_WINDOW_CLOSEOTHERS, OnWindowCloseOthers)
+		COMMAND_ID_HANDLER(ID_WINDOW_NEWHGROUP, OnWindowDockCommand)
+		COMMAND_ID_HANDLER(ID_WINDOW_NEWVGROUP, OnWindowDockCommand)
+		COMMAND_ID_HANDLER(ID_WINDOW_NEXTGROUP, OnWindowDockCommand)
+		COMMAND_ID_HANDLER(ID_WINDOW_PREVGROUP, OnWindowDockCommand)
+		COMMAND_ID_HANDLER(ID_WINDOW_WINDOWS, OnWindowWindows)
+		COMMAND_ID_HANDLER(ID_WINDOW_RESETLAYOUT, OnWindowResetLayout)
+		COMMAND_ID_HANDLER(ID_VIEW_EXPLORER, OnViewExplorer)
 		COMMAND_ID_HANDLER(ID_FILE_OPEN, OnFileOpen)
 		COMMAND_ID_HANDLER(ID_FILE_OPENINANEWWINDOW, OnFileOpenNewWindow)
 		COMMAND_RANGE_HANDLER(ID_WINDOW_TABFIRST, ID_WINDOW_TABLAST, OnWindowActivate)
@@ -77,6 +86,7 @@ public:
 		COMMAND_ID_HANDLER(ID_VIEW_DIRECTORIES, OnViewDataDirs)
 		COMMAND_ID_HANDLER(ID_PE_DISASSEMBLEENTRYPOINT, OnDisassembleEntryPoint)
 		COMMAND_ID_HANDLER(ID_PE_DISASSEMBLEFUNCTION, OnDisassembleFunction)
+		COMMAND_ID_HANDLER(ID_PE_DECOMPILEFUNCTION, OnDecompileFunction)
 		COMMAND_ID_HANDLER(ID_FILE_NEW, OnNewWindow)
 		COMMAND_ID_HANDLER(ID_OPTIONS_ALWAYSONTOP, OnAlwaysOnTop)
 		COMMAND_ID_HANDLER(ID_HELP_ABOUTWINDOWS, OnWindowsProperties)
@@ -187,6 +197,14 @@ private:
 	static TreeItemType GetIndex(TreeItemType value);
 	// the views of lists to come back to (symbols, references) are tool panes, not documents
 	static bool IsToolView(TreeItemType type);
+	// the id of the tool pane of a kind of list, that keeps its place (empty for those that have none: references)
+	static std::wstring ToolViewId(TreeItemType type);
+	static std::wstring ToolViewTitle(std::wstring const& id);
+public:
+	// The name of a function without what its signature has around it (the access, the return type, the calling convention,
+	// the parameters): "public: virtual long __cdecl ns::C::F(int) const" is "ns::C::F". A decorated name is undecorated.
+	static std::wstring FunctionName(std::wstring const& name);
+private:
 
 	// Handler prototypes (uncomment arguments if needed):
 	//	LRESULT MessageHandler(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)
@@ -202,6 +220,15 @@ private:
 	LRESULT OnAppAbout(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) const;
 	LRESULT OnWindowClose(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnWindowCloseAll(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnWindowCloseOthers(WORD, WORD, HWND, BOOL&);
+	LRESULT OnWindowDockCommand(WORD, WORD id, HWND, BOOL&);
+	LRESULT OnWindowWindows(WORD, WORD, HWND, BOOL&);
+	LRESULT OnWindowResetLayout(WORD, WORD, HWND, BOOL&);
+	LRESULT OnViewExplorer(WORD, WORD, HWND, BOOL&);
+	// the commands of the docking area that depend on the active view
+	void UpdateDockUI();
+	// the file the arrangement of the docking area is kept in
+	static std::wstring LayoutPath();
 	LRESULT OnNewWindow(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnWindowActivate(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnRunAsAdmin(WORD, WORD, HWND, BOOL&);
@@ -230,6 +257,21 @@ private:
 	bool SaveText(HWND hText, CString const& name);
 	LRESULT OnDisassembleEntryPoint(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnDisassembleFunction(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnDecompileFunction(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	// The function at an address as C (Ghidra's decompiler), in a view of its own next to where its disassembly goes
+	bool DecompileFunction(uint64_t va) override;
+	// the decompiler of the PE file (made on first use); null, with the reason, if there is none for its machine
+	GhidraDecompiler* Decompiler(std::wstring& error);
+	// the PE image as it is in memory: the headers, and the sections at their addresses (zeros past their data)
+	bool ReadImage(uint64_t va, uint8_t* buffer, size_t size) const;
+	// the decompiler's types and prototypes from the symbols: a type by its symbol's id, the prototype of a function
+	bool DescribeType(uint32_t id, GhidraDecompiler::Type& type) const;
+	bool FunctionPrototype(uint64_t va, uint32_t& type, std::vector<std::string>& parameterNames) const;
+	// the name of the function at an address for the decompiler (of an incremental linking stub, the function it jumps to)
+	std::string DecompilerFunctionName(uint64_t va) const;
+	// the target of an incremental linking stub ("jmp rel32") at an address; 0 if it is not one
+	uint64_t StubTarget(uint64_t va) const;
+	std::unique_ptr<GhidraDecompiler> m_Decompiler;
 	LRESULT OnAlwaysOnTop(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnUpdateDarkMode(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnToggleDarkMode(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
@@ -292,6 +334,7 @@ private:
 	std::vector<ElfName> m_ElfNames;
 	ElfDebugInfo m_ElfDebug;			// of the ELF file: in it, or in its debug file	// the functions and data of the ELF file, by address: the disassembly shows their names
 	int m_ElfCodeViews{ 0 };
+	std::unordered_map<uint64_t, TreeItemType> m_ElfCodeItems;	// the code views of the ELF file, by address
 	std::vector<GuardTable> m_GuardTables;	// of the PE file
 	std::vector<FlatResource> m_FlatResources;
 	CImageList m_TreeImages;
