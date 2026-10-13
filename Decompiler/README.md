@@ -13,6 +13,7 @@ library. `GhidraDecompiler.h` is the interface TotalPE uses; nothing of Ghidra i
 | `ghidra/LICENSE`, `ghidra/NOTICE` | Ghidra's license (Apache 2.0) and notices |
 | `languages/x86` | The x86 language definitions (`.ldefs`, `.pspec`, `.cspec`) and the compiled specifications `x86.sla` (32 bit) and `x86-64.sla` |
 | `languages/AARCH64` | The ARM64 language definitions and the compiled specification `AARCH64.sla` |
+| `BuildSla.ps1` | Compiles the `.sla` files again (see below) |
 
 Source: Ghidra **12.1.4** (tag `Ghidra_12.1.4_build`). The files are unchanged, but for one fix: in `bitfield.cc`,
 `BitFieldPullTransform::PullRecord::operator<` made two records without a read op each less than the other (an invalid
@@ -36,18 +37,31 @@ A `.sla` file is a processor's SLEIGH specification (`.slaspec` and its `.sinc` 
 `Ghidra/Processors/<processor>/data/languages`) compiled by Ghidra's SLEIGH compiler. Its format belongs to the
 decompiler's version: when the sources are updated, the `.sla` files are compiled again with the compiler of the same version.
 
-The compiler is in the same folder of Ghidra's sources: the files of `CORE`, `SLEIGH` and `SLACOMP` in the Makefile
-(`slgh_compile`, `slghparse`, `slghscan`), with zlib, built as a console program (same defines as above). Then:
+`BuildSla.ps1` does it: it clones the sources of the tag (sparse: the decompiler and the languages of x86 and AARCH64),
+builds the compiler (the files of `CORE`, `SLEIGH` and `SLACOMP` in the decompiler's Makefile, with zlib, with Visual
+Studio's compiler and the defines above), compiles `x86.slaspec`, `x86-64.slaspec` and `AARCH64.slaspec`, and puts the
+`.sla` files in `languages`. The clone and the compiler are kept in a work folder (`%TEMP%\TotalPE-sla`) for the next run.
 
 ```
-sleigh x86-64.slaspec x86-64.sla
-sleigh x86.slaspec x86.sla
-sleigh AARCH64.slaspec AARCH64.sla
+.\BuildSla.ps1                               # compile, and update the .sla files that changed
+.\BuildSla.ps1 -Check                        # compile, and only tell whether they are the same (exit code 1 if not)
+.\BuildSla.ps1 -Tag Ghidra_12.2_build -Definitions   # another version, with its .ldefs, .pspec and .cspec files
+.\BuildSla.ps1 -Source C:\src\ghidra          # a checkout of Ghidra's sources instead of a clone
 ```
+
+The `.sla` files of 12.1.4 that are here come out of it the same, byte for byte.
 
 ## Updating
 
 1. Copy the files listed above from the new version of Ghidra (the list of sources is in the Makefile of
    `src/decompile/cpp`; a new source file there goes into `Decompiler.vcxproj` as well).
-2. Compile the `.sla` files again with that version's SLEIGH compiler.
-3. Update the version above.
+2. Compile the `.sla` files again with that version's SLEIGH compiler: `.\BuildSla.ps1 -Tag <the tag> -Definitions`.
+3. Update the version above, and the default of `-Tag` in `BuildSla.ps1`.
+4. Run `Decompiler.Tests`.
+
+## Tests
+
+`Decompiler.Tests` (Catch2) decompiles small pieces of machine code that it puts together in memory (`TestImage.h`): x64,
+x86 and ARM64 functions, calls of functions by name (given ahead or asked for), calls through imports, thunks of imports and
+tail calls (jumps through the import address table), strings in read-only memory, prototypes with the caller's types,
+global variables and the addresses of the lines. It copies `languages` next to its executable, as TotalPE does.
