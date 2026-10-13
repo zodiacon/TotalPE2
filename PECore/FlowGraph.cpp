@@ -391,15 +391,24 @@ uint64_t FindFunctionStart(PEFile const& pe, XrefMap const& xrefs, uint64_t va) 
 		return base + f->BeginAddress;
 	}
 
-	// no exception directory (32-bit code): the closest function that is called
-	uint64_t best = 0;
-	for (auto target : xrefs.Targets()) {
-		if (target > va)
+	// No unwind information for the address (32-bit code, or a leaf function of 64-bit code, which needs none): the closest
+	// function before it that is called. A stub that only jumps to a function (incremental linking) is a function of its
+	// own few bytes, and the function it jumps to is called (through it).
+	auto targets = xrefs.Targets();
+	for (auto it = std::upper_bound(targets.begin(), targets.end(), va); it != targets.begin(); ) {
+		auto target = *--it;
+		if (va - target >= 0x10000)
 			break;
-		if (xrefs.CallCount(target) > 0)
-			best = target;
+		if (xrefs.CallCount(target) > 0) {
+			if (StubTarget(pe, target) && va >= target + 5)
+				continue;
+			return target;
+		}
+		for (auto const& ref : xrefs.To(target))
+			if (ref.Kind == XrefKind::Jump && StubTarget(pe, ref.From) == target && xrefs.CallCount(ref.From) > 0)
+				return target;
 	}
-	return best && va - best < 0x10000 ? best : va;
+	return va;
 }
 
 namespace {
@@ -662,4 +671,132 @@ FlowLayout LayoutFlowGraph(FlowGraph const& graph, std::span<const FlowSize> siz
 			std::reverse(result.Edges[i].begin(), result.Edges[i].end());
 	}
 	return result;
+}
+
+uint64_t StubTarget(PEFile const& pe, uint64_t va) {
+	auto arch = ArchOf(pe);
+	auto base = pe.GetImageBase();
+	if (!arch || *arch == CpuArch::Arm64 || va < base || va - base > 0xFFFFFFFFULL)
+		return 0;
+	auto offset = pe.GetOffsetFromRVA((uint32_t)(va - base));
+	if (offset == 0 || offset + 5 > pe.GetFileSize())
+		return 0;
+	auto code = (const uint8_t*)pe.GetData() + offset;
+	if (code[0] != 0xE9)
+		return 0;
+	int32_t displacement;
+	memcpy(&displacement, code + 1, sizeof(displacement));
+	return va + 5 + displacement;
+}
+
+CallGraph BuildCallGraph(PEFile const& pe, XrefMap const& xrefs, uint64_t function) {
+	CallGraph graph;
+	graph.Function = function;
+
+	// the callees: the calls (and tail calls) of the function's code
+	std::map<std::pair<uint64_t, bool>, CallGraphNode> callees;
+	auto flow = BuildFlowGraph(pe, xrefs, function);
+	graph.Truncated = flow.Truncated;
+	auto addCallee = [&](uint64_t target, bool import, bool tail) {
+		if (!import)
+			if (auto real = StubTarget(pe, target))
+				target = real;
+		if (target == function && !import)
+			return;		// a recursion is not shown as an edge to itself
+		auto& node = callees[{ target, import }];
+		node.Address = target;
+		node.Import = import;
+		node.TailCall = tail && node.Sites == 0;
+		node.Sites++;
+	};
+	for (auto const& block : flow.Blocks) {
+		for (auto const& inst : block.Code) {
+			bool call = inst.Mnemonic == "call" || inst.Mnemonic == "bl" || inst.Mnemonic == "blr";
+			if (!call)
+				continue;
+			if (inst.Branch)
+				addCallee(*inst.Branch, false, false);
+			else if (inst.Memory)
+				addCallee(*inst.Memory, true, false);		// through a pointer: the entry of the import address table
+		}
+		if (block.Ending == FlowEnd::TailCall && !block.Code.empty()) {
+			auto const& last = block.Code.back();
+			if (last.Branch)
+				addCallee(*last.Branch, false, true);
+			else if (last.Memory)
+				addCallee(*last.Memory, true, true);
+		}
+	}
+
+	// the callers: the functions of the calls to it, and of the calls to the stubs that jump to it
+	std::map<uint64_t, CallGraphNode> callers;
+	// The function a call is in: from the unwind information (64-bit code), otherwise the closest function before it
+	// that is called (as FindFunctionStart, without a walk over all the targets for each call)
+	auto exceptions = pe.GetExceptions();
+	bool unwind = exceptions && !exceptions->empty();
+	std::vector<uint64_t> called;
+	if (!unwind) {
+		// (a function that is called through a stub is called too)
+		for (auto target : xrefs.Targets())
+			if (xrefs.CallCount(target) > 0) {
+				// (a stub is not a function that calls are in)
+				auto real = StubTarget(pe, target);
+				called.push_back(real ? real : target);
+			}
+		// and those that are not called: the entry point, the exports
+		auto base = pe.GetImageBase();
+		auto nt = pe.GetNTHeader();
+		auto entry = pe.GetFileInfo()->IsPE64 ? nt->NTHdr64.OptionalHeader.AddressOfEntryPoint : nt->NTHdr32.OptionalHeader.AddressOfEntryPoint;
+		if (entry)
+			called.push_back(base + entry);
+		if (auto exports = pe.GetExport())
+			for (auto const& f : exports->Funcs)
+				if (f.FuncRVA && f.ForwarderName.empty())
+					called.push_back(base + f.FuncRVA);
+		std::sort(called.begin(), called.end());
+		called.erase(std::unique(called.begin(), called.end()), called.end());
+	}
+	auto startOf = [&](uint64_t va) {
+		if (unwind)
+			return FindFunctionStart(pe, xrefs, va);
+		auto it = std::upper_bound(called.begin(), called.end(), va);
+		if (it == called.begin())
+			return va;
+		auto best = *--it;
+		return va - best < 0x10000 ? best : va;
+	};
+	auto addCaller = [&](uint64_t from, bool tail) {
+		auto caller = startOf(from);
+		if (caller == function)
+			return;
+		auto& node = callers[caller];
+		node.Address = caller;
+		node.TailCall = tail && node.Sites == 0;
+		node.Sites++;
+	};
+	for (auto const& ref : xrefs.To(function)) {
+		if (ref.Kind == XrefKind::Call)
+			addCaller(ref.From, false);
+		else if (ref.Kind == XrefKind::Jump) {
+			if (StubTarget(pe, ref.From) == function && xrefs.CallCount(ref.From) > 0) {
+				// a stub: its callers are the function's
+				for (auto const& stubRef : xrefs.To(ref.From))
+					if (stubRef.Kind == XrefKind::Call)
+						addCaller(stubRef.From, false);
+			}
+			else
+				addCaller(ref.From, true);		// a jump from another function: a tail call
+		}
+	}
+
+	auto bySites = [](CallGraphNode const& a, CallGraphNode const& b) {
+		return a.Sites != b.Sites ? a.Sites > b.Sites : a.Address < b.Address;
+	};
+	for (auto& [key, node] : callees)
+		graph.Callees.push_back(node);
+	for (auto& [key, node] : callers)
+		graph.Callers.push_back(node);
+	std::sort(graph.Callees.begin(), graph.Callees.end(), bySites);
+	std::sort(graph.Callers.begin(), graph.Callers.end(), bySites);
+	return graph;
 }

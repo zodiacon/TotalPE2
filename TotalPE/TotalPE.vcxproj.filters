@@ -137,6 +137,9 @@
     <ClCompile Include="FunctionsView.cpp">
       <Filter>Views</Filter>
     </ClCompile>
+    <ClCompile Include="CallGraphView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
     <ClCompile Include="LoadConfigView.cpp">
       <Filter>Views\DataDirectories</Filter>
     </ClCompile>
@@ -352,6 +355,9 @@
       <Filter>Views</Filter>
     </ClInclude>
     <ClInclude Include="FunctionsView.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="CallGraphView.h">
       <Filter>Views</Filter>
     </ClInclude>
     <ClInclude Include="ScintillaCtrl.h">

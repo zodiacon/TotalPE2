@@ -143,6 +143,8 @@ enum class TreeItemType : int64_t {
 	SideBySide,
 	// the functions of the image
 	Functions,
+	// the callers and callees of a function (the index is its RVA)
+	CallGraph,
 
 	ItemMask = 255,
 };
@@ -187,6 +189,8 @@ struct IMainFrame abstract {
 	virtual bool ShowXrefs(uint64_t va) = 0;
 	// The flow graph of the function that contains the address (the code from the address if the function is not known)
 	virtual bool ShowFlowGraph(uint64_t va) = 0;
+	// The functions that the function at an address calls, and those that call it, as a graph.
+	virtual bool ShowCallGraph(uint64_t va) = 0;
 	// The code of the function at an address in a view of its own: under the exports for an export, otherwise under Disassembly
 	virtual bool DisassembleFunction(uint64_t va) = 0;
 	// The function at an address as C (decompiled), in a view of its own next to where its disassembly goes

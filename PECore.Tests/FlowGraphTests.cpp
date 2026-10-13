@@ -546,3 +546,76 @@ TEST_CASE("The flow graph of functions of a system DLL", "[flowgraph][system]") 
 	CHECK(loops > 0);
 	INFO("blocks ending in a switch: " << switches);
 }
+
+namespace {
+	// x64, at 0x140001000:
+	//   00 F: call G; call stub; ret
+	//   20 G: ret
+	//   30 stub: jmp H
+	//   40 H: call G; ret
+	Bytes CallsCode() {
+		Bytes code(0x60, 0xCC);
+		Put(code, 0x00, { 0xE8, 0x1B, 0x00, 0x00, 0x00 });
+		Put(code, 0x05, { 0xE8, 0x26, 0x00, 0x00, 0x00 });
+		Put(code, 0x0A, { 0xC3 });
+		Put(code, 0x20, { 0xC3 });
+		Put(code, 0x30, { 0xE9, 0x0B, 0x00, 0x00, 0x00 });
+		Put(code, 0x40, { 0xE8, 0xDB, 0xFF, 0xFF, 0xFF });
+		Put(code, 0x45, { 0xC3 });
+		return code;
+	}
+
+	CallGraphNode const* FindNode(std::vector<CallGraphNode> const& nodes, uint64_t address) {
+		auto it = std::find_if(nodes.begin(), nodes.end(), [&](auto const& n) { return n.Address == address; });
+		return it == nodes.end() ? nullptr : &*it;
+	}
+}
+
+TEST_CASE("Callers and callees, through a stub", "[flowgraph][callgraph]") {
+	Graph g(SyntheticPE{}, CallsCode());
+	auto F = Base64, G = Base64 + 0x20, stub = Base64 + 0x30, H = Base64 + 0x40;
+	CHECK(StubTarget(g.PE, stub) == H);
+	CHECK(StubTarget(g.PE, G) == 0);
+
+	SECTION("the callees of F: G, and H through the stub") {
+		auto calls = BuildCallGraph(g.PE, g.Xrefs, F);
+		CHECK(calls.Callers.empty());
+		REQUIRE(calls.Callees.size() == 2);
+		REQUIRE(FindNode(calls.Callees, G));
+		REQUIRE(FindNode(calls.Callees, H));
+		CHECK(FindNode(calls.Callees, H)->Sites == 1);
+		CHECK_FALSE(FindNode(calls.Callees, stub));
+	}
+	SECTION("the callers of G: F and H") {
+		auto calls = BuildCallGraph(g.PE, g.Xrefs, G);
+		CHECK(calls.Callees.empty());
+		REQUIRE(calls.Callers.size() == 2);
+		CHECK(FindNode(calls.Callers, F));
+		CHECK(FindNode(calls.Callers, H));
+	}
+	SECTION("the caller of H is F, which calls its stub") {
+		auto calls = BuildCallGraph(g.PE, g.Xrefs, H);
+		REQUIRE(calls.Callers.size() == 1);
+		CHECK(calls.Callers[0].Address == F);
+		CHECK_FALSE(calls.Callers[0].TailCall);
+		REQUIRE(calls.Callees.size() == 1);
+		CHECK(calls.Callees[0].Address == G);
+	}
+}
+
+// A function to look at: TOTALPE_CALLS_FILE=<path> TOTALPE_CALLS_VA=<hex address> PECore.Tests "[.callgraph]"
+TEST_CASE("Dump the call graph of a function", "[.callgraph]") {
+	char path[MAX_PATH], va[32];
+	if (::GetEnvironmentVariableA("TOTALPE_CALLS_FILE", path, MAX_PATH) == 0 || ::GetEnvironmentVariableA("TOTALPE_CALLS_VA", va, 32) == 0)
+		SKIP("TOTALPE_CALLS_FILE or TOTALPE_CALLS_VA is not set");
+	PEFile pe;
+	REQUIRE(pe.Open(std::wstring(path, path + strlen(path)).c_str()));
+	XrefMap xrefs;
+	REQUIRE(xrefs.Build(pe));
+	printf("function start 0x%llX\n", FindFunctionStart(pe, xrefs, std::stoull(va, nullptr, 16)));
+	auto calls = BuildCallGraph(pe, xrefs, std::stoull(va, nullptr, 16));
+	for (auto const& n : calls.Callers)
+		printf("caller 0x%llX %zu%s\n", n.Address, n.Sites, n.TailCall ? " (tail)" : "");
+	for (auto const& n : calls.Callees)
+		printf("callee 0x%llX %zu%s%s\n", n.Address, n.Sites, n.Import ? " (import)" : "", n.TailCall ? " (tail)" : "");
+}

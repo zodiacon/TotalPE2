@@ -160,6 +160,7 @@ void CScintillaView::UpdateUI(bool first) {
 	ui.UIEnable(ID_ASSEMBLY_XREFS_HERE, line && line->Va);
 	ui.UIEnable(ID_ASSEMBLY_XREFS_TARGET, line && line->Target());
 	ui.UIEnable(ID_ASSEMBLY_FLOWGRAPH, FlowGraphAddress().has_value());
+	ui.UIEnable(ID_ASSEMBLY_CALLGRAPH, FlowGraphAddress().has_value());
 }
 
 namespace {
@@ -375,9 +376,10 @@ LRESULT CScintillaView::OnXrefsTarget(WORD, WORD, HWND, BOOL&) {
 	return 0;
 }
 
-LRESULT CScintillaView::OnFlowGraph(WORD, WORD, HWND, BOOL&) {
+// the flow graph, or the call graph, of the function
+LRESULT CScintillaView::OnFlowGraph(WORD, WORD id, HWND, BOOL&) {
 	if (auto va = FlowGraphAddress())
-		Frame()->ShowFlowGraph(*va);
+		id == ID_ASSEMBLY_CALLGRAPH ? Frame()->ShowCallGraph(*va) : Frame()->ShowFlowGraph(*va);
 	return 0;
 }
 

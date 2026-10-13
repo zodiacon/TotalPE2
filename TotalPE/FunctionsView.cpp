@@ -7,6 +7,7 @@
 #include <ClipboardHelper.h>
 #include <ListViewHelper.h>
 #include <map>
+#include <thread>
 
 CFunctionsView::CFunctionsView(IMainFrame* frame, PEFile const& pe) : CViewBase(frame), m_PE(pe) {
 }
@@ -85,17 +86,6 @@ void CFunctionsView::Collect() {
 		Add(functions, rva, source, name, size);
 	};
 
-	// the symbols: names and sizes (a function of private symbols, or a public symbol in code)
-	auto const& symbols = Frame()->GetSymbols();
-	if (symbols) {
-		for (auto const& sym : symbols.FindChildren(nullptr, SymbolTag::Function))
-			if (auto rva = sym.RelativeVirtualAddress())
-				add(rva, FromSymbols, sym.Name(), (uint32_t)sym.Length());
-		for (auto const& sym : symbols.FindChildren(nullptr, SymbolTag::PublicSymbol))
-			if (auto rva = sym.RelativeVirtualAddress(); rva && sym.IsFunction())
-				add(rva, FromSymbols, sym.UndecoratedName().empty() ? sym.Name() : sym.UndecoratedName());
-	}
-
 	// the functions with unwind information (x64 and ARM64): a part of a function that has its own (an entry that is
 	// "chained" to the function's) is not a function
 	if (auto exceptions = m_PE.GetExceptions()) {
@@ -120,6 +110,60 @@ void CFunctionsView::Collect() {
 	auto entry = m_PE.GetFileInfo()->IsPE64 ? m_PE.GetNTHeader()->NTHdr64.OptionalHeader.AddressOfEntryPoint : m_PE.GetNTHeader()->NTHdr32.OptionalHeader.AddressOfEntryPoint;
 	if (entry)
 		add(entry, FromEntryPoint);
+
+	// The symbols' functions come later: they are read on a thread of its own (those of a large program take seconds),
+	// from a session of its own of the same symbols file (the frame's is the frame thread's)
+	auto const& symbols = Frame()->GetSymbols();
+	if (!symbols || symbols.GetSymbolFile().empty())
+		return;
+	m_ReadingSymbols = true;
+	m_Cancel = std::make_shared<std::atomic<bool>>(false);
+	std::thread([hWnd = m_hWnd, cancel = m_Cancel, path = symbols.GetSymbolFile()] {
+		::SetThreadDescription(::GetCurrentThread(), L"Functions of the symbols");
+		::CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+		auto functions = std::make_unique<std::vector<SymbolFunction>>();
+		{
+			DiaSession session;
+			if (session.OpenPdb(path.c_str())) {
+				// a function of private symbols, or a public symbol in code
+				for (auto const& sym : session.FindChildren(nullptr, SymbolTag::Function)) {
+					if (*cancel)
+						break;
+					if (auto rva = sym.RelativeVirtualAddress())
+						functions->push_back({ rva, (uint32_t)sym.Length(), sym.Name() });
+				}
+				for (auto const& sym : session.FindChildren(nullptr, SymbolTag::PublicSymbol)) {
+					if (*cancel)
+						break;
+					if (auto rva = sym.RelativeVirtualAddress(); rva && sym.IsFunction()) {
+						auto name = sym.UndecoratedName();
+						functions->push_back({ rva, 0, name.empty() ? sym.Name() : name, true });
+					}
+				}
+			}
+		}
+		if (!*cancel && ::PostMessage(hWnd, WM_SYMBOL_FUNCTIONS, 0, (LPARAM)functions.get()))
+			functions.release();
+		::CoUninitialize();
+		}).detach();
+}
+
+LRESULT CFunctionsView::OnSymbolFunctions(UINT, WPARAM, LPARAM lParam, BOOL&) {
+	std::unique_ptr<std::vector<SymbolFunction>> functions(reinterpret_cast<std::vector<SymbolFunction>*>(lParam));
+	m_ReadingSymbols = false;
+	// the names and sizes of the symbols are those of the functions (a public symbol's only if there is no other)
+	for (auto const& f : *functions)
+		Add(m_Known, f.Rva, FromSymbols, f.Name, f.Size, !f.Public);
+	CWaitCursor wait;
+	Build();
+	return 0;
+}
+
+LRESULT CFunctionsView::OnDestroy(UINT, WPARAM, LPARAM, BOOL& handled) {
+	if (m_Cancel)
+		*m_Cancel = true;	// the thread reading the symbols ends soon, and what it read goes
+	handled = FALSE;
+	return 0;
 }
 
 CFunctionsView::Code const* CFunctionsView::SectionOf(uint32_t rva) const {
@@ -129,14 +173,15 @@ CFunctionsView::Code const* CFunctionsView::SectionOf(uint32_t rva) const {
 	return nullptr;
 }
 
-void CFunctionsView::Add(std::map<uint32_t, Function>& functions, uint32_t rva, uint8_t source, std::wstring const& name, uint32_t size) const {
+void CFunctionsView::Add(std::map<uint32_t, Function>& functions, uint32_t rva, uint8_t source, std::wstring const& name, uint32_t size,
+	bool prefer) const {
 	if (!SectionOf(rva))
 		return;
 	auto& f = functions.try_emplace(rva, Function{ rva }).first->second;
 	f.Sources |= source;
-	if (f.Name.empty() && !name.empty())
+	if ((f.Name.empty() || prefer) && !name.empty())
 		f.Name = name;
-	if (size && !f.KnownSize) {
+	if (size && (!f.KnownSize || prefer)) {
 		f.Size = size;
 		f.KnownSize = true;
 	}
@@ -251,11 +296,15 @@ void CFunctionsView::UpdateUI(bool first) const {
 	auto& ui = Frame()->GetUI();
 	int selected = m_List.GetSelectedCount();
 	ui.UIEnable(ID_EDIT_COPY, selected > 0);
-	for (auto id : { ID_VIEW_DISASSEMBLE, ID_EXPORT_DECOMPILE, ID_EXPORT_SIDEBYSIDE, ID_EXPORT_XREFS, ID_EXPORT_FLOWGRAPH })
+	for (auto id : { ID_VIEW_DISASSEMBLE, ID_EXPORT_DECOMPILE, ID_EXPORT_SIDEBYSIDE, ID_EXPORT_XREFS, ID_EXPORT_FLOWGRAPH, ID_EXPORT_CALLGRAPH })
 		ui.UIEnable(id, selected == 1);
-	if (first)
-		Frame()->SetStatusText(1, (m_Items.size() == m_Items.TotalSize() ? std::format(L"Functions: {}", m_Items.size()) :
-			std::format(L"Functions: {} of {}", m_Items.size(), m_Items.TotalSize())).c_str());
+	if (first) {
+		auto text = m_Items.size() == m_Items.TotalSize() ? std::format(L"Functions: {}", m_Items.size()) :
+			std::format(L"Functions: {} of {}", m_Items.size(), m_Items.TotalSize());
+		if (m_ReadingSymbols)
+			text += L" (reading the symbols...)";
+		Frame()->SetStatusText(1, text.c_str());
+	}
 }
 
 LRESULT CFunctionsView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
@@ -329,6 +378,7 @@ LRESULT CFunctionsView::OnFunctionCommand(WORD, WORD id, HWND, BOOL&) const {
 		case ID_EXPORT_SIDEBYSIDE: Frame()->ShowSideBySide(va); break;
 		case ID_EXPORT_XREFS: Frame()->ShowXrefs(va); break;
 		case ID_EXPORT_FLOWGRAPH: Frame()->ShowFlowGraph(va); break;
+		case ID_EXPORT_CALLGRAPH: Frame()->ShowCallGraph(va); break;
 	}
 	return 0;
 }

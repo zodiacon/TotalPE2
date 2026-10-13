@@ -385,6 +385,7 @@ BEGIN
         MENUITEM "Side by &Side",               ID_EXPORT_SIDEBYSIDE
         MENUITEM "Cross-&References...",        ID_EXPORT_XREFS
         MENUITEM "Flow &Graph...",              ID_EXPORT_FLOWGRAPH
+        MENUITEM "C&all Graph...",              ID_EXPORT_CALLGRAPH
         MENUITEM SEPARATOR
         MENUITEM "&Copy\tCtrl+C",               ID_EDIT_COPY
     END
@@ -409,6 +410,7 @@ BEGIN
         MENUITEM "Cross-References to the &Target", ID_ASSEMBLY_XREFS_TARGET
         MENUITEM SEPARATOR
         MENUITEM "Function Flow &Graph\tG",     ID_ASSEMBLY_FLOWGRAPH
+        MENUITEM "Function C&all Graph",        ID_ASSEMBLY_CALLGRAPH
         MENUITEM SEPARATOR
         MENUITEM "Disassemble at the End",      ID_ASSEMBLY_DISASSEMBLEATTHEEND
         MENUITEM "Go to Address",               ID_ASSEMBLY_GOTOADDRESS

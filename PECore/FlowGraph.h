@@ -98,3 +98,24 @@ struct FlowLayout {
 // An edge that skips layers is given bends in the layers that it crosses, so that it goes around the blocks in between.
 // 'sizes' has one entry per block. Coordinates are not negative.
 FlowLayout LayoutFlowGraph(FlowGraph const& graph, std::span<const FlowSize> sizes, FlowLayoutOptions options = {});
+
+// The functions a function calls and those that call it. A call through a stub that only jumps to a function (incremental
+// linking) is a call of the function; a call through an entry of the import address table is a call of the import.
+struct CallGraphNode {
+	uint64_t Address{ 0 };	// of the function; of an import: the address of its entry in the import address table
+	bool Import{ false };
+	bool TailCall{ false };	// the function is jumped to (at the end of the caller), not called
+	size_t Sites{ 0 };		// the places of the calls
+};
+
+struct CallGraph {
+	uint64_t Function{ 0 };
+	std::vector<CallGraphNode> Callers;		// by the number of calls, most first
+	std::vector<CallGraphNode> Callees;
+	bool Truncated{ false };				// the function is bigger than what was followed: there may be more callees
+};
+
+CallGraph BuildCallGraph(PEFile const& pe, XrefMap const& xrefs, uint64_t function);
+
+// The function that a stub jumps to ("jmp rel32" of x86 and x64), or 0 if the code at 'va' is not such a stub
+uint64_t StubTarget(PEFile const& pe, uint64_t va);

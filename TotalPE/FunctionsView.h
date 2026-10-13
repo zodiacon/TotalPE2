@@ -6,6 +6,8 @@
 #include <SortedFilteredVector.h>
 #include "resource.h"
 #include <map>
+#include <atomic>
+#include <memory>
 
 class PEFile;
 
@@ -32,6 +34,8 @@ public:
 	BEGIN_MSG_MAP(CFunctionsView)
 		MESSAGE_HANDLER(CFindReplaceDialog::GetFindReplaceMsg(), OnFind)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
+		MESSAGE_HANDLER(WM_DESTROY, OnDestroy)
+		MESSAGE_HANDLER(WM_SYMBOL_FUNCTIONS, OnSymbolFunctions)
 		COMMAND_CODE_HANDLER(EN_DELAYCHANGE, OnFilterChanged)
 		CHAIN_MSG_MAP(CVirtualListView<CFunctionsView>)
 		CHAIN_MSG_MAP(CViewBase<CFunctionsView>)
@@ -42,6 +46,7 @@ public:
 		COMMAND_ID_HANDLER(ID_EXPORT_SIDEBYSIDE, OnFunctionCommand)
 		COMMAND_ID_HANDLER(ID_EXPORT_XREFS, OnFunctionCommand)
 		COMMAND_ID_HANDLER(ID_EXPORT_FLOWGRAPH, OnFunctionCommand)
+		COMMAND_ID_HANDLER(ID_EXPORT_CALLGRAPH, OnFunctionCommand)
 		CHAIN_MSG_MAP_ALT(CViewBase<CFunctionsView>, 1)
 	END_MSG_MAP()
 
@@ -71,12 +76,25 @@ private:
 	void Collect();
 	void Build();
 	Code const* SectionOf(uint32_t rva) const;
-	void Add(std::map<uint32_t, Function>& functions, uint32_t rva, uint8_t source, std::wstring const& name = {}, uint32_t size = 0) const;
+	// 'prefer': the name and size replace those from elsewhere (those of the symbols)
+	void Add(std::map<uint32_t, Function>& functions, uint32_t rva, uint8_t source, std::wstring const& name = {}, uint32_t size = 0,
+		bool prefer = false) const;
+	// a function of the symbols, read on another thread
+	struct SymbolFunction {
+		uint32_t Rva;
+		uint32_t Size;
+		std::wstring Name;
+		bool Public{ false };
+	};
+	// posted by the thread that reads the symbols: lParam is a std::vector<SymbolFunction>* that the view deletes
+	static constexpr UINT WM_SYMBOL_FUNCTIONS = WM_APP + 70;
 	void ApplyFilter();
 	Function const* GetSelected() const;
 	static std::wstring SourceText(uint8_t sources);
 
 	LRESULT OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
+	LRESULT OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
+	LRESULT OnSymbolFunctions(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnFind(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnFilterChanged(WORD, WORD, HWND, BOOL&);
 	LRESULT OnCopy(WORD, WORD, HWND, BOOL&) const;
@@ -88,6 +106,8 @@ private:
 	SortedFilteredVector<Function> m_Items;
 	std::map<uint32_t, Function> m_Known;	// from the file and the symbols, by RVA
 	std::vector<Code> m_Code;				// the code sections
+	bool m_ReadingSymbols{ false };
+	std::shared_ptr<std::atomic<bool>> m_Cancel;	// of the thread that reads the symbols
 	std::vector<std::wstring> m_SectionNames;
 	CString m_FilterText;
 };

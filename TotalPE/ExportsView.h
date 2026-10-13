@@ -33,6 +33,7 @@ public:
 		COMMAND_ID_HANDLER(ID_EXPORT_SIDEBYSIDE, OnDecompile)
 		COMMAND_ID_HANDLER(ID_EXPORT_XREFS, OnXrefs)
 		COMMAND_ID_HANDLER(ID_EXPORT_FLOWGRAPH, OnFlowGraph)
+		COMMAND_ID_HANDLER(ID_EXPORT_CALLGRAPH, OnFlowGraph)
 		CHAIN_MSG_MAP_ALT(CViewBase<CExportsView>, 1)
 	END_MSG_MAP()
 
@@ -61,7 +62,7 @@ private:
 	LRESULT OnDissassemble(WORD, WORD, HWND, BOOL&) const;
 	LRESULT OnDecompile(WORD, WORD id, HWND, BOOL&) const;
 	LRESULT OnXrefs(WORD, WORD, HWND, BOOL&) const;
-	LRESULT OnFlowGraph(WORD, WORD, HWND, BOOL&) const;
+	LRESULT OnFlowGraph(WORD, WORD id, HWND, BOOL&) const;
 
 	CListViewCtrl m_List;
 	std::vector<Export> m_Exports;

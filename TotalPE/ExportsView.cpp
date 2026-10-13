@@ -107,6 +107,7 @@ void CExportsView::UpdateUI(bool first) const {
 	ui.UIEnable(ID_EXPORT_SIDEBYSIDE, selected == 1 && m_Exports[m_List.GetNextItem(-1, LVNI_SELECTED)].ForwarderName.empty());
 	ui.UIEnable(ID_EXPORT_XREFS, selected == 1 && m_Exports[m_List.GetNextItem(-1, LVNI_SELECTED)].ForwarderName.empty());
 	ui.UIEnable(ID_EXPORT_FLOWGRAPH, selected == 1 && m_Exports[m_List.GetNextItem(-1, LVNI_SELECTED)].ForwarderName.empty());
+	ui.UIEnable(ID_EXPORT_CALLGRAPH, selected == 1 && m_Exports[m_List.GetNextItem(-1, LVNI_SELECTED)].ForwarderName.empty());
 	if(first)
 		Frame()->SetStatusText(1, std::format(L"Exports: {}", m_Exports.size()).c_str());
 }
@@ -200,11 +201,14 @@ LRESULT CExportsView::OnXrefs(WORD, WORD, HWND, BOOL&) const {
 	return 0;
 }
 
-// The blocks of the exported function and how they lead to one another
-LRESULT CExportsView::OnFlowGraph(WORD, WORD, HWND, BOOL&) const {
+// The blocks of the exported function and how they lead to one another, or its callers and callees
+LRESULT CExportsView::OnFlowGraph(WORD, WORD id, HWND, BOOL&) const {
 	ATLASSERT(m_List.GetSelectedCount() == 1);
 	auto& exp = m_Exports[m_List.GetNextItem(-1, LVNI_SELECTED)];
-	Frame()->ShowFlowGraph(m_PE.GetImageBase() + exp.FuncRVA);
+	if (id == ID_EXPORT_CALLGRAPH)
+		Frame()->ShowCallGraph(m_PE.GetImageBase() + exp.FuncRVA);
+	else
+		Frame()->ShowFlowGraph(m_PE.GetImageBase() + exp.FuncRVA);
 	return 0;
 }
 

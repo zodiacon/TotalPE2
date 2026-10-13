@@ -157,6 +157,7 @@ void CMainFrame::InitMenu(HMENU hMenu) {
 		{ ID_WINDOW_CLOSE, IDI_WIN_CLOSE },
 		{ ID_WINDOW_CLOSE_ALL, IDI_WIN_CLOSEALL },
 		{ ID_EXPORT_FLOWGRAPH, IDI_FLOW },
+		{ ID_ASSEMBLY_FLOWGRAPH, IDI_FLOW },
 		{ ID_PE_STRINGS, IDI_TEXT },
 
 	};
@@ -1752,6 +1753,7 @@ void CMainFrame::ParseCommandLine() {
 
 void CMainFrame::CloseTab(int page) {
 	auto hWnd = m_Tabs.GetPageHWND(page);
+	CancelDecompiles(hWnd);
 	auto type = m_Views2.at(hWnd);
 	m_Views.erase(type);
 	m_Views2.erase(hWnd);
@@ -2505,6 +2507,8 @@ LRESULT CMainFrame::OnDecompilerAsk(UINT, WPARAM, LPARAM lParam, BOOL&) {
 
 void CMainFrame::CloseDecompiler(bool closed) {
 	if (closed) {
+		for (auto& [id, pending] : m_PendingDecompiles)
+			*pending.Cancel = true;
 		m_PendingDecompiles.clear();
 		UpdateDecompilerStatus();
 	}
@@ -2522,9 +2526,12 @@ void CMainFrame::CloseDecompiler(bool closed) {
 
 void CMainFrame::DecompileAsync(uint64_t address, std::wstring const& name, bool lines, HWND hView, std::function<void(Decompiled&)> done) {
 	auto id = ++m_LastDecompile;
-	m_PendingDecompiles[id] = { hView, name.empty() ? std::format(L"0x{:X}", address) : name, std::move(done) };
+	auto cancel = std::make_shared<std::atomic<bool>>(false);
+	m_PendingDecompiles[id] = { hView, name.empty() ? std::format(L"0x{:X}", address) : name, std::move(done), cancel };
 	UpdateDecompilerStatus();
-	DecompilerThread::Get().Post([session = m_Decompiler, hWnd = m_hWnd, id, address, name = std::string(CW2A(name.c_str())), lines] {
+	DecompilerThread::Get().Post([session = m_Decompiler, hWnd = m_hWnd, id, address, name = std::string(CW2A(name.c_str())), lines, cancel] {
+		if (*cancel)
+			return;		// its view was closed while it waited
 		auto result = std::make_unique<Decompiled>();
 		result->Id = id;
 		std::string error;
@@ -2535,6 +2542,21 @@ void CMainFrame::DecompileAsync(uint64_t address, std::wstring const& name, bool
 		if (!session->Closed && ::PostMessage(hWnd, WM_DECOMPILED, 0, (LPARAM)result.get()))
 			result.release();
 		});
+}
+
+void CMainFrame::CancelDecompiles(HWND hView) {
+	bool any = false;
+	for (auto it = m_PendingDecompiles.begin(); it != m_PendingDecompiles.end(); ) {
+		if (it->second.View == hView) {
+			*it->second.Cancel = true;
+			it = m_PendingDecompiles.erase(it);
+			any = true;
+		}
+		else
+			++it;
+	}
+	if (any)
+		UpdateDecompilerStatus();
 }
 
 // The function that is decompiled now (the decompiler's thread takes them in order), and how many wait

@@ -145,6 +145,7 @@ private:
 	}
 	bool ShowXrefs(uint64_t va) override;
 	bool ShowFlowGraph(uint64_t va) override;
+	bool ShowCallGraph(uint64_t va) override;
 	bool DisassembleFunction(uint64_t va) override;
 	bool ShowType(DiaSymbol const& type) override;
 	bool ShowTypeDefinition(DiaSymbol const& type, TypeFormat format) override;
@@ -331,7 +332,10 @@ private:
 		HWND View;
 		std::wstring Name;
 		std::function<void(Decompiled&)> Done;
+		std::shared_ptr<std::atomic<bool>> Cancel;	// set when the view goes: the decompiler's thread skips it if not started
 	};
+	// the work for a view that is closed (it is not done, unless it is being done already)
+	void CancelDecompiles(HWND hView);
 	// the status bar's panes of the work in the background: the decompiling, the cross-references
 	static constexpr int DecompilerPane = 3, XrefsPane = 4;
 	void UpdateDecompilerStatus();

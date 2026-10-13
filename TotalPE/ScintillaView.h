@@ -82,6 +82,7 @@ public:
 		COMMAND_ID_HANDLER(ID_ASSEMBLY_XREFS_HERE, OnXrefsHere)
 		COMMAND_ID_HANDLER(ID_ASSEMBLY_XREFS_TARGET, OnXrefsTarget)
 		COMMAND_ID_HANDLER(ID_ASSEMBLY_FLOWGRAPH, OnFlowGraph)
+		COMMAND_ID_HANDLER(ID_ASSEMBLY_CALLGRAPH, OnFlowGraph)
 		COMMAND_ID_HANDLER(ID_ASSEMBLY_DISASSEMBLEATTHEEND, OnDisassembleAtEnd)
 		COMMAND_ID_HANDLER(ID_ASSEMBLY_DISASSEMBLEINANEWTAB, OnDisassembleNewTab)
 		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnEditCopy)
@@ -144,7 +145,7 @@ private:
 	LRESULT OnFollow(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnXrefsHere(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnXrefsTarget(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
-	LRESULT OnFlowGraph(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnFlowGraph(WORD /*wNotifyCode*/, WORD id, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 
 	std::optional<uint64_t> FlowGraphAddress();
 

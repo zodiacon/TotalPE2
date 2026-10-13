@@ -37,6 +37,7 @@
 #include "FlowGraphView.h"
 #include "ArchiveView.h"
 #include "FunctionsView.h"
+#include "CallGraphView.h"
 #include "StringsView.h"
 #include "FontView.h"
 #include "EventManifestView.h"
@@ -1018,6 +1019,54 @@ bool CMainFrame::ShowTypeDefinition(DiaSymbol const& type, TypeFormat format) {
 	view->SetDeleteFromTree(true);
 
 	auto image = GetIconIndex(CTypeView::TypeIcon(type));	// as the type's own view
+	auto hItem = InsertTreeItem(m_Tree, title.c_str(), image, itemType, hParent, TVI_SORT);
+	m_Tree.EnsureVisible(hItem);
+	view->SetHTreeItem(hItem);
+	m_Tabs.AddPage(view->GetHwnd(), view->GetTitle(), image, view);
+	m_Views.insert({ itemType, view });
+	m_Views2.insert({ view->GetHwnd(), itemType });
+	RecordNavigation();
+	return true;
+}
+
+bool CMainFrame::ShowCallGraph(uint64_t va) {
+	if (!m_PE)
+		return false;
+	auto base = m_PE.GetImageBase();
+	if (va < base || va - base > 0xFFFFFFFFULL)
+		return false;
+	if (!m_XrefsReady) {
+		WithXrefs([=] { ShowCallGraph(va); });	// the callers are found from the cross-references
+		return true;
+	}
+	// of the function the address is in (a stub that jumps to a function: of the function)
+	auto function = FindFunctionStart(m_PE, GetXrefs(), va);
+	if (auto target = ::StubTarget(m_PE, function); target && target >= base && target - base <= 0xFFFFFFFFULL)
+		function = target;
+	auto rva = (uint32_t)(function - base);
+	auto itemType = TreeItemWithIndex(TreeItemType::CallGraph, (int64_t)rva << ItemShift);
+	if (auto it = m_Views.find(itemType); it != m_Views.end()) {
+		ShowView(it->second->GetHTreeItem());
+		return true;
+	}
+
+	// next to the function's other views
+	std::wstring name;
+	auto hParent = PlaceItem(FunctionPlace(rva, name));
+	if (!hParent)
+		return false;
+	auto title = std::format(L"{} (Calls)", name.empty() ? std::format(L"0x{:X}", function) : name);
+
+	RecordNavigation();
+	auto view = new CCallGraphView(this, m_PE, function, title.c_str());
+	if (nullptr == view->DoCreate(m_Tabs)) {
+		ATLASSERT(false);
+		return false;
+	}
+	view->Build();
+	view->SetDeleteFromTree(true);
+
+	auto image = GetIconIndex(IDI_FLOW);
 	auto hItem = InsertTreeItem(m_Tree, title.c_str(), image, itemType, hParent, TVI_SORT);
 	m_Tree.EnsureVisible(hItem);
 	view->SetHTreeItem(hItem);
