@@ -26,6 +26,7 @@
 #include "RichHeaderView.h"
 #include "IATView.h"
 #include "ClrView.h"
+#include "ClrTypesView.h"
 #include "BoundImportView.h"
 #include "GlobalPtrView.h"
 #include "DialogView.h"
@@ -417,6 +418,16 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		case TreeItemType::DirectoryCLR:
 		{
 			auto view = new CClrView(this, m_PE);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::ClrTypes:
+		{
+			auto view = new CClrTypesView(this, m_PE);
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};

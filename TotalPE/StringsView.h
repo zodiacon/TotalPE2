@@ -5,13 +5,16 @@
 #include <QuickFindEdit.h>
 #include <SortedFilteredVector.h>
 #include "FileStrings.h"
+#include <ClrMetadata.h>
+#include <memory>
 #include "resource.h"
 
 class PEFile;
 class ElfFile;
 
 // The ASCII and UTF-16 strings of the whole file: headers, sections and overlay (PE), or the sections and what is around them (ELF).
-// Double-click a row to see the string in the hex view.
+// Double-click a row to see the string in the hex view. The functions whose code refers to a string (once the cross-references
+// are found), or the methods that load it (ldstr, in a .NET file), are in Used By.
 class CStringsView :
 	public CViewBase<CStringsView>,
 	public CVirtualListView<CStringsView> {
@@ -26,6 +29,8 @@ public:
 	bool OnRightClickList(HWND, int row, int col, POINT const& pt) const;
 	void OnStateChanged(HWND, int from, int to, UINT oldState, UINT newState);
 	void UpdateUI(bool first = false);
+	// the strings again, with the functions that use them
+	void XrefsChanged() override;
 
 	BEGIN_MSG_MAP(CStringsView)
 		MESSAGE_HANDLER(CFindReplaceDialog::GetFindReplaceMsg(), OnFind)
@@ -34,6 +39,7 @@ public:
 		COMMAND_CODE_HANDLER(EN_DELAYCHANGE, OnFilterChanged)
 		COMMAND_ID_HANDLER(ID_STRINGS_ASCII, OnToggleEncoding)
 		COMMAND_ID_HANDLER(ID_STRINGS_UTF16, OnToggleEncoding)
+		COMMAND_ID_HANDLER(ID_STRINGS_USEDONLY, OnUsedOnly)
 		COMMAND_RANGE_HANDLER(ID_STRINGS_MINLENGTH_FIRST, ID_STRINGS_MINLENGTH_LAST, OnMinLength)
 		CHAIN_MSG_MAP(CVirtualListView<CStringsView>)
 		CHAIN_MSG_MAP(CViewBase<CStringsView>)
@@ -48,6 +54,9 @@ private:
 	struct Item : FoundString {
 		int Section;	// index of the section that contains the string, -1 for the headers, -2 for the data after the sections
 		uint64_t Rva;	// 0 if the string is not part of the image; for ELF, the virtual address
+		uint32_t Uses{ 0 };		// the references to it from code, or the methods that load it
+		mutable std::wstring UsedBy;	// the names of those functions (when it is first shown)
+		mutable bool Resolved{ false };
 	};
 
 	void Scan();
@@ -59,6 +68,10 @@ private:
 	void ScanPE(std::vector<FoundString>&& strings);
 	void ScanElf(std::vector<FoundString>&& strings);
 	void ApplyFilter();
+	// the number of uses of a string, and their names
+	uint32_t CountUses(uint64_t rva) const;
+	std::wstring const& UsedBy(Item const& item) const;
+	bool ILOnly() const;
 	Item const* GetSelectedItem() const;
 
 	LRESULT OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
@@ -66,6 +79,7 @@ private:
 	LRESULT OnDropDown(int /*idCtrl*/, LPNMHDR hdr, BOOL& /*bHandled*/);
 	LRESULT OnFilterChanged(WORD, WORD, HWND, BOOL&);
 	LRESULT OnToggleEncoding(WORD, WORD id, HWND, BOOL&);
+	LRESULT OnUsedOnly(WORD, WORD, HWND, BOOL&);
 	LRESULT OnMinLength(WORD, WORD id, HWND, BOOL&);
 	LRESULT OnCopy(WORD, WORD, HWND, BOOL&) const;
 	LRESULT OnShowInHex(WORD, WORD, HWND, BOOL&) const;
@@ -80,4 +94,8 @@ private:
 	std::vector<std::wstring> m_SectionNames;
 	StringScanOptions m_Options;
 	CString m_FilterText;
+	bool m_UsedOnly{ false };
+	// a .NET file: its metadata, and the methods that load each user string (by the RVA of its characters)
+	std::unique_ptr<ClrMetadata> m_Clr;
+	std::unordered_map<uint32_t, std::vector<uint32_t>> m_ClrUses;
 };

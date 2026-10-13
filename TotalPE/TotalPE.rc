@@ -316,6 +316,7 @@ BEGIN
         MENUITEM "&Overlay",                    ID_VIEW_OVERLAY
         MENUITEM "S&trings",                    ID_PE_STRINGS
         MENUITEM "F&unctions",                  ID_PE_FUNCTIONS
+        MENUITEM ".&NET Types",                 ID_PE_CLRTYPES
         MENUITEM "&Debug",                      ID_VIEW_DEBUG
         MENUITEM "Security",                    ID_PE_SECURITY
         MENUITEM SEPARATOR

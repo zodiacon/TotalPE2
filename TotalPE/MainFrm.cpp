@@ -115,6 +115,7 @@ void CMainFrame::UpdateUI() {
 	m_SaveUIPage = (HWND)-1;	// Save and Export List: from the active view, on the next idle
 	UIEnable(ID_PE_STRINGS, fi != nullptr || m_Elf);
 	UIEnable(ID_PE_FUNCTIONS, fi && ArchOf(m_PE));
+	UIEnable(ID_PE_CLRTYPES, fi && FindTreeItem(TreeItemType::ClrTypes) != nullptr);
 	UIEnable(ID_VIEW_MANIFEST, fi && m_hResManifest != nullptr);
 	UIEnable(ID_VIEW_VERSION, fi && m_hResVersion != nullptr);
 	UIEnable(ID_VIEW_OVERLAY, fi && m_hOverlay != nullptr);
@@ -1316,6 +1317,8 @@ void CMainFrame::BuildTree(int iconSize) {
 		if (dir.DataDir.Size || (i == IMAGE_DIRECTORY_ENTRY_GLOBALPTR && dir.DataDir.VirtualAddress)) {
 			auto hDir = InsertTreeItem(m_Tree, PEStrings::GetDataDirectoryName(i), DirectoryIndexToIcon(i),
 				TreeItemWithIndex(TreeItemType::Directory, i), directories);
+			if (i == IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR)
+				InsertTreeItem(m_Tree, L".NET Types", GetTreeIcon(IDI_CLASS), TreeItemType::ClrTypes, hDir);
 			if (i == IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG) {
 				int t = 0;
 				for (auto const& table : m_GuardTables) {
@@ -1791,6 +1794,12 @@ LRESULT CMainFrame::OnViewStrings(WORD, WORD, HWND, BOOL&) {
 
 LRESULT CMainFrame::OnViewFunctions(WORD, WORD, HWND, BOOL&) {
 	if (auto hItem = FindTreeItem(TreeItemType::Functions))
+		ShowView(hItem);
+	return 0;
+}
+
+LRESULT CMainFrame::OnViewClrTypes(WORD, WORD, HWND, BOOL&) {
+	if (auto hItem = FindTreeItem(TreeItemType::ClrTypes))
 		ShowView(hItem);
 	return 0;
 }

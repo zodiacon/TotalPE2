@@ -23,6 +23,7 @@ enum class LexLanguage {
 	C,
 	Cpp,
 	CSharp,
+	IL,
 };
 
 class CScintillaView :
@@ -59,6 +60,10 @@ public:
 	// view does not offer to be shown side by side
 	using Notify = std::function<void(CScintillaView&, SCNotification const&)>;
 	void SetNotify(Notify notify);
+	// Where a line of the text leads (IL: to the definition of what the line refers to): a double-click or Enter on the
+	// line, or Go to Definition in its context menu, calls it; false if the line leads nowhere
+	using LineAction = std::function<bool(int line)>;
+	void SetLineAction(LineAction action);
 
 	int64_t GetNavigationPosition() const override;
 	void SetNavigationPosition(int64_t va) override;
@@ -91,6 +96,7 @@ public:
 		COMMAND_ID_HANDLER(ID_CODE_DECOMPILE_HERE, OnCodeLink)
 		COMMAND_ID_HANDLER(ID_CODE_DISASSEMBLE_HERE, OnCodeLink)
 		COMMAND_ID_HANDLER(ID_CODE_SIDEBYSIDE, OnSideBySide)
+		COMMAND_ID_HANDLER(ID_CODE_GOTODEFINITION, OnGoToDefinition)
 		COMMAND_ID_HANDLER(ID_EDIT_CUT, OnEdit)
 		COMMAND_ID_HANDLER(ID_EDIT_PASTE, OnEdit)
 		COMMAND_ID_HANDLER(ID_EDIT_UNDO, OnEdit)
@@ -131,8 +137,10 @@ private:
 	LRESULT OnEdit(WORD, WORD id, HWND, BOOL&);
 	LRESULT OnCodeLink(WORD, WORD id, HWND, BOOL&);
 	LRESULT OnSideBySide(WORD, WORD, HWND, BOOL&);
+	LRESULT OnGoToDefinition(WORD, WORD, HWND, BOOL&);
 	LRESULT OnSciNotify(int, LPNMHDR, BOOL&);
 	Notify m_Notify;
+	LineAction m_LineAction;
 	uint64_t m_Function{ 0 };
 	// the name (of a function: with its scopes and template arguments) at a position of the text, empty if none
 	std::wstring NameAt(intptr_t pos) const;

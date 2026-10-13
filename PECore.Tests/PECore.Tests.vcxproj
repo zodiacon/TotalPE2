@@ -104,6 +104,7 @@
     <ClCompile Include="RobustnessTests.cpp" />
     <ClCompile Include="LibArchiveTests.cpp" />
     <ClCompile Include="ClrMetadataTests.cpp" />
+    <ClCompile Include="ClrILTests.cpp" />
     <ClCompile Include="MenuTemplateTests.cpp" />
     <ClCompile Include="DialogTemplateTests.cpp" />
     <ClCompile Include="HexSearchTests.cpp" />

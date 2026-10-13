@@ -182,6 +182,9 @@
 #define ID_PE_FUNCTIONS                 32900
 #define ID_EXPORT_CALLGRAPH             32901
 #define ID_ASSEMBLY_CALLGRAPH           32902
+#define ID_CODE_GOTODEFINITION          32903
+#define ID_PE_CLRTYPES                  32904
+#define ID_STRINGS_USEDONLY             32905
 #define ID_IMPORT_FILEPROPERTIES        32809
 #define ID_IMPORT_GOTOFILELOCATION      32810
 #define ID_WINDOW_WINDOWS               32811
@@ -239,7 +242,7 @@
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        280
-#define _APS_NEXT_COMMAND_VALUE         32903
+#define _APS_NEXT_COMMAND_VALUE         32906
 #define _APS_NEXT_CONTROL_VALUE         1036
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

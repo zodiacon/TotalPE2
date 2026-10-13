@@ -7,12 +7,14 @@
 #include <ClipboardHelper.h>
 #include <ListViewHelper.h>
 #include <ToolbarHelper.h>
+#include <ClrIL.h>
+#include "FlowGraph.h"
 
 namespace {
 	const uint32_t MinLengths[] = { 3, 4, 5, 6, 8, 10, 16, 32 };
 	static_assert(_countof(MinLengths) == ID_STRINGS_MINLENGTH_LAST - ID_STRINGS_MINLENGTH_FIRST + 1);
 
-	enum Column { Offset, Rva, Section, Encoding, Length, Text };
+	enum Column { Offset, Rva, Section, Encoding, Length, Uses, UsedBy, Text };
 }
 
 CStringsView::CStringsView(IMainFrame* frame, PEFile const& pe) : CViewBase(frame), m_PE(&pe) {
@@ -37,6 +39,8 @@ CString CStringsView::GetColumnText(HWND, int row, int col) const {
 			return item.Section == -1 ? L"(Headers)" : m_Elf ? L"(Section Headers)" : L"(Overlay)";
 		case Column::Encoding: return StringEncodingToString(item.Encoding);
 		case Column::Length: return std::to_wstring(item.Length).c_str();
+		case Column::Uses: return item.Uses ? std::to_wstring(item.Uses).c_str() : L"";
+		case Column::UsedBy: return UsedBy(item).c_str();
 		case Column::Text: return item.Text.c_str();
 	}
 	return CString();
@@ -54,6 +58,8 @@ void CStringsView::DoSort(SortInfo const* si) {
 			case Column::Section: return SortHelper::Sort(a.Section, b.Section, asc);
 			case Column::Encoding: return SortHelper::Sort((int)a.Encoding, (int)b.Encoding, asc);
 			case Column::Length: return SortHelper::Sort(a.Length, b.Length, asc);
+			case Column::Uses: return SortHelper::Sort(a.Uses, b.Uses, asc);
+			case Column::UsedBy: return SortHelper::Sort(UsedBy(a), UsedBy(b), asc);
 			case Column::Text: return SortHelper::Sort(a.Text, b.Text, asc);
 		}
 		return false;
@@ -84,6 +90,7 @@ void CStringsView::UpdateUI(bool first) {
 	auto selected = m_List.GetSelectedCount();
 	ui.UIEnable(ID_EDIT_COPY, selected > 0);
 	ui.UIEnable(ID_STRINGS_HEX, selected == 1);
+	ui.UIEnable(ID_STRINGS_USEDONLY, m_PE != nullptr);	// the references are known in PE files
 	auto item = GetSelectedItem();
 	ui.UIEnable(ID_STRINGS_XREFS, m_PE && item && item->Rva != 0);	// the references are known in PE files
 	Frame()->SetStatusText(1, (m_Items.size() == m_Items.TotalSize() ? std::format(L"Strings: {}", m_Items.size()) :
@@ -99,6 +106,13 @@ CStringsView::Item const* CStringsView::GetSelectedItem() const {
 void CStringsView::Scan() {
 	CWaitCursor wait;
 	m_SectionNames.clear();
+	// the methods of a .NET file that load each string
+	if (m_PE && !m_Clr) {
+		m_Clr = std::make_unique<ClrMetadata>();
+		if (m_Clr->Parse(*m_PE) && m_Clr->HasMetadata())
+			for (auto& use : FindIlStringUses(*m_PE, *m_Clr))
+				m_ClrUses[use.Rva].push_back(use.Method);
+	}
 	if (m_Elf)
 		ScanElf(FindStrings(m_Elf->Data(), m_Options));
 	else
@@ -182,18 +196,84 @@ void CStringsView::ScanPE(std::vector<FoundString>&& strings) {
 		// between sections (alignment padding) or in a section's data that is not mapped
 		if (item.Section == -2 && item.Offset < dataEnd)
 			continue;
+		item.Uses = item.Rva ? CountUses(item.Rva) : 0;
 		items.push_back(std::move(item));
 	}
 	m_Items.Set(std::move(items));
 }
 
+uint32_t CStringsView::CountUses(uint64_t rva) const {
+	if (auto it = m_ClrUses.find((uint32_t)rva); it != m_ClrUses.end())
+		return (uint32_t)it->second.size();
+	if (!m_PE || !Frame()->XrefsReady() || ILOnly())
+		return 0;
+	// the code that uses a string refers to it as data: a call or jump to it would be to code that looks like text
+	auto refs = Frame()->GetXrefs().To(m_PE->GetImageBase() + rva);
+	return (uint32_t)std::count_if(refs.begin(), refs.end(), [](Xref const& ref) { return ref.Kind == XrefKind::Data; });
+}
+
+// a .NET file without native code: what the disassembly of its sections finds is not code
+bool CStringsView::ILOnly() const {
+	return m_Clr && m_Clr->HasHeader() && (m_Clr->Header().Flags & COMIMAGE_FLAGS_ILONLY);
+}
+
+// the functions (or methods) that use a string, each once: the first few of them
+std::wstring const& CStringsView::UsedBy(Item const& item) const {
+	if (item.Resolved || item.Uses == 0)
+		return item.UsedBy;
+	item.Resolved = true;
+	std::vector<std::wstring> names;
+	auto add = [&](std::wstring name) {
+		if (std::find(names.begin(), names.end(), name) == names.end())
+			names.push_back(std::move(name));
+	};
+	if (auto it = m_ClrUses.find((uint32_t)item.Rva); it != m_ClrUses.end()) {
+		for (auto m : it->second) {
+			auto& method = m_Clr->Methods()[m - 1];
+			add(method.Type ? m_Clr->FullName(method.Type) + L"::" + method.Name : method.Name);
+		}
+	}
+	else if (m_PE && Frame()->XrefsReady() && !ILOnly()) {
+		auto& xrefs = Frame()->GetXrefs();
+		for (auto& ref : xrefs.To(m_PE->GetImageBase() + item.Rva)) {
+			if (ref.Kind != XrefKind::Data)
+				continue;
+			auto start = FindFunctionStart(*m_PE, xrefs, ref.From);
+			auto name = start ? Frame()->ResolveVa(start) : std::wstring();
+			add(name.empty() ? std::format(L"sub_{:X}", start ? start : ref.From) : name);
+		}
+	}
+	const size_t max = 4;
+	for (size_t i = 0; i < names.size() && i < max; i++)
+		item.UsedBy += (i ? L", " : L"") + names[i];
+	if (names.size() > max)
+		item.UsedBy += std::format(L" (+{} more)", names.size() - max);
+	return item.UsedBy;
+}
+
+void CStringsView::XrefsChanged() {
+	if (m_PE && !ILOnly())
+		Scan();
+}
+
+LRESULT CStringsView::OnUsedOnly(WORD, WORD, HWND, BOOL&) {
+	m_UsedOnly = !m_UsedOnly;
+	UISetCheck(ID_STRINGS_USEDONLY, m_UsedOnly);
+	ApplyFilter();
+	return 0;
+}
+
 void CStringsView::ApplyFilter() {
-	if (m_FilterText.IsEmpty())
+	if (m_FilterText.IsEmpty() && !m_UsedOnly)
 		m_Items.Filter(nullptr);
 	else {
 		CString filter(m_FilterText);
 		filter.MakeLower();
 		m_Items.Filter([&](Item const& item, size_t) {
+			if (m_UsedOnly && item.Uses == 0)
+				return false;
+			if (filter.IsEmpty())
+				return true;
 			CString text(item.Text.c_str());
 			text.MakeLower();
 			return text.Find(filter) >= 0;
@@ -210,6 +290,8 @@ LRESULT CStringsView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 		{ ID_STRINGS_UTF16, 0, BTNS_CHECK | BTNS_SHOWTEXT, L"UTF-16" },
 		{ 0 },
 		{ ID_STRINGS_MINLENGTH, 0, BTNS_DROPDOWN | BTNS_WHOLEDROPDOWN | BTNS_SHOWTEXT, L"Minimum Length" },
+		{ 0 },
+		{ ID_STRINGS_USEDONLY, 0, BTNS_CHECK | BTNS_SHOWTEXT, L"Used Only" },
 	};
 	CreateSimpleReBar(ATL_SIMPLE_REBAR_NOBORDER_STYLE);
 	m_tb = ToolbarHelper::CreateAndInitToolBar(m_hWnd, buttons, _countof(buttons), 16);
@@ -247,6 +329,8 @@ LRESULT CStringsView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	cm->AddColumn(L"Section", LVCFMT_LEFT, 80);
 	cm->AddColumn(L"Encoding", LVCFMT_LEFT, 70);
 	cm->AddColumn(L"Length", LVCFMT_RIGHT, 60);
+	cm->AddColumn(L"Uses", LVCFMT_RIGHT, 50);
+	cm->AddColumn(L"Used By", LVCFMT_LEFT, 250);
 	cm->AddColumn(L"Text", LVCFMT_LEFT, 700);
 
 	Scan();

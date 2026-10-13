@@ -7,6 +7,7 @@
 #include "ScintillaView.h"
 #include <lexilla/Lexilla.h>
 #include <lexilla/SciLexer.h>
+#include "ClrIL.h"
 #include <lexilla/lexlib/LexerModule.h>
 #include <WTLHelper.h>
 #include "PEStrings.h"
@@ -334,6 +335,12 @@ bool CScintillaView::Follow(int line) {
 }
 
 BOOL CScintillaView::PreTranslateMessage(MSG* pMsg) {
+	if (pMsg->message == WM_KEYDOWN && m_LineAction && m_Sci.m_hWnd && pMsg->hwnd == m_Sci.m_hWnd && pMsg->wParam == VK_RETURN &&
+		::GetKeyState(VK_CONTROL) >= 0 && ::GetKeyState(VK_MENU) >= 0 && ::GetKeyState(VK_SHIFT) >= 0) {
+		if (!m_LineAction(CurrentLine()))
+			::MessageBeep(MB_ICONWARNING);
+		return TRUE;
+	}
 	if (pMsg->message == WM_KEYDOWN && m_Language == LexLanguage::Asm && m_Sci.m_hWnd && pMsg->hwnd == m_Sci.m_hWnd &&
 		(pMsg->wParam == VK_RETURN || pMsg->wParam == 'X' || pMsg->wParam == 'G') &&
 		::GetKeyState(VK_CONTROL) >= 0 && ::GetKeyState(VK_MENU) >= 0 && ::GetKeyState(VK_SHIFT) >= 0) {
@@ -355,8 +362,18 @@ BOOL CScintillaView::PreTranslateMessage(MSG* pMsg) {
 
 LRESULT CScintillaView::OnDoubleClick(int, LPNMHDR pnmh, BOOL& handled) {
 	auto line = (int)m_Sci.LineFromPosition(((SCNotification*)pnmh)->position);
-	handled = Follow(line);
+	handled = m_LineAction ? m_LineAction(line) : Follow(line);
 	return 0;
+}
+
+LRESULT CScintillaView::OnGoToDefinition(WORD, WORD, HWND, BOOL&) {
+	if (m_LineAction && !m_LineAction(m_ContextLine >= 0 ? m_ContextLine : CurrentLine()))
+		::MessageBeep(MB_ICONWARNING);
+	return 0;
+}
+
+void CScintillaView::SetLineAction(LineAction action) {
+	m_LineAction = std::move(action);
 }
 
 LRESULT CScintillaView::OnFollow(WORD, WORD, HWND, BOOL&) {
@@ -440,6 +457,7 @@ void CScintillaView::SetLanguage(LexLanguage lang) {
 	extern LexerModule lmAsm;
 	extern LexerModule lmXML;
 	extern LexerModule lmInf;
+	extern LexerModule lmIl;
 	extern const LexerModule lmCPP;	// C, C++ and C# (from the Lexilla library, where it is const): the keywords tell them apart
 
 	m_Language = lang;
@@ -468,6 +486,10 @@ void CScintillaView::SetLanguage(LexLanguage lang) {
 
 		case LexLanguage::Inf:
 			m_Sci.SetLexer(lmInf.Create());
+			break;
+
+		case LexLanguage::IL:
+			m_Sci.SetLexer(lmIl.Create());
 			break;
 
 		case LexLanguage::C:
@@ -566,6 +588,18 @@ void CScintillaView::UpdateColors() {
 			m_Sci.StyleSetBold((int)InfStyle::RootKey, true);
 			break;
 
+		case LexLanguage::IL:
+			m_Sci.StyleSetFore((int)IlStyle::Comment, dark ? RGB(87, 166, 74) : RGB(0, 128, 0));
+			m_Sci.StyleSetFore((int)IlStyle::String, dark ? RGB(214, 157, 133) : RGB(163, 21, 21));
+			m_Sci.StyleSetFore((int)IlStyle::Label, RGB(128, 128, 128));
+			m_Sci.StyleSetFore((int)IlStyle::Opcode, dark ? RGB(240, 100, 100) : RGB(160, 0, 0));
+			m_Sci.StyleSetFore((int)IlStyle::Directive, dark ? RGB(200, 120, 255) : RGB(128, 0, 128));
+			m_Sci.StyleSetBold((int)IlStyle::Directive, true);
+			m_Sci.StyleSetFore((int)IlStyle::Keyword, dark ? RGB(86, 156, 214) : RGB(0, 0, 255));
+			m_Sci.StyleSetFore((int)IlStyle::Type, dark ? RGB(78, 201, 176) : RGB(43, 145, 175));
+			m_Sci.StyleSetFore((int)IlStyle::Number, dark ? RGB(181, 206, 168) : RGB(9, 134, 88));
+			break;
+
 		case LexLanguage::C:
 		case LexLanguage::Cpp:
 		case LexLanguage::CSharp:
@@ -623,7 +657,7 @@ LRESULT CScintillaView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
 		x = pt.x;
 		y = pt.y;
 	}
-	if (m_Language == LexLanguage::Asm && pos >= 0)
+	if ((m_Language == LexLanguage::Asm || m_LineAction) && pos >= 0)
 		m_ContextLine = (int)m_Sci.LineFromPosition(pos);
 	UpdateUI();
 	CMenu menu;
@@ -646,6 +680,10 @@ LRESULT CScintillaView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
 			sub.InsertMenu(0, MF_BYPOSITION | MF_STRING, ID_CODE_DISASSEMBLE, (L"Dis&assemble " + shown).c_str());
 			sub.InsertMenu(0, MF_BYPOSITION | MF_STRING, ID_CODE_DECOMPILE, (L"&Decompile " + shown).c_str());
 		}
+	}
+	if (m_LineAction) {
+		sub.InsertMenu(0, MF_BYPOSITION | MF_SEPARATOR);
+		sub.InsertMenu(0, MF_BYPOSITION | MF_STRING, ID_CODE_GOTODEFINITION, L"&Go to Definition\tEnter");
 	}
 	// the function of the view: its disassembly and C side by side
 	if (m_Function && !m_Notify && (m_Language == LexLanguage::Asm || m_Language == LexLanguage::C)) {

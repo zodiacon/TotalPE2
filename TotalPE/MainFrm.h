@@ -81,6 +81,7 @@ public:
 		COMMAND_ID_HANDLER(ID_VIEW_OVERLAY, OnViewOverlay)
 		COMMAND_ID_HANDLER(ID_PE_STRINGS, OnViewStrings)
 		COMMAND_ID_HANDLER(ID_PE_FUNCTIONS, OnViewFunctions)
+		COMMAND_ID_HANDLER(ID_PE_CLRTYPES, OnViewClrTypes)
 		COMMAND_ID_HANDLER(ID_FILE_SAVE, OnFileSave)
 		COMMAND_ID_HANDLER(ID_FILE_EXPORTLIST, OnFileExportList)
 		COMMAND_ID_HANDLER(ID_PE_SECURITY, OnViewSecurity)
@@ -263,6 +264,7 @@ private:
 	LRESULT OnViewOverlay(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewStrings(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewFunctions(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnViewClrTypes(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnFileSave(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnFileExportList(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	void UpdateSaveUI();

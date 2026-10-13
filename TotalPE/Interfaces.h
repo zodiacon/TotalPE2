@@ -145,6 +145,8 @@ enum class TreeItemType : int64_t {
 	Functions,
 	// the callers and callees of a function (the index is its RVA)
 	CallGraph,
+	// the types of a .NET file and the IL of their methods
+	ClrTypes,
 
 	ItemMask = 255,
 };

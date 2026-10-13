@@ -137,6 +137,9 @@
     <ClCompile Include="FunctionsView.cpp">
       <Filter>Views</Filter>
     </ClCompile>
+    <ClCompile Include="ClrTypesView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
     <ClCompile Include="CallGraphView.cpp">
       <Filter>Views</Filter>
     </ClCompile>
@@ -168,6 +171,9 @@
       <Filter>Lexers</Filter>
     </ClCompile>
     <ClCompile Include="LexInf.cxx">
+      <Filter>Lexers</Filter>
+    </ClCompile>
+    <ClCompile Include="LexIl.cxx">
       <Filter>Lexers</Filter>
     </ClCompile>
     <ClCompile Include="IATView.cpp">
@@ -355,6 +361,9 @@
       <Filter>Views</Filter>
     </ClInclude>
     <ClInclude Include="FunctionsView.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="ClrTypesView.h">
       <Filter>Views</Filter>
     </ClInclude>
     <ClInclude Include="CallGraphView.h">

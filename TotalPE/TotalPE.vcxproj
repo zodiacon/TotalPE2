@@ -381,6 +381,7 @@
     <ClCompile Include="LexAsm.cxx" />
     <ClCompile Include="LexHTML.cxx" />
     <ClCompile Include="LexInf.cxx" />
+    <ClCompile Include="LexIl.cxx" />
     <ClCompile Include="LoadConfigView.cpp" />
     <ClCompile Include="MainFrm.cpp" />
     <ClCompile Include="pch.cpp">
@@ -416,6 +417,7 @@
     <ClCompile Include="SideBySideView.cpp" />
     <ClCompile Include="DecompilerThread.cpp" />
     <ClCompile Include="FunctionsView.cpp" />
+    <ClCompile Include="ClrTypesView.cpp" />
     <ClCompile Include="CallGraphView.cpp" />
     <ClCompile Include="SectionsView.cpp" />
     <ClCompile Include="SecurityHelper.cpp" />
@@ -490,6 +492,7 @@
     <ClInclude Include="SideBySideView.h" />
     <ClInclude Include="DecompilerThread.h" />
     <ClInclude Include="FunctionsView.h" />
+    <ClInclude Include="ClrTypesView.h" />
     <ClInclude Include="CallGraphView.h" />
     <ClInclude Include="SectionsView.h" />
     <ClInclude Include="SecurityHelper.h" />
