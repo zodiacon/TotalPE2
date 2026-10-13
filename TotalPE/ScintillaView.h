@@ -106,6 +106,7 @@ public:
 		COMMAND_ID_HANDLER(ID_CODE_DISASSEMBLE_HERE, OnCodeLink)
 		COMMAND_ID_HANDLER(ID_CODE_SIDEBYSIDE, OnSideBySide)
 		COMMAND_ID_HANDLER(ID_CODE_GOTODEFINITION, OnGoToDefinition)
+		COMMAND_ID_HANDLER(ID_CODE_WIN32API, OnWin32Api)
 		COMMAND_ID_HANDLER(ID_CODE_RENAME, OnRename)
 		COMMAND_ID_HANDLER(ID_CODE_RETYPE, OnRename)
 		COMMAND_ID_HANDLER(ID_HEX_BOOKMARK_TOGGLE, OnAnnotate)
@@ -156,6 +157,8 @@ private:
 	LRESULT OnSideBySide(WORD, WORD, HWND, BOOL&);
 	LRESULT OnGoToDefinition(WORD, WORD, HWND, BOOL&);
 	LRESULT OnRename(WORD, WORD id, HWND, BOOL&);
+	LRESULT OnWin32Api(WORD, WORD, HWND, BOOL&);
+	std::wstring m_ContextApi;	// a function or type of Windows the context menu was opened on
 	// renames (or retypes) a variable or function by the name the code shows; false if it is neither
 	bool Rename(std::wstring const& name, bool type);
 	GhidraDecompiler::Variable const* VariableNamed(std::wstring const& name) const;

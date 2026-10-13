@@ -344,6 +344,10 @@ BEGIN
         MENUITEM "Upload to &VirusTotal...",    ID_PE_VIRUSTOTAL
         MENUITEM "VirusTotal API &Key...",      ID_PE_VTAPIKEY
     END
+    POPUP "&Tools"
+    BEGIN
+        MENUITEM "&Windows API",                ID_PE_WIN32API
+    END
     POPUP "&Options"
     BEGIN
         MENUITEM "&Always On Top",              ID_OPTIONS_ALWAYSONTOP
@@ -847,6 +851,8 @@ BEGIN
     ID_CODE_RETYPE          "Change the type of the variable under the caret\nChange Type"
     ID_NAV_BOOKMARKS        "The bookmarks of the file\nBookmarks"
     ID_NAV_COMMENT          "Comment the instruction of the caret\nComment"
+    ID_PE_WIN32API          "The functions and types of Windows, with their declarations\nWindows API"
+    ID_WIN32_IMPORTS        "Only the functions the file imports\nImports"
 END
 
 STRINGTABLE

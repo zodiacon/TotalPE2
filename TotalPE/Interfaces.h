@@ -155,6 +155,8 @@ enum class TreeItemType : int64_t {
 	SecuritySummary,
 	// the user's bookmarks of the file
 	Bookmarks,
+	// the functions and types of Windows (from the Win32 metadata)
+	Win32Api,
 
 	ItemMask = 255,
 };
@@ -226,6 +228,9 @@ struct IMainFrame abstract {
 	virtual bool SetBookmark(uint64_t va, std::wstring const& name) = 0;
 	virtual bool RemoveBookmark(uint64_t va) = 0;
 	virtual bool ShowBookmarks() = 0;
+	// The Windows API view, at a function or type (by its name); whether the Win32 metadata has one of the name
+	virtual bool ShowWin32Api(std::string const& name) = 0;
+	virtual bool IsWin32Api(std::string const& name) = 0;
 	// A view in place of another ("in the same window"): 'open' opens it (as DecompileFunction does), then it takes the
 	// place of the view, which is closed. Nothing is closed if 'open' fails, or brings up the view itself.
 	virtual bool ReplaceView(HWND hView, std::function<bool()> const& open) = 0;

@@ -108,6 +108,7 @@ public:
 		COMMAND_ID_HANDLER(ID_NAV_BACK, OnNavBack)
 		COMMAND_ID_HANDLER(ID_NAV_FORWARD, OnNavForward)
 		COMMAND_ID_HANDLER(ID_NAV_BOOKMARKS, OnViewBookmarks)
+		COMMAND_ID_HANDLER(ID_PE_WIN32API, OnViewWin32Api)
 		COMMAND_ID_HANDLER(ID_NAV_COMMENT, OnNotInView)
 		COMMAND_ID_HANDLER(ID_HEX_BOOKMARK_TOGGLE, OnNotInView)
 		MESSAGE_HANDLER(WM_SYMBOLS_LOADED, OnSymbolsLoaded)
@@ -301,6 +302,11 @@ private:
 	bool SetBookmark(uint64_t va, std::wstring const& name) override;
 	bool RemoveBookmark(uint64_t va) override;
 	bool ShowBookmarks() override;
+	bool ShowWin32Api(std::string const& name) override;
+	bool IsWin32Api(std::string const& name) override;
+	// the Win32 API of the file's machine; null if there is no metadata (or no PE file)
+	Win32Api* Win32ForFile() const;
+	LRESULT OnViewWin32Api(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	// the views show the comments and bookmarks again (and, if the comments changed, the code is decompiled again)
 	void NotifyAnnotationsChanged(bool comments);
 	LRESULT OnViewBookmarks(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);

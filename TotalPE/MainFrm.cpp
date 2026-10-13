@@ -7,6 +7,7 @@
 #include "AboutDlg.h"
 #include "MainFrm.h"
 #include "InputDlg.h"
+#include "Win32ApiView.h"
 #include <IconHelper.h>
 #include "SecurityHelper.h"
 #include <ToolbarHelper.h>
@@ -28,7 +29,7 @@
 #include <thread>
 #include <WTLHelper.h>
 
-const int WindowMenuPosition = 5;
+const int WindowMenuPosition = 6;	// File, Edit, View, PE, Tools, Options, Window
 
 BOOL CMainFrame::PreTranslateMessage(MSG* pMsg) {
 	if (m_pFindDlg && m_pFindDlg->IsDialogMessageW(pMsg))
@@ -119,6 +120,9 @@ void CMainFrame::UpdateUI() {
 	UIEnable(ID_PE_FUNCTIONS, fi && ArchOf(m_PE));
 	UIEnable(ID_PE_CLRTYPES, fi && FindTreeItem(TreeItemType::ClrTypes) != nullptr);
 	UIEnable(ID_PE_SECURITYSUMMARY, fi != nullptr);
+	// (of no file: whenever the metadata is there)
+	static bool const metadata = ::GetFileAttributesW(Win32Api::MetadataPath().c_str()) != INVALID_FILE_ATTRIBUTES;
+	UIEnable(ID_PE_WIN32API, metadata);
 	UIEnable(ID_VIEW_MANIFEST, fi && m_hResManifest != nullptr);
 	UIEnable(ID_VIEW_VERSION, fi && m_hResVersion != nullptr);
 	UIEnable(ID_VIEW_OVERLAY, fi && m_hOverlay != nullptr);
@@ -1354,6 +1358,8 @@ void CMainFrame::BuildTree(int iconSize) {
 	InsertTreeItem(m_Tree, std::format(L"Anomalies ({})", m_Anomalies.size()).c_str(), GetTreeIcon(IDI_EXCEPTION), TreeItemType::Anomalies, root);
 	InsertTreeItem(m_Tree, L"Security Summary", GetTreeIcon(IDI_SECURITY), TreeItemType::SecuritySummary, root);
 	InsertTreeItem(m_Tree, L"Bookmarks", GetTreeIcon(IDI_BOOKMARK), TreeItemType::Bookmarks, root);
+	if (::GetFileAttributesW(Win32Api::MetadataPath().c_str()) != INVALID_FILE_ATTRIBUTES)
+		InsertTreeItem(m_Tree, L"Windows API", GetTreeIcon(IDI_FUNCTION2), TreeItemType::Win32Api, root);
 	m_hOverlay = nullptr;
 	if (!m_Overlay.Empty())
 		m_hOverlay = InsertTreeItem(m_Tree, L"Overlay", GetTreeIcon(IDI_BINARY), TreeItemType::Overlay, root);
@@ -3097,6 +3103,57 @@ void CMainFrame::NotifyAnnotationsChanged(bool comments) {
 		view->AnnotationsChanged();
 	if (comments)
 		RedecompileViews();
+}
+
+Win32Api* CMainFrame::Win32ForFile() const {
+	// without a file: of this computer's machine
+	if (!m_PE) {
+#ifdef _M_ARM64
+		return Win32Api::Get(Win32Api::Machine::Arm64);
+#else
+		return Win32Api::Get(Win32Api::Machine::X64);
+#endif
+	}
+	auto machine = m_PE.GetNTHeader()->NTHdr32.FileHeader.Machine;
+	return Win32Api::Get(machine == IMAGE_FILE_MACHINE_I386 ? Win32Api::Machine::X86 :
+		machine == IMAGE_FILE_MACHINE_ARM64 ? Win32Api::Machine::Arm64 : Win32Api::Machine::X64);
+}
+
+bool CMainFrame::IsWin32Api(std::string const& name) {
+	auto api = Win32ForFile();
+	return api && api->Find(name);
+}
+
+bool CMainFrame::ShowWin32Api(std::string const& name) {
+	// (it is not of the file: without one, it has no node in the tree)
+	if (!Win32ForFile())
+		return false;
+	RecordNavigation();
+	auto hItem = FindTreeItem(TreeItemType::Win32Api);
+	// without a file, the images of the views are not there yet (the tree makes them)
+	if (!hItem && BuildTreeImageList(16)) {
+		m_Tree.SetImageList(m_TreeImages);
+		m_Tabs.SetImageList(m_TreeImages);
+	}
+	if (!(hItem ? ShowView(hItem) : ShowView(TreeItemType::Win32Api, nullptr, IDI_FUNCTION2)))
+		return false;
+	auto it = m_Views.find(TreeItemType::Win32Api);
+	auto view = it == m_Views.end() ? nullptr : dynamic_cast<CWin32ApiView*>(it->second);
+	bool shown = view && (name.empty() || view->Select(name));
+	RecordNavigation();
+	return shown;
+}
+
+LRESULT CMainFrame::OnViewWin32Api(WORD, WORD, HWND, BOOL&) {
+	if (ShowWin32Api({}))
+		return 0;
+	if (::GetFileAttributesW(Win32Api::MetadataPath().c_str()) == INVALID_FILE_ATTRIBUTES)
+		AtlMessageBox(m_hWnd, L"The Win32 metadata (Windows.Win32.winmd) is not next to TotalPE.exe: GetWin32Metadata.ps1 gets it.",
+			IDR_MAINFRAME, MB_ICONINFORMATION);
+	else
+		AtlMessageBox(m_hWnd, std::format(L"The Win32 metadata could not be read from {}", Win32Api::MetadataPath()).c_str(),
+			IDR_MAINFRAME, MB_ICONWARNING);
+	return 0;
 }
 
 LRESULT CMainFrame::OnViewBookmarks(WORD, WORD, HWND, BOOL&) {

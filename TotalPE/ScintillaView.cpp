@@ -719,6 +719,16 @@ LRESULT CScintillaView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
 		sub.InsertMenu(0, MF_BYPOSITION | MF_SEPARATOR);
 		sub.InsertMenu(0, MF_BYPOSITION | MF_STRING, ID_CODE_GOTODEFINITION, L"&Go to Definition\tEnter");
 	}
+	// a function or type of Windows under the mouse: its declaration
+	m_ContextApi.clear();
+	if (m_Language == LexLanguage::C && pos >= 0) {
+		auto name = NameAt(pos);
+		if (!name.empty() && Frame()->IsWin32Api(std::string(CW2A(name.c_str())))) {
+			m_ContextApi = name;
+			sub.InsertMenu(0, MF_BYPOSITION | MF_SEPARATOR);
+			sub.InsertMenu(0, MF_BYPOSITION | MF_STRING, ID_CODE_WIN32API, (L"Show " + name + L" in &Windows API").c_str());
+		}
+	}
 	// a variable (or a function) of the decompiled code under the mouse: it can be renamed, and a variable retyped
 	m_ContextName.clear();
 	if (m_Language == LexLanguage::C && m_Function && pos >= 0) {
@@ -855,6 +865,12 @@ GhidraDecompiler::Variable const* CScintillaView::VariableNamed(std::wstring con
 		if (v.Name == narrow)
 			return &v;
 	return nullptr;
+}
+
+LRESULT CScintillaView::OnWin32Api(WORD, WORD, HWND, BOOL&) {
+	if (m_ContextApi.empty() || !Frame()->ShowWin32Api(std::string(CW2A(m_ContextApi.c_str()))))
+		::MessageBeep(MB_ICONWARNING);
+	return 0;
 }
 
 LRESULT CScintillaView::OnRename(WORD, WORD id, HWND, BOOL&) {

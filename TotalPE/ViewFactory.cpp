@@ -29,6 +29,7 @@
 #include "ClrTypesView.h"
 #include "SecuritySummaryView.h"
 #include "BookmarksView.h"
+#include "Win32ApiView.h"
 #include "BoundImportView.h"
 #include "GlobalPtrView.h"
 #include "DialogView.h"
@@ -430,6 +431,31 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		case TreeItemType::SecuritySummary:
 		{
 			auto view = new CSecuritySummaryView(this, m_PE);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::Win32Api:
+		{
+			auto api = Win32ForFile();
+			if (!api)
+				return {};
+			// the names of the functions the file imports (for the filter of imports)
+			std::unordered_set<std::string> imports;
+			if (auto list = m_PE ? m_PE.GetImport() : nullptr)
+				for (auto const& mod : *list)
+					for (auto const& fn : mod.ImportFunc)
+						if (!fn.FuncName.empty())
+							imports.insert(fn.FuncName);
+			if (auto list = m_PE ? m_PE.GetDelayImport() : nullptr)
+				for (auto const& mod : *list)
+					for (auto const& fn : mod.DelayImpFunc)
+						if (!fn.FuncName.empty())
+							imports.insert(fn.FuncName);
+			auto view = new CWin32ApiView(this, m_PE, *api, std::move(imports));
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};

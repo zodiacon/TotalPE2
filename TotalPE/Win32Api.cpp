@@ -465,3 +465,244 @@ uint32_t Win32Api::TypeByName(std::string const& name) {
 	}
 	return 0;
 }
+
+//
+// What the metadata has, to look at
+//
+
+PCWSTR Win32Api::KindName(Entry::Kinds kind) {
+	static PCWSTR const names[] = { L"Function", L"Enum", L"Struct", L"Union", L"Typedef", L"Callback", L"Interface" };
+	return names[(int)kind];
+}
+
+std::vector<Win32Api::Entry> const& Win32Api::Entries() {
+	if (!m_Entries.empty())
+		return m_Entries;
+	auto& md = m_Data.Md;
+	for (auto const& [name, methods] : m_Data.Functions)
+		for (auto m : methods) {
+			if (!OfMachine((ClrTableId::MethodDef << 24) | m))
+				continue;
+			auto native = md.PInvoke(m);
+			auto module = native ? Narrow(native->Module) : std::string();
+			// one that is exported by its ordinal only ("#660"): by the metadata's name, with the ordinal
+			if (name.starts_with("#"))
+				m_Entries.push_back({ Narrow(md.Methods()[m - 1].Name), Entry::Kinds::Function, module + " " + name, m });
+			else
+				m_Entries.push_back({ name, Entry::Kinds::Function, module, m });
+		}
+	for (uint32_t row = 1; row <= md.Types().size(); row++) {
+		auto const& t = md.Types()[row - 1];
+		if (t.Enclosing)
+			continue;
+		auto kind = md.TypeKind(row);
+		Entry::Kinds entry;
+		if (kind == L"enum")
+			entry = Entry::Kinds::Enum;
+		else if (kind == L"delegate")
+			entry = Entry::Kinds::Callback;
+		else if (kind == L"interface")
+			entry = Entry::Kinds::Interface;
+		else if (kind == L"struct") {
+			bool typedefOf = false;
+			for (auto const& attribute : md.CustomAttributes((ClrTableId::TypeDef << 24) | row))
+				typedefOf |= md.TypeName(attribute.AttributeType).ends_with(L"NativeTypedefAttribute");
+			entry = typedefOf ? Entry::Kinds::Typedef : (t.Flags & 0x18) == 0x10 ? Entry::Kinds::Union : Entry::Kinds::Struct;
+		}
+		else
+			continue;	// the classes of the functions and constants, attributes
+		if (ForMachine(row) != row)
+			continue;	// (a type defined for another machine)
+		auto where = Narrow(t.Namespace);
+		if (where.starts_with("Windows.Win32."))
+			where = where.substr(14);
+		m_Entries.push_back({ Narrow(t.Name), entry, where, row });
+	}
+	std::stable_sort(m_Entries.begin(), m_Entries.end(), [](auto const& a, auto const& b) { return _stricmp(a.Name.c_str(), b.Name.c_str()) < 0; });
+	for (size_t i = 0; i < m_Entries.size(); i++)
+		m_EntryIndex.try_emplace(m_Entries[i].Name, i);
+	return m_Entries;
+}
+
+Win32Api::Entry const* Win32Api::Find(std::string const& name) {
+	Entries();
+	auto it = m_EntryIndex.find(name);
+	return it == m_EntryIndex.end() ? nullptr : &m_Entries[it->second];
+}
+
+std::string Win32Api::TypeText(uint32_t id) {
+	if (id == 0)
+		return "void";
+	GhidraDecompiler::Type type;
+	if (!Describe(id, type))
+		return "?";
+	auto number = [&] {
+		if (type.Kind == Kind::Float)
+			return std::string(type.Size == 4 ? "float" : "double");
+		if (type.Kind == Kind::Boolean)
+			return std::string("bool");
+		if (type.Kind == Kind::Char)
+			return std::string(type.Size == 2 ? "wchar_t" : "char");
+		if (type.Kind == Kind::Unknown)
+			return std::format("undef{}", type.Size);
+		static char const* const names[] = { "char", "short", "int", "longlong" };
+		int index = type.Size == 1 ? 0 : type.Size == 2 ? 1 : type.Size == 4 ? 2 : 3;
+		return std::string(type.Signed ? "" : "u") + names[index];
+	};
+	switch (type.Kind) {
+		case Kind::Pointer:
+		{
+			// a callback is named by its delegate
+			if (!(id & MadeBit))
+				return Name(id & ~IdBit);
+			auto target = TypeText(type.Target);
+			return target + (target.ends_with("*") ? "*" : " *");
+		}
+		case Kind::Array:
+			return std::format("{}[{}]", TypeText(type.Target), type.Count);
+		case Kind::Function:
+			return "function";
+		case Kind::Struct: case Kind::Union: case Kind::Enum: case Kind::Typedef:
+			return type.Name.empty() ? number() : type.Name;
+		default:
+			return number();
+	}
+}
+
+std::string Win32Api::Referred(uint32_t id) {
+	for (int depth = 0; id && depth < 16; depth++) {
+		if (!(id & MadeBit)) {
+			// (a nested type: the type it is in, which is listed)
+			auto row = id & ~IdBit;
+			auto const& types = m_Data.Md.Types();
+			for (int up = 0; up < 16 && row && row <= types.size() && types[row - 1].Enclosing; up++)
+				row = types[row - 1].Enclosing;
+			return row && row <= types.size() ? Narrow(types[row - 1].Name) : std::string();
+		}
+		GhidraDecompiler::Type type;
+		if (!Describe(id, type) || (type.Kind != Kind::Pointer && type.Kind != Kind::Array))
+			return {};
+		id = type.Target;
+	}
+	return {};
+}
+
+std::string Win32Api::Declaration(Entry const& entry, std::vector<std::string>* lines) {
+	auto& md = m_Data.Md;
+	std::string text;
+	// "HANDLE hFile", "SECURITY_ATTRIBUTES *lpAttributes"
+	auto declare = [](std::string const& type, std::string const& name) {
+		return type + (type.ends_with("*") ? "" : " ") + name;
+	};
+	auto line = [&](std::string const& s, std::string const& type = {}) {
+		text += s + "\r\n";
+		if (lines)
+			lines->push_back(type);
+	};
+	if (lines)
+		lines->clear();
+	// a function (or a method of an interface, or a callback's): "Type Name(\n\tType param, /* in */ ...);"
+	auto signature = [&](uint32_t method, std::string const& name, std::string const& prefix, std::string const& indent) {
+		ClrSigType result;
+		std::vector<ClrSigType> params;
+		if (!md.MethodSigTypes(method, result, params)) {
+			line(indent + prefix + name + "(?);");
+			return;
+		}
+		auto ret = TypeId(result);
+		if (params.empty()) {
+			line(indent + prefix + TypeText(ret) + " " + name + "(void);", Referred(ret));
+			return;
+		}
+		line(indent + prefix + TypeText(ret) + " " + name + "(", Referred(ret));
+		for (size_t i = 0; i < params.size(); i++) {
+			auto id = TypeId(params[i]);
+			auto flags = md.ParamFlags(method, (uint32_t)i + 1);
+			std::string notes;
+			if (flags & 1)
+				notes += "in";
+			if (flags & 2)
+				notes += std::string(notes.empty() ? "" : ", ") + "out";
+			if (flags & 0x10)
+				notes += std::string(notes.empty() ? "" : ", ") + "optional";
+			auto pname = Narrow(md.ParamName(method, (uint32_t)i + 1));
+			line(std::format("{}\t{}{}{}", indent, declare(TypeText(id), pname.empty() ? std::format("param{}", i + 1) : pname),
+				i + 1 < params.size() ? "," : ");", notes.empty() ? "" : "\t// " + notes), Referred(id));
+		}
+	};
+	auto where = std::format("// {}{}", entry.Kind == Entry::Kinds::Function ? "" : "Windows.Win32.", entry.Where);
+
+	switch (entry.Kind) {
+		case Entry::Kinds::Function:
+			line(where);
+			signature(entry.Row, entry.Name, "", "");
+			break;
+
+		case Entry::Kinds::Callback:
+			line(where);
+			for (auto m : md.MethodsOf(entry.Row))
+				if (md.Methods()[m - 1].Name == L"Invoke") {
+					signature(m, "(*" + entry.Name + ")", "typedef ", "");
+					break;
+				}
+			break;
+
+		case Entry::Kinds::Interface:
+		{
+			line(where);
+			std::string bases;
+			for (auto token : md.Interfaces(entry.Row))
+				bases += (bases.empty() ? " : " : ", ") + Narrow(md.TypeName(token).substr(md.TypeName(token).rfind(L'.') + 1));
+			line("interface " + entry.Name + bases);
+			line("{");
+			for (auto m : md.MethodsOf(entry.Row)) {
+				signature(m, Narrow(md.Methods()[m - 1].Name), "", "\t");
+			}
+			line("};");
+			break;
+		}
+
+		default:
+		{
+			GhidraDecompiler::Type type;
+			auto id = IdBit | entry.Row;
+			if (!Describe(id, type)) {
+				line(where);
+				line("// (not described)");
+				break;
+			}
+			line(where);
+			if (type.Kind == Kind::Enum) {
+				line(std::format("enum {} : {}{}", entry.Name, type.Signed ? "" : "u",
+					type.Size == 1 ? "char" : type.Size == 2 ? "short" : type.Size == 8 ? "longlong" : "int"));
+				line(type.Exact ? "{" : "{\t// flags");
+				uint64_t mask = type.Size >= 8 ? ~0ULL : (1ULL << (type.Size * 8)) - 1;
+				for (auto const& [name, value] : type.Values)
+					line(std::format("\t{} = 0x{:X},", name, value & mask));
+				line("};");
+			}
+			else if (type.Kind == Kind::Typedef)
+				line("typedef " + TypeText(type.Target) + " " + entry.Name + ";", Referred(type.Target));
+			else if (type.Kind == Kind::Struct || type.Kind == Kind::Union) {
+				line(std::format("{} {}\t// 0x{:X} bytes", type.Kind == Kind::Union ? "union" : "struct", entry.Name, type.Size));
+				line("{");
+				for (auto const& f : type.Fields) {
+					// an array's count goes after the name
+					GhidraDecompiler::Type ft;
+					auto typeText = TypeText(f.Type);
+					std::string suffix;
+					if (Describe(f.Type, ft) && ft.Kind == Kind::Array) {
+						typeText = TypeText(ft.Target);
+						suffix = std::format("[{}]", ft.Count);
+					}
+					line(std::format("\t/* 0x{:03X} */ {}{};", f.Offset, declare(typeText, f.Name), suffix), Referred(f.Type));
+				}
+				line("};");
+			}
+			else if (type.Kind == Kind::Enum || type.Kind == Kind::Integer)
+				line("typedef " + TypeText(id) + " " + entry.Name + ";");
+			break;
+		}
+	}
+	return text;
+}

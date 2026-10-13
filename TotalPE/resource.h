@@ -261,13 +261,16 @@
 #define ID_CODE_COMMENT                 32916
 #define ID_BOOKMARK_RENAME              32917
 #define ID_BOOKMARK_DELETE              32918
+#define ID_PE_WIN32API                  32919
+#define ID_CODE_WIN32API                32920
+#define ID_WIN32_IMPORTS                32921
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        286
-#define _APS_NEXT_COMMAND_VALUE         32919
+#define _APS_NEXT_COMMAND_VALUE         32922
 #define _APS_NEXT_CONTROL_VALUE         1042
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

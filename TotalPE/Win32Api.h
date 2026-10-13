@@ -35,6 +35,23 @@ public:
 	// a type by its name (a struct, union, enum, typedef: "HANDLE", "SECURITY_ATTRIBUTES"); 0 if there is none
 	uint32_t TypeByName(std::string const& name);
 
+	// What the metadata has, to look at: the functions (of the machine) and the types (not those nested in others)
+	struct Entry {
+		enum class Kinds : uint8_t { Function, Enum, Struct, Union, Typedef, Callback, Interface };
+		std::string Name;
+		Kinds Kind;
+		std::string Where;	// a function's DLL, a type's namespace (without "Windows.Win32.")
+		uint32_t Row;		// MethodDef or TypeDef
+	};
+	std::vector<Entry> const& Entries();
+	static PCWSTR KindName(Entry::Kinds kind);
+	// a function or type by its name (null if there is none)
+	Entry const* Find(std::string const& name);
+	// The C declaration of an entry; 'lines' gets, for each line, the type it refers to (empty for none)
+	std::string Declaration(Entry const& entry, std::vector<std::string>* lines = nullptr);
+	// a type as C writes it ("HANDLE", "WIN32_FIND_DATAW *", "wchar_t[260]")
+	std::string TypeText(uint32_t id);
+
 private:
 	struct Data;
 	Win32Api(Data& data, Machine machine);
@@ -51,6 +68,10 @@ private:
 	// the size and alignment of a type
 	std::pair<uint32_t, uint32_t> Layout(uint32_t id, int depth = 0);
 	std::string Name(uint32_t row);
+	// the type a line refers to: the first one of the metadata in a type
+	std::string Referred(uint32_t id);
+	std::vector<Entry> m_Entries;
+	std::unordered_map<std::string, size_t> m_EntryIndex;
 
 	Data& m_Data;
 	Machine m_Machine;

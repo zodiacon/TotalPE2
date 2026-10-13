@@ -406,6 +406,7 @@
     <ClCompile Include="GoToDlg.cpp" />
     <ClCompile Include="InputDlg.cpp" />
     <ClCompile Include="Win32Api.cpp" />
+    <ClCompile Include="Win32ApiView.cpp" />
     <ClCompile Include="BookmarksView.cpp" />
     <ClCompile Include="HexFind.cpp" />
     <ClCompile Include="HexInspector.cpp" />
@@ -478,6 +479,7 @@
     <ClInclude Include="GoToDlg.h" />
     <ClInclude Include="InputDlg.h" />
     <ClInclude Include="Win32Api.h" />
+    <ClInclude Include="Win32ApiView.h" />
     <ClInclude Include="BookmarksView.h" />
     <ClInclude Include="HexFind.h" />
     <ClInclude Include="HexInspector.h" />
