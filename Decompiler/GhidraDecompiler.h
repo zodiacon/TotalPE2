@@ -55,6 +55,8 @@ public:
 		uint32_t Count{ 0 };		// the elements of an array
 		std::vector<Field> Fields;	// of a struct or union
 		std::vector<std::pair<std::string, uint64_t>> Values;	// of an enum
+		bool Exact{ false };		// an enum whose values are not flags: a value is shown by name only if one has it (an
+									// HRESULT is not the | of others)
 		std::vector<uint32_t> Parameters;	// of a function (an object pointer, "this", first)
 		bool Variadic{ false };		// a function with "..." after its parameters
 	};
@@ -124,7 +126,8 @@ public:
 	// 'name', which is outside the image. Each such function gets an address in an area that the image does not use,
 	// which is set first. 'module' (the DLL, as it is to be shown) is told of a function that only jumps to the import.
 	void SetExternalArea(uint64_t address);
-	void AddImport(uint64_t slot, std::string const& name, std::string const& module = {});
+	// (the address the import is given, which the source of prototypes is asked for; 0 if it was not taken)
+	uint64_t AddImport(uint64_t slot, std::string const& name, std::string const& module = {});
 
 	// Types, prototypes, names and local variables (set before decompiling). The name and prototype of the decompiled function, and
 	// those of the functions it calls, are asked for when it is decompiled: a large program's symbols are not all given

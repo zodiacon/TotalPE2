@@ -485,3 +485,52 @@ TEST_CASE("Comments are shown at their instructions", "[decompiler]") {
 	// at the indentation of the statement after it
 	CHECK_THAT(code, ContainsSubstring("\n  /* the sum */\n"));
 }
+
+TEST_CASE("Imports have prototypes, and the values of enums are named", "[decompiler]") {
+	Fixture f;
+	// DoThing(0x80070005, 3) == 0x80004005 || result == 0x80004007:
+	//   sub rsp, 28h; mov edx, 3; mov ecx, 80070005h; call [slot]; cmp eax, 80004005h; je yes; cmp eax, 80004007h; je yes;
+	//   xor eax, eax; add rsp, 28h; ret; yes: mov eax, 1; add rsp, 28h; ret
+	f.Image.At(Code)
+		.Bytes({ 0x48, 0x83, 0xEC, 0x28, 0xBA, 0x03, 0x00, 0x00, 0x00, 0xB9, 0x05, 0x00, 0x07, 0x80 })
+		.CallThrough(Slots)
+		.Bytes({ 0x3D, 0x05, 0x40, 0x00, 0x80, 0x74, 0x0F, 0x3D, 0x07, 0x40, 0x00, 0x80, 0x74, 0x08,
+			0x31, 0xC0, 0x48, 0x83, 0xC4, 0x28, 0xC3, 0xB8, 0x01, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x28, 0xC3 });
+	using Kind = GhidraDecompiler::TypeKind;
+	f.Decompiler.SetTypeSource([](uint32_t id, GhidraDecompiler::Type& type) {
+		switch (id) {
+			case 1:	// HRESULT: its values are not flags
+				type = { Kind::Enum, "HRESULT", 4, true };
+				type.Values = { { "S_OK", 0 }, { "E_FAIL", 0x80004005 }, { "E_ACCESSDENIED", 0x80070005 }, { "S_FALSE", 1 }, { "X_TWO", 2 } };
+				type.Exact = true;
+				return true;
+			case 2:	// flags
+				type = { Kind::Enum, "OPTIONS", 4, false };
+				type.Values = { { "ONE", 1 }, { "TWO", 2 } };
+				return true;
+			case 3:
+				type = { Kind::Function };
+				type.Target = 1;
+				type.Parameters = { 1, 2 };
+				return true;
+		}
+		return false;
+		});
+	uint64_t doThing = 0;
+	f.Decompiler.SetPrototypeSource([&](uint64_t address, uint32_t& type, std::vector<std::string>& names) {
+		if (address != doThing)
+			return false;
+		type = 3;
+		names = { "code", "options" };
+		return true;
+		});
+	f.Open();
+	doThing = f.Decompiler.AddImport(Slots, "DoThing", "THING.dll");
+	REQUIRE(doThing != 0);
+	auto code = f.Decompile(Code, "Caller");
+	CHECK_THAT(code, ContainsSubstring("DoThing(E_ACCESSDENIED,ONE|TWO)") || ContainsSubstring("DoThing(E_ACCESSDENIED,TWO|ONE)"));
+	CHECK_THAT(code, ContainsSubstring("E_FAIL"));
+	// a value that is no one name is a number, not the | of names that make it up (E_FAIL | X_TWO)
+	CHECK(code.find("X_TWO") == std::string::npos);
+	CHECK_THAT(code, ContainsSubstring("0x80004007") || ContainsSubstring("-0x7fffbff9"));
+}

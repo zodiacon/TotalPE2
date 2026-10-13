@@ -7,6 +7,7 @@
 #include "DockViews.h"
 #include <GhidraDecompiler.h>
 #include <Annotations.h>
+#include "Win32Api.h"
 #include <TabViewHelper.h>
 #include <CustomSplitterWindow.h>
 #include <TreeViewHelper.h>
@@ -336,8 +337,11 @@ private:
 			uint64_t Slot;		// in the import address table
 			std::string Name;
 			std::string Module;	// the DLL, and for an API set the DLL that implements it
+			std::string Dll;	// the DLL as the file names it
 		};
 		std::vector<Import> Imports;
+		std::unordered_map<uint64_t, size_t> ImportAt;	// the imports by the addresses the decompiler gave them
+		Win32Api* Win32{ nullptr };	// the prototypes of the functions of Windows (if the metadata is there)
 		std::vector<std::pair<uint64_t, uint64_t>> ReadOnly;	// the sections that are not written (address, size)
 		struct Global {
 			uint64_t Address;
@@ -395,6 +399,11 @@ private:
 	// the decompiler's types and prototypes from the symbols: a type by its symbol's id, the prototype of a function
 	bool DescribeType(uint32_t id, GhidraDecompiler::Type& type) const;
 	bool FunctionPrototype(uint64_t va, uint32_t& type, std::vector<std::string>& parameterNames) const;
+	// the import a function only jumps to (a thunk: jmp [slot]), by its slot; null if it is not one
+	DecompilerSession::Import const* ThunkImport(uint64_t va) const;
+	std::string ExportName(uint64_t va) const;
+	std::string FileModuleName() const;
+	bool IsWindowsFile() const;
 	// the local variables of a function on the stack, from the symbols (of private symbols)
 	bool FunctionLocals(uint64_t va, std::vector<GhidraDecompiler::Local>& locals) const;
 	// the frame an x64 function's prologue makes, from its unwind information: its size (what is pushed and allocated), and

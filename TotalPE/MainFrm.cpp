@@ -2140,6 +2140,12 @@ bool CMainFrame::DescribeType(uint32_t id, GhidraDecompiler::Type& type) const {
 			type.Name = Narrow(sym.Name());
 			if (auto target = sym.Type())
 				type.Target = target.Id();
+			// HRESULT and NTSTATUS: with the names of their values, from the Win32 metadata
+			if ((type.Name == "HRESULT" || type.Name == "NTSTATUS") && m_Decompiler && m_Decompiler->Win32) {
+				GhidraDecompiler::Type codes;
+				if (auto id = m_Decompiler->Win32->TypeByName(type.Name); id && m_Decompiler->Win32->Describe(id, codes) && codes.Kind == Kind::Enum)
+					type = codes;
+			}
 			break;
 
 		case SymbolTag::FunctionType:
@@ -2187,6 +2193,49 @@ std::string CMainFrame::DecompilerFunctionName(uint64_t va) const {
 	if (name.empty() || name[0] == L'<' || name.find(L"+0x") != std::wstring::npos)
 		return {};		// none, a marker ("<entry point>") or a place inside a function
 	return Narrow(FunctionName(name));
+}
+
+// The name an export of the file has at an address (empty if none), and the name of the file as a DLL ("kernel32.dll")
+std::string CMainFrame::ExportName(uint64_t va) const {
+	uint32_t rva;
+	auto exp = m_PE ? m_PE.GetExport() : nullptr;
+	if (!exp || !RvaOf(va, rva))
+		return {};
+	for (auto const& f : exp->Funcs)
+		if (f.FuncRVA == rva && f.ForwarderName.empty() && !f.FuncName.empty())
+			return f.FuncName;
+	return {};
+}
+
+// a file of the Windows folder (System32, SysWOW64...)
+bool CMainFrame::IsWindowsFile() const {
+	WCHAR windows[MAX_PATH];
+	if (!m_PE || !::GetWindowsDirectoryW(windows, _countof(windows)))
+		return false;
+	std::wstring folder = std::wstring(windows) + L"\\";
+	auto const& path = m_PE.GetPath();
+	return path.size() > folder.size() && _wcsnicmp(path.c_str(), folder.c_str(), folder.size()) == 0;
+}
+
+std::string CMainFrame::FileModuleName() const {
+	auto const& path = m_PE.GetPath();
+	return Narrow(path.substr(path.find_last_of(L"\\/") + 1));
+}
+
+// A function that only jumps through an entry of the import address table: jmp [rip+x] (x64), jmp [x] (x86)
+CMainFrame::DecompilerSession::Import const* CMainFrame::ThunkImport(uint64_t va) const {
+	if (!m_Decompiler || !m_PE)
+		return nullptr;
+	uint8_t code[6];
+	if (!ReadImage(va, code, sizeof(code)) || code[0] != 0xFF || code[1] != 0x25)
+		return nullptr;
+	int32_t displacement;
+	memcpy(&displacement, code + 2, 4);
+	uint64_t slot = m_PE.GetFileInfo()->IsPE64 ? va + 6 + displacement : (uint32_t)displacement;
+	for (auto const& imp : m_Decompiler->Imports)
+		if (imp.Slot == slot)
+			return &imp;
+	return nullptr;
 }
 
 // The prototype of a function the symbols have (with types: private symbols): its type, and the names of its parameters
@@ -2364,6 +2413,8 @@ std::shared_ptr<CMainFrame::DecompilerSession> CMainFrame::Decompiler(std::wstri
 	session->Frame = this;
 	session->Window = m_hWnd;
 	session->Target = target;
+	session->Win32 = Win32Api::Get(machine == IMAGE_FILE_MACHINE_AMD64 ? Win32Api::Machine::X64 :
+		machine == IMAGE_FILE_MACHINE_I386 ? Win32Api::Machine::X86 : Win32Api::Machine::Arm64);
 	// the language definitions are next to the executable
 	WCHAR folder[MAX_PATH];
 	::GetModuleFileName(nullptr, folder, _countof(folder));
@@ -2405,7 +2456,7 @@ std::shared_ptr<CMainFrame::DecompilerSession> CMainFrame::Decompiler(std::wstri
 						auto ordinal = pe64 ? fn.unThunk.Thunk64.u1.Ordinal & 0xFFFF : fn.unThunk.Thunk32.u1.Ordinal & 0xFFFF;
 						name = module + "_Ordinal_" + std::to_string(ordinal);
 					}
-					session->Imports.push_back({ base + slot, name, dll });
+					session->Imports.push_back({ base + slot, name, dll, imp.ModuleName });
 					slot += pe64 ? 8 : 4;
 				}
 			}
@@ -2431,7 +2482,7 @@ std::shared_ptr<CMainFrame::DecompilerSession> CMainFrame::Decompiler(std::wstri
 							name = module + "_Ordinal_" + std::to_string(entry & 0xFFFF);
 					}
 					if (!name.empty())
-						session->Imports.push_back({ base + slot, name, dll });
+						session->Imports.push_back({ base + slot, name, dll, imp.ModuleName });
 					slot += pe64 ? 8 : 4;
 					if (names)
 						names += pe64 ? 8 : 4;
@@ -2509,20 +2560,45 @@ GhidraDecompiler* CMainFrame::DecompilerSession::Open(std::string& error) {
 		decompiler->AddReadOnly(va, size);
 	if (ExternalArea) {
 		decompiler->SetExternalArea(ExternalArea);
-		for (auto const& imp : Imports)
-			decompiler->AddImport(imp.Slot, imp.Name, imp.Module);
+		for (size_t i = 0; i < Imports.size(); i++)
+			if (auto at = decompiler->AddImport(Imports[i].Slot, Imports[i].Name, Imports[i].Module))
+				ImportAt[at] = i;
 	}
+	// Types (of the symbols, and of Windows: Win32Api's ids) and prototypes: of the functions of the symbols, of the imports
+	// (and the thunks that jump to them) from the Win32 metadata
+	decompiler->SetTypeSource([this](uint32_t id, GhidraDecompiler::Type& type) {
+		bool known = false;
+		Ask([&] {
+			if (Win32Api::IsId(id))
+				known = Win32 && Win32->Describe(id, type);
+			else
+				known = Symbols && !Stale && Frame->DescribeType(id, type);
+			});
+		return known;
+		});
+	decompiler->SetPrototypeSource([this](uint64_t va, uint32_t& type, std::vector<std::string>& names) {
+		bool known = false;
+		Ask([&] {
+			auto import = ImportAt.find(va);
+			if (import != ImportAt.end()) {
+				auto const& imp = Imports[import->second];
+				known = Win32 && Win32->Function(imp.Name, imp.Dll, type, names);
+				return;
+			}
+			known = Symbols && !Stale && Frame->FunctionPrototype(va, type, names);
+			if (!known && Win32) {
+				if (auto imp = Frame->ThunkImport(va))
+					known = Win32->Function(imp->Name, imp->Dll, type, names);
+				// A function of Windows that this DLL exports (kernel32's Beep): of this DLL in the metadata, or, for a DLL
+				// of Windows, of any (the metadata has the DLL that programs import it from: kernelbase's CreateFileW is
+				// kernel32's there)
+				else if (auto name = Frame->ExportName(va); !name.empty())
+					known = Win32->Function(name, Frame->FileModuleName(), type, names, !Frame->IsWindowsFile());
+			}
+			});
+		return known;
+		});
 	if (Symbols) {
-		decompiler->SetTypeSource([this](uint32_t id, GhidraDecompiler::Type& type) {
-			bool known = false;
-			Ask([&] { known = !Stale && Frame->DescribeType(id, type); });
-			return known;
-			});
-		decompiler->SetPrototypeSource([this](uint64_t va, uint32_t& type, std::vector<std::string>& names) {
-			bool known = false;
-			Ask([&] { known = !Stale && Frame->FunctionPrototype(va, type, names); });
-			return known;
-			});
 		decompiler->SetLocalSource([this](uint64_t va, std::vector<GhidraDecompiler::Local>& locals) {
 			bool known = false;
 			Ask([&] { known = !Stale && Frame->FunctionLocals(va, locals); });
@@ -2530,12 +2606,18 @@ GhidraDecompiler* CMainFrame::DecompilerSession::Open(std::string& error) {
 			});
 		for (auto const& g : Globals)
 			decompiler->AddGlobal(g.Address, g.Name, g.Type);
-		decompiler->SetTypeNameSource([this](std::string const& name) {
-			uint32_t id = 0;
-			Ask([&] { id = Stale ? 0 : Frame->TypeIdByName(name); });
-			return id;
-			});
 	}
+	// a type the user names: of the symbols, or of Windows
+	decompiler->SetTypeNameSource([this](std::string const& name) {
+		uint32_t id = 0;
+		Ask([&] {
+			if (Symbols && !Stale)
+				id = Frame->TypeIdByName(name);
+			if (!id && Win32)
+				id = Win32->TypeByName(name);
+			});
+		return id;
+		});
 	// the user's: the names of functions and global variables (in the place of those of the file), the changes to variables
 	std::vector<std::pair<uint64_t, std::string>> renamed;
 	std::vector<std::pair<uint64_t, GhidraDecompiler::VariableChange>> globals;
@@ -2757,6 +2839,7 @@ void CMainFrame::LoadAnnotations(std::wstring const& path) {
 }
 
 void CMainFrame::SaveAnnotations() {
+	SearchTargetChanged();	// (Go Anywhere finds the user's names, bookmarks and comments)
 	if (m_Annotations.IsOpen() && !m_Annotations.Save())
 		AtlMessageBox(m_hWnd, std::format(L"The names, types and bookmarks of this file could not be saved to {}", m_Annotations.StoreFile()).c_str(),
 			IDR_MAINFRAME, MB_ICONWARNING);
@@ -2791,24 +2874,28 @@ bool CMainFrame::RenameFunction(uint64_t va, std::wstring const& name) {
 				session->Decompiler->RenameFunction(va, narrow);
 			});
 	RedecompileViews();
-	// the function's views of C are named by it ("Name (C)", "Name (Side by Side)")
+	NotifyAnnotationsChanged(false);
+	// the function's views are named by it ("Name", "Name (C)", "Name (Side by Side)"...)
 	std::wstring shown;
 	FunctionPlace(rva, shown);
 	if (shown.empty())
 		shown = std::format(L"0x{:X}", va);
-	for (auto const& [hView, view] : m_DecompiledViews) {
-		if (view.Function != va)
+	for (auto const& [type, view] : m_Views) {
+		auto kind = type & TreeItemType::ItemMask;
+		if ((uint32_t)((int64_t)type >> ItemShift) != rva || (kind != TreeItemType::Disassembly && kind != TreeItemType::Decompiled &&
+			kind != TreeItemType::SideBySide && kind != TreeItemType::FlowGraph && kind != TreeItemType::CallGraph))
 			continue;
 		for (int page = 0; page < m_Tabs.GetPageCount(); page++) {
-			if (m_Tabs.GetPageHWND(page) != hView)
+			if (m_Tabs.GetPageHWND(page) != view->GetHwnd())
 				continue;
 			std::wstring title = m_Tabs.GetPageTitle(page);
+			if (title.starts_with(L"Code at "))
+				break;	// (inside a function)
 			auto open = title.rfind(L" (");
 			title = shown + (open == std::wstring::npos ? std::wstring() : title.substr(open));
 			m_Tabs.SetPageTitle(page, title.c_str());
-			if (auto it = m_Views2.find(hView); it != m_Views2.end())
-				if (auto v = m_Views.find(it->second); v != m_Views.end() && v->second->GetHTreeItem())
-					m_Tree.SetItemText(v->second->GetHTreeItem(), title.c_str());
+			if (view->GetHTreeItem())
+				m_Tree.SetItemText(view->GetHTreeItem(), title.c_str());
 		}
 	}
 	return true;

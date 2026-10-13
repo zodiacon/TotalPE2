@@ -156,6 +156,16 @@ struct ClrEnumInfo {
 	std::vector<size_t> Parts(int64_t value) const;
 };
 
+// A type of a signature, decoded: its ELEMENT_TYPE (II.23.1.16) and what it is of: the token of a class or value type
+// (0x12, 0x11), the type pointed to (0x0F, 0x10), the element and the count of an array (0x14: the product of its sizes;
+// 0x1D: none), the type and its arguments (0x15). Modifiers (0x1F, 0x20) and pinned (0x45) are left out.
+struct ClrSigType {
+	uint8_t Element{};
+	uint32_t Token{};
+	uint32_t Count{};
+	std::vector<ClrSigType> Inner;
+};
+
 // The names (and kinds) of the generic parameters that !0 and !!0 stand for
 struct ClrGenericContext {
 	std::vector<std::wstring> const* TypeNames{ nullptr };
@@ -296,6 +306,13 @@ public:
 	std::shared_ptr<ClrEnumInfo const> EnumInfo(uint32_t token) const;
 	// The enum a custom attribute names ("Ns.Outer+Inner, Assembly, Version=..."); null if it is not found
 	std::shared_ptr<ClrEnumInfo const> EnumInfoByName(std::wstring const& name) const;
+
+	// The types of signatures, decoded: of a field, of a method's result and parameters (false if it cannot be read)
+	bool FieldSigType(uint32_t field, ClrSigType& type) const;
+	bool MethodSigTypes(uint32_t method, ClrSigType& result, std::vector<ClrSigType>& params) const;
+	// The layout of a type (ClassLayout): its packing and size (0 for those it does not say), and a field's offset (FieldLayout)
+	std::pair<uint16_t, uint32_t> ClassLayout(uint32_t type) const;
+	std::optional<uint32_t> FieldOffset(uint32_t field) const;
 
 private:
 	bool ParseTables(std::span<const std::byte> md, ClrStream const& tables);

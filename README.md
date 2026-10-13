@@ -62,6 +62,7 @@ The kind of file is recognized by its contents, not its extension. Open files fr
 * Cross references: who calls a function, who uses an import, a string or an address
 * Flow graphs of functions, exported as SVG
 * Go To (address, RVA or file offset), Back and Forward
+* Decompiled C (Ghidra's decompiler): rename and retype variables and functions (N, Y), comment instructions (;) and bookmark them (Ctrl+B), kept for the file; the functions of Windows that the code calls have their prototypes, and their constants (flags, `HRESULT`, `NTSTATUS`...) their names, from the Win32 metadata
 
 ## Hex view
 
@@ -98,6 +99,8 @@ vcpkg install lief capstone scintilla lexilla wil nlohmann-json catch2 --triplet
 The `WTLHelper` submodule is needed as well (`git submodule update --init`).
 
 `PECore` has everything that is not UI: the parsers (PE, COFF, libraries, ELF, CodeView, resources), the analysis (disassembly, flow graphs, anomalies, signatures, comparison) and the formatting of values. `TotalPE` is the UI on top of it.
+
+The prototypes of the functions of Windows come from the Win32 metadata (`Windows.Win32.winmd`), which is under the license of the Windows SDK and is not part of the sources: `TotalPE\GetWin32Metadata.ps1` downloads it into `Win32Metadata`, and the build copies it next to `TotalPE.exe`. Without it, imports are decompiled without their prototypes.
 
 `PECore.Tests` has the unit tests (Catch2). Some of them use files of the system (`kernel32.dll` and the like); the ones that need the Windows SDK or WSL skip themselves when those are not installed. `Decompiler.Tests` has those of the decompiler, on small pieces of x86, x64 and ARM64 code.
 

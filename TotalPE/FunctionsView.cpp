@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "FunctionsView.h"
+#include <Annotations.h>
 #include <PEFile.h>
 #include <CodeAnalysis.h>
 #include <DiaHelper.h>
@@ -221,6 +222,11 @@ void CFunctionsView::Build() {
 				f.Name = L"j_" + (functions[f.Target].Name.empty() ? std::format(L"sub_{:X}", base + f.Target) : functions[f.Target].Name);
 	}
 
+	// the user's names in the place of the others
+	for (auto const& [rva, name] : Frame()->GetAnnotations().Functions)
+		if (auto it = functions.find(rva); it != functions.end())
+			it->second.Name = std::wstring(name.begin(), name.end());
+
 	// names for those without one, and sizes up to the next function (in the same section) for those with none
 	std::vector<Function> items;
 	items.reserve(functions.size());
@@ -264,6 +270,10 @@ void CFunctionsView::ApplyFilter() {
 }
 
 void CFunctionsView::XrefsChanged() {
+	Build();
+}
+
+void CFunctionsView::AnnotationsChanged() {
 	Build();
 }
 

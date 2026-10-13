@@ -405,6 +405,7 @@
     <ClCompile Include="XrefView.cpp" />
     <ClCompile Include="GoToDlg.cpp" />
     <ClCompile Include="InputDlg.cpp" />
+    <ClCompile Include="Win32Api.cpp" />
     <ClCompile Include="BookmarksView.cpp" />
     <ClCompile Include="HexFind.cpp" />
     <ClCompile Include="HexInspector.cpp" />
@@ -476,6 +477,7 @@
     <ClInclude Include="XrefView.h" />
     <ClInclude Include="GoToDlg.h" />
     <ClInclude Include="InputDlg.h" />
+    <ClInclude Include="Win32Api.h" />
     <ClInclude Include="BookmarksView.h" />
     <ClInclude Include="HexFind.h" />
     <ClInclude Include="HexInspector.h" />
@@ -647,6 +649,11 @@
       <DecompilerLanguages Include="$(SolutionDir)Decompiler\languages\**\*" />
     </ItemGroup>
     <Copy SourceFiles="@(DecompilerLanguages)" DestinationFiles="@(DecompilerLanguages->'$(OutDir)Decompiler\languages\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <!-- the Win32 metadata (if GetWin32Metadata.ps1 got it) next to the executable, with its license -->
+  <Target Name="CopyWin32Metadata" AfterTargets="Build" Condition="Exists('$(SolutionDir)Win32Metadata\Windows.Win32.winmd')">
+    <Copy SourceFiles="$(SolutionDir)Win32Metadata\Windows.Win32.winmd" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(SolutionDir)Win32Metadata\sdk_license.txt" DestinationFiles="$(OutDir)Win32Metadata_license.txt" SkipUnchangedFiles="true" />
   </Target>
   <ImportGroup Label="ExtensionTargets" />
 </Project>

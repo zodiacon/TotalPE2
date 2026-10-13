@@ -95,9 +95,21 @@ namespace {
 	class StringPrintC : public PrintC {
 	public:
 		using PrintC::PrintC;
+		// the enums whose values are not flags (see GhidraDecompiler::Type::Exact)
+		std::unordered_set<Datatype const*> ExactEnums;
 
 	protected:
 		void pushConstant(uintb val, const Datatype* ct, tagtype tag, const Varnode* vn, const PcodeOp* op, uint4 displayFormat) override {
+			// a value of such an enum: by its name, or as a number (not as the | of names that it happens to be)
+			if (ct->isEnumType() && ExactEnums.count(ct)) {
+				TypeEnum::Representation rep;
+				static_cast<TypeEnum const*>(ct)->getMatches(val, rep);
+				if (rep.matchname.size() == 1 && !rep.complement && rep.shiftAmount == 0)
+					pushAtom(Atom(rep.matchname[0], tag, EmitMarkup::const_color, op, vn, val));
+				else
+					push_integer(val, ct->getSize(), ct->getMetatype() == TYPE_INT, tag, vn, op, displayFormat);
+				return;
+			}
 			if (val != 0 && LooksLikePointer(ct)) {
 				Datatype* charType = nullptr;
 				Address addr;
@@ -203,6 +215,7 @@ struct GhidraDecompiler::Impl {
 	std::unordered_map<uint64_t, std::string> Applied;	// the changes each function was last decompiled with (as text)
 	std::string Pending;	// what is to be said in the code of the next function decompiled (a change that could not be made)
 	std::unordered_map<uint32_t, Datatype*> Converted;	// the decompiler's types of the caller's ids
+	StringPrintC* Printer{ nullptr };
 	std::unordered_set<uint64_t> Prototyped;			// the functions whose prototypes were asked for
 	std::unordered_set<uint64_t> Localized;				// the functions whose local variables were asked for
 	std::unordered_map<std::string, std::string> Fixups;	// the call fixups of the compiler, by the names of the functions they replace
@@ -459,6 +472,8 @@ Datatype* GhidraDecompiler::Impl::Convert(uint32_t id, int depth) {
 				result = Existing(name, meta, id);
 				if (!result)
 					result = DefineEnum(name, t.Size ? t.Size : 4, t.Signed, t.Values);
+				if (result && t.Exact && Printer)
+					Printer->ExactEnums.insert(result);
 				break;
 			}
 
@@ -650,8 +665,9 @@ namespace {
 	// Ghidra names a variable on the stack by its type, then the space and its offset ("uStack_c", "auStack_28", "lStackX_10"):
 	// it is named local_ and the offset ("local_c", "local_28"; "localX_10" in the caller's part of the stack)
 	std::string StackName(std::string const& name) {
+		// (the type's letters: "u", "au", or of a type's name: "S" of SYSTEM_INFO)
 		auto at = name.find("Stack");
-		if (at == std::string::npos || name.find_first_not_of("abcdefghijklmnopqrstuvwxyz") != at)
+		if (at == std::string::npos || !std::all_of(name.begin(), name.begin() + at, [](char c) { return isalpha((unsigned char)c) != 0; }))
 			return {};
 		auto rest = name.substr(at + 5);	// [X|Y]_offset
 		size_t i = 0;
@@ -664,16 +680,17 @@ namespace {
 
 	// Ghidra names the other variables by their type as well: a value in a register "uVar1" ("pcVar3"...), a global
 	// variable "uRam0000000140003000". Without the type: "Var1", "Ram0000000140003000".
+	// (the type's letters: "u", "pc", or of a type's name: "W" of WIN32_ERROR, "H" of HRESULT)
 	std::string Untyped(std::string const& name) {
-		auto prefix = name.find_first_not_of("abcdefghijklmnopqrstuvwxyz");
-		if (prefix == 0 || prefix == std::string::npos)
-			return {};
-		auto rest = name.substr(prefix);
 		for (char const* kind : { "Var", "Ram" }) {
+			auto at = name.rfind(kind);
 			auto length = strlen(kind);
-			if (rest.compare(0, length, kind) == 0 && rest.size() > length &&
-				rest.find_first_not_of(*kind == 'V' ? "0123456789" : "0123456789abcdef", length) == std::string::npos)
-				return rest;
+			if (at == std::string::npos || at == 0 || name.size() <= at + length ||
+				name.find_first_not_of(*kind == 'V' ? "0123456789" : "0123456789abcdef", at + length) != std::string::npos)
+				continue;
+			bool letters = std::all_of(name.begin(), name.begin() + at, [](char c) { return isalpha((unsigned char)c) != 0; });
+			if (letters)
+				return name.substr(at);
 		}
 		return {};
 	}
@@ -1065,6 +1082,7 @@ bool GhidraDecompiler::Open(std::string& error) {
 		arch->init(store);
 		// the printer of C with strings, in the place of Ghidra's (with its settings)
 		auto print = new StringPrintC(arch.get(), "c-language");
+		m_Impl->Printer = print;
 		print->setOutputStream(arch->print->getOutputStream());
 		print->initializeFromArchitecture();
 		print->setBraceFormatFunction(Emit::next_line);	// the function's brace right below its declaration (not after a blank line)
@@ -1131,10 +1149,10 @@ void GhidraDecompiler::SetExternalArea(uint64_t address) {
 
 // The function an import is: a function without code (outside the image), and an external reference from the slot to it,
 // which makes a call through the slot a call of the function
-void GhidraDecompiler::AddImport(uint64_t slot, std::string const& name, std::string const& module) {
+uint64_t GhidraDecompiler::AddImport(uint64_t slot, std::string const& name, std::string const& module) {
 	auto arch = m_Impl->Arch.get();
 	if (!arch || name.empty() || m_Impl->NextExternal == 0)
-		return;
+		return 0;
 	try {
 		Address target(arch->getDefaultCodeSpace(), m_Impl->NextExternal);
 		m_Impl->NextExternal += 16;
@@ -1143,10 +1161,12 @@ void GhidraDecompiler::AddImport(uint64_t slot, std::string const& name, std::st
 		global->addExternalRef(Address(arch->getDefaultDataSpace(), slot), target, name);
 		if (!module.empty())
 			m_Impl->ImportModules[target.getOffset()] = module;
+		return target.getOffset();
 	}
 	catch (LowlevelError const&) {
 		// a name the decompiler does not take: the call stays a call through the pointer
 	}
+	return 0;
 }
 
 void GhidraDecompiler::SetTypeSource(TypeSource source) {
@@ -1394,8 +1414,13 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 					}
 			}
 		}
-		if (auto it = m_Impl->Thunks.find(address); it != m_Impl->Thunks.end())
-			m_Impl->Messages << it->second << "\n";
+		if (auto it = m_Impl->Thunks.find(address); it != m_Impl->Thunks.end()) {
+			// (with a prototype, what it passes on is known)
+			auto note = it->second;
+			if (fd->getFuncProto().isInputLocked())
+				note = note.substr(0, note.find(" The parameters"));
+			m_Impl->Messages << note << "\n";
+		}
 
 		// the names and prototypes of the functions it calls: if there are any, it is decompiled again with them
 		for (int4 i = 0; i < fd->numCalls(); i++) {

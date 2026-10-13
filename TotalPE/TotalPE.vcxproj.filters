@@ -233,6 +233,9 @@
     <ClCompile Include="InputDlg.cpp">
       <Filter>Dialogs</Filter>
     </ClCompile>
+    <ClCompile Include="Win32Api.cpp">
+      <Filter>Dialogs</Filter>
+    </ClCompile>
     <ClCompile Include="BookmarksView.cpp">
       <Filter>Dialogs</Filter>
     </ClCompile>
@@ -454,6 +457,9 @@
       <Filter>Dialogs</Filter>
     </ClInclude>
     <ClInclude Include="InputDlg.h">
+      <Filter>Dialogs</Filter>
+    </ClInclude>
+    <ClInclude Include="Win32Api.h">
       <Filter>Dialogs</Filter>
     </ClInclude>
     <ClInclude Include="BookmarksView.h">

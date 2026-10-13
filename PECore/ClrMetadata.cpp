@@ -2378,19 +2378,73 @@ std::wstring ClrMetadata::AttributeCSharp(ClrCustomAttribute const& attribute, C
 	return name + L")";
 }
 
+// what is found once: the types and assemblies of the references, the layouts, whether ImplMap is sorted
+struct ClrMetadata::ResolvedReferences {
+	std::mutex Lock;
+	std::unordered_map<uint32_t, ClrMetadata const*> Assemblies;	// by the AssemblyRef row
+	std::unordered_map<uint32_t, std::pair<ClrMetadata const*, uint32_t>> Types;	// by the TypeRef row
+	std::unordered_map<std::wstring, std::shared_ptr<ClrEnumInfo const>> EnumsByName;
+	std::unordered_map<uint32_t, std::shared_ptr<ClrEnumInfo const>> Enums;	// by the token
+	std::unordered_map<std::wstring, uint32_t> TypeDefs;	// the types that are not nested, by "namespace|name"
+	bool Indexed{ false };
+	std::unordered_map<uint32_t, uint32_t> FieldOffsets;	// FieldLayout, by the field
+	bool OffsetsRead{ false };
+	int ImplMapSorted{ -1 };	// (not known yet)
+};
+
 std::optional<ClrPInvoke> ClrMetadata::PInvoke(uint32_t method) const {
+	// ImplMap: Flags, MemberForwarded, ImportName, ImportScope; sorted by MemberForwarded (II.22): searched by halves, unless
+	// the file does not keep it sorted
 	auto token = (ClrTableId::MethodDef << 24) | method;
-	for (uint32_t i = 1; i <= m_Rows[0x1C]; i++) {	// ImplMap
-		ClrRowReader r(*this, 0x1C, i);
-		auto flags = (uint16_t)r.U16();
-		if (r.Coded(MemberForwarded) != token)
-			continue;
+	auto rows = m_Rows[0x1C];
+	auto member = [&](uint32_t row) {
+		ClrRowReader r(*this, 0x1C, row);
+		r.U16();
+		auto forwarded = r.Coded(MemberForwarded);
+		// (the order of the coded index: the row, then the table: Field 0, MethodDef 1)
+		return std::pair<uint32_t, uint32_t>(TokenRow(forwarded), TokenTable(forwarded) == ClrTableId::MethodDef ? 1 : 0);
+	};
+	auto read = [&](uint32_t row) {
+		ClrRowReader r(*this, 0x1C, row);
 		ClrPInvoke info;
-		info.Flags = flags;
+		info.Flags = (uint16_t)r.U16();
+		r.Coded(MemberForwarded);
 		info.EntryPoint = String(r.Str());
 		ClrRowReader m(*this, ClrTableId::ModuleRef, r.Simple(ClrTableId::ModuleRef));
 		info.Module = String(m.Str());
 		return info;
+	};
+	bool sorted;
+	{
+		std::lock_guard lock(m_References->Lock);
+		if (m_References->ImplMapSorted < 0) {
+			bool ordered = true;
+			for (uint32_t row = 2; row <= rows && ordered; row++)
+				ordered = member(row - 1) <= member(row);
+			m_References->ImplMapSorted = ordered;
+		}
+		sorted = m_References->ImplMapSorted > 0;
+	}
+	if (sorted) {
+		std::pair<uint32_t, uint32_t> wanted{ method, 1 };
+		uint32_t low = 1, high = rows;
+		while (low <= high) {
+			auto middle = low + (high - low) / 2;
+			auto at = member(middle);
+			if (at == wanted)
+				return read(middle);
+			if (at < wanted)
+				low = middle + 1;
+			else
+				high = middle - 1;
+		}
+		return {};
+	}
+	for (uint32_t row = 1; row <= rows; row++) {
+		ClrRowReader r(*this, 0x1C, row);
+		r.U16();
+		if (r.Coded(MemberForwarded) == token)
+			return read(row);
 	}
 	return {};
 }
@@ -2431,15 +2485,6 @@ std::vector<size_t> ClrEnumInfo::Parts(int64_t value) const {
 	return parts;
 }
 
-struct ClrMetadata::ResolvedReferences {
-	std::mutex Lock;
-	std::unordered_map<uint32_t, ClrMetadata const*> Assemblies;	// by the AssemblyRef row
-	std::unordered_map<uint32_t, std::pair<ClrMetadata const*, uint32_t>> Types;	// by the TypeRef row
-	std::unordered_map<std::wstring, std::shared_ptr<ClrEnumInfo const>> EnumsByName;
-	std::unordered_map<uint32_t, std::shared_ptr<ClrEnumInfo const>> Enums;	// by the token
-	std::unordered_map<std::wstring, uint32_t> TypeDefs;	// the types that are not nested, by "namespace|name"
-	bool Indexed{ false };
-};
 
 namespace {
 	// The assemblies that files refer to, loaded once (by their path) and kept for as long as the process runs
@@ -2847,4 +2892,134 @@ std::shared_ptr<ClrEnumInfo const> ClrMetadata::EnumInfoByName(std::wstring cons
 	std::lock_guard lock(m_References->Lock);
 	m_References->EnumsByName[serialized] = info;
 	return info;
+}
+
+//
+// Signatures as types, and layouts
+//
+
+namespace {
+	bool DecodeSigType(ClrSignature& sig, ClrSigType& type, int depth) {
+		if (depth > 32 || !sig.Ok)
+			return false;
+		auto et = sig.Byte();
+		while (et == 0x1F || et == 0x20 || et == 0x45) {	// modifiers, pinned
+			if (et != 0x45)
+				sig.TypeToken();
+			et = sig.Byte();
+		}
+		type = {};
+		type.Element = et;
+		switch (et) {
+			case 0x11: case 0x12:
+				type.Token = sig.TypeToken();
+				break;
+			case 0x0F: case 0x10: case 0x1D:
+			{
+				ClrSigType inner;
+				if (!DecodeSigType(sig, inner, depth + 1))
+					return false;
+				type.Inner.push_back(std::move(inner));
+				break;
+			}
+			case 0x14:
+			{
+				ClrSigType inner;
+				if (!DecodeSigType(sig, inner, depth + 1))
+					return false;
+				type.Inner.push_back(std::move(inner));
+				auto rank = sig.Compressed();
+				auto sizes = std::min<uint32_t>(sig.Compressed(), 32);
+				uint64_t count = sizes ? 1 : 0;
+				for (uint32_t i = 0; i < sizes; i++)
+					count *= sig.Compressed();
+				for (auto bounds = std::min<uint32_t>(sig.Compressed(), 32); bounds--; )
+					sig.Signed();
+				(void)rank;
+				type.Count = count > 0xFFFFFFFF ? 0 : (uint32_t)count;
+				break;
+			}
+			case 0x15:
+			{
+				ClrSigType generic;
+				if (!DecodeSigType(sig, generic, depth + 1))
+					return false;
+				type.Inner.push_back(std::move(generic));
+				for (auto count = std::min<uint32_t>(sig.Compressed(), 32); count--; ) {
+					ClrSigType arg;
+					if (!DecodeSigType(sig, arg, depth + 1))
+						return false;
+					type.Inner.push_back(std::move(arg));
+				}
+				break;
+			}
+			case 0x13: case 0x1E:
+				type.Count = sig.Compressed();	// the generic parameter's number
+				break;
+			case 0x1B:
+				return false;	// (a function pointer: not decoded)
+		}
+		return sig.Ok;
+	}
+}
+
+bool ClrMetadata::FieldSigType(uint32_t field, ClrSigType& type) const {
+	if (field == 0 || field > m_Fields.size())
+		return false;
+	ClrSignature sig{ *this, Blob(m_Fields[field - 1].Signature) };
+	if ((sig.Byte() & 0x0F) != 0x06)
+		return false;
+	return DecodeSigType(sig, type, 0);
+}
+
+bool ClrMetadata::MethodSigTypes(uint32_t method, ClrSigType& result, std::vector<ClrSigType>& params) const {
+	if (method == 0 || method > m_Methods.size())
+		return false;
+	ClrSignature sig{ *this, Blob(m_Methods[method - 1].Signature) };
+	auto conv = sig.Byte();
+	if (conv & 0x10)
+		sig.Compressed();	// generic parameters
+	auto count = std::min<uint32_t>(sig.Compressed(), 256);
+	if (!DecodeSigType(sig, result, 0))
+		return false;
+	params.clear();
+	for (uint32_t i = 0; i < count; i++) {
+		ClrSigType param;
+		if (!DecodeSigType(sig, param, 0))
+			return false;
+		params.push_back(std::move(param));
+	}
+	return true;
+}
+
+// ClassLayout: PackingSize (2), ClassSize (4), Parent (TypeDef); FieldLayout: Offset (4), Field
+std::pair<uint16_t, uint32_t> ClrMetadata::ClassLayout(uint32_t type) const {
+	for (uint32_t row = 1; row <= m_Rows[0x0F]; row++) {
+		ClrRowReader r(*this, 0x0F, row);
+		auto packing = (uint16_t)r.U16();
+		auto size = r.U32();
+		if (r.R.Ok && r.Simple(ClrTableId::TypeDef) == type)
+			return { packing, size };
+	}
+	return {};
+}
+
+std::optional<uint32_t> ClrMetadata::FieldOffset(uint32_t field) const {
+	{
+		std::lock_guard lock(m_References->Lock);
+		auto& offsets = m_References->FieldOffsets;
+		if (!m_References->OffsetsRead) {
+			for (uint32_t row = 1; row <= m_Rows[0x10]; row++) {
+				ClrRowReader r(*this, 0x10, row);
+				auto offset = r.U32();
+				auto of = r.Simple(ClrTableId::Field);
+				if (r.R.Ok)
+					offsets[of] = offset;
+			}
+			m_References->OffsetsRead = true;
+		}
+		if (auto it = offsets.find(field); it != offsets.end())
+			return it->second;
+	}
+	return std::nullopt;
 }

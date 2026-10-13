@@ -362,3 +362,6 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# the Win32 metadata (TotalPE/GetWin32Metadata.ps1 downloads it: it is under the license of the Windows SDK)
+Win32Metadata/

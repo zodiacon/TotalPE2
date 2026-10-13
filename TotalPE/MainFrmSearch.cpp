@@ -180,6 +180,20 @@ void CMainFrame::BuildSearchIndex() {
 				.Location = std::format(L"{} bytes", res.Data.size()), .Value = res.Data.size(), .Index = i++, .Image = ResourceTypeToIcon(res.TypeID) });
 		}
 
+		// the user's: names of functions and global variables, bookmarks, comments
+		for (auto const& [rva, name] : m_Annotations.Functions)
+			index.Add({ .Kind = SearchKind::Symbol, .Name = Widen(name), .Details = L"Function (your name)",
+				.Location = std::format(L"RVA 0x{:X}", rva), .Value = base + rva });
+		for (auto const& [rva, v] : m_Annotations.Globals)
+			index.Add({ .Kind = SearchKind::Symbol, .Name = Widen(v.Name), .Details = L"Data (your name): " + Widen(v.Type),
+				.Location = std::format(L"RVA 0x{:X}", rva), .Value = base + rva });
+		for (auto const& b : m_Annotations.Bookmarks)
+			index.Add({ .Kind = SearchKind::Symbol, .Name = b.Name, .Details = L"Bookmark",
+				.Location = std::format(L"RVA 0x{:X}", b.Rva), .Value = base + b.Rva, .Image = GetTreeIcon(IDI_BOOKMARK) });
+		for (auto const& [rva, text] : m_Annotations.Comments)
+			index.Add({ .Kind = SearchKind::Symbol, .Name = text, .Details = L"Comment",
+				.Location = std::format(L"RVA 0x{:X}", rva), .Value = base + rva });
+
 		// the functions and the data of the symbols, then the public symbols that are elsewhere
 		if (m_Symbols) {
 			std::unordered_set<uint64_t> seen;

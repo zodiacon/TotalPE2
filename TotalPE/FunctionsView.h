@@ -22,6 +22,7 @@ public:
 	CString GetTitle() const override;
 	// the calls to the functions, and the functions that are known only as their targets
 	void XrefsChanged() override;
+	void AnnotationsChanged() override;
 
 	CString GetColumnText(HWND, int row, int col) const;
 	void DoSort(SortInfo const* si);
