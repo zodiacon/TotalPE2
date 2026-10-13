@@ -268,6 +268,7 @@
     <ClInclude Include="PERegions.h" />
     <ClInclude Include="ResourceContent.h" />
     <ClInclude Include="SearchIndex.h" />
+    <ClInclude Include="SecuritySummary.h" />
     <ClInclude Include="TypeLibText.h" />
     <ClInclude Include="UnwindInfo.h" />
     <ClInclude Include="VirusTotal.h" />
@@ -316,6 +317,7 @@
     <ClCompile Include="PERegions.cpp" />
     <ClCompile Include="ResourceContent.cpp" />
     <ClCompile Include="SearchIndex.cpp" />
+    <ClCompile Include="SecuritySummary.cpp" />
     <ClCompile Include="TypeLibText.cpp" />
     <ClCompile Include="UnwindInfo.cpp" />
     <ClCompile Include="VirusTotal.cpp" />

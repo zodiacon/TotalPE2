@@ -16,6 +16,10 @@ enum class SearchKind : uint8_t {
 	Resource,
 	Symbol,
 	Section,
+	View,			// a node of the tree (Value: what it is, as the main frame has it)
+	ClrType,		// a type of a .NET file (Value: its token)
+	ClrMember,		// a method or field of a .NET file (Value: its token)
+	Address,		// not in the index: an address that Go Anywhere was given (Index: 0 VA, 1 RVA, 2 file offset)
 	Count
 };
 
@@ -49,6 +53,15 @@ public:
 	// The items of the kinds whose name contains the text, in the order they were added; at most 'limit' of them.
 	// 'truncated' says if there were more.
 	std::vector<uint32_t> Find(std::wstring_view text, bool matchCase, uint32_t kinds, size_t limit, bool* truncated = nullptr) const;
+
+	// The items that match the text best, best first (ignoring case): the name is the text, then names that start with it,
+	// then those where a word starts with it ("Proc" in "GetProcAddress"), then those that contain it; the kinds that lead
+	// somewhere most directly before strings, and shorter names first. Words separated by spaces must all be in the name.
+	std::vector<uint32_t> FindBest(std::wstring_view text, uint32_t kinds, size_t limit) const;
+
+	// How a name matches the text (both in lower case; the name as it is, for the starts of words): 0 the same, 1 a prefix,
+	// 2 at the start of a word, 3 inside; -1 if it does not
+	static int MatchRank(std::wstring_view name, std::wstring_view folded, std::wstring_view text);
 
 	static const wchar_t* KindName(SearchKind kind);
 

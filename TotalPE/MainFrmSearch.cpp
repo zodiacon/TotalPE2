@@ -8,6 +8,10 @@
 #include "ItaniumDemangle.h"
 #include <unordered_set>
 #include <DbgHelp.h>
+#include <ClrMetadata.h>
+#include <HexNumber.h>
+#include "GoAnywhereDlg.h"
+#include "ClrTypesView.h"
 
 namespace {
 	std::wstring Widen(std::string const& s) {
@@ -39,8 +43,59 @@ int CMainFrame::SearchItemImage(SearchItem const& item) {
 		case SearchKind::Resource: return GetTreeIcon(IDI_RESOURCE);
 		case SearchKind::Symbol: return GetTreeIcon(IDI_SYMBOLS);
 		case SearchKind::Section: return GetTreeIcon(IDI_SECTION);
+		case SearchKind::ClrType: return GetTreeIcon(IDI_CLASS);
+		case SearchKind::ClrMember: return GetTreeIcon(IDI_FUNCTION);
+		case SearchKind::Address: return GetTreeIcon(IDI_BINARY);
 	}
 	return -1;
+}
+
+LRESULT CMainFrame::OnNavGoAnywhere(WORD, WORD, HWND, BOOL&) {
+	if (!m_PE && !m_Elf && !m_Object && !m_Archive)
+		return 0;
+	CGoAnywhereDlg dlg(this);
+	if (dlg.DoModal(m_hWnd) == IDOK && !GoToSearchItem(dlg.Selected()))
+		::MessageBeep(MB_ICONWARNING);
+	return 0;
+}
+
+// A hexadecimal number as the places it can be: an address in the image, an RVA, an offset in the file
+std::vector<SearchItem> CMainFrame::AddressItems(std::wstring const& text) {
+	std::vector<SearchItem> items;
+	uint64_t value;
+	if (!m_PE || !ParseHexNumber(text, value))
+		return items;
+	auto base = m_PE.GetImageBase();
+	auto nt = m_PE.GetNTHeader();
+	uint64_t size = m_PE.GetFileInfo()->IsPE64 ? nt->NTHdr64.OptionalHeader.SizeOfImage : nt->NTHdr32.OptionalHeader.SizeOfImage;
+	auto image = SearchItemImage({ .Kind = SearchKind::Address });
+	if (value >= base && value - base < size)
+		items.push_back({ .Kind = SearchKind::Address, .Name = std::format(L"VA 0x{:X}", value), .Details = ResolveVa(value),
+			.Location = std::format(L"RVA 0x{:X}", value - base), .Value = value, .Index = 0, .Image = image });
+	if (value < size)
+		items.push_back({ .Kind = SearchKind::Address, .Name = std::format(L"RVA 0x{:X}", value), .Details = ResolveRva((DWORD)value),
+			.Location = std::format(L"VA 0x{:X}", base + value), .Value = value, .Index = 1, .Image = image });
+	if (value < m_PE.GetFileSize())
+		items.push_back({ .Kind = SearchKind::Address, .Name = std::format(L"File offset 0x{:X}", value), .Value = value, .Index = 2,
+			.Image = image });
+	return items;
+}
+
+// the nodes of the tree that show something (not the sections and resources, which have their own items)
+void CMainFrame::AddViewsToSearchIndex(HTREEITEM hParent, std::wstring const& parent, int depth) {
+	for (auto hItem = hParent ? m_Tree.GetChildItem(hParent) : m_Tree.GetRootItem(); hItem; hItem = m_Tree.GetNextSiblingItem(hItem)) {
+		CString text;
+		m_Tree.GetItemText(hItem, text);
+		auto type = (TreeItemType)m_Tree.GetItemData(hItem);
+		auto kind = type & TreeItemType::ItemMask;
+		int image = -1, selected;
+		m_Tree.GetItemImage(hItem, image, selected);
+		if (kind != TreeItemType::Section && kind != TreeItemType::Resource && kind != TreeItemType::ResourceName &&
+			kind != TreeItemType::ResourceLnaguage && hParent)	// the root is the file
+			m_SearchIndex.Add({ .Kind = SearchKind::View, .Name = (PCWSTR)text, .Details = parent, .Value = (uint64_t)type, .Image = image });
+		if (depth < 3)
+			AddViewsToSearchIndex(hItem, hParent ? std::wstring(text) : std::wstring(), depth + 1);
+	}
 }
 
 LRESULT CMainFrame::OnEditSearchAll(WORD, WORD, HWND, BOOL&) {
@@ -130,6 +185,8 @@ void CMainFrame::BuildSearchIndex() {
 			std::unordered_set<uint64_t> seen;
 			auto add = [&](SymbolTag tag, PCWSTR kind) {
 				for (auto const& sym : m_Symbols.FindChildren(nullptr, tag)) {
+					if (sym.Location() != LocationKind::Static)	// a constant, say: no address
+						continue;
 					auto va = sym.VirtualAddress();
 					if (va < base || !seen.insert(va).second)
 						continue;
@@ -159,6 +216,28 @@ void CMainFrame::BuildSearchIndex() {
 			index.Add({ .Kind = SearchKind::Section, .Name = Widen(sec.SectionName),
 				.Details = PEStrings::SectionCharacteristicsToString(sec.SecHdr.Characteristics),
 				.Location = std::format(L"RVA 0x{:X}", sec.SecHdr.VirtualAddress), .Value = sec.SecHdr.VirtualAddress, .Index = i++ });
+		}
+
+		// the types and members of a .NET file
+		if (m_PE.GetFileInfo()->HasCOMDescr) {
+			ClrMetadata md;
+			if (md.Parse(m_PE)) {
+				auto& types = md.Types();
+				for (uint32_t t = 1; t <= types.size(); t++)
+					index.Add({ .Kind = SearchKind::ClrType, .Name = md.FullName(t), .Details = md.TypeKind(t),
+						.Value = (ClrTableId::TypeDef << 24) | t });
+				auto field = GetTreeIcon(IDI_FIELD);
+				for (uint32_t m = 1; m <= md.Methods().size(); m++) {
+					auto& method = md.Methods()[m - 1];
+					index.Add({ .Kind = SearchKind::ClrMember, .Name = method.Name, .Details = method.Type ? md.FullName(method.Type) : std::wstring(),
+						.Value = (ClrTableId::MethodDef << 24) | m });
+				}
+				for (uint32_t f = 1; f <= md.Fields().size(); f++) {
+					auto& fd = md.Fields()[f - 1];
+					index.Add({ .Kind = SearchKind::ClrMember, .Name = fd.Name, .Details = fd.Type ? md.FullName(fd.Type) : std::wstring(),
+						.Value = (ClrTableId::Field << 24) | f, .Image = field });
+				}
+			}
 		}
 
 		AddStringsToSearchIndex(std::span((const std::byte*)m_PE.GetData(), m_PE.GetFileSize()));
@@ -241,7 +320,9 @@ void CMainFrame::BuildSearchIndex() {
 				index.Add({ .Kind = SearchKind::ImportModule, .Name = Widen(dyn.Text), .Details = L"Needed library" });
 		AddStringsToSearchIndex(m_Elf.Data());
 	}
-	else if (m_Archive) {
+	if (m_PE || m_Elf || m_Object || m_Archive)
+		AddViewsToSearchIndex(nullptr, L"", 0);
+	if (m_Archive) {
 		auto memberName = [&](int member) {
 			return member >= 0 && member < (int)m_Archive.Members().size() ? Widen(m_Archive.Members()[member].Name) : std::wstring();
 		};
@@ -255,8 +336,35 @@ void CMainFrame::BuildSearchIndex() {
 }
 
 bool CMainFrame::GoToSearchItem(SearchItem const& item) {
+	// a view of the tree, whatever the file
+	if (item.Kind == SearchKind::View) {
+		auto hItem = FindTreeItem((TreeItemType)item.Value);
+		if (!hItem)
+			return false;
+		RecordNavigation();
+		auto shown = ShowView(hItem);
+		RecordNavigation();
+		return shown;
+	}
 	if (m_PE) {
 		switch (item.Kind) {
+			case SearchKind::Address:
+				switch (item.Index) {
+					case 0: return GoToVa(item.Value);
+					case 1: return GoToVa(m_PE.GetImageBase() + item.Value);
+					case 2: return GoToFileOffset((int64_t)item.Value);
+				}
+				return false;
+			case SearchKind::ClrType:
+			case SearchKind::ClrMember:
+			{
+				auto hItem = FindTreeItem(TreeItemType::ClrTypes);
+				if (!hItem || !ShowView(hItem))
+					return false;
+				auto it = m_Views.find(TreeItemType::ClrTypes);
+				auto view = it == m_Views.end() ? nullptr : dynamic_cast<CClrTypesView*>(it->second);
+				return view && view->SelectToken((uint32_t)item.Value);
+			}
 			case SearchKind::ImportModule:
 			case SearchKind::Import:
 			{

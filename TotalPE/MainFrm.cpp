@@ -10,6 +10,7 @@
 #include "SecurityHelper.h"
 #include <ToolbarHelper.h>
 #include "PEStrings.h"
+#include "ApiSetMap.h"
 #include "AppSettings.h"
 #include "SymbolSettingsDlg.h"
 #include "GoToDlg.h"
@@ -116,6 +117,7 @@ void CMainFrame::UpdateUI() {
 	UIEnable(ID_PE_STRINGS, fi != nullptr || m_Elf);
 	UIEnable(ID_PE_FUNCTIONS, fi && ArchOf(m_PE));
 	UIEnable(ID_PE_CLRTYPES, fi && FindTreeItem(TreeItemType::ClrTypes) != nullptr);
+	UIEnable(ID_PE_SECURITYSUMMARY, fi != nullptr);
 	UIEnable(ID_VIEW_MANIFEST, fi && m_hResManifest != nullptr);
 	UIEnable(ID_VIEW_VERSION, fi && m_hResVersion != nullptr);
 	UIEnable(ID_VIEW_OVERLAY, fi && m_hOverlay != nullptr);
@@ -124,6 +126,7 @@ void CMainFrame::UpdateUI() {
 	UIEnable(ID_EDIT_COPY, FALSE);
 	UIEnable(ID_EDIT_FIND, (fi || m_Archive || m_Object || m_Elf) && m_Tabs.GetActivePage() >= 0);
 	UIEnable(ID_EDIT_SEARCHALL, fi || m_Archive || m_Object || m_Elf);
+	UIEnable(ID_NAV_GOANYWHERE, fi || m_Archive || m_Object || m_Elf);
 	UIEnable(ID_FILE_COMPARE, fi != nullptr);
 	UIEnable(ID_PE_ENTIREFILEINHEX, fi != nullptr);
 	UIEnable(ID_VIEW_RESOURCEHEX, FALSE);
@@ -1333,6 +1336,7 @@ void CMainFrame::BuildTree(int iconSize) {
 	m_Tree.Expand(directories, TVE_EXPAND);
 
 	InsertTreeItem(m_Tree, std::format(L"Anomalies ({})", m_Anomalies.size()).c_str(), GetTreeIcon(IDI_EXCEPTION), TreeItemType::Anomalies, root);
+	InsertTreeItem(m_Tree, L"Security Summary", GetTreeIcon(IDI_SECURITY), TreeItemType::SecuritySummary, root);
 	m_hOverlay = nullptr;
 	if (!m_Overlay.Empty())
 		m_hOverlay = InsertTreeItem(m_Tree, L"Overlay", GetTreeIcon(IDI_BINARY), TreeItemType::Overlay, root);
@@ -1798,6 +1802,12 @@ LRESULT CMainFrame::OnViewFunctions(WORD, WORD, HWND, BOOL&) {
 	return 0;
 }
 
+LRESULT CMainFrame::OnViewSecuritySummary(WORD, WORD, HWND, BOOL&) {
+	if (auto hItem = FindTreeItem(TreeItemType::SecuritySummary))
+		ShowView(hItem);
+	return 0;
+}
+
 LRESULT CMainFrame::OnViewClrTypes(WORD, WORD, HWND, BOOL&) {
 	if (auto hItem = FindTreeItem(TreeItemType::ClrTypes))
 		ShowView(hItem);
@@ -1998,6 +2008,13 @@ bool CMainFrame::ReadImage(uint64_t va, uint8_t* buffer, size_t size) const {
 namespace {
 	std::string Narrow(std::wstring const& text) {
 		return std::string(CW2A(text.c_str(), CP_UTF8));
+	}
+
+	// a DLL as the decompiler shows it: an API set with the DLL that implements it on this system
+	std::string ShownModule(std::string const& module) {
+		if (auto host = ApiSetMap::System().Resolve(module))
+			return module + " (" + *host + ")";
+		return module;
 	}
 
 	// the value of an enum's constant as its bits
@@ -2363,13 +2380,14 @@ std::shared_ptr<CMainFrame::DecompilerSession> CMainFrame::Decompiler(std::wstri
 				if (slot == 0)
 					continue;
 				auto module = moduleOf(imp.ModuleName);
+				auto dll = ShownModule(imp.ModuleName);
 				for (auto const& fn : imp.ImportFunc) {
 					auto name = fn.FuncName;
 					if (name.empty()) {
 						auto ordinal = pe64 ? fn.unThunk.Thunk64.u1.Ordinal & 0xFFFF : fn.unThunk.Thunk32.u1.Ordinal & 0xFFFF;
 						name = module + "_Ordinal_" + std::to_string(ordinal);
 					}
-					session->Imports.emplace_back(base + slot, name);
+					session->Imports.push_back({ base + slot, name, dll });
 					slot += pe64 ? 8 : 4;
 				}
 			}
@@ -2385,6 +2403,7 @@ std::shared_ptr<CMainFrame::DecompilerSession> CMainFrame::Decompiler(std::wstri
 					continue;
 				uint64_t slot = desc.rvaIAT - rebase, names = desc.rvaINT ? desc.rvaINT - rebase : 0;
 				auto module = moduleOf(imp.ModuleName);
+				auto dll = ShownModule(imp.ModuleName) + " (delay loaded)";
 				for (auto const& fn : imp.DelayImpFunc) {
 					auto name = fn.FuncName;
 					if (name.empty() && names) {
@@ -2394,7 +2413,7 @@ std::shared_ptr<CMainFrame::DecompilerSession> CMainFrame::Decompiler(std::wstri
 							name = module + "_Ordinal_" + std::to_string(entry & 0xFFFF);
 					}
 					if (!name.empty())
-						session->Imports.emplace_back(base + slot, name);
+						session->Imports.push_back({ base + slot, name, dll });
 					slot += pe64 ? 8 : 4;
 					if (names)
 						names += pe64 ? 8 : 4;
@@ -2472,8 +2491,8 @@ GhidraDecompiler* CMainFrame::DecompilerSession::Open(std::string& error) {
 		decompiler->AddReadOnly(va, size);
 	if (ExternalArea) {
 		decompiler->SetExternalArea(ExternalArea);
-		for (auto const& [slot, name] : Imports)
-			decompiler->AddImport(slot, name);
+		for (auto const& imp : Imports)
+			decompiler->AddImport(imp.Slot, imp.Name, imp.Module);
 	}
 	if (Symbols) {
 		decompiler->SetTypeSource([this](uint32_t id, GhidraDecompiler::Type& type) {

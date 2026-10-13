@@ -137,6 +137,12 @@
     <ClCompile Include="FunctionsView.cpp">
       <Filter>Views</Filter>
     </ClCompile>
+    <ClCompile Include="GoAnywhereDlg.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
+    <ClCompile Include="SecuritySummaryView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
     <ClCompile Include="ClrTypesView.cpp">
       <Filter>Views</Filter>
     </ClCompile>
@@ -361,6 +367,12 @@
       <Filter>Views</Filter>
     </ClInclude>
     <ClInclude Include="FunctionsView.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="GoAnywhereDlg.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="SecuritySummaryView.h">
       <Filter>Views</Filter>
     </ClInclude>
     <ClInclude Include="ClrTypesView.h">

@@ -12,6 +12,8 @@ struct ISearchHost abstract {
 	virtual bool GoToSearchItem(SearchItem const& item) = 0;
 	// the icons of the items (SearchItem::Image)
 	virtual HIMAGELIST GetImageList() const = 0;
+	// the places a number can be (Go Anywhere): a VA, an RVA, a file offset (SearchKind::Address); none if it is not a number
+	virtual std::vector<SearchItem> AddressItems(std::wstring const& text) { return {}; }
 };
 
 // Search All: one search through the imports, exports, strings, resources, symbols and section names of the file.

@@ -83,7 +83,7 @@ uint32_t CSearchDlg::SelectedKinds() const {
 	if (IsDlgButtonChecked(IDC_SEARCH_RESOURCES))
 		kinds |= SearchKindBit(SearchKind::Resource);
 	if (IsDlgButtonChecked(IDC_SEARCH_SYMBOLS))
-		kinds |= SearchKindBit(SearchKind::Symbol);
+		kinds |= SearchKindBit(SearchKind::Symbol) | SearchKindBit(SearchKind::ClrType) | SearchKindBit(SearchKind::ClrMember);
 	if (IsDlgButtonChecked(IDC_SEARCH_SECTIONS))
 		kinds |= SearchKindBit(SearchKind::Section);
 	return kinds;

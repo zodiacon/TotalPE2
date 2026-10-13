@@ -147,6 +147,8 @@ enum class TreeItemType : int64_t {
 	CallGraph,
 	// the types of a .NET file and the IL of their methods
 	ClrTypes,
+	// the protections of the file: ASLR, DEP, CFG, CET, its signature...
+	SecuritySummary,
 
 	ItemMask = 255,
 };

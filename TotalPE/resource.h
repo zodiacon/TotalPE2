@@ -80,6 +80,7 @@
 #define IDD_DISASM_FUNCTION             278
 #define IDI_CLASS                       279
 #define IDD_SEARCH                      277
+#define IDD_GOANYWHERE                  280
 #define IDD_VTKEY                       274
 #define IDI_ICON5                       276
 #define IDI_FLOW                        276
@@ -119,6 +120,9 @@
 #define IDC_SEARCH_MATCHCASE            1032
 #define IDC_SEARCH_RESULTS              1033
 #define IDC_SEARCH_STATUS               1034
+#define IDC_GOANY_TEXT                  1036
+#define IDC_GOANY_LIST                  1037
+#define IDC_GOANY_STATUS                1038
 #define ID_WINDOW_CLOSE                 32772
 #define ID_WINDOW_CLOSE_ALL             32773
 #define ID_FILE_RUNASADMINISTRATOR      32775
@@ -185,6 +189,8 @@
 #define ID_CODE_GOTODEFINITION          32903
 #define ID_PE_CLRTYPES                  32904
 #define ID_STRINGS_USEDONLY             32905
+#define ID_PE_SECURITYSUMMARY           32906
+#define ID_NAV_GOANYWHERE               32907
 #define ID_IMPORT_FILEPROPERTIES        32809
 #define ID_IMPORT_GOTOFILELOCATION      32810
 #define ID_WINDOW_WINDOWS               32811
@@ -241,9 +247,9 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        280
-#define _APS_NEXT_COMMAND_VALUE         32906
-#define _APS_NEXT_CONTROL_VALUE         1036
+#define _APS_NEXT_RESOURCE_VALUE        281
+#define _APS_NEXT_COMMAND_VALUE         32908
+#define _APS_NEXT_CONTROL_VALUE         1039
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

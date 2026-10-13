@@ -92,9 +92,9 @@ public:
 	void AddReadOnly(uint64_t address, uint64_t size);
 	// Imports: a call through the pointer at 'slot' (an entry of the import address table) is a call of the function
 	// 'name', which is outside the image. Each such function gets an address in an area that the image does not use,
-	// which is set first.
+	// which is set first. 'module' (the DLL, as it is to be shown) is told of a function that only jumps to the import.
 	void SetExternalArea(uint64_t address);
-	void AddImport(uint64_t slot, std::string const& name);
+	void AddImport(uint64_t slot, std::string const& name, std::string const& module = {});
 
 	// Types, prototypes, names and local variables (set before decompiling). The name and prototype of the decompiled function, and
 	// those of the functions it calls, are asked for when it is decompiled: a large program's symbols are not all given

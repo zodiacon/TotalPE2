@@ -82,6 +82,7 @@ public:
 		COMMAND_ID_HANDLER(ID_PE_STRINGS, OnViewStrings)
 		COMMAND_ID_HANDLER(ID_PE_FUNCTIONS, OnViewFunctions)
 		COMMAND_ID_HANDLER(ID_PE_CLRTYPES, OnViewClrTypes)
+		COMMAND_ID_HANDLER(ID_PE_SECURITYSUMMARY, OnViewSecuritySummary)
 		COMMAND_ID_HANDLER(ID_FILE_SAVE, OnFileSave)
 		COMMAND_ID_HANDLER(ID_FILE_EXPORTLIST, OnFileExportList)
 		COMMAND_ID_HANDLER(ID_PE_SECURITY, OnViewSecurity)
@@ -101,6 +102,7 @@ public:
 		COMMAND_ID_HANDLER(ID_OPTIONS_DARKMODE, OnToggleDarkMode)
 		COMMAND_ID_HANDLER(ID_OPTIONS_SYMBOLS, OnSymbolSettings)
 		COMMAND_ID_HANDLER(ID_NAV_GOTO, OnNavGoTo)
+		COMMAND_ID_HANDLER(ID_NAV_GOANYWHERE, OnNavGoAnywhere)
 		COMMAND_ID_HANDLER(ID_NAV_BACK, OnNavBack)
 		COMMAND_ID_HANDLER(ID_NAV_FORWARD, OnNavForward)
 		MESSAGE_HANDLER(WM_SYMBOLS_LOADED, OnSymbolsLoaded)
@@ -265,6 +267,7 @@ private:
 	LRESULT OnViewStrings(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewFunctions(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewClrTypes(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnViewSecuritySummary(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnFileSave(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnFileExportList(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	void UpdateSaveUI();
@@ -293,7 +296,12 @@ private:
 		std::wstring Languages;		// the folder of the language definitions
 		std::vector<std::pair<uint64_t, std::string>> Functions;	// the exports
 		uint64_t ExternalArea{ 0 };
-		std::vector<std::pair<uint64_t, std::string>> Imports;	// by the slots of the import address tables
+		struct Import {
+			uint64_t Slot;		// in the import address table
+			std::string Name;
+			std::string Module;	// the DLL, and for an API set the DLL that implements it
+		};
+		std::vector<Import> Imports;
 		std::vector<std::pair<uint64_t, uint64_t>> ReadOnly;	// the sections that are not written (address, size)
 		struct Global {
 			uint64_t Address;
@@ -365,6 +373,9 @@ private:
 	LRESULT OnToggleDarkMode(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnSymbolSettings(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnNavGoTo(WORD, WORD, HWND, BOOL&);
+	LRESULT OnNavGoAnywhere(WORD, WORD, HWND, BOOL&);
+	std::vector<SearchItem> AddressItems(std::wstring const& text) override;
+	void AddViewsToSearchIndex(HTREEITEM hParent, std::wstring const& parent, int depth);
 	LRESULT OnEditSearchAll(WORD, WORD, HWND, BOOL&);
 	LRESULT OnFileCompare(WORD, WORD, HWND, BOOL&);
 	int m_Comparisons{ 0 };

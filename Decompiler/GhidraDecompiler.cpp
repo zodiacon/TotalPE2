@@ -189,6 +189,7 @@ struct GhidraDecompiler::Impl {
 	std::ostringstream Messages;	// what the decompiler says (warnings)
 	std::unique_ptr<CallbackArchitecture> Arch;
 	uint64_t NextExternal{ 0 };		// where the next import goes (0: no area for them)
+	std::unordered_map<uint64_t, std::string> ImportModules;	// the DLL of each import, by its address in the area
 
 	TypeSource Types;
 	PrototypeSource Prototypes;
@@ -686,7 +687,7 @@ void GhidraDecompiler::SetExternalArea(uint64_t address) {
 
 // The function an import is: a function without code (outside the image), and an external reference from the slot to it,
 // which makes a call through the slot a call of the function
-void GhidraDecompiler::AddImport(uint64_t slot, std::string const& name) {
+void GhidraDecompiler::AddImport(uint64_t slot, std::string const& name, std::string const& module) {
 	auto arch = m_Impl->Arch.get();
 	if (!arch || name.empty() || m_Impl->NextExternal == 0)
 		return;
@@ -696,6 +697,8 @@ void GhidraDecompiler::AddImport(uint64_t slot, std::string const& name) {
 		auto global = arch->symboltab->getGlobalScope();
 		global->addFunction(target, name)->getFunction()->setNoCode(true);
 		global->addExternalRef(Address(arch->getDefaultDataSpace(), slot), target, name);
+		if (!module.empty())
+			m_Impl->ImportModules[target.getOffset()] = module;
 	}
 	catch (LowlevelError const&) {
 		// a name the decompiler does not take: the call stays a call through the pointer
@@ -827,8 +830,26 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 		action->reset(*fd);
 		int4 result = action->perform(*fd);
 
-		// the names and prototypes of the functions it calls: if there are any, it is decompiled again with them
+		// An indirect jump to a known function (through the slot of an import, as a thunk does) is a tail call: a call, then a
+		// return. Ghidra first takes it for a switch whose table it cannot find, with warnings, so it is told what it is.
 		bool more = false;
+		for (int4 i = 0; i < fd->numCalls(); i++) {
+			auto fc = fd->getCallSpecs(i);
+			if (fc->isBadJumpTable() && !fc->getEntryAddress().isInvalid() && fc->getOp()) {
+				fd->getOverride().insertFlowOverride(fc->getOp()->getAddr(), Override::CALL_RETURN);
+				more = true;
+				// a function that is only that jump (a thunk) passes its parameters on, which cannot be seen in it
+				auto entry = fc->getEntryAddress().getOffset();
+				if (fc->getOp()->getAddr() == fd->getAddress())
+					if (auto it = m_Impl->ImportModules.find(entry); it != m_Impl->ImportModules.end()) {
+						auto callee = global->queryFunction(fc->getEntryAddress());
+						m_Impl->Messages << "A thunk: it jumps to " << (callee ? callee->getName() : std::string("the import")) << " in "
+							<< it->second << ". The parameters it passes on are not known here.\n";
+					}
+			}
+		}
+
+		// the names and prototypes of the functions it calls: if there are any, it is decompiled again with them
 		for (int4 i = 0; i < fd->numCalls(); i++) {
 			auto fc = fd->getCallSpecs(i);
 			auto const& entry = fc->getEntryAddress();

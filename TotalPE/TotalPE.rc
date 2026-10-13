@@ -288,6 +288,7 @@ BEGIN
         MENUITEM "&Paste\tCtrl+V",              ID_EDIT_PASTE
         MENUITEM SEPARATOR
         MENUITEM "&Go to...\tCtrl+G",           ID_NAV_GOTO
+        MENUITEM "Go &Anywhere...\tCtrl+P",     ID_NAV_GOANYWHERE
         MENUITEM "&Back\tAlt+Left",             ID_NAV_BACK
         MENUITEM "&Forward\tAlt+Right",         ID_NAV_FORWARD
     END
@@ -319,6 +320,7 @@ BEGIN
         MENUITEM ".&NET Types",                 ID_PE_CLRTYPES
         MENUITEM "&Debug",                      ID_VIEW_DEBUG
         MENUITEM "Security",                    ID_PE_SECURITY
+        MENUITEM "Security Summar&y",           ID_PE_SECURITYSUMMARY
         MENUITEM SEPARATOR
         MENUITEM "Disassemble Entry Point",     ID_PE_DISASSEMBLEENTRYPOINT
         MENUITEM "Disassemble &Function...",    ID_PE_DISASSEMBLEFUNCTION
@@ -551,6 +553,15 @@ BEGIN
     PUSHBUTTON      "Cancel",IDCANCEL,203,71,50,14
 END
 
+IDD_GOANYWHERE DIALOGEX 0, 0, 420, 230
+STYLE DS_SETFONT | DS_FIXEDSYS | WS_POPUP | WS_BORDER
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    EDITTEXT        IDC_GOANY_TEXT,5,5,410,14,ES_AUTOHSCROLL
+    CONTROL         "",IDC_GOANY_LIST,"SysListView32",LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_SHAREIMAGELISTS | LVS_OWNERDATA | LVS_NOCOLUMNHEADER | WS_BORDER | WS_TABSTOP,5,23,410,190
+    LTEXT           "",IDC_GOANY_STATUS,5,217,410,9
+END
+
 IDD_SEARCH DIALOGEX 0, 0, 440, 260
 STYLE DS_SETFONT | DS_FIXEDSYS | WS_MAXIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
 CAPTION "Search All"
@@ -607,7 +618,7 @@ BEGIN
     "Z",            ID_EDIT_UNDO,           VIRTKEY, CONTROL, NOINVERT
     "N",            ID_FILE_NEW,            VIRTKEY, CONTROL, NOINVERT
     "O",            ID_FILE_OPEN,           VIRTKEY, CONTROL, NOINVERT
-    "P",            ID_FILE_PRINT,          VIRTKEY, CONTROL, NOINVERT
+    "P",            ID_NAV_GOANYWHERE,      VIRTKEY, CONTROL, NOINVERT
     "S",            ID_FILE_SAVE,           VIRTKEY, CONTROL, NOINVERT
     "S",            ID_FILE_EXPORTLIST,     VIRTKEY, SHIFT, CONTROL, NOINVERT
     VK_F6,          ID_NEXT_PANE,           VIRTKEY, NOINVERT
