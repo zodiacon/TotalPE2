@@ -253,6 +253,10 @@ IDI_BOOKMARK            ICON                    "res\\Bookmark.ico"
 
 IDI_FLOW                ICON                    "res\\Flow.ico"
 
+IDI_PROPERTY            ICON                    "res\\property.ico"
+
+IDI_EVENT               ICON                    "res\\event.ico"
+
 IDI_CLASS               ICON                    "res\\class.ico"
 
 

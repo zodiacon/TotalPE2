@@ -1,7 +1,9 @@
 #include "pch.h"
 #include "ClrTypesView.h"
 #include <ClrIL.h>
+#include <ClrDecompiler.h>
 #include <PEFile.h>
+#include <ToolbarHelper.h>
 
 namespace {
 	// a type's name without the number of generic parameters ("List`1" -> "List")
@@ -71,20 +73,40 @@ CString CClrTypesView::GetTitle() const {
 }
 
 void CClrTypesView::UpdateUI(bool) {
-	auto text = std::format(L"{} types, {} methods, {} fields", m_Md.Types().size(), m_Md.Methods().size(), m_Md.Fields().size());
+	auto text = std::format(L"{} types, {} methods, {} fields, {} properties, {} events", m_Md.Types().size(), m_Md.Methods().size(),
+		m_Md.Fields().size(), m_Md.Properties().size(), m_Md.Events().size());
 	if (!m_FilterText.empty())
 		text += std::format(L" ({} types match{})", m_Shown, m_Shown >= MaxFilteredTypes ? L", the first ones shown" : L"");
 	Frame()->SetStatusText(1, text.c_str());
 }
 
 LRESULT CClrTypesView::OnCreate(UINT, WPARAM, LPARAM, BOOL& handled) {
-	// the filter, in a band of its own (the rebar passes its notifications on to this window)
+	// C# or IL, then the filter, in bands of their own (the rebar passes their notifications on to this window)
+	ToolBarButtonInfo const buttons[] = {
+		{ ID_CLR_CSHARP, 0, BTNS_CHECKGROUP | BTNS_SHOWTEXT | BTNS_AUTOSIZE, L"C#" },
+		{ ID_CLR_IL, 0, BTNS_CHECKGROUP | BTNS_SHOWTEXT | BTNS_AUTOSIZE, L"IL" },
+	};
 	CreateSimpleReBar(ATL_SIMPLE_REBAR_NOBORDER_STYLE);
+	m_tb = ToolbarHelper::CreateAndInitToolBar(m_hWnd, buttons, _countof(buttons), 16);
+	AddSimpleReBarBand(m_tb);
+	UIAddToolBar(m_tb);
 	CRect rc(0, 0, 300, 20);
 	m_Filter.Create(m_hWnd, rc, nullptr, WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL);
 	m_Filter.SetFont(AtlGetDefaultGuiFont());
 	m_Filter.SetWatermark(L"Filter types and members (Esc to clear)");
 	AddSimpleReBarBand(m_Filter, nullptr, FALSE, 300);
+	// the band of the toolbar is as wide as its buttons, so the filter comes after them
+	CRect rcLast;
+	m_tb.GetItemRect(m_tb.GetButtonCount() - 1, &rcLast);
+	CReBarCtrl rebar(m_hWndToolBar);
+	REBARBANDINFO band{ sizeof(band) };
+	band.fMask = RBBIM_CHILDSIZE | RBBIM_SIZE | RBBIM_IDEALSIZE;
+	rebar.GetBandInfo(0, &band);
+	band.cxMinChild = band.cxIdeal = rcLast.right;
+	band.cx = rcLast.right + 16;
+	rebar.SetBandInfo(0, &band);
+	UISetCheck(ID_CLR_CSHARP, m_CSharp);
+	UISetCheck(ID_CLR_IL, !m_CSharp);
 
 	m_hWndClient = m_Splitter.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
 	m_Tree.Create(m_Splitter, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS |
@@ -94,7 +116,7 @@ LRESULT CClrTypesView::OnCreate(UINT, WPARAM, LPARAM, BOOL& handled) {
 
 	m_Code = new CScintillaView(Frame(), m_PE, GetTitle());
 	m_Code->DoCreate(m_Splitter);
-	m_Code->SetLanguage(LexLanguage::IL);
+	m_Code->SetLanguage(m_CSharp ? LexLanguage::CSharp : LexLanguage::IL);
 	m_Code->GetCtrl().SetCodePage(SC_CP_UTF8);
 	m_Code->GetCtrl().SetReadOnly(true);
 	m_Code->GetCtrl().SendMessage(SCI_SETTABWIDTH, 4);
@@ -167,12 +189,19 @@ bool CClrTypesView::AnyMemberMatches(uint32_t type) const {
 	for (auto f : m_Md.FieldsOf(type))
 		if (Matches(m_Md.Fields()[f - 1].Name))
 			return true;
+	for (auto p : m_Md.PropertiesOf(type))
+		if (Matches(m_Md.Properties()[p - 1].Name))
+			return true;
+	for (auto e : m_Md.EventsOf(type))
+		if (Matches(m_Md.Events()[e - 1].Name))
+			return true;
 	return false;
 }
 
 bool CClrTypesView::HasChildren(uint32_t type) const {
 	auto& t = m_Md.Types()[type - 1];
-	return (m_FilterText.empty() && !m_NestedTypes[type].empty()) || t.EndMethod > t.FirstMethod || t.EndField > t.FirstField;
+	return (m_FilterText.empty() && !m_NestedTypes[type].empty()) || t.EndMethod > t.FirstMethod || t.EndField > t.FirstField ||
+		!m_Md.PropertiesOf(type).empty() || !m_Md.EventsOf(type).empty();
 }
 
 std::wstring CClrTypesView::TypeText(uint32_t type, bool qualified) const {
@@ -299,24 +328,62 @@ void CClrTypesView::Populate(HTREEITEM hItem) {
 			if (m_FilterText.empty())
 				for (auto nested : m_NestedTypes[index])
 					AddType(hItem, nested, false);
-			auto addMember = [&](Kind kind, uint32_t row, std::wstring const& text, int image) {
+			auto addMember = [&](Kind kind, uint32_t row, std::wstring const& text, int image, bool children = false) {
 				TVINSERTSTRUCT tvis{};
 				tvis.hParent = hItem;
 				tvis.hInsertAfter = TVI_LAST;
-				tvis.item.mask = TVIF_TEXT | TVIF_PARAM | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
+				tvis.item.mask = TVIF_TEXT | TVIF_PARAM | TVIF_IMAGE | TVIF_SELECTEDIMAGE | TVIF_CHILDREN;
 				tvis.item.pszText = (PWSTR)text.c_str();
 				tvis.item.iImage = tvis.item.iSelectedImage = image;
 				tvis.item.lParam = Data(kind, row);
+				tvis.item.cChildren = children ? 1 : 0;
 				m_Tree.InsertItem(&tvis);
 			};
 			auto field = Frame()->GetIconIndex(IDI_FIELD), constant = Frame()->GetIconIndex(IDI_DATA);
 			for (auto f : m_Md.FieldsOf(index))
 				if (all || Matches(m_Md.Fields()[f - 1].Name))
 					addMember(Kind::Field, f, FieldText(f), (m_Md.Fields()[f - 1].Flags & 0x40) ? constant : field);
+			// the events and properties have their accessors under them, not with the methods
+			auto event = Frame()->GetIconIndex(IDI_EVENT);
+			for (auto e : m_Md.EventsOf(index))
+				if (all || Matches(m_Md.Events()[e - 1].Name))
+					addMember(Kind::Event, e, Simplify(m_Md.EventSignature(e)), event, true);
+			auto property = Frame()->GetIconIndex(IDI_PROPERTY);
+			for (auto p : m_Md.PropertiesOf(index))
+				if (all || Matches(m_Md.Properties()[p - 1].Name))
+					addMember(Kind::Property, p, Simplify(m_Md.PropertySignature(p)), property, true);
 			auto method = Frame()->GetIconIndex(IDI_FUNCTION);
 			for (auto m : m_Md.MethodsOf(index))
-				if (all || Matches(m_Md.Methods()[m - 1].Name))
+				if ((all || Matches(m_Md.Methods()[m - 1].Name)) && m_Md.AccessorOf(m).second == ClrAccessor::None)
 					addMember(Kind::Method, m, MethodText(m), method);
+			break;
+		}
+		case Kind::Property:
+		case Kind::Event:
+		{
+			std::vector<uint32_t> accessors;
+			if (KindOf(data) == Kind::Property) {
+				auto& p = m_Md.Properties()[index - 1];
+				accessors = { p.Getter, p.Setter };
+			}
+			else {
+				auto& e = m_Md.Events()[index - 1];
+				accessors = { e.Adder, e.Remover, e.Raiser };
+			}
+			auto image = Frame()->GetIconIndex(IDI_FUNCTION);
+			for (auto m : accessors) {
+				if (!m)
+					continue;
+				auto text = MethodText(m);
+				TVINSERTSTRUCT tvis{};
+				tvis.hParent = hItem;
+				tvis.hInsertAfter = TVI_LAST;
+				tvis.item.mask = TVIF_TEXT | TVIF_PARAM | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
+				tvis.item.pszText = (PWSTR)text.c_str();
+				tvis.item.iImage = tvis.item.iSelectedImage = image;
+				tvis.item.lParam = Data(Kind::Method, m);
+				m_Tree.InsertItem(&tvis);
+			}
 			break;
 		}
 	}
@@ -340,6 +407,24 @@ LRESULT CClrTypesView::OnItemExpanding(int, LPNMHDR hdr, BOOL&) {
 LRESULT CClrTypesView::OnSelChanged(int, LPNMHDR hdr, BOOL&) {
 	if (hdr->hwndFrom == m_Tree)
 		Show(m_Tree.GetSelectedItem());
+	return 0;
+}
+
+LRESULT CClrTypesView::OnLanguage(WORD, WORD id, HWND, BOOL&) {
+	bool csharp = id == ID_CLR_CSHARP;
+	UISetCheck(ID_CLR_CSHARP, csharp);
+	UISetCheck(ID_CLR_IL, !csharp);
+	if (csharp == m_CSharp)
+		return 0;
+	m_CSharp = csharp;
+	m_Code->SetLanguage(m_CSharp ? LexLanguage::CSharp : LexLanguage::IL);
+	// the same item, in the other language, at about the same place
+	auto& ctrl = m_Code->GetCtrl();
+	auto first = (int)ctrl.SendMessage(SCI_GETFIRSTVISIBLELINE);
+	auto lines = std::max<int>(1, (int)ctrl.SendMessage(SCI_GETLINECOUNT));
+	Show(m_Tree.GetSelectedItem());
+	auto now = (int)ctrl.SendMessage(SCI_GETLINECOUNT);
+	ctrl.SendMessage(SCI_SETFIRSTVISIBLELINE, (WPARAM)((int64_t)first * now / lines));
 	return 0;
 }
 
@@ -373,6 +458,7 @@ void CClrTypesView::Show(HTREEITEM hItem) {
 	}
 	auto data = m_Tree.GetItemData(hItem);
 	auto index = IndexOf(data);
+	CWaitCursor wait;	// a large type takes a while to decompile
 	switch (KindOf(data)) {
 		case Kind::Namespace:
 		{
@@ -380,7 +466,7 @@ void CClrTypesView::Show(HTREEITEM hItem) {
 			std::wstring text;
 			if (index < m_Types.size()) {
 				for (auto type : m_Types[index]) {
-					text += m_Md.TypeDeclaration(type) + L"\r\n";
+					text += (m_CSharp ? CSharpTypeDeclaration(m_Md, type) : m_Md.TypeDeclaration(type)) + L"\r\n";
 					m_LineTokens.push_back((ClrTableId::TypeDef << 24) | type);
 				}
 			}
@@ -388,14 +474,24 @@ void CClrTypesView::Show(HTREEITEM hItem) {
 			break;
 		}
 		case Kind::Type:
-			SetCode(DisassembleIlType(m_PE, m_Md, index, &m_LineTokens));
+			SetCode(m_CSharp ? DecompileClrType(m_PE, m_Md, index, &m_LineTokens) : DisassembleIlType(m_PE, m_Md, index, &m_LineTokens));
 			break;
 		case Kind::Method:
-			SetCode(DisassembleIlMethod(m_PE, m_Md, index, &m_LineTokens));
+			SetCode(m_CSharp ? DecompileClrMethod(m_PE, m_Md, index, &m_LineTokens) : DisassembleIlMethod(m_PE, m_Md, index, &m_LineTokens));
+			break;
+		case Kind::Property:
+			SetCode(m_CSharp ? DecompileClrProperty(m_PE, m_Md, index, &m_LineTokens) : DisassembleIlProperty(m_PE, m_Md, index, &m_LineTokens));
+			break;
+		case Kind::Event:
+			SetCode(m_CSharp ? DecompileClrEvent(m_PE, m_Md, index, &m_LineTokens) : DisassembleIlEvent(m_PE, m_Md, index, &m_LineTokens));
 			break;
 		case Kind::Field:
 		{
 			auto type = m_Md.Fields()[index - 1].Type;
+			if (m_CSharp) {
+				SetCode(DecompileClrField(m_Md, index, &m_LineTokens));
+				break;
+			}
 			SetCode(m_Md.FieldDeclaration(index) + L"\r\n\r\n// in " + m_Md.TypeDeclaration(type) + L"\r\n");
 			m_LineTokens = { (ClrTableId::Field << 24) | index, 0, (ClrTableId::TypeDef << 24) | type };
 			break;
@@ -410,16 +506,22 @@ bool CClrTypesView::GoToLine(int line) {
 	if (!definition)
 		return false;
 	// the line of the selected item itself leads nowhere new
-	auto selected = m_Tree.GetSelectedItem();
-	if (selected) {
-		auto data = m_Tree.GetItemData(selected);
-		auto kind = KindOf(data);
-		auto table = definition >> 24;
-		if (IndexOf(data) == (definition & 0xFFFFFF) && ((kind == Kind::Method && table == ClrTableId::MethodDef) ||
-			(kind == Kind::Field && table == ClrTableId::Field) || (kind == Kind::Type && table == ClrTableId::TypeDef)))
-			return false;
-	}
+	if (auto selected = m_Tree.GetSelectedItem(); selected && TokenOf(selected) == definition)
+		return false;
 	return SelectToken(definition);
+}
+
+uint32_t CClrTypesView::TokenOf(HTREEITEM hItem) const {
+	auto data = m_Tree.GetItemData(hItem);
+	auto index = IndexOf(data);
+	switch (KindOf(data)) {
+		case Kind::Type: return (ClrTableId::TypeDef << 24) | index;
+		case Kind::Method: return (ClrTableId::MethodDef << 24) | index;
+		case Kind::Field: return (ClrTableId::Field << 24) | index;
+		case Kind::Property: return (ClrTableId::Property << 24) | index;
+		case Kind::Event: return (ClrTableId::Event << 24) | index;
+	}
+	return 0;
 }
 
 HTREEITEM CClrTypesView::FindChild(HTREEITEM hParent, LPARAM data) {
@@ -433,16 +535,37 @@ HTREEITEM CClrTypesView::FindChild(HTREEITEM hParent, LPARAM data) {
 bool CClrTypesView::SelectToken(uint32_t token) {
 	auto row = token & 0xFFFFFF;
 	uint32_t type = 0;
-	LPARAM member = 0;
+	LPARAM member = 0, accessorOf = 0;
 	switch (token >> 24) {
 		case ClrTableId::TypeDef:
 			type = row;
 			break;
 		case ClrTableId::MethodDef:
+		{
 			if (row == 0 || row > m_Md.Methods().size())
 				return false;
 			type = m_Md.Methods()[row - 1].Type;
 			member = Data(Kind::Method, row);
+			// an accessor is under its property or event
+			auto [owner, accessor] = m_Md.AccessorOf(row);
+			if (accessor != ClrAccessor::None && owner) {
+				accessorOf = Data((owner >> 24) == ClrTableId::Property ? Kind::Property : Kind::Event, owner & 0xFFFFFF);
+				if (accessor == ClrAccessor::Other)
+					accessorOf = 0;
+			}
+			break;
+		}
+		case ClrTableId::Property:
+			if (row == 0 || row > m_Md.Properties().size())
+				return false;
+			type = m_Md.Properties()[row - 1].Type;
+			member = Data(Kind::Property, row);
+			break;
+		case ClrTableId::Event:
+			if (row == 0 || row > m_Md.Events().size())
+				return false;
+			type = m_Md.Events()[row - 1].Type;
+			member = Data(Kind::Event, row);
 			break;
 		case ClrTableId::Field:
 			if (row == 0 || row > m_Md.Fields().size())
@@ -478,6 +601,10 @@ bool CClrTypesView::SelectToken(uint32_t token) {
 		hItem = FindChild(hItem, Data(Kind::Type, t));
 		if (!hItem)
 			break;
+	}
+	if (hItem && accessorOf) {
+		Populate(hItem);
+		hItem = FindChild(hItem, accessorOf);
 	}
 	if (hItem && member) {
 		Populate(hItem);

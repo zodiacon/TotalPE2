@@ -247,6 +247,7 @@
     <ClInclude Include="Authenticode.h" />
     <ClInclude Include="ClrMetadata.h" />
     <ClInclude Include="ClrIL.h" />
+    <ClInclude Include="ClrDecompiler.h" />
     <ClInclude Include="CodeAnalysis.h" />
     <ClInclude Include="CodeViewInfo.h" />
     <ClInclude Include="CoffObject.h" />
@@ -296,6 +297,7 @@
     <ClCompile Include="Authenticode.cpp" />
     <ClCompile Include="ClrMetadata.cpp" />
     <ClCompile Include="ClrIL.cpp" />
+    <ClCompile Include="ClrDecompiler.cpp" />
     <ClCompile Include="CodeAnalysis.cpp" />
     <ClCompile Include="CodeViewInfo.cpp" />
     <ClCompile Include="CoffObject.cpp" />

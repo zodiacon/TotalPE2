@@ -30,7 +30,9 @@ struct ClrAssemblyInfo {
 namespace ClrTableId {
 	enum : int {
 		Module = 0x00, TypeRef = 0x01, TypeDef = 0x02, FieldPtr = 0x03, Field = 0x04, MethodPtr = 0x05, MethodDef = 0x06,
-		ParamPtr = 0x07, Param = 0x08, InterfaceImpl = 0x09, MemberRef = 0x0A, StandAloneSig = 0x11, ModuleRef = 0x1A,
+		ParamPtr = 0x07, Param = 0x08, InterfaceImpl = 0x09, MemberRef = 0x0A, Constant = 0x0B, CustomAttribute = 0x0C,
+		StandAloneSig = 0x11, EventMap = 0x12, EventPtr = 0x13, Event = 0x14, PropertyMap = 0x15, PropertyPtr = 0x16,
+		Property = 0x17, MethodSemantics = 0x18, ModuleRef = 0x1A,
 		TypeSpec = 0x1B, Assembly = 0x20, AssemblyRef = 0x23, NestedClass = 0x29, GenericParam = 0x2A, MethodSpec = 0x2B,
 		UserString = 0x70,	// not a table: the tokens of ldstr are offsets in the #US heap
 	};
@@ -62,9 +64,97 @@ struct ClrFieldDef {
 	uint32_t Type{};
 };
 
+// A property, and the methods that are its accessors (MethodDef rows, 0 for none)
+struct ClrPropertyDef {
+	uint16_t Flags{};
+	std::wstring Name;
+	uint32_t Signature{};
+	uint32_t Type{};
+	uint32_t Getter{}, Setter{};
+};
+
+// An event, its type (a token) and its accessors
+struct ClrEventDef {
+	uint16_t Flags{};
+	std::wstring Name;
+	uint32_t EventType{};
+	uint32_t Type{};
+	uint32_t Adder{}, Remover{}, Raiser{};
+};
+
+// A method that is a function of a native DLL (ImplMap): the DLL, the function's name in it and the flags (CharSet...)
+struct ClrPInvoke {
+	std::wstring Module, EntryPoint;
+	uint16_t Flags{};
+};
+
+// What a method is to a property or an event (MethodSemantics)
+enum class ClrAccessor : uint8_t { None, Getter, Setter, Adder, Remover, Raiser, Other };
+
+// A custom attribute: the constructor and its arguments, decoded, in IL and in C#
+struct ClrAttributeArgument {
+	std::wstring Name;		// of a named argument (a field or property of the attribute); empty for a constructor's
+	bool Field{ false };	// a named argument that is a field
+	std::wstring Type;		// in IL: "int32", "string", "type", the type of an enum...
+	std::wstring Il, CSharp;	// the value: "int32(5)" / "5", "string('a')" / "\"a\"", "type(T)" / "typeof(T)"
+};
+struct ClrCustomAttribute {
+	uint32_t Parent{};		// the token it is on
+	uint32_t Constructor{};	// a MethodDef or MemberRef token
+	uint32_t AttributeType{};	// the token of the attribute's type
+	std::vector<ClrAttributeArgument> Arguments;	// those of the constructor, then the named ones
+	bool Decoded{ false };	// false: the value is not what the constructor says (it is shown as bytes)
+	std::vector<uint8_t> Value;
+};
+
+// What kind of value a type is, as the C# decompiler needs to know it (to write a condition, a literal...)
+enum class ClrValueKind : uint8_t {
+	Unknown, Void, Bool, Char, Integer, Float, String, Object, Struct, Enum, Pointer, ByRef, Generic,
+};
+
+struct ClrTypeInfo {
+	std::wstring Name;	// in C#: "int", "List<string>", "ref int", "T"
+	ClrValueKind Kind{ ClrValueKind::Unknown };
+	uint32_t Token{};	// of a class, struct or enum (TypeDef, TypeRef or TypeSpec), 0 for the others
+};
+
+struct ClrSignatureInfo {
+	bool HasThis{ false };
+	bool Vararg{ false };
+	uint32_t GenericCount{ 0 };
+	ClrTypeInfo Return;
+	std::vector<ClrTypeInfo> Params;
+};
+
+// A method or field that a token refers to, with what the C# decompiler needs: the type it is in, its name, its signature
+struct ClrMemberInfo {
+	uint32_t Token{};
+	bool IsField{ false };
+	bool Ok{ false };
+	std::wstring Name;
+	ClrTypeInfo Owner;		// the type it is a member of (an instance of a generic type: with its arguments)
+	ClrSignatureInfo Signature;	// of a method
+	ClrTypeInfo FieldType;	// of a field
+	std::vector<std::wstring> GenericArgs;	// of an instance of a generic method
+	uint32_t Definition{};	// the MethodDef or Field of this file it is, 0 if it is elsewhere
+};
+
+// The names (and kinds) of the generic parameters that !0 and !!0 stand for
+struct ClrGenericContext {
+	std::vector<std::wstring> const* TypeNames{ nullptr };
+	std::vector<std::wstring> const* MethodNames{ nullptr };
+	std::vector<ClrValueKind> const* TypeKinds{ nullptr };
+	std::vector<ClrValueKind> const* MethodKinds{ nullptr };
+};
+
 // Parses the CLR (COM descriptor) header and the metadata: version, streams, table row counts, module name, assembly
 // identity and references, and the types and members, whose names and signatures it turns into text (in the style of
 // ildasm). The metadata stays in the file: the PEFile must outlive this object.
+// C# literals: a string, a character ('a', '\n'), a real number ("1.5", "2.0", "1.5f", "double.NaN")
+std::wstring CSharpQuote(std::wstring_view text);
+std::wstring CSharpChar(wchar_t c);
+std::wstring CSharpReal(double value, bool single);
+
 class ClrMetadata {
 public:
 	bool Parse(PEFile const& pe);
@@ -137,10 +227,55 @@ public:
 	// "class", "interface", "struct", "enum" or "delegate"
 	std::wstring TypeKind(uint32_t type) const;
 
+	// The properties and events (rows, 1-based) and their accessors
+	std::vector<ClrPropertyDef> const& Properties() const { return m_Properties; }
+	std::vector<ClrEventDef> const& Events() const { return m_Events; }
+	std::vector<uint32_t> PropertiesOf(uint32_t type) const;
+	std::vector<uint32_t> EventsOf(uint32_t type) const;
+	// What a method is an accessor of: the token of the property or event, and which accessor (None if it is not one)
+	std::pair<uint32_t, ClrAccessor> AccessorOf(uint32_t method) const;
+	// ".property instance int32 Count()", ".event [mscorlib]System.EventHandler Changed"
+	std::wstring PropertyDeclaration(uint32_t property) const;
+	std::wstring EventDeclaration(uint32_t event) const;
+	// "int32 Count", "int32 Item(int32)", "[mscorlib]System.EventHandler Changed": for the tree
+	std::wstring PropertySignature(uint32_t property) const;
+	std::wstring EventSignature(uint32_t event) const;
+
+	// The custom attributes on what a token is (a type, method, field, parameter, property, event, the assembly...)
+	std::vector<ClrCustomAttribute> CustomAttributes(uint32_t token) const;
+	// ".custom instance void [mscorlib]System.ObsoleteAttribute::.ctor(string) = { string('old') }"
+	std::wstring AttributeIl(ClrCustomAttribute const& attribute) const;
+	// "Obsolete(\"old\")" (without the brackets)
+	std::wstring AttributeCSharp(ClrCustomAttribute const& attribute, ClrGenericContext const& context = {}) const;
+	// The token of a parameter (Param), by its sequence (0: the return value); 0 if it has no row
+	uint32_t ParamToken(uint32_t method, uint32_t sequence) const;
+	// The flags of a parameter (in = 1, out = 2, optional = 0x10)
+	uint16_t ParamFlags(uint32_t method, uint32_t sequence) const;
+	// The native function a method is (P/Invoke), if it is one
+	std::optional<ClrPInvoke> PInvoke(uint32_t method) const;
+
+	// C#: the names of types, the signatures and the members that code refers to
+	ClrGenericContext ContextOf(uint32_t method) const;	// of a method of the file (row)
+	ClrGenericContext ContextOfType(uint32_t type) const;
+	ClrTypeInfo CSharpType(uint32_t token, ClrGenericContext const& context = {}) const;
+	ClrMemberInfo MemberInfo(uint32_t token, ClrGenericContext const& context = {}) const;
+	std::vector<ClrTypeInfo> CSharpLocalTypes(uint32_t signatureToken, uint32_t method) const;
+	ClrTypeInfo CSharpPropertyType(uint32_t property, std::vector<ClrTypeInfo>* parameters = nullptr) const;
+	// The value of a constant (a field, parameter or property) as C# writes it: "5", "\"text\"", "null"; empty if it has none
+	std::wstring ConstantCSharp(uint32_t token) const;
+	// The integer value of a constant, if it is one
+	std::optional<int64_t> ConstantInteger(uint32_t token) const;
+	// The type of an enum's values (its value__ field), "int" if it is not known
+	ClrTypeInfo EnumUnderlyingType(uint32_t type) const;
+	// C#'s name of a type of the file, with the types it is nested in ("Outer.Inner"), without the namespace or arity
+	std::wstring CSharpTypeDefName(uint32_t type) const;
+
 private:
 	bool ParseTables(std::span<const std::byte> md, ClrStream const& tables);
 	friend struct ClrRowReader;
 	friend struct ClrSignature;
+	friend struct ClrAttributeReader;
+	ClrMemberInfo MemberInfoOf(uint32_t token, ClrGenericContext const& context, std::vector<ClrTypeInfo> const* methodArgs) const;
 
 	std::wstring String(uint32_t index) const;
 	std::span<const std::byte> Blob(uint32_t index) const;
@@ -176,6 +311,11 @@ private:
 	std::vector<ClrTypeDef> m_Types;
 	std::vector<ClrMethodDef> m_Methods;
 	std::vector<ClrFieldDef> m_Fields;
+	std::vector<ClrPropertyDef> m_Properties;
+	std::vector<ClrEventDef> m_Events;
+	std::vector<std::vector<uint32_t>> m_TypeProperties, m_TypeEvents;	// by the TypeDef row
+	std::unordered_map<uint32_t, std::pair<uint32_t, ClrAccessor>> m_Accessors;	// by the MethodDef row
+	std::vector<std::pair<uint32_t, uint32_t>> m_Attributes;	// the token an attribute is on, the CustomAttribute row (sorted)
 	std::unordered_map<uint32_t, std::vector<std::wstring>> m_GenericParams;	// by the token of the type or method
 	std::vector<std::pair<uint32_t, uint32_t>> m_Interfaces;	// type row, interface token (sorted by the row)
 	std::unordered_map<uint32_t, uint32_t> m_Constants;	// the Constant row of a field, parameter or property (by its token)

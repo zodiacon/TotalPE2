@@ -237,6 +237,17 @@ void CMainFrame::BuildSearchIndex() {
 					index.Add({ .Kind = SearchKind::ClrMember, .Name = fd.Name, .Details = fd.Type ? md.FullName(fd.Type) : std::wstring(),
 						.Value = (ClrTableId::Field << 24) | f, .Image = field });
 				}
+				auto property = GetTreeIcon(IDI_PROPERTY), event = GetTreeIcon(IDI_EVENT);
+				for (uint32_t p = 1; p <= md.Properties().size(); p++) {
+					auto& pd = md.Properties()[p - 1];
+					index.Add({ .Kind = SearchKind::ClrMember, .Name = pd.Name, .Details = pd.Type ? md.FullName(pd.Type) : std::wstring(),
+						.Value = (ClrTableId::Property << 24) | p, .Image = property });
+				}
+				for (uint32_t e = 1; e <= md.Events().size(); e++) {
+					auto& ed = md.Events()[e - 1];
+					index.Add({ .Kind = SearchKind::ClrMember, .Name = ed.Name, .Details = ed.Type ? md.FullName(ed.Type) : std::wstring(),
+						.Value = (ClrTableId::Event << 24) | e, .Image = event });
+				}
 			}
 		}
 

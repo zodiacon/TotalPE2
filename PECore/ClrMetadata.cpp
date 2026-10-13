@@ -226,6 +226,121 @@ struct ClrSignature {
 		return std::format(L"(0x{:02X})", et);
 	}
 
+	// C#: a type as C# writes it ("int", "List<string>", "ref int"), with what kind of value it is
+	ClrGenericContext Context;
+
+	ClrTypeInfo CsType(int depth = 0) {
+		using K = ClrValueKind;
+		if (depth > 64 || !Ok) {
+			Ok = false;
+			return { L"?" };
+		}
+		auto et = Byte();
+		auto simple = [](PCWSTR name, K kind) { return ClrTypeInfo{ name, kind }; };
+		switch (et) {
+			case 0x01: return simple(L"void", K::Void);
+			case 0x02: return simple(L"bool", K::Bool);
+			case 0x03: return simple(L"char", K::Char);
+			case 0x04: return simple(L"sbyte", K::Integer);
+			case 0x05: return simple(L"byte", K::Integer);
+			case 0x06: return simple(L"short", K::Integer);
+			case 0x07: return simple(L"ushort", K::Integer);
+			case 0x08: return simple(L"int", K::Integer);
+			case 0x09: return simple(L"uint", K::Integer);
+			case 0x0A: return simple(L"long", K::Integer);
+			case 0x0B: return simple(L"ulong", K::Integer);
+			case 0x0C: return simple(L"float", K::Float);
+			case 0x0D: return simple(L"double", K::Float);
+			case 0x0E: return simple(L"string", K::String);
+			case 0x0F: return { CsType(depth + 1).Name + L"*", K::Pointer };
+			case 0x10: return { L"ref " + CsType(depth + 1).Name, K::ByRef };
+			case 0x11: case 0x12:
+			{
+				auto token = TypeToken();
+				auto type = Md.CSharpType(token, Context);
+				if (et == 0x12 && type.Kind != K::String)
+					type.Kind = K::Object;
+				else if (et == 0x11 && type.Kind != K::Enum && type.Kind != K::Bool && type.Kind != K::Char &&
+					type.Kind != K::Integer && type.Kind != K::Float)
+					type.Kind = K::Struct;
+				return type;
+			}
+			case 0x13: case 0x1E:
+			{
+				auto n = Compressed();
+				auto names = et == 0x13 ? Context.TypeNames : Context.MethodNames;
+				auto kinds = et == 0x13 ? Context.TypeKinds : Context.MethodKinds;
+				ClrTypeInfo type{ names && n < names->size() && !(*names)[n].empty() ? (*names)[n] :
+					std::format(L"{}{}", et == 0x13 ? L"T" : L"M", n), K::Generic };
+				if (kinds && n < kinds->size())
+					type.Kind = (*kinds)[n];
+				return type;
+			}
+			case 0x14:
+			{
+				auto type = CsType(depth + 1);
+				auto rank = Compressed();
+				for (auto count = std::min<uint32_t>(Compressed(), 32); count--; )
+					Compressed();
+				for (auto count = std::min<uint32_t>(Compressed(), 32); count--; )
+					Signed();
+				return { type.Name + L"[" + std::wstring(rank ? std::min<uint32_t>(rank, 32) - 1 : 0, L',') + L"]", K::Object };
+			}
+			case 0x15:
+			{
+				auto kind = Byte();
+				auto token = TypeToken();
+				auto count = Compressed();
+				std::vector<ClrTypeInfo> args;
+				for (uint32_t i = 0; i < count && Ok && i < 64; i++)
+					args.push_back(CsType(depth + 1));
+				auto base = Md.CSharpType(token, Context);
+				if (base.Name == L"Nullable" && args.size() == 1)
+					return { args[0].Name + L"?", K::Struct, token };
+				std::wstring text = base.Name + L"<";
+				for (size_t i = 0; i < args.size(); i++)
+					text += (i ? L", " : L"") + args[i].Name;
+				return { text + L">", kind == 0x11 ? K::Struct : K::Object, token };
+			}
+			case 0x16: return simple(L"TypedReference", K::Struct);
+			case 0x18: return simple(L"IntPtr", K::Integer);
+			case 0x19: return simple(L"UIntPtr", K::Integer);
+			case 0x1B:
+			{
+				std::wstring name;
+				Method(name, nullptr, depth + 1, true);	// what it points to is not written
+				return simple(L"IntPtr", K::Pointer);
+			}
+			case 0x1C: return simple(L"object", K::Object);
+			case 0x1D: return { CsType(depth + 1).Name + L"[]", K::Object };
+			case 0x1F: case 0x20:
+				TypeToken();	// a modifier (volatile, const): C# does not write it
+				return CsType(depth + 1);
+			case 0x45: return CsType(depth + 1);	// pinned
+			case 0x41: return simple(L"__arglist", K::Unknown);
+		}
+		Ok = false;
+		return { L"?" };
+	}
+
+	// C#: a method's signature
+	ClrSignatureInfo CsMethod() {
+		ClrSignatureInfo info;
+		auto conv = Byte();
+		info.HasThis = (conv & 0x20) != 0;
+		info.Vararg = (conv & 0x0F) == 5;
+		if (conv & 0x10)
+			info.GenericCount = Compressed();
+		auto count = Compressed();
+		info.Return = CsType();
+		for (uint32_t i = 0; i < count && Ok && i < 1024; i++) {
+			if (Peek() == 0x41)
+				Byte();	// the sentinel before the extra arguments of a vararg call
+			info.Params.push_back(CsType());
+		}
+		return info;
+	}
+
 	// a method signature: "instance void Name<T>(int32 a, string)". The names of the parameters, if known, are
 	// filled in. A function pointer type has a '*' where the name is.
 	std::wstring Method(std::wstring const& name, std::vector<std::wstring> const* paramNames, int depth = 0, bool pointer = false) {
@@ -636,6 +751,87 @@ bool ClrMetadata::ParseTables(std::span<const std::byte> md, ClrStream const& st
 		if (auto parent = c.Coded(HasConstant))
 			m_Constants.emplace(parent, i);
 	}
+
+	// the properties and events: each map row gives a type the ones from its list up to the next row's
+	m_Properties.resize(rows[ClrTableId::Property]);
+	for (uint32_t i = 0; i < rows[ClrTableId::Property]; i++) {
+		ClrRowReader p(*this, ClrTableId::Property, i + 1);
+		auto& property = m_Properties[i];
+		property.Flags = (uint16_t)p.U16();
+		property.Name = String(p.Str());
+		property.Signature = p.Blob();
+	}
+	m_Events.resize(rows[ClrTableId::Event]);
+	for (uint32_t i = 0; i < rows[ClrTableId::Event]; i++) {
+		ClrRowReader e(*this, ClrTableId::Event, i + 1);
+		auto& event = m_Events[i];
+		event.Flags = (uint16_t)e.U16();
+		event.Name = String(e.Str());
+		event.EventType = e.Coded(TypeDefOrRef);
+	}
+	m_TypeProperties.assign(m_Types.size() + 1, {});
+	m_TypeEvents.assign(m_Types.size() + 1, {});
+	auto maps = [&](int mapTable, int listTable, int ptrTable, auto& lists, auto& members) {
+		auto count = rows[ptrTable] ? rows[ptrTable] : rows[listTable];
+		std::vector<std::pair<uint32_t, uint32_t>> starts;	// type, first
+		for (uint32_t i = 1; i <= rows[mapTable]; i++) {
+			ClrRowReader m(*this, mapTable, i);
+			auto type = m.Simple(ClrTableId::TypeDef);
+			auto first = m.Simple(listTable);
+			if (m.R.Ok)
+				starts.emplace_back(type, first);
+		}
+		for (size_t i = 0; i < starts.size(); i++) {
+			auto [type, first] = starts[i];
+			auto end = i + 1 < starts.size() ? starts[i + 1].second : count + 1;
+			if (type == 0 || type > m_Types.size())
+				continue;
+			for (auto row = first; row < end && row <= count; row++)
+				if (auto member = Indirect(ptrTable, row); member && member <= members.size()) {
+					members[member - 1].Type = type;
+					lists[type].push_back(member);
+				}
+		}
+	};
+	maps(ClrTableId::PropertyMap, ClrTableId::Property, ClrTableId::PropertyPtr, m_TypeProperties, m_Properties);
+	maps(ClrTableId::EventMap, ClrTableId::Event, ClrTableId::EventPtr, m_TypeEvents, m_Events);
+
+	for (uint32_t i = 1; i <= rows[ClrTableId::MethodSemantics]; i++) {
+		ClrRowReader s(*this, ClrTableId::MethodSemantics, i);
+		auto semantics = s.U16();
+		auto method = s.Simple(ClrTableId::MethodDef);
+		auto association = s.Coded(HasSemantics);
+		if (!s.R.Ok || method == 0 || method > m_Methods.size())
+			continue;
+		auto row = TokenRow(association);
+		ClrAccessor accessor = ClrAccessor::Other;
+		if (TokenTable(association) == ClrTableId::Property && row && row <= m_Properties.size()) {
+			auto& property = m_Properties[row - 1];
+			if (semantics & 0x02)
+				accessor = ClrAccessor::Getter, property.Getter = method;
+			else if (semantics & 0x01)
+				accessor = ClrAccessor::Setter, property.Setter = method;
+		}
+		else if (TokenTable(association) == ClrTableId::Event && row && row <= m_Events.size()) {
+			auto& event = m_Events[row - 1];
+			if (semantics & 0x08)
+				accessor = ClrAccessor::Adder, event.Adder = method;
+			else if (semantics & 0x10)
+				accessor = ClrAccessor::Remover, event.Remover = method;
+			else if (semantics & 0x20)
+				accessor = ClrAccessor::Raiser, event.Raiser = method;
+		}
+		else
+			continue;
+		m_Accessors[method] = { association, accessor };
+	}
+
+	for (uint32_t i = 1; i <= rows[ClrTableId::CustomAttribute]; i++) {
+		ClrRowReader a(*this, ClrTableId::CustomAttribute, i);
+		if (auto parent = a.Coded(HasCustomAttribute); parent && a.R.Ok)
+			m_Attributes.emplace_back(parent, i);
+	}
+	std::stable_sort(m_Attributes.begin(), m_Attributes.end(), [](auto& a, auto& b) { return a.first < b.first; });
 	return true;
 }
 
@@ -1025,8 +1221,25 @@ std::wstring ClrMetadata::MethodDeclaration(uint32_t method) const {
 		{ 0x400, L"abstract" }, { 0x40, L"virtual" }, { 0x20, L"final" }, { 0x10, L"static" }, { 0x2000, L"pinvokeimpl" },
 	};
 	for (auto& f : flags)
-		if (m.Flags & f.Flag)
+		if (m.Flags & f.Flag) {
 			text += std::format(L" {}", f.Text);
+			// pinvokeimpl("kernel32.dll" as "CreateFileW" unicode lasterr winapi)
+			if (f.Flag == 0x2000)
+				if (auto native = PInvoke(method)) {
+					text += L"(\"" + native->Module + L"\"";
+					if (!native->EntryPoint.empty() && native->EntryPoint != m.Name)
+						text += L" as \"" + native->EntryPoint + L"\"";
+					if (native->Flags & 1)
+						text += L" nomangle";
+					static const PCWSTR charsets[] = { L"", L" ansi", L" unicode", L" autochar" };
+					text += charsets[(native->Flags >> 1) & 3];
+					if (native->Flags & 0x40)
+						text += L" lasterr";
+					static const PCWSTR conventions[] = { L"", L" winapi", L" cdecl", L" stdcall", L" thiscall", L" fastcall", L"", L"" };
+					text += conventions[(native->Flags >> 8) & 7];
+					text += L")";
+				}
+		}
 	text += L" " + MethodSignature(method);
 	static const PCWSTR code[] = { L" cil", L" native", L" optil", L" runtime" };
 	text += code[m.ImplFlags & 3];
@@ -1217,4 +1430,978 @@ uint32_t ClrMetadata::Definition(uint32_t token) const {
 		}
 	}
 	return 0;
+}
+
+std::wstring CSharpQuote(std::wstring_view text) {
+	std::wstring s = L"\"";
+	for (auto c : text) {
+		switch (c) {
+			case L'"': s += L"\\\""; break;
+			case L'\\': s += L"\\\\"; break;
+			case L'\n': s += L"\\n"; break;
+			case L'\r': s += L"\\r"; break;
+			case L'\t': s += L"\\t"; break;
+			case L'\0': s += L"\\0"; break;
+			default:
+				if (c < 0x20 || (c >= 0x7F && c < 0xA0) || (c >= 0xD800 && c < 0xE000))
+					s += std::format(L"\\u{:04X}", (unsigned)c);
+				else
+					s += c;
+		}
+	}
+	return s + L"\"";
+}
+
+std::wstring CSharpChar(wchar_t c) {
+	switch (c) {
+		case L'\'': return L"'\\''";
+		case L'\\': return L"'\\\\'";
+		case L'\n': return L"'\\n'";
+		case L'\r': return L"'\\r'";
+		case L'\t': return L"'\\t'";
+		case L'\0': return L"'\\0'";
+	}
+	if (c < 0x20 || (c >= 0x7F && c < 0xA0) || (c >= 0xD800 && c < 0xE000) || c >= 0xFFFE)
+		return std::format(L"'\\u{:04X}'", (unsigned)c);
+	return std::wstring(L"'") + c + L"'";
+}
+
+std::wstring CSharpReal(double value, bool single) {
+	if (std::isnan(value))
+		return single ? L"float.NaN" : L"double.NaN";
+	if (std::isinf(value))
+		return std::wstring(single ? L"float" : L"double") + (value > 0 ? L".PositiveInfinity" : L".NegativeInfinity");
+	if (single)
+		return std::format(L"{}f", (float)value);
+	auto text = std::format(L"{}", value);
+	if (text.find_first_of(L".eE") == std::wstring::npos)
+		text += L".0";
+	return text;
+}
+
+namespace {
+	// C#'s keywords for the types of the core library (System.Int32 is "int")
+	PCWSTR CSharpKeyword(std::wstring_view name, ClrValueKind& kind) {
+		using K = ClrValueKind;
+		static const struct { PCWSTR Name, Keyword; K Kind; } map[] = {
+			{ L"Boolean", L"bool", K::Bool }, { L"Char", L"char", K::Char }, { L"SByte", L"sbyte", K::Integer },
+			{ L"Byte", L"byte", K::Integer }, { L"Int16", L"short", K::Integer }, { L"UInt16", L"ushort", K::Integer },
+			{ L"Int32", L"int", K::Integer }, { L"UInt32", L"uint", K::Integer }, { L"Int64", L"long", K::Integer },
+			{ L"UInt64", L"ulong", K::Integer }, { L"Single", L"float", K::Float }, { L"Double", L"double", K::Float },
+			{ L"String", L"string", K::String }, { L"Object", L"object", K::Object }, { L"Void", L"void", K::Void },
+			{ L"Decimal", L"decimal", K::Struct }, { L"IntPtr", L"IntPtr", K::Integer }, { L"UIntPtr", L"UIntPtr", K::Integer },
+		};
+		for (auto& m : map)
+			if (name == m.Name) {
+				kind = m.Kind;
+				return m.Keyword;
+			}
+		return nullptr;
+	}
+
+	std::wstring WithoutArity(std::wstring_view name) {
+		auto tick = name.find(L'`');
+		return std::wstring(tick == std::wstring_view::npos ? name : name.substr(0, tick));
+	}
+}
+
+std::wstring ClrMetadata::CSharpTypeDefName(uint32_t type) const {
+	if (type == 0 || type > m_Types.size())
+		return std::format(L"TypeDef{}", type);
+	std::vector<uint32_t> chain{ type };
+	for (auto t = m_Types[type - 1].Enclosing; t && chain.size() < 32; t = m_Types[t - 1].Enclosing)
+		chain.push_back(t);
+	if (chain.size() == 1 && m_Types[type - 1].Namespace == L"System") {
+		ClrValueKind kind;
+		if (auto keyword = CSharpKeyword(m_Types[type - 1].Name, kind))
+			return keyword;
+	}
+	std::wstring name;
+	for (auto it = chain.rbegin(); it != chain.rend(); ++it)
+		name += (name.empty() ? L"" : L".") + WithoutArity(m_Types[*it - 1].Name);
+	return name;
+}
+
+ClrTypeInfo ClrMetadata::CSharpType(uint32_t token, ClrGenericContext const& context) const {
+	using K = ClrValueKind;
+	auto row = TokenRow(token);
+	switch (TokenTable(token)) {
+		case ClrTableId::TypeDef:
+		{
+			if (row == 0 || row > m_Types.size())
+				break;
+			ClrTypeInfo info{ CSharpTypeDefName(row), K::Object, token };
+			auto& t = m_Types[row - 1];
+			if (t.Enclosing == 0 && t.Namespace == L"System" && CSharpKeyword(t.Name, info.Kind))
+				return info;
+			auto kind = TypeKind(row);
+			info.Kind = kind == L"enum" ? K::Enum : kind == L"struct" ? K::Struct : K::Object;
+			return info;
+		}
+		case ClrTableId::TypeRef:
+		{
+			ClrRowReader r(*this, ClrTableId::TypeRef, row);
+			auto scope = r.Coded(ResolutionScope);
+			auto name = String(r.Str());
+			auto ns = String(r.Str());
+			if (!r.R.Ok)
+				break;
+			ClrTypeInfo info{ {}, K::Unknown, token };
+			if (TokenTable(scope) == ClrTableId::TypeRef) {
+				static thread_local int depth = 0;
+				if (depth < 16) {
+					depth++;
+					info.Name = CSharpType(scope).Name + L".";
+					depth--;
+				}
+			}
+			else if (ns == L"System")
+				if (auto keyword = CSharpKeyword(name, info.Kind)) {
+					info.Name = keyword;
+					return info;
+				}
+			info.Name += WithoutArity(name);
+			return info;
+		}
+		case ClrTableId::TypeSpec:
+		{
+			static thread_local int depth = 0;
+			if (depth > 8)
+				return { L"?" };
+			ClrRowReader r(*this, ClrTableId::TypeSpec, row);
+			ClrSignature sig{ *this, Blob(r.Blob()) };
+			sig.Context = context;
+			depth++;
+			auto info = sig.CsType();
+			depth--;
+			if (info.Token == 0)
+				info.Token = token;
+			return info;
+		}
+	}
+	return { std::format(L"Type0x{:08X}", token) };
+}
+
+ClrGenericContext ClrMetadata::ContextOf(uint32_t method) const {
+	ClrGenericContext context;
+	if (method == 0 || method > m_Methods.size())
+		return context;
+	context.TypeNames = GenericParams((ClrTableId::TypeDef << 24) | m_Methods[method - 1].Type);
+	context.MethodNames = GenericParams((ClrTableId::MethodDef << 24) | method);
+	return context;
+}
+
+ClrGenericContext ClrMetadata::ContextOfType(uint32_t type) const {
+	ClrGenericContext context;
+	context.TypeNames = GenericParams((ClrTableId::TypeDef << 24) | type);
+	return context;
+}
+
+ClrMemberInfo ClrMetadata::MemberInfo(uint32_t token, ClrGenericContext const& context) const {
+	return MemberInfoOf(token, context, nullptr);
+}
+
+ClrMemberInfo ClrMetadata::MemberInfoOf(uint32_t token, ClrGenericContext const& context, std::vector<ClrTypeInfo> const* methodArgs) const {
+	ClrMemberInfo info;
+	info.Token = token;
+	auto row = TokenRow(token);
+	// what !0 and !!0 stand for: the arguments of the instance of a generic type or method
+	std::vector<std::wstring> typeNames, methodNames;
+	std::vector<ClrValueKind> typeKinds, methodKinds;
+	if (methodArgs)
+		for (auto& arg : *methodArgs) {
+			methodNames.push_back(arg.Name);
+			methodKinds.push_back(arg.Kind);
+		}
+	auto decode = [&](std::span<const std::byte> blob, ClrGenericContext sigContext) {
+		if (methodArgs) {
+			sigContext.MethodNames = &methodNames;
+			sigContext.MethodKinds = &methodKinds;
+		}
+		ClrSignature sig{ *this, blob };
+		sig.Context = sigContext;
+		if (!blob.empty() && std::to_integer<uint8_t>(blob[0]) == 0x06) {
+			sig.Byte();
+			info.IsField = true;
+			info.FieldType = sig.CsType();
+		}
+		else
+			info.Signature = sig.CsMethod();
+		info.Ok = sig.Ok && !blob.empty();
+	};
+	switch (TokenTable(token)) {
+		case ClrTableId::MethodDef:
+		{
+			if (row == 0 || row > m_Methods.size())
+				break;
+			auto& m = m_Methods[row - 1];
+			info.Name = m.Name;
+			info.Definition = token;
+			info.Owner = CSharpType((ClrTableId::TypeDef << 24) | m.Type);
+			decode(Blob(m.Signature), ContextOf(row));
+			break;
+		}
+		case ClrTableId::Field:
+		{
+			if (row == 0 || row > m_Fields.size())
+				break;
+			auto& f = m_Fields[row - 1];
+			info.Name = f.Name;
+			info.Definition = token;
+			info.Owner = CSharpType((ClrTableId::TypeDef << 24) | f.Type);
+			decode(Blob(f.Signature), ContextOfType(f.Type));
+			break;
+		}
+		case ClrTableId::MemberRef:
+		{
+			ClrRowReader r(*this, ClrTableId::MemberRef, row);
+			auto parent = r.Coded(MemberRefParent);
+			info.Name = String(r.Str());
+			auto blob = Blob(r.Blob());
+			if (!r.R.Ok)
+				break;
+			ClrGenericContext sigContext;
+			switch (TokenTable(parent)) {
+				case ClrTableId::TypeSpec:
+				{
+					info.Owner = CSharpType(parent, context);
+					ClrRowReader ts(*this, ClrTableId::TypeSpec, TokenRow(parent));
+					ClrSignature s{ *this, Blob(ts.Blob()) };
+					s.Context = context;
+					if (s.Byte() == 0x15) {
+						s.Byte();
+						s.TypeToken();
+						auto count = s.Compressed();
+						for (uint32_t i = 0; i < count && s.Ok && i < 64; i++) {
+							auto arg = s.CsType();
+							typeNames.push_back(arg.Name);
+							typeKinds.push_back(arg.Kind);
+						}
+						sigContext.TypeNames = &typeNames;
+						sigContext.TypeKinds = &typeKinds;
+					}
+					break;
+				}
+				case ClrTableId::TypeDef:
+				case ClrTableId::TypeRef:
+					info.Owner = CSharpType(parent, context);
+					break;
+				case ClrTableId::MethodDef:	// the signature of a call of a vararg method
+					if (TokenRow(parent) && TokenRow(parent) <= m_Methods.size())
+						info.Owner = CSharpType((ClrTableId::TypeDef << 24) | m_Methods[TokenRow(parent) - 1].Type);
+					break;
+			}
+			decode(blob, sigContext);
+			info.Definition = Definition(token);
+			break;
+		}
+		case ClrTableId::MethodSpec:
+		{
+			ClrRowReader r(*this, ClrTableId::MethodSpec, row);
+			auto method = r.Coded(MethodDefOrRef);
+			auto inst = Blob(r.Blob());
+			if (!r.R.Ok || TokenTable(method) == ClrTableId::MethodSpec)
+				break;
+			ClrSignature args{ *this, inst };
+			args.Context = context;
+			std::vector<ClrTypeInfo> list;
+			if (args.Byte() == 0x0A) {
+				auto count = args.Compressed();
+				for (uint32_t i = 0; i < count && args.Ok && i < 64; i++)
+					list.push_back(args.CsType());
+			}
+			info = MemberInfoOf(method, context, &list);
+			info.Token = token;
+			for (auto& arg : list)
+				info.GenericArgs.push_back(arg.Name);
+			info.Definition = Definition(token);
+			break;
+		}
+	}
+	return info;
+}
+
+std::vector<ClrTypeInfo> ClrMetadata::CSharpLocalTypes(uint32_t signatureToken, uint32_t method) const {
+	std::vector<ClrTypeInfo> types;
+	if (TokenTable(signatureToken) != ClrTableId::StandAloneSig)
+		return types;
+	ClrRowReader r(*this, ClrTableId::StandAloneSig, TokenRow(signatureToken));
+	auto blob = Blob(r.Blob());
+	if (!r.R.Ok || blob.empty())
+		return types;
+	ClrSignature sig{ *this, blob };
+	sig.Context = ContextOf(method);
+	if (sig.Byte() != 0x07)	// LOCAL_SIG
+		return types;
+	auto count = sig.Compressed();
+	for (uint32_t i = 0; i < count && sig.Ok && i < 0x10000; i++)
+		types.push_back(sig.CsType());
+	return types;
+}
+
+ClrTypeInfo ClrMetadata::CSharpPropertyType(uint32_t property, std::vector<ClrTypeInfo>* parameters) const {
+	if (property == 0 || property > m_Properties.size())
+		return {};
+	auto& p = m_Properties[property - 1];
+	ClrSignature sig{ *this, Blob(p.Signature) };
+	sig.Context = ContextOfType(p.Type);
+	sig.Byte();
+	auto count = sig.Compressed();
+	auto type = sig.CsType();
+	for (uint32_t i = 0; i < count && sig.Ok && i < 64; i++) {
+		auto param = sig.CsType();
+		if (parameters)
+			parameters->push_back(param);
+	}
+	return type;
+}
+
+std::wstring ClrMetadata::ConstantCSharp(uint32_t token) const {
+	auto it = m_Constants.find(token);
+	if (it == m_Constants.end())
+		return {};
+	ClrRowReader c(*this, 0x0B, it->second);
+	auto type = c.U16() & 0xFF;
+	c.Coded(HasConstant);
+	auto blob = Blob(c.Blob());
+	if (!c.R.Ok)
+		return {};
+	uint64_t v = 0;
+	for (size_t i = 0; i < blob.size() && i < 8; i++)
+		v |= (uint64_t)std::to_integer<uint8_t>(blob[i]) << (8 * i);
+	auto fits = [&](size_t size) { return blob.size() >= size; };
+	switch (type) {
+		case 0x02: return fits(1) ? (v & 0xFF ? L"true" : L"false") : L"";
+		case 0x03: return fits(2) ? CSharpChar((wchar_t)v) : L"";
+		case 0x04: return fits(1) ? std::to_wstring((int8_t)v) : L"";
+		case 0x05: return fits(1) ? std::to_wstring((uint8_t)v) : L"";
+		case 0x06: return fits(2) ? std::to_wstring((int16_t)v) : L"";
+		case 0x07: return fits(2) ? std::to_wstring((uint16_t)v) : L"";
+		case 0x08: return fits(4) ? std::to_wstring((int32_t)v) : L"";
+		case 0x09: return fits(4) ? std::format(L"{}u", (uint32_t)v) : L"";
+		case 0x0A: return fits(8) ? std::format(L"{}L", (int64_t)v) : L"";
+		case 0x0B: return fits(8) ? std::format(L"{}UL", v) : L"";
+		case 0x0C:
+		{
+			if (!fits(4))
+				return {};
+			float f;
+			uint32_t bits = (uint32_t)v;
+			memcpy(&f, &bits, 4);
+			return CSharpReal(f, true);
+		}
+		case 0x0D:
+		{
+			if (!fits(8))
+				return {};
+			double d;
+			memcpy(&d, &v, 8);
+			return CSharpReal(d, false);
+		}
+		case 0x0E:
+		{
+			std::wstring text(blob.size() / 2, L'\0');
+			memcpy(text.data(), blob.data(), text.size() * 2);
+			return CSharpQuote(text);
+		}
+		case 0x12: return L"null";
+	}
+	return {};
+}
+
+std::optional<int64_t> ClrMetadata::ConstantInteger(uint32_t token) const {
+	auto it = m_Constants.find(token);
+	if (it == m_Constants.end())
+		return {};
+	ClrRowReader c(*this, 0x0B, it->second);
+	auto type = c.U16() & 0xFF;
+	c.Coded(HasConstant);
+	auto blob = Blob(c.Blob());
+	if (!c.R.Ok)
+		return {};
+	uint64_t v = 0;
+	for (size_t i = 0; i < blob.size() && i < 8; i++)
+		v |= (uint64_t)std::to_integer<uint8_t>(blob[i]) << (8 * i);
+	switch (type) {
+		case 0x02: case 0x05: return (int64_t)(uint8_t)v;
+		case 0x03: case 0x07: return (int64_t)(uint16_t)v;
+		case 0x04: return (int64_t)(int8_t)v;
+		case 0x06: return (int64_t)(int16_t)v;
+		case 0x08: return (int64_t)(int32_t)v;
+		case 0x09: return (int64_t)(uint32_t)v;
+		case 0x0A: case 0x0B: return (int64_t)v;
+	}
+	return {};
+}
+
+ClrTypeInfo ClrMetadata::EnumUnderlyingType(uint32_t type) const {
+	for (auto f : FieldsOf(type))
+		if ((m_Fields[f - 1].Flags & 0x10) == 0) {	// the one instance field
+			auto info = MemberInfo((ClrTableId::Field << 24) | f);
+			if (info.Ok)
+				return info.FieldType;
+		}
+	return { L"int", ClrValueKind::Integer };
+}
+
+std::vector<uint32_t> ClrMetadata::PropertiesOf(uint32_t type) const {
+	return type < m_TypeProperties.size() ? m_TypeProperties[type] : std::vector<uint32_t>();
+}
+
+std::vector<uint32_t> ClrMetadata::EventsOf(uint32_t type) const {
+	return type < m_TypeEvents.size() ? m_TypeEvents[type] : std::vector<uint32_t>();
+}
+
+std::pair<uint32_t, ClrAccessor> ClrMetadata::AccessorOf(uint32_t method) const {
+	auto it = m_Accessors.find(method);
+	return it == m_Accessors.end() ? std::pair<uint32_t, ClrAccessor>{ 0, ClrAccessor::None } : it->second;
+}
+
+std::wstring ClrMetadata::PropertyDeclaration(uint32_t property) const {
+	if (property == 0 || property > m_Properties.size())
+		return {};
+	auto& p = m_Properties[property - 1];
+	std::wstring text = L".property ";
+	if (p.Flags & 0x200)
+		text += L"specialname ";
+	if (p.Flags & 0x400)
+		text += L"rtspecialname ";
+	ClrSignature sig{ *this, Blob(p.Signature), GenericParams((ClrTableId::TypeDef << 24) | p.Type) };
+	return text + sig.Method(p.Name, nullptr);
+}
+
+std::wstring ClrMetadata::EventDeclaration(uint32_t event) const {
+	if (event == 0 || event > m_Events.size())
+		return {};
+	auto& e = m_Events[event - 1];
+	std::wstring text = L".event ";
+	if (e.Flags & 0x200)
+		text += L"specialname ";
+	if (e.Flags & 0x400)
+		text += L"rtspecialname ";
+	return text + EventSignature(event);
+}
+
+std::wstring ClrMetadata::PropertySignature(uint32_t property) const {
+	if (property == 0 || property > m_Properties.size())
+		return {};
+	auto& p = m_Properties[property - 1];
+	ClrSignature sig{ *this, Blob(p.Signature), GenericParams((ClrTableId::TypeDef << 24) | p.Type) };
+	sig.Byte();
+	auto count = sig.Compressed();
+	auto text = sig.Type() + L" " + p.Name;
+	if (count) {
+		text += L"(";
+		for (uint32_t i = 0; i < count && sig.Ok && i < 64; i++)
+			text += (i ? L", " : L"") + sig.Type();
+		text += L")";
+	}
+	return text;
+}
+
+std::wstring ClrMetadata::EventSignature(uint32_t event) const {
+	if (event == 0 || event > m_Events.size())
+		return {};
+	auto& e = m_Events[event - 1];
+	return (e.EventType ? TypeName(e.EventType) + L" " : L"") + e.Name;
+}
+
+uint32_t ClrMetadata::ParamToken(uint32_t method, uint32_t sequence) const {
+	if (method == 0 || method > m_Methods.size())
+		return 0;
+	auto& m = m_Methods[method - 1];
+	for (auto i = m.FirstParam; i < m.EndParam; i++) {
+		auto row = Indirect(ClrTableId::ParamPtr, i);
+		ClrRowReader p(*this, ClrTableId::Param, row);
+		p.U16();
+		if (p.U16() == sequence && p.R.Ok)
+			return (ClrTableId::Param << 24) | row;
+	}
+	return 0;
+}
+
+uint16_t ClrMetadata::ParamFlags(uint32_t method, uint32_t sequence) const {
+	auto token = ParamToken(method, sequence);
+	if (!token)
+		return 0;
+	ClrRowReader p(*this, ClrTableId::Param, TokenRow(token));
+	return (uint16_t)p.U16();
+}
+
+// Decodes the value of a custom attribute (ECMA-335 II.23.3): the arguments of the constructor, by the types of its
+// parameters, then the named ones (fields and properties), each with its type
+struct ClrAttributeReader {
+	ClrMetadata const& Md;
+	Reader R;
+
+	struct ValueType {
+		uint8_t Element{};		// ELEMENT_TYPE (0x02 to 0x0E), 0x50 System.Type, 0x51 boxed (object), 0x55 an enum
+		uint8_t Underlying{ 0x08 };	// of an enum: int32 if it is not known
+		std::wstring EnumIl, EnumCs;
+		uint32_t EnumType{};	// an enum of this file (TypeDef row)
+		bool Array{ false };
+	};
+
+	static PCWSTR ElementIl(uint8_t element) {
+		static const PCWSTR names[] = { L"bool", L"char", L"int8", L"uint8", L"int16", L"uint16", L"int32", L"uint32",
+			L"int64", L"uint64", L"float32", L"float64", L"string" };
+		return element >= 0x02 && element <= 0x0E ? names[element - 2] : element == 0x50 ? L"type" : L"object";
+	}
+	static PCWSTR ElementCs(uint8_t element) {
+		static const PCWSTR names[] = { L"bool", L"char", L"sbyte", L"byte", L"short", L"ushort", L"int", L"uint",
+			L"long", L"ulong", L"float", L"double", L"string" };
+		return element >= 0x02 && element <= 0x0E ? names[element - 2] : element == 0x50 ? L"Type" : L"object";
+	}
+	std::wstring TypeIl(ValueType const& type) const {
+		auto text = type.Element == 0x55 ? L"enum " + type.EnumIl : std::wstring(ElementIl(type.Element));
+		return type.Array ? text + L"[]" : text;
+	}
+	std::wstring TypeCs(ValueType const& type) const {
+		return type.Element == 0x55 ? type.EnumCs : ElementCs(type.Element);
+	}
+
+	void SetEnum(ValueType& type, uint32_t token) {
+		type.Element = 0x55;
+		type.EnumIl = Md.TypeName(token);
+		type.EnumCs = Md.CSharpType(token).Name;
+		if (TokenTable(token) == ClrTableId::TypeDef && TokenRow(token) && TokenRow(token) <= Md.m_Types.size()) {
+			type.EnumType = TokenRow(token);
+			type.Underlying = UnderlyingElement(type.EnumType);
+		}
+	}
+	// an enum named in the value ("Ns.Outer+Inner, Assembly"): of this file, or taken to be of int32
+	void SetEnum(ValueType& type, std::wstring const& name) {
+		type.Element = 0x55;
+		auto full = name.substr(0, name.find(L','));
+		auto il = full;
+		std::replace(il.begin(), il.end(), L'+', L'/');
+		type.EnumIl = il;
+		auto last = full.find_last_of(L".+");
+		type.EnumCs = last == std::wstring::npos ? full : full.substr(last + 1);
+		for (uint32_t t = 1; t <= Md.m_Types.size(); t++)
+			if (Md.TypeDefName(t) == il) {
+				type.EnumType = t;
+				type.EnumCs = Md.CSharpTypeDefName(t);
+				type.Underlying = UnderlyingElement(t);
+				break;
+			}
+	}
+	uint8_t UnderlyingElement(uint32_t type) const {
+		for (auto f : Md.FieldsOf(type)) {
+			auto& field = Md.m_Fields[f - 1];
+			if (field.Flags & 0x10)
+				continue;
+			auto blob = Md.Blob(field.Signature);
+			if (blob.size() >= 2) {
+				auto et = std::to_integer<uint8_t>(blob[1]);
+				if (et >= 0x02 && et <= 0x0B)
+					return et;
+			}
+		}
+		return 0x08;
+	}
+
+	// the type of a parameter of the constructor
+	bool ParamType(ClrSignature& sig, ValueType& type) {
+		auto et = sig.Byte();
+		if (et == 0x1D) {
+			type.Array = true;
+			et = sig.Byte();
+		}
+		if (et >= 0x02 && et <= 0x0E) {
+			type.Element = et;
+			return true;
+		}
+		if (et == 0x1C) {
+			type.Element = 0x51;
+			return true;
+		}
+		if (et == 0x11 || et == 0x12) {
+			auto token = sig.TypeToken();
+			if (et == 0x12) {
+				auto name = Md.TypeName(token);
+				auto is = [&](std::wstring_view full) {
+					return name == full || (name.ends_with(full) && name.size() > full.size() && name[name.size() - full.size() - 1] == L']');
+				};
+				if (is(L"System.Type"))
+					type.Element = 0x50;
+				else if (is(L"System.Object"))
+					type.Element = 0x51;
+				else
+					return false;
+				return true;
+			}
+			SetEnum(type, token);
+			return true;
+		}
+		return false;
+	}
+
+	// the type of a named argument, or of a boxed value
+	bool FieldOrPropType(ValueType& type) {
+		auto b = (uint8_t)R.Read(1);
+		if (b == 0x1D) {
+			type.Array = true;
+			b = (uint8_t)R.Read(1);
+		}
+		if ((b >= 0x02 && b <= 0x0E) || b == 0x50 || b == 0x51)
+			type.Element = b;
+		else if (b == 0x55) {
+			bool null = false;
+			auto name = SerString(null);
+			if (!R.Ok || null)
+				return false;
+			SetEnum(type, name);
+		}
+		else
+			return false;
+		return R.Ok;
+	}
+
+	uint32_t Compressed() {
+		auto b = R.Read(1);
+		if ((b & 0x80) == 0)
+			return b;
+		if ((b & 0xC0) == 0x80)
+			return ((b & 0x3F) << 8) | R.Read(1);
+		uint32_t v = (b & 0x1F) << 24;
+		v |= R.Read(1) << 16;
+		v |= R.Read(1) << 8;
+		return v | R.Read(1);
+	}
+	std::wstring SerString(bool& null) {
+		null = false;
+		if (R.Pos < R.Data.size() && std::to_integer<uint8_t>(R.Data[R.Pos]) == 0xFF) {
+			R.Pos++;
+			null = true;
+			return {};
+		}
+		auto size = Compressed();
+		if (!R.Ok || size > R.Data.size() - R.Pos) {
+			R.Ok = false;
+			return {};
+		}
+		auto text = Utf8ToWide(std::string_view(reinterpret_cast<const char*>(R.Data.data()) + R.Pos, size));
+		R.Pos += size;
+		return text;
+	}
+
+	// an integer of an element type: its value as a signed or unsigned number
+	bool Integer(uint8_t element, int64_t& value) {
+		static const uint8_t sizes[] = { 1, 2, 1, 1, 2, 2, 4, 4, 8, 8 };
+		auto size = sizes[element - 2];
+		uint64_t v = size == 8 ? (R.Read(4) | ((uint64_t)R.Read(4) << 32)) : R.Read(size);
+		switch (element) {
+			case 0x04: value = (int8_t)v; break;
+			case 0x06: value = (int16_t)v; break;
+			case 0x08: value = (int32_t)v; break;
+			default: value = (int64_t)v; break;
+		}
+		return R.Ok;
+	}
+	static std::wstring IntegerCs(uint8_t element, int64_t value) {
+		switch (element) {
+			case 0x09: return std::format(L"{}u", (uint32_t)value);
+			case 0x0A: return std::format(L"{}L", value);
+			case 0x0B: return std::format(L"{}UL", (uint64_t)value);
+		}
+		return std::to_wstring(value);
+	}
+
+	static std::wstring IlSingleQuote(std::wstring const& text) {
+		std::wstring s = L"'";
+		for (auto c : text) {
+			if (c == L'\'' || c == L'\\')
+				s += L'\\';
+			s += c;
+		}
+		return s + L"'";
+	}
+
+	// a type named in a value ("Ns.Outer+Inner, Assembly, Version=...": generic arguments in brackets have commas of their own)
+	static std::wstring ReflectionTypeName(std::wstring const& name) {
+		int brackets = 0;
+		for (size_t i = 0; i < name.size(); i++) {
+			if (name[i] == L'[')
+				brackets++;
+			else if (name[i] == L']')
+				brackets--;
+			else if (name[i] == L',' && brackets == 0)
+				return name.substr(0, i);
+		}
+		return name;
+	}
+
+	bool Value(ValueType const& type, ClrAttributeArgument& arg, int depth = 0) {
+		if (depth > 8)
+			return false;
+		if (type.Array) {
+			auto count = R.Read(4);
+			if (!R.Ok)
+				return false;
+			ValueType element = type;
+			element.Array = false;
+			if (count == 0xFFFFFFFF) {
+				arg.Il = TypeIl(element) + L"[](nullref)";
+				arg.CSharp = L"null";
+				return true;
+			}
+			if (count > 0x10000)
+				return false;
+			std::wstring il, cs;
+			for (uint32_t i = 0; i < count; i++) {
+				ClrAttributeArgument e;
+				if (!Value(element, e, depth + 1))
+					return false;
+				// "int32(5)" is "5" in the list of an array
+				auto open = e.Il.find(L'(');
+				il += (i ? L" " : L"") + (open != std::wstring::npos && e.Il.back() == L')' ? e.Il.substr(open + 1, e.Il.size() - open - 2) : e.Il);
+				cs += (i ? L", " : L"") + e.CSharp;
+			}
+			arg.Il = std::format(L"{}[{}]({})", TypeIl(element), count, il);
+			arg.CSharp = L"new " + TypeCs(element) + L"[] { " + cs + (count ? L" }" : L"}");
+			return true;
+		}
+		auto element = type.Element;
+		switch (element) {
+			case 0x02:
+			{
+				auto v = R.Read(1);
+				arg.Il = v ? L"bool(true)" : L"bool(false)";
+				arg.CSharp = v ? L"true" : L"false";
+				return R.Ok;
+			}
+			case 0x03:
+			{
+				auto v = (wchar_t)R.Read(2);
+				arg.Il = std::format(L"char(0x{:04X})", (unsigned)v);
+				arg.CSharp = CSharpChar(v);
+				return R.Ok;
+			}
+			case 0x04: case 0x05: case 0x06: case 0x07: case 0x08: case 0x09: case 0x0A: case 0x0B:
+			{
+				int64_t v;
+				if (!Integer(element, v))
+					return false;
+				arg.Il = std::format(L"{}({})", ElementIl(element), element == 0x0B ? std::to_wstring((uint64_t)v) : std::to_wstring(v));
+				arg.CSharp = IntegerCs(element, v);
+				return true;
+			}
+			case 0x0C:
+			{
+				auto bits = R.Read(4);
+				float f;
+				memcpy(&f, &bits, 4);
+				arg.Il = std::format(L"float32({})", f);
+				arg.CSharp = CSharpReal(f, true);
+				return R.Ok;
+			}
+			case 0x0D:
+			{
+				uint64_t bits = R.Read(4);
+				bits |= (uint64_t)R.Read(4) << 32;
+				double d;
+				memcpy(&d, &bits, 8);
+				arg.Il = std::format(L"float64({})", d);
+				arg.CSharp = CSharpReal(d, false);
+				return R.Ok;
+			}
+			case 0x0E:
+			{
+				bool null;
+				auto text = SerString(null);
+				arg.Il = null ? L"string(nullref)" : L"string(" + IlSingleQuote(text) + L")";
+				arg.CSharp = null ? L"null" : CSharpQuote(text);
+				return R.Ok;
+			}
+			case 0x50:
+			{
+				bool null;
+				auto name = SerString(null);
+				if (null) {
+					arg.Il = L"type(nullref)";
+					arg.CSharp = L"null";
+					return R.Ok;
+				}
+				auto full = ReflectionTypeName(name);
+				auto il = full;
+				std::replace(il.begin(), il.end(), L'+', L'/');
+				arg.Il = L"type(" + il + L")";
+				// C#: the name without its namespace and arity (a keyword for those that have one)
+				auto cs = full.substr(0, full.find_first_of(L"`["));
+				ClrValueKind kind;
+				if (cs.starts_with(L"System.") && cs.find_first_of(L".+", 7) == std::wstring::npos)
+					if (auto keyword = CSharpKeyword(std::wstring_view(cs).substr(7), kind))
+						cs = keyword;
+				if (auto last = cs.find_last_of(L'.'); last != std::wstring::npos)
+					cs = cs.substr(last + 1);
+				std::replace(cs.begin(), cs.end(), L'+', L'.');
+				arg.CSharp = L"typeof(" + cs + L")";
+				return R.Ok;
+			}
+			case 0x51:
+			{
+				ValueType boxed;
+				if (!FieldOrPropType(boxed))
+					return false;
+				ClrAttributeArgument inner;
+				if (!Value(boxed, inner, depth + 1))
+					return false;
+				arg.Il = L"object(" + inner.Il + L")";
+				arg.CSharp = inner.CSharp;
+				return true;
+			}
+			case 0x55:
+			{
+				int64_t v;
+				auto underlying = type.Underlying >= 0x02 && type.Underlying <= 0x0B ? type.Underlying : (uint8_t)0x08;
+				if (!Integer(underlying, v))
+					return false;
+				arg.Il = std::format(L"{}({})", ElementIl(underlying), v);
+				arg.CSharp = std::format(L"({}){}", type.EnumCs, v);
+				// the name of the value, for an enum of this file
+				if (type.EnumType)
+					for (auto f : Md.FieldsOf(type.EnumType))
+						if (auto value = Md.ConstantInteger((ClrTableId::Field << 24) | f); value && *value == v) {
+							arg.CSharp = type.EnumCs + L"." + Md.m_Fields[f - 1].Name;
+							break;
+						}
+				return true;
+			}
+		}
+		return false;
+	}
+
+	bool Decode(ClrCustomAttribute& attribute) {
+		std::span<const std::byte> signature;
+		auto ctor = attribute.Constructor;
+		if (TokenTable(ctor) == ClrTableId::MethodDef) {
+			if (TokenRow(ctor) == 0 || TokenRow(ctor) > Md.m_Methods.size())
+				return false;
+			auto& m = Md.m_Methods[TokenRow(ctor) - 1];
+			signature = Md.Blob(m.Signature);
+			attribute.AttributeType = (ClrTableId::TypeDef << 24) | m.Type;
+		}
+		else if (TokenTable(ctor) == ClrTableId::MemberRef) {
+			ClrRowReader r(Md, ClrTableId::MemberRef, TokenRow(ctor));
+			attribute.AttributeType = r.Coded(MemberRefParent);
+			r.Str();
+			signature = Md.Blob(r.Blob());
+			if (!r.R.Ok)
+				return false;
+		}
+		else
+			return false;
+		if (R.Read(2) != 1)	// the prolog
+			return false;
+		ClrSignature sig{ Md, signature };
+		sig.Byte();
+		auto count = sig.Compressed();
+		sig.Type();	// void
+		for (uint32_t i = 0; i < count && i < 256; i++) {
+			ValueType type;
+			if (!ParamType(sig, type) || !sig.Ok)
+				return false;
+			ClrAttributeArgument arg;
+			arg.Type = TypeIl(type);
+			if (!Value(type, arg))
+				return false;
+			attribute.Arguments.push_back(std::move(arg));
+		}
+		auto named = R.Read(2);
+		for (uint32_t i = 0; i < named && R.Ok && i < 256; i++) {
+			auto kind = R.Read(1);
+			if (kind != 0x53 && kind != 0x54)
+				return false;
+			ValueType type;
+			if (!FieldOrPropType(type))
+				return false;
+			ClrAttributeArgument arg;
+			arg.Field = kind == 0x53;
+			bool null;
+			arg.Name = SerString(null);
+			arg.Type = TypeIl(type);
+			if (!R.Ok || !Value(type, arg))
+				return false;
+			attribute.Arguments.push_back(std::move(arg));
+		}
+		return R.Ok;
+	}
+};
+
+std::vector<ClrCustomAttribute> ClrMetadata::CustomAttributes(uint32_t token) const {
+	std::vector<ClrCustomAttribute> attributes;
+	auto it = std::lower_bound(m_Attributes.begin(), m_Attributes.end(), token, [](auto& a, uint32_t t) { return a.first < t; });
+	for (; it != m_Attributes.end() && it->first == token && attributes.size() < 256; ++it) {
+		ClrRowReader r(*this, ClrTableId::CustomAttribute, it->second);
+		ClrCustomAttribute attribute;
+		attribute.Parent = r.Coded(HasCustomAttribute);
+		attribute.Constructor = r.Coded(CustomAttributeType);
+		auto blob = Blob(r.Blob());
+		for (auto b : blob)
+			attribute.Value.push_back(std::to_integer<uint8_t>(b));
+		ClrAttributeReader reader{ *this, Reader{ blob } };
+		attribute.Decoded = reader.Decode(attribute);
+		if (!attribute.Decoded)
+			attribute.Arguments.clear();
+		attributes.push_back(std::move(attribute));
+	}
+	return attributes;
+}
+
+std::wstring ClrMetadata::AttributeIl(ClrCustomAttribute const& attribute) const {
+	auto text = L".custom " + MemberName(attribute.Constructor);
+	if (attribute.Decoded) {
+		if (attribute.Arguments.empty())
+			return text;
+		text += L" = {";
+		for (auto& arg : attribute.Arguments) {
+			text += L" ";
+			if (!arg.Name.empty())
+				text += (arg.Field ? L"field " : L"property ") + arg.Type + L" '" + arg.Name + L"' = ";
+			text += arg.Il;
+		}
+		return text + L" }";
+	}
+	text += L" = (";
+	for (auto b : attribute.Value)
+		text += std::format(L" {:02X}", b);
+	return text + L" )";
+}
+
+std::wstring ClrMetadata::AttributeCSharp(ClrCustomAttribute const& attribute, ClrGenericContext const& context) const {
+	auto name = CSharpType(attribute.AttributeType, context).Name;
+	if (name.size() > 9 && name.ends_with(L"Attribute"))
+		name.resize(name.size() - 9);
+	if (!attribute.Decoded) {
+		std::wstring bytes;
+		for (auto b : attribute.Value)
+			bytes += std::format(L" {:02X}", b);
+		return name + L"(/*" + bytes + L" */)";
+	}
+	if (attribute.Arguments.empty())
+		return name;
+	name += L"(";
+	for (size_t i = 0; i < attribute.Arguments.size(); i++) {
+		auto& arg = attribute.Arguments[i];
+		name += (i ? L", " : L"") + (arg.Name.empty() ? L"" : arg.Name + L" = ") + arg.CSharp;
+	}
+	return name + L")";
+}
+
+std::optional<ClrPInvoke> ClrMetadata::PInvoke(uint32_t method) const {
+	auto token = (ClrTableId::MethodDef << 24) | method;
+	for (uint32_t i = 1; i <= m_Rows[0x1C]; i++) {	// ImplMap
+		ClrRowReader r(*this, 0x1C, i);
+		auto flags = (uint16_t)r.U16();
+		if (r.Coded(MemberForwarded) != token)
+			continue;
+		ClrPInvoke info;
+		info.Flags = flags;
+		info.EntryPoint = String(r.Str());
+		ClrRowReader m(*this, ClrTableId::ModuleRef, r.Simple(ClrTableId::ModuleRef));
+		info.Module = String(m.Str());
+		return info;
+	}
+	return {};
 }

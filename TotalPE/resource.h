@@ -81,6 +81,8 @@
 #define IDI_CLASS                       279
 #define IDD_SEARCH                      277
 #define IDD_GOANYWHERE                  280
+#define IDI_PROPERTY                    281
+#define IDI_EVENT                       282
 #define IDD_VTKEY                       274
 #define IDI_ICON5                       276
 #define IDI_FLOW                        276
@@ -191,6 +193,8 @@
 #define ID_STRINGS_USEDONLY             32905
 #define ID_PE_SECURITYSUMMARY           32906
 #define ID_NAV_GOANYWHERE               32907
+#define ID_CLR_CSHARP                   32908
+#define ID_CLR_IL                       32909
 #define ID_IMPORT_FILEPROPERTIES        32809
 #define ID_IMPORT_GOTOFILELOCATION      32810
 #define ID_WINDOW_WINDOWS               32811
@@ -247,8 +251,8 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        281
-#define _APS_NEXT_COMMAND_VALUE         32908
+#define _APS_NEXT_RESOURCE_VALUE        283
+#define _APS_NEXT_COMMAND_VALUE         32910
 #define _APS_NEXT_CONTROL_VALUE         1039
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

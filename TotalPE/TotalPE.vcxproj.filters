@@ -694,6 +694,12 @@
     <Image Include="res\Flow.ico">
       <Filter>Resource Files\Icons</Filter>
     </Image>
+    <Image Include="res\property.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\event.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
     <Image Include="res\class.ico">
       <Filter>Resource Files</Filter>
     </Image>

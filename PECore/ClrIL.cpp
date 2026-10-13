@@ -359,12 +359,19 @@ namespace {
 		}
 	};
 
+	// the custom attributes on what a token is, each on a line that refers to its constructor
+	void AttributeLines(ClrMetadata const& md, uint32_t token, IlLines& out, std::wstring const& indent) {
+		for (auto& attribute : md.CustomAttributes(token))
+			out.Add(indent + md.AttributeIl(attribute), attribute.Constructor);
+	}
+
 	void MethodLines(PEFile const& pe, ClrMetadata const& md, uint32_t method, IlLines& out, std::wstring const& indent) {
 		auto& m = md.Methods()[method - 1];
 		out.Add(indent + md.MethodDeclaration(method), (ClrTableId::MethodDef << 24) | method);
 		out.Add(indent + L"{");
 		if (md.EntryPointMethod() == method)
 			out.Add(indent + L"\t.entrypoint");
+		AttributeLines(md, (ClrTableId::MethodDef << 24) | method, out, indent + L"\t");
 
 		IlMethodBody body;
 		if (m.Rva == 0 || (m.ImplFlags & 3) != 0) {
@@ -476,21 +483,91 @@ std::wstring DisassembleIlType(PEFile const& pe, ClrMetadata const& md, uint32_t
 	auto& t = md.Types()[type - 1];
 	lines.Add(md.TypeDeclaration(type), t.Extends);
 	lines.Add(L"{");
+	AttributeLines(md, (ClrTableId::TypeDef << 24) | type, lines, L"\t");
 	auto nested = md.NestedTypes(type);
 	for (auto n : nested)
 		lines.Add(std::format(L"\t// nested {} {}", md.TypeKind(n), md.Types()[n - 1].Name), (ClrTableId::TypeDef << 24) | n);
 	if (!nested.empty())
 		lines.Add(L"");
 	auto fields = md.FieldsOf(type);
-	for (auto f : fields)
+	for (auto f : fields) {
 		lines.Add(L"\t" + md.FieldDeclaration(f), (ClrTableId::Field << 24) | f);
+		AttributeLines(md, (ClrTableId::Field << 24) | f, lines, L"\t");
+	}
 	if (!fields.empty())
 		lines.Add(L"");
 	for (auto m : md.MethodsOf(type)) {
 		MethodLines(pe, md, m, lines, L"\t");
 		lines.Add(L"");
 	}
+	// the properties and events, with their accessors
+	auto accessor = [&](PCWSTR directive, uint32_t method) {
+		if (method)
+			lines.Add(std::wstring(L"\t\t") + directive + L" " + md.MemberName((ClrTableId::MethodDef << 24) | method),
+				(ClrTableId::MethodDef << 24) | method);
+	};
+	for (auto p : md.PropertiesOf(type)) {
+		auto& property = md.Properties()[p - 1];
+		lines.Add(L"\t" + md.PropertyDeclaration(p));
+		lines.Add(L"\t{");
+		AttributeLines(md, (ClrTableId::Property << 24) | p, lines, L"\t\t");
+		accessor(L".get", property.Getter);
+		accessor(L".set", property.Setter);
+		lines.Add(L"\t}");
+		lines.Add(L"");
+	}
+	for (auto e : md.EventsOf(type)) {
+		auto& event = md.Events()[e - 1];
+		lines.Add(L"\t" + md.EventDeclaration(e), event.EventType);
+		lines.Add(L"\t{");
+		AttributeLines(md, (ClrTableId::Event << 24) | e, lines, L"\t\t");
+		accessor(L".addon", event.Adder);
+		accessor(L".removeon", event.Remover);
+		accessor(L".fire", event.Raiser);
+		lines.Add(L"\t}");
+		lines.Add(L"");
+	}
 	lines.Add(L"} // end of " + md.FullName(type));
+	return lines.Join(tokens);
+}
+
+std::wstring DisassembleIlProperty(PEFile const& pe, ClrMetadata const& md, uint32_t property, std::vector<uint32_t>* tokens) {
+	if (property == 0 || property > md.Properties().size())
+		return {};
+	auto& p = md.Properties()[property - 1];
+	IlLines lines;
+	lines.Add(md.PropertyDeclaration(property));
+	lines.Add(L"{");
+	AttributeLines(md, (ClrTableId::Property << 24) | property, lines, L"\t");
+	for (auto [directive, method] : { std::pair{ L".get", p.Getter }, std::pair{ L".set", p.Setter } })
+		if (method)
+			lines.Add(std::wstring(L"\t") + directive + L" " + md.MemberName((ClrTableId::MethodDef << 24) | method), (ClrTableId::MethodDef << 24) | method);
+	lines.Add(L"}");
+	for (auto method : { p.Getter, p.Setter })
+		if (method) {
+			lines.Add(L"");
+			MethodLines(pe, md, method, lines, L"");
+		}
+	return lines.Join(tokens);
+}
+
+std::wstring DisassembleIlEvent(PEFile const& pe, ClrMetadata const& md, uint32_t event, std::vector<uint32_t>* tokens) {
+	if (event == 0 || event > md.Events().size())
+		return {};
+	auto& e = md.Events()[event - 1];
+	IlLines lines;
+	lines.Add(md.EventDeclaration(event), e.EventType);
+	lines.Add(L"{");
+	AttributeLines(md, (ClrTableId::Event << 24) | event, lines, L"\t");
+	for (auto [directive, method] : { std::pair{ L".addon", e.Adder }, std::pair{ L".removeon", e.Remover }, std::pair{ L".fire", e.Raiser } })
+		if (method)
+			lines.Add(std::wstring(L"\t") + directive + L" " + md.MemberName((ClrTableId::MethodDef << 24) | method), (ClrTableId::MethodDef << 24) | method);
+	lines.Add(L"}");
+	for (auto method : { e.Adder, e.Remover, e.Raiser })
+		if (method) {
+			lines.Add(L"");
+			MethodLines(pe, md, method, lines, L"");
+		}
 	return lines.Join(tokens);
 }
 
@@ -502,14 +579,16 @@ std::vector<IlStyle> IlLineStyles(std::string_view line) {
 		"aggressiveinlining", "nooptimization", "aggressiveoptimization", "interface", "auto", "sequential", "explicit",
 		"ansi", "unicode", "autochar", "sealed", "import", "serializable", "beforefieldinit", "extends", "implements",
 		"nested", "initonly", "literal", "notserialized", "init", "class", "valuetype", "catch", "finally", "filter", "fault",
-		"vararg", "modreq", "modopt", "pinned", "method", "nullref", "cdecl", "stdcall", "thiscall", "fastcall",
+		"vararg", "modreq", "modopt", "pinned", "method", "nullref", "cdecl", "stdcall", "thiscall", "fastcall", "property",
+		"field", "type", "enum",
 	};
 	static const std::unordered_set<std::string_view> types = {
 		"void", "bool", "char", "int8", "uint8", "int16", "uint16", "int32", "uint32", "int64", "uint64", "float32", "float64",
 		"string", "object", "typedref", "int", "uint",
 	};
 	static const std::unordered_set<std::string_view> directives = {
-		".class", ".method", ".field", ".locals", ".maxstack", ".entrypoint", ".try",
+		".class", ".method", ".field", ".locals", ".maxstack", ".entrypoint", ".try", ".custom", ".property", ".event",
+		".get", ".set", ".addon", ".removeon", ".fire",
 	};
 	auto isWord = [](char c) { return isalnum((unsigned char)c) || c == '_' || c == '.' || c == '`' || c == '$'; };
 

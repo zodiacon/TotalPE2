@@ -76,6 +76,9 @@ bool ReadIlMethodBody(PEFile const& pe, uint32_t rva, IlMethodBody& body);
 std::wstring DisassembleIlMethod(PEFile const& pe, ClrMetadata const& md, uint32_t method, std::vector<uint32_t>* tokens = nullptr);
 // A type: its declaration, fields and the methods
 std::wstring DisassembleIlType(PEFile const& pe, ClrMetadata const& md, uint32_t type, std::vector<uint32_t>* tokens = nullptr);
+// A property or event (rows): its declaration, then the IL of its accessors
+std::wstring DisassembleIlProperty(PEFile const& pe, ClrMetadata const& md, uint32_t property, std::vector<uint32_t>* tokens = nullptr);
+std::wstring DisassembleIlEvent(PEFile const& pe, ClrMetadata const& md, uint32_t event, std::vector<uint32_t>* tokens = nullptr);
 
 // The syntax of the IL that the functions above write, for coloring
 enum class IlStyle : uint8_t {

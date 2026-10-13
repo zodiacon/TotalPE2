@@ -554,6 +554,8 @@
     <Image Include="res\find_next.ico" />
     <Image Include="res\find_previous.ico" />
     <Image Include="res\Flow.ico" />
+    <Image Include="res\property.ico" />
+    <Image Include="res\event.ico" />
     <Image Include="res\folder.ico" />
     <Image Include="res\folders.ico" />
     <Image Include="res\font.ico" />

@@ -9,9 +9,10 @@
 class PEFile;
 
 //
-// The types of a .NET file by namespace, with their nested types, fields and methods, and the IL of the one selected (of a
-// type: of all its methods). Double-click or Enter on a line of the IL goes to the definition of what it refers to, when
-// the file defines it. The filter shows the types and members whose names contain its text.
+// The types of a .NET file by namespace, with their nested types, fields, events, properties (with their accessors) and
+// methods, and the code of the one selected, decompiled to C# or as IL (of a type: all of it). Double-click or Enter on a
+// line of the code goes to the definition of what it refers to, when the file defines it. The filter shows the types and
+// members whose names contain its text.
 //
 class CClrTypesView : public CViewBase<CClrTypesView> {
 public:
@@ -29,6 +30,8 @@ public:
 		NOTIFY_CODE_HANDLER(TVN_ITEMEXPANDING, OnItemExpanding)
 		NOTIFY_CODE_HANDLER(TVN_SELCHANGED, OnSelChanged)
 		COMMAND_CODE_HANDLER(EN_DELAYCHANGE, OnFilterChanged)
+		COMMAND_ID_HANDLER(ID_CLR_CSHARP, OnLanguage)
+		COMMAND_ID_HANDLER(ID_CLR_IL, OnLanguage)
 		CHAIN_MSG_MAP(CViewBase<CClrTypesView>)
 	ALT_MSG_MAP(1)
 		// the frame's commands (copy, find) are for the IL when the user is in it
@@ -41,7 +44,7 @@ public:
 private:
 	// what a node of the tree is: the kind in the top bits of its data, the index (of a namespace) or row in the others
 	enum class Kind : uint32_t {
-		Namespace = 1, Type, Method, Field,
+		Namespace = 1, Type, Method, Field, Property, Event,
 	};
 	static LPARAM Data(Kind kind, uint32_t index) {
 		return ((LPARAM)kind << 28) | index;
@@ -59,6 +62,7 @@ private:
 	LRESULT OnItemExpanding(int, LPNMHDR, BOOL&);
 	LRESULT OnSelChanged(int, LPNMHDR, BOOL&);
 	LRESULT OnFilterChanged(WORD, WORD, HWND, BOOL&);
+	LRESULT OnLanguage(WORD, WORD id, HWND, BOOL&);
 
 	void Index();
 	void Fill();
@@ -74,6 +78,8 @@ private:
 	std::wstring TypeText(uint32_t type, bool qualified) const;
 	std::wstring MethodText(uint32_t method) const;
 	std::wstring FieldText(uint32_t field) const;
+	// the type, method, property or event a line of the tree is (its token), 0 for a namespace
+	uint32_t TokenOf(HTREEITEM hItem) const;
 	int TypeImage(uint32_t type) const;
 	HTREEITEM FindChild(HTREEITEM hParent, LPARAM data);
 	void Show(HTREEITEM hItem);
@@ -86,6 +92,8 @@ private:
 	CTreeViewCtrl m_Tree;
 	CScintillaView* m_Code{ nullptr };
 	CQuickFindEdit m_Filter;
+	CToolBarCtrl m_tb;
+	bool m_CSharp{ true };	// C# or IL
 	std::wstring m_FilterText;	// in lowercase
 	std::vector<std::wstring> m_Namespaces;			// sorted
 	std::vector<std::vector<uint32_t>> m_Types;		// the types of each namespace that are not nested, sorted by name

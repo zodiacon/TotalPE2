@@ -105,6 +105,7 @@
     <ClCompile Include="LibArchiveTests.cpp" />
     <ClCompile Include="ClrMetadataTests.cpp" />
     <ClCompile Include="ClrILTests.cpp" />
+    <ClCompile Include="ClrDecompilerTests.cpp" />
     <ClCompile Include="MenuTemplateTests.cpp" />
     <ClCompile Include="DialogTemplateTests.cpp" />
     <ClCompile Include="HexSearchTests.cpp" />
