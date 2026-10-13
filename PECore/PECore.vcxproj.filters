@@ -51,6 +51,12 @@
     <ClInclude Include="ClrDecompiler.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Annotations.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Json.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="CodeAnalysis.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -174,6 +180,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="ClrDecompiler.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Annotations.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Json.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="CodeAnalysis.cpp">

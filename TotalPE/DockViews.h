@@ -52,6 +52,7 @@ public:
 	void MoveToPlaceOf(int page, int other);
 	HWND GetPageHWND(int page) const;
 	PCWSTR GetPageTitle(int page) const;
+	void SetPageTitle(int page, PCWSTR title);
 	void* GetPageData(int page) const;
 
 	// the images of the pages (the icons of their tabs)

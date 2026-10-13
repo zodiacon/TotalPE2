@@ -6,6 +6,7 @@
 
 #include "DockViews.h"
 #include <GhidraDecompiler.h>
+#include <Annotations.h>
 #include <TabViewHelper.h>
 #include <CustomSplitterWindow.h>
 #include <TreeViewHelper.h>
@@ -105,6 +106,9 @@ public:
 		COMMAND_ID_HANDLER(ID_NAV_GOANYWHERE, OnNavGoAnywhere)
 		COMMAND_ID_HANDLER(ID_NAV_BACK, OnNavBack)
 		COMMAND_ID_HANDLER(ID_NAV_FORWARD, OnNavForward)
+		COMMAND_ID_HANDLER(ID_NAV_BOOKMARKS, OnViewBookmarks)
+		COMMAND_ID_HANDLER(ID_NAV_COMMENT, OnNotInView)
+		COMMAND_ID_HANDLER(ID_HEX_BOOKMARK_TOGGLE, OnNotInView)
 		MESSAGE_HANDLER(WM_SYMBOLS_LOADED, OnSymbolsLoaded)
 		MESSAGE_HANDLER(WM_DECOMPILER_ASK, OnDecompilerAsk)
 		MESSAGE_HANDLER(WM_DECOMPILED, OnDecompiled)
@@ -279,6 +283,38 @@ private:
 	// The function at an address as C (Ghidra's decompiler), in a view of its own next to where its disassembly goes
 	bool DecompileFunction(uint64_t va) override;
 	bool ShowSideBySide(uint64_t va) override;
+	bool RenameFunction(uint64_t va, std::wstring const& name) override;
+	bool ChangeVariable(uint64_t function, GhidraDecompiler::Variable const& variable, std::optional<std::string> const& name,
+		std::optional<std::string> const& type, GhidraDecompiler::Variables const& variables) override;
+	// What the user added to the file (names, types, bookmarks, comments), kept by its content; none for a file of another kind
+	Annotations m_Annotations;
+	void LoadAnnotations(std::wstring const& path);
+	void SaveAnnotations();
+	Annotations const& GetAnnotations() const override {
+		return m_Annotations;
+	}
+	std::wstring CommentAt(uint64_t va) const override;
+	bool IsBookmarked(uint64_t va) const override;
+	bool EditComment(uint64_t va) override;
+	bool ToggleBookmark(uint64_t va) override;
+	bool SetBookmark(uint64_t va, std::wstring const& name) override;
+	bool RemoveBookmark(uint64_t va) override;
+	bool ShowBookmarks() override;
+	// the views show the comments and bookmarks again (and, if the comments changed, the code is decompiled again)
+	void NotifyAnnotationsChanged(bool comments);
+	LRESULT OnViewBookmarks(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	// a command of the code views (a comment, a bookmark) that no view took: there is no code here
+	LRESULT OnNotInView(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	// the RVA of an address of the image (false if it is not in it)
+	bool RvaOf(uint64_t va, uint32_t& rva) const;
+	// The views of decompiled functions: the function, and how its C is made again (when the user's names or types change)
+	struct DecompiledView {
+		uint64_t Function;
+		std::function<void()> Refresh;
+	};
+	std::unordered_map<HWND, DecompiledView> m_DecompiledViews;
+	// the views of a function's C (all of them for 0) are decompiled again, where they were scrolled to
+	void RedecompileViews(uint64_t function = 0);
 	LRESULT OnSideBySide(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	TreeItemType FunctionPlace(uint32_t rva, std::wstring& name) const;
 	HTREEITEM PlaceItem(TreeItemType parent);
@@ -334,6 +370,7 @@ private:
 		std::string Code, Error;
 		GhidraDecompiler::FunctionRefs Functions;
 		GhidraDecompiler::LineAddresses Lines;
+		GhidraDecompiler::Variables Variables;
 	};
 	void DecompileAsync(uint64_t address, std::wstring const& name, bool lines, HWND hView, std::function<void(Decompiled&)> done);
 	static std::string DecompilingText(uint64_t address, std::wstring const& name);
@@ -365,6 +402,11 @@ private:
 	bool X64Frame(uint32_t rva, uint32_t& size, uint32_t& frameRegister, int64_t& frameOffset) const;
 	// the name of the function at an address for the decompiler (of an incremental linking stub, the function it jumps to)
 	std::string DecompilerFunctionName(uint64_t va) const;
+	// for the decompiler: the user's changes to the variables of a function, a type of the symbols by name, and the user's
+	// names of functions and global variables
+	std::vector<GhidraDecompiler::VariableChange> VariableChanges(uint64_t va) const;
+	uint32_t TypeIdByName(std::string const& name) const;
+	void UserNames(std::vector<std::pair<uint64_t, std::string>>& functions, std::vector<std::pair<uint64_t, GhidraDecompiler::VariableChange>>& globals) const;
 	// the target of an incremental linking stub ("jmp rel32") at an address; 0 if it is not one
 	uint64_t StubTarget(uint64_t va) const;
 	std::shared_ptr<DecompilerSession> m_Decompiler;

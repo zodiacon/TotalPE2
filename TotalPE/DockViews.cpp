@@ -155,6 +155,14 @@ PCWSTR CDockViews::GetPageTitle(int page) const {
 	return page >= 0 && page < (int)m_Pages.size() ? m_Pages[page].Pane->Title.c_str() : L"";
 }
 
+void CDockViews::SetPageTitle(int page, PCWSTR title) {
+	if (page < 0 || page >= (int)m_Pages.size())
+		return;
+	m_Pages[page].Pane->Title = title;
+	m_Dock.RefreshPane(m_Pages[page].Pane);
+	UpdateWindowMenu();
+}
+
 void* CDockViews::GetPageData(int page) const {
 	return page >= 0 && page < (int)m_Pages.size() ? m_Pages[page].Data : nullptr;
 }

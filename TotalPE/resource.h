@@ -84,6 +84,7 @@
 #define IDD_DISASM_FUNCTION             278
 #define IDI_CLASS                       279
 #define IDD_GOANYWHERE                  280
+#define IDD_INPUT                       285
 #define IDI_PROPERTY                    281
 #define IDI_EVENT                       282
 #define IDI_BACK                        283
@@ -128,6 +129,9 @@
 #define IDC_GOANY_TEXT                  1036
 #define IDC_GOANY_LIST                  1037
 #define IDC_GOANY_STATUS                1038
+#define IDC_INPUT_PROMPT                1039
+#define IDC_INPUT_TEXT                  1040
+#define IDC_INPUT_HINT                  1041
 #define ID_WINDOW_CLOSE                 32772
 #define ID_WINDOW_CLOSE_ALL             32773
 #define ID_FILE_RUNASADMINISTRATOR      32775
@@ -249,14 +253,22 @@
 #define ID_NAV_GOANYWHERE               32907
 #define ID_CLR_CSHARP                   32908
 #define ID_CLR_IL                       32909
+#define ID_CODE_RENAME                  32910
+#define ID_CODE_RETYPE                  32911
+#define ID_NAV_BOOKMARKS                32913
+#define ID_NAV_COMMENT                  32914
+#define ID_CODE_BOOKMARK                32915
+#define ID_CODE_COMMENT                 32916
+#define ID_BOOKMARK_RENAME              32917
+#define ID_BOOKMARK_DELETE              32918
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        285
-#define _APS_NEXT_COMMAND_VALUE         32910
-#define _APS_NEXT_CONTROL_VALUE         1039
+#define _APS_NEXT_RESOURCE_VALUE        286
+#define _APS_NEXT_COMMAND_VALUE         32919
+#define _APS_NEXT_CONTROL_VALUE         1042
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

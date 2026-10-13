@@ -93,6 +93,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="AnnotationsTests.cpp" />
     <ClCompile Include="ElfDebugInfoTests.cpp" />
     <ClCompile Include="EventManifestTests.cpp" />
     <ClCompile Include="InfSyntaxTests.cpp" />

@@ -6,6 +6,7 @@
 #include "resource.h"
 #include "AboutDlg.h"
 #include "MainFrm.h"
+#include "InputDlg.h"
 #include <IconHelper.h>
 #include "SecurityHelper.h"
 #include <ToolbarHelper.h>
@@ -429,6 +430,7 @@ bool CMainFrame::IsToolView(TreeItemType type) {
 		case TreeItemType::SymbolsTypes:
 		case TreeItemType::SymbolsGlobalData:
 		case TreeItemType::Xrefs:
+		case TreeItemType::Bookmarks:
 			return true;
 	}
 	return false;
@@ -448,6 +450,7 @@ namespace {
 		{ TreeItemType::SymbolsEnums, L"tool:enum", L"Enum" },
 		{ TreeItemType::SymbolsTypes, L"tool:types", L"Types" },
 		{ TreeItemType::SymbolsGlobalData, L"tool:data", L"Data" },
+		{ TreeItemType::Bookmarks, L"tool:bookmarks", L"Bookmarks" },
 	};
 }
 
@@ -664,11 +667,17 @@ void CMainFrame::BuildNamedRvas() {
 std::wstring CMainFrame::ResolveRva(DWORD rva) const {
 	if (rva == 0)
 		return {};
+	// the user's name of a function
+	auto& renamed = m_Annotations.Functions;
+	if (auto it = renamed.find(rva); it != renamed.end())
+		return std::wstring(CA2W(it->second.c_str()));
 
 	if (m_Symbols) {
 		long disp = 0;
 		auto sym = m_Symbols.GetSymbolByRVA(rva, SymbolTag::Null, &disp);
 		if (sym) {
+			if (auto it = renamed.find(sym.RelativeVirtualAddress()); disp > 0 && it != renamed.end())
+				return std::format(L"{}+0x{:X}", std::wstring(CA2W(it->second.c_str())), disp);
 			auto name = sym.Name();
 			if (!name.empty()) {
 				auto undecorated = PEStrings::UndecorateName(name.c_str());
@@ -794,6 +803,7 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 		m_SymbolsForModules.clear();
 
 	m_Symbols.Close();
+	LoadAnnotations(path);
 	BuildNamedRvas();
 	m_Anomalies = FindAnomalies(m_PE);
 	CancelVirusTotal();
@@ -891,6 +901,7 @@ void CMainFrame::BuildArchiveTree(int iconSize) {
 void CMainFrame::ResetFileState() {
 	m_Tabs.RemoveAllPages();
 	CloseDecompiler();
+	m_Annotations = {};
 	CancelXrefs();
 	m_Views.clear();
 	m_Views2.clear();
@@ -1342,6 +1353,7 @@ void CMainFrame::BuildTree(int iconSize) {
 
 	InsertTreeItem(m_Tree, std::format(L"Anomalies ({})", m_Anomalies.size()).c_str(), GetTreeIcon(IDI_EXCEPTION), TreeItemType::Anomalies, root);
 	InsertTreeItem(m_Tree, L"Security Summary", GetTreeIcon(IDI_SECURITY), TreeItemType::SecuritySummary, root);
+	InsertTreeItem(m_Tree, L"Bookmarks", GetTreeIcon(IDI_BOOKMARK), TreeItemType::Bookmarks, root);
 	m_hOverlay = nullptr;
 	if (!m_Overlay.Empty())
 		m_hOverlay = InsertTreeItem(m_Tree, L"Overlay", GetTreeIcon(IDI_BINARY), TreeItemType::Overlay, root);
@@ -1454,6 +1466,7 @@ LRESULT CMainFrame::OnFileCompare(WORD, WORD, HWND, BOOL&) {
 LRESULT CMainFrame::OnFileClose(WORD, WORD, HWND, BOOL&) {
 	m_Tabs.RemoveAllPages();
 	CloseDecompiler();
+	m_Annotations = {};
 	CancelXrefs();
 	m_Views.clear();
 	m_Views2.clear();
@@ -1678,7 +1691,7 @@ bool CMainFrame::BuildTreeImageList(int iconSize) {
 		IDI_THREAD, IDI_RICH_HEADER, IDI_MSDOS, IDI_FILE_HEADER, IDI_COMPONENT,
 		IDI_FUNCTION, IDI_FUNC_FORWARD, IDI_INTERFACE, IDI_DLL_IMPORT, IDI_FUNCTION2, IDI_SYMBOLS,
 		IDI_TYPE, IDI_ENUM, IDI_BITFIELD, IDI_FIELD, IDI_ARRAY, IDI_UNION, IDI_BINARY,
-		IDI_DATA, IDI_FLOW, IDI_LOOK, IDI_CLASS, IDI_PROPERTY, IDI_EVENT,
+		IDI_DATA, IDI_FLOW, IDI_LOOK, IDI_CLASS, IDI_PROPERTY, IDI_EVENT, IDI_BOOKMARK,
 	};
 
 	bool insert = s_ImageIndices.empty();
@@ -2517,7 +2530,31 @@ GhidraDecompiler* CMainFrame::DecompilerSession::Open(std::string& error) {
 			});
 		for (auto const& g : Globals)
 			decompiler->AddGlobal(g.Address, g.Name, g.Type);
+		decompiler->SetTypeNameSource([this](std::string const& name) {
+			uint32_t id = 0;
+			Ask([&] { id = Stale ? 0 : Frame->TypeIdByName(name); });
+			return id;
+			});
 	}
+	// the user's: the names of functions and global variables (in the place of those of the file), the changes to variables
+	std::vector<std::pair<uint64_t, std::string>> renamed;
+	std::vector<std::pair<uint64_t, GhidraDecompiler::VariableChange>> globals;
+	Ask([&] { Frame->UserNames(renamed, globals); });
+	for (auto const& [va, name] : renamed)
+		decompiler->RenameFunction(va, name);
+	for (auto const& [va, change] : globals)
+		decompiler->ChangeGlobal(va, change);
+	decompiler->SetChangeSource([this](uint64_t va, std::vector<GhidraDecompiler::VariableChange>& changes) {
+		Ask([&] { changes = Frame->VariableChanges(va); });
+		return !changes.empty();
+		});
+	decompiler->SetCommentSource([this](std::vector<std::pair<uint64_t, std::string>>& comments) {
+		Ask([&] {
+			auto base = Frame->m_PE.GetImageBase();
+			for (auto const& [rva, text] : Frame->m_Annotations.Comments)
+				comments.emplace_back(base + rva, std::string(CW2A(text.c_str(), CP_UTF8)));
+			});
+		});
 	Decompiler = std::move(decompiler);
 	return Decompiler.get();
 }
@@ -2569,7 +2606,8 @@ void CMainFrame::DecompileAsync(uint64_t address, std::wstring const& name, bool
 		result->Id = id;
 		std::string error;
 		if (auto decompiler = session->Open(error))
-			result->Ok = decompiler->Decompile(address, name, result->Code, result->Error, &result->Functions, lines ? &result->Lines : nullptr);
+			result->Ok = decompiler->Decompile(address, name, result->Code, result->Error, &result->Functions, lines ? &result->Lines : nullptr,
+				&result->Variables);
 		else
 			result->Error = error;
 		if (!session->Closed && ::PostMessage(hWnd, WM_DECOMPILED, 0, (LPARAM)result.get()))
@@ -2659,18 +2697,26 @@ bool CMainFrame::DecompileFunction(uint64_t address) {
 	view->SetFunctionAddress(address);
 	view->GetCtrl().SetReadOnly(true);
 	view->SetDeleteFromTree(true);
-	DecompileAsync(address, name, false, view->GetHwnd(), [=](Decompiled& result) {
+	auto done = [=](Decompiled& result) {
 		auto& ctrl = view->GetCtrl();
+		auto first = ctrl.SendMessage(SCI_GETFIRSTVISIBLELINE);
+		auto caret = ctrl.GetCurrentPos();
 		ctrl.SetReadOnly(false);
 		if (result.Ok) {
 			view->SetText(result.Code.c_str());
 			view->SetFunctionLinks(FunctionLinks(result.Functions));
+			view->SetVariables(std::move(result.Variables));
+			view->SetLineAddresses(std::move(result.Lines));
 		}
 		else
 			view->SetText(NotDecompiledText(address, result.Error).c_str());
 		ctrl.SetReadOnly(true);
 		ctrl.EmptyUndoBuffer();
-		});
+		ctrl.SendMessage(SCI_SETSEL, caret, caret);
+		ctrl.SendMessage(SCI_SETFIRSTVISIBLELINE, first);
+	};
+	DecompileAsync(address, name, true, view->GetHwnd(), done);
+	m_DecompiledViews[view->GetHwnd()] = { address, [=] { DecompileAsync(address, name, true, view->GetHwnd(), done); } };
 
 	auto image = GetIconIndex(IDI_FUNCTION);
 	auto hItem = InsertTreeItem(m_Tree, title.c_str(), image, itemType, hParent, TVI_SORT);
@@ -2681,6 +2727,301 @@ bool CMainFrame::DecompileFunction(uint64_t address) {
 	m_Views2.insert({ view->GetHwnd(), itemType });
 	RecordNavigation();
 	return true;
+}
+
+//
+// The user's names and types
+//
+
+bool CMainFrame::RvaOf(uint64_t va, uint32_t& rva) const {
+	if (!m_PE)
+		return false;
+	auto base = m_PE.GetImageBase();
+	if (va < base || va - base > 0xFFFFFFFFULL)
+		return false;
+	rva = (uint32_t)(va - base);
+	return true;
+}
+
+// The annotations are found by the SHA-256 of the file (a file larger than 1 GB is not hashed: it has none)
+void CMainFrame::LoadAnnotations(std::wstring const& path) {
+	m_Annotations = {};
+	if (m_PE.GetFileSize() > (1u << 30))
+		return;
+	auto hash = vt::HashFile(path);
+	if (hash.empty())
+		return;
+	if (!m_Annotations.Load(Annotations::StorePath(hash), path))
+		AtlMessageBox(m_hWnd, std::format(L"The names, types and bookmarks of this file could not be read from {}", m_Annotations.StoreFile()).c_str(),
+			IDR_MAINFRAME, MB_ICONWARNING);
+}
+
+void CMainFrame::SaveAnnotations() {
+	if (m_Annotations.IsOpen() && !m_Annotations.Save())
+		AtlMessageBox(m_hWnd, std::format(L"The names, types and bookmarks of this file could not be saved to {}", m_Annotations.StoreFile()).c_str(),
+			IDR_MAINFRAME, MB_ICONWARNING);
+}
+
+void CMainFrame::RedecompileViews(uint64_t function) {
+	for (auto it = m_DecompiledViews.begin(); it != m_DecompiledViews.end(); ) {
+		if (!::IsWindow(it->first) || !m_Views2.contains(it->first)) {
+			it = m_DecompiledViews.erase(it);
+			continue;
+		}
+		if (function == 0 || it->second.Function == function)
+			it->second.Refresh();
+		++it;
+	}
+}
+
+bool CMainFrame::RenameFunction(uint64_t va, std::wstring const& name) {
+	uint32_t rva;
+	if (!RvaOf(va, rva) || !m_Annotations.IsOpen())
+		return false;
+	auto narrow = Narrow(name);
+	if (narrow.empty())
+		m_Annotations.Functions.erase(rva);
+	else
+		m_Annotations.Functions[rva] = narrow;
+	SaveAnnotations();
+	// (a decompiler that is not made yet takes the names when it is)
+	if (m_Decompiler)
+		DecompilerThread::Get().Post([session = m_Decompiler, va, narrow] {
+			if (session->Decompiler && !session->Closed)
+				session->Decompiler->RenameFunction(va, narrow);
+			});
+	RedecompileViews();
+	// the function's views of C are named by it ("Name (C)", "Name (Side by Side)")
+	std::wstring shown;
+	FunctionPlace(rva, shown);
+	if (shown.empty())
+		shown = std::format(L"0x{:X}", va);
+	for (auto const& [hView, view] : m_DecompiledViews) {
+		if (view.Function != va)
+			continue;
+		for (int page = 0; page < m_Tabs.GetPageCount(); page++) {
+			if (m_Tabs.GetPageHWND(page) != hView)
+				continue;
+			std::wstring title = m_Tabs.GetPageTitle(page);
+			auto open = title.rfind(L" (");
+			title = shown + (open == std::wstring::npos ? std::wstring() : title.substr(open));
+			m_Tabs.SetPageTitle(page, title.c_str());
+			if (auto it = m_Views2.find(hView); it != m_Views2.end())
+				if (auto v = m_Views.find(it->second); v != m_Views.end() && v->second->GetHTreeItem())
+					m_Tree.SetItemText(v->second->GetHTreeItem(), title.c_str());
+		}
+	}
+	return true;
+}
+
+bool CMainFrame::ChangeVariable(uint64_t function, GhidraDecompiler::Variable const& variable, std::optional<std::string> const& name,
+	std::optional<std::string> const& type, GhidraDecompiler::Variables const& variables) {
+	uint32_t rva;
+	if (!RvaOf(function, rva) || !m_Annotations.IsOpen() || variable.Key.empty())
+		return false;
+	// what it becomes: as it was changed before, with what changes now
+	auto merge = [&](Annotations::Variable const* before) {
+		Annotations::Variable after = before ? *before : Annotations::Variable{ variable.Name, variable.Type };
+		if (name)
+			after.Name = *name;
+		if (type) {
+			after.Type = type->empty() ? variable.Type : *type;
+			after.Retyped = !type->empty();
+		}
+		return after;
+	};
+
+	// a global variable: in the decompiler's global scope, and in the code of every function
+	if (variable.Key.starts_with("global:")) {
+		auto address = std::strtoull(variable.Key.c_str() + 7, nullptr, 16);
+		uint32_t global;
+		if (!RvaOf(address, global))
+			return false;
+		auto it = m_Annotations.Globals.find(global);
+		auto after = merge(it == m_Annotations.Globals.end() ? nullptr : &it->second);
+		bool undo = name && name->empty();
+		if (undo)
+			m_Annotations.Globals.erase(global);
+		else
+			m_Annotations.Globals[global] = after;
+		SaveAnnotations();
+		if (m_Decompiler) {
+			GhidraDecompiler::VariableChange change{ variable.Key, undo ? std::string() : after.Name, after.Type, after.Retyped };
+			// undone: the symbol is removed, and the one of the symbols (if there is one) is there again
+			std::optional<DecompilerSession::Global> symbol;
+			for (auto const& g : m_Decompiler->Globals)
+				if (g.Address == address)
+					symbol = g;
+			DecompilerThread::Get().Post([session = m_Decompiler, address, change, symbol] {
+				if (!session->Decompiler || session->Closed)
+					return;
+				session->Decompiler->ChangeGlobal(address, change);
+				if (change.Name.empty() && symbol)
+					session->Decompiler->AddGlobal(symbol->Address, symbol->Name, symbol->Type);
+				});
+		}
+		RedecompileViews();
+		return true;
+	}
+
+	auto& changes = m_Annotations.Variables[rva];
+	if (variable.Key.starts_with("param:")) {
+		if (name && name->empty()) {
+			// the prototype is made of all the parameters: they are all undone
+			std::erase_if(changes, [](auto const& c) { return c.first.starts_with("param:"); });
+		}
+		else {
+			// all the parameters are set (with the names and types they are shown with), this one as the user changed it
+			for (auto const& v : variables)
+				if (v.Key.starts_with("param:") && !changes.contains(v.Key))
+					changes[v.Key] = { v.Name, v.Type };
+			changes[variable.Key] = merge(&changes[variable.Key]);
+		}
+	}
+	else if (name && name->empty())
+		changes.erase(variable.Key);
+	else {
+		auto it = changes.find(variable.Key);
+		changes[variable.Key] = merge(it == changes.end() ? nullptr : &it->second);
+	}
+	if (changes.empty())
+		m_Annotations.Variables.erase(rva);
+	SaveAnnotations();
+	RedecompileViews(function);
+	return true;
+}
+
+std::vector<GhidraDecompiler::VariableChange> CMainFrame::VariableChanges(uint64_t va) const {
+	std::vector<GhidraDecompiler::VariableChange> changes;
+	uint32_t rva;
+	if (!RvaOf(va, rva))
+		return changes;
+	if (auto it = m_Annotations.Variables.find(rva); it != m_Annotations.Variables.end())
+		for (auto const& [key, v] : it->second)
+			changes.push_back({ key, v.Name, v.Type, v.Retyped });
+	return changes;
+}
+
+// a struct, union, enum or typedef of the symbols (the first one that has a size, of a name that several have)
+uint32_t CMainFrame::TypeIdByName(std::string const& name) const {
+	if (!m_Symbols || name.empty())
+		return 0;
+	std::wstring wide(CA2W(name.c_str()));
+	for (auto tag : { SymbolTag::UDT, SymbolTag::Enum, SymbolTag::Typedef })
+		for (auto const& sym : m_Symbols.FindChildren(wide.c_str(), tag))
+			if (sym.Length() > 0 || tag == SymbolTag::Typedef)
+				return sym.Id();
+	return 0;
+}
+
+void CMainFrame::UserNames(std::vector<std::pair<uint64_t, std::string>>& functions,
+	std::vector<std::pair<uint64_t, GhidraDecompiler::VariableChange>>& globals) const {
+	if (!m_PE)
+		return;
+	auto base = m_PE.GetImageBase();
+	for (auto const& [rva, name] : m_Annotations.Functions)
+		functions.emplace_back(base + rva, name);
+	for (auto const& [rva, v] : m_Annotations.Globals)
+		globals.emplace_back(base + rva, GhidraDecompiler::VariableChange{ std::format("global:0x{:X}", base + rva), v.Name, v.Type, v.Retyped });
+}
+
+//
+// The user's comments and bookmarks
+//
+
+std::wstring CMainFrame::CommentAt(uint64_t va) const {
+	uint32_t rva;
+	if (!RvaOf(va, rva))
+		return {};
+	auto it = m_Annotations.Comments.find(rva);
+	return it == m_Annotations.Comments.end() ? std::wstring() : it->second;
+}
+
+bool CMainFrame::IsBookmarked(uint64_t va) const {
+	uint32_t rva;
+	return RvaOf(va, rva) && std::ranges::any_of(m_Annotations.Bookmarks, [&](auto const& b) { return b.Rva == rva; });
+}
+
+bool CMainFrame::EditComment(uint64_t va) {
+	uint32_t rva;
+	if (!RvaOf(va, rva) || !m_Annotations.IsOpen())
+		return false;
+	auto before = CommentAt(va);
+	auto text = before;
+	auto where = ResolveVa(va);
+	auto prompt = std::format(L"&Comment at 0x{:X}{}:", va, where.empty() ? std::wstring() : L" (" + where + L")");
+	CInputDlg dlg(L"Comment", prompt.c_str(), L"Shown in the disassembly and the decompiled code. Empty: no comment.", text);
+	if (dlg.DoModal() != IDOK || text == before)
+		return true;
+	if (text.empty())
+		m_Annotations.Comments.erase(rva);
+	else
+		m_Annotations.Comments[rva] = text;
+	SaveAnnotations();
+	NotifyAnnotationsChanged(true);
+	return true;
+}
+
+bool CMainFrame::ToggleBookmark(uint64_t va) {
+	uint32_t rva;
+	if (!RvaOf(va, rva) || !m_Annotations.IsOpen())
+		return false;
+	if (IsBookmarked(va))
+		return RemoveBookmark(va);
+	auto name = ResolveVa(va);
+	if (name.empty())
+		name = std::format(L"0x{:X}", va);
+	CInputDlg dlg(L"Bookmark", std::format(L"&Name of the bookmark at 0x{:X}:", va).c_str(), nullptr, name);
+	if (dlg.DoModal() != IDOK)
+		return true;
+	return SetBookmark(va, name.empty() ? std::format(L"0x{:X}", va) : name);
+}
+
+bool CMainFrame::SetBookmark(uint64_t va, std::wstring const& name) {
+	uint32_t rva;
+	if (!RvaOf(va, rva) || !m_Annotations.IsOpen())
+		return false;
+	auto& bookmarks = m_Annotations.Bookmarks;
+	if (auto it = std::ranges::find(bookmarks, rva, &Annotations::Bookmark::Rva); it != bookmarks.end())
+		it->Name = name;
+	else
+		bookmarks.push_back({ rva, name });
+	SaveAnnotations();
+	NotifyAnnotationsChanged(false);
+	return true;
+}
+
+bool CMainFrame::RemoveBookmark(uint64_t va) {
+	uint32_t rva;
+	if (!RvaOf(va, rva) || std::erase_if(m_Annotations.Bookmarks, [&](auto const& b) { return b.Rva == rva; }) == 0)
+		return false;
+	SaveAnnotations();
+	NotifyAnnotationsChanged(false);
+	return true;
+}
+
+bool CMainFrame::ShowBookmarks() {
+	auto hItem = FindTreeItem(TreeItemType::Bookmarks);
+	return hItem && ShowView(hItem);
+}
+
+void CMainFrame::NotifyAnnotationsChanged(bool comments) {
+	for (auto const& [type, view] : m_Views)
+		view->AnnotationsChanged();
+	if (comments)
+		RedecompileViews();
+}
+
+LRESULT CMainFrame::OnViewBookmarks(WORD, WORD, HWND, BOOL&) {
+	if (!ShowBookmarks())
+		::MessageBeep(MB_ICONWARNING);
+	return 0;
+}
+
+LRESULT CMainFrame::OnNotInView(WORD, WORD, HWND, BOOL&) {
+	SetStatusText(0, L"Comments and bookmarks are added in the disassembly and the decompiled code");
+	::MessageBeep(MB_ICONWARNING);
+	return 0;
 }
 
 // What the view of a function's C shows while it is decompiled, and if it could not be
@@ -2813,12 +3154,14 @@ bool CMainFrame::ShowSideBySide(uint64_t address) {
 	view->SetAsm(asmCode, address, *arch);
 	view->SetC(DecompilingText(address, name), {}, {});
 	view->SetDeleteFromTree(true);
-	DecompileAsync(address, name, true, view->GetHwnd(), [=](Decompiled& result) {
+	auto done = [=](Decompiled& result) {
 		if (result.Ok)
-			view->SetC(result.Code, std::move(result.Lines), FunctionLinks(result.Functions));
+			view->SetC(result.Code, std::move(result.Lines), FunctionLinks(result.Functions), std::move(result.Variables));
 		else
 			view->SetC(NotDecompiledText(address, result.Error), {}, {});
-		});
+	};
+	DecompileAsync(address, name, true, view->GetHwnd(), done);
+	m_DecompiledViews[view->GetHwnd()] = { address, [=] { DecompileAsync(address, name, true, view->GetHwnd(), done); } };
 
 	auto image = GetIconIndex(IDI_FUNCTION);
 	auto hItem = InsertTreeItem(m_Tree, title.c_str(), image, itemType, hParent, TVI_SORT);

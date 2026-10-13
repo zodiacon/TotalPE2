@@ -97,6 +97,32 @@ namespace Sample
 		public static Circle operator +(Circle a, Circle b) { return new Circle(a._radius + b._radius); }
 	}
 
+	// field initializers: static and instance ones, arrays, and constructors that say the rest
+	public class Settings
+	{
+		private static readonly string[] s_names = { "low", "high" };
+		private static int s_created;
+		private int _level = 2;
+		private readonly List<string> _log = new List<string>();
+
+		static Settings()
+		{
+			Console.WriteLine("settings");
+		}
+
+		public Settings()
+		{
+			s_created++;
+		}
+
+		public Settings(int level) : this()
+		{
+			_level = level;
+		}
+
+		public string Name { get { return s_names[_level % 2] + _log.Count; } }
+	}
+
 	public static class Algorithms
 	{
 		// enums: of other assemblies, [Flags] ones, 0
@@ -139,6 +165,24 @@ namespace Sample
 				case 3: return 40;
 				default: return -1;
 			}
+		}
+
+		// a switch on a string (in a dictionary of the strings, or by their hashes, lengths and characters)
+		public static int Month(string name)
+		{
+			switch (name)
+			{
+				case "January": return 1;
+				case "February": return 2;
+				case "March": return 3;
+				case "April": return 4;
+				case "May": return 5;
+				case "June": case "Juni": return 6;
+				case "July": Console.WriteLine("summer"); break;
+				case null: return -1;
+				default: return 0;
+			}
+			return 7;
 		}
 
 		public static string Describe(int x, bool verbose)
@@ -404,6 +448,95 @@ namespace {
 	}
 }
 
+// Roslyn's switches on strings: by their lengths and characters, and (with more strings of a length) by their hashes. The
+// compiler of Visual Studio is used, if there is one.
+TEST_CASE("Switches on strings that Roslyn makes are decompiled", "[clr][cs]") {
+	WCHAR programs[MAX_PATH];
+	if (!::GetEnvironmentVariableW(L"ProgramFiles", programs, MAX_PATH))
+		SKIP("no Program Files");
+	std::wstring csc;
+	for (auto version : { L"18", L"2022" })
+		for (auto edition : { L"Enterprise", L"Professional", L"Community", L"BuildTools" }) {
+			auto path = std::format(L"{}\\Microsoft Visual Studio\\{}\\{}\\MSBuild\\Current\\Bin\\Roslyn\\csc.exe", programs, version, edition);
+			if (csc.empty() && ::GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES)
+				csc = path;
+		}
+	if (csc.empty())
+		SKIP("no Roslyn");
+	WCHAR temp[MAX_PATH];
+	::GetTempPathW(MAX_PATH, temp);
+	auto folder = std::wstring(temp) + std::format(L"TotalPE.Tests.{}\\", ::GetCurrentProcessId());
+	::CreateDirectoryW(folder.c_str(), nullptr);
+	auto source = folder + L"Roslyn.cs", dll = folder + L"Roslyn.dll";
+	{
+		std::ofstream out(source, std::ios::binary);
+		out << R"cs(
+public static class Switches
+{
+	public static int Short(string s)
+	{
+		switch (s)
+		{
+			case "alpha": return 1;
+			case "beta": return 2;
+			case "gamma": return 3;
+			case "delta": return 4;
+			case "epsilon": return 5;
+			case "zeta": case "eta": return 6;
+			case null: return -1;
+			default: return 0;
+		}
+	}
+	public static int Hashed(string s)
+	{
+		switch (s)
+		{
+			case "aaaa1": return 1;
+			case "aaaa2": return 2;
+			case "aaaa3": return 3;
+			case "aaaa4": return 4;
+			case "aaaa5": return 5;
+			case "aaaa6": return 6;
+			case "aaaa7": return 7;
+			case "aaaa8": return 8;
+			case "aaaa9": return 9;
+			default: return 0;
+		}
+	}
+}
+)cs";
+	}
+	auto command = std::format(L"\"{}\" /nologo /target:library /optimize+ /out:\"{}\" \"{}\"", csc, dll, source);
+	STARTUPINFOW si{ sizeof(si) };
+	PROCESS_INFORMATION pi{};
+	REQUIRE(::CreateProcessW(nullptr, command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, folder.c_str(), &si, &pi));
+	::WaitForSingleObject(pi.hProcess, 120000);
+	DWORD code = 1;
+	::GetExitCodeProcess(pi.hProcess, &code);
+	::CloseHandle(pi.hProcess);
+	::CloseHandle(pi.hThread);
+	REQUIRE(code == 0);
+
+	PEFile pe;
+	REQUIRE(pe.Open(dll));
+	ClrMetadata md;
+	REQUIRE(md.Parse(pe));
+	using Catch::Matchers::ContainsSubstring;
+	auto type = FindTypeNamed(md, L"Switches");
+	for (auto name : { L"Short", L"Hashed" }) {
+		auto text = Narrow(DecompileClrMethod(pe, md, FindMethodNamed(md, type, name)));
+		INFO(text);
+		CHECK_THAT(text, ContainsSubstring("switch (s)"));
+		CHECK(text.find("goto") == std::string::npos);
+		CHECK(text.find("Length") == std::string::npos);
+		CHECK(text.find("ComputeStringHash") == std::string::npos);
+	}
+	auto shortOne = Narrow(DecompileClrMethod(pe, md, FindMethodNamed(md, type, L"Short")));
+	CHECK_THAT(shortOne, ContainsSubstring("case \"eta\":\r\n\t\tcase \"zeta\":\r\n\t\t\treturn 6;"));
+	CHECK_THAT(shortOne, ContainsSubstring("case null:\r\n\t\t\treturn -1;"));
+	CHECK_THAT(Narrow(DecompileClrMethod(pe, md, FindMethodNamed(md, type, L"Hashed"))), ContainsSubstring("case \"aaaa9\":\r\n\t\t\treturn 9;"));
+}
+
 TEST_CASE("Properties, events and custom attributes are read", "[clr][cs]") {
 	auto path = CompiledSample(true);
 	if (path.empty())
@@ -514,6 +647,15 @@ TEST_CASE("C# is decompiled as it was written", "[clr][cs]") {
 	CHECK_THAT(classify, ContainsSubstring("case 3:"));
 	CHECK_THAT(classify, ContainsSubstring("default:"));
 
+	auto month = method(algorithms, L"Month");
+	CHECK_THAT(month, ContainsSubstring("switch (name)"));
+	CHECK_THAT(month, ContainsSubstring("case \"January\":"));
+	CHECK_THAT(month, ContainsSubstring("case \"June\":\r\n\t\tcase \"Juni\":"));
+	CHECK_THAT(month, ContainsSubstring("case null:"));
+	CHECK_THAT(month, ContainsSubstring("Console.WriteLine(\"summer\");"));
+	CHECK(month.find("TryGetValue") == std::string::npos);
+	CHECK(month.find("goto") == std::string::npos);
+
 	auto describe = method(algorithms, L"Describe");
 	CHECK_THAT(describe, ContainsSubstring("string text = x > 0 && verbose ? \"positive\" : \"other\";"));
 	CHECK_THAT(describe, ContainsSubstring("if (x < 0 || x > 100)"));
@@ -589,6 +731,17 @@ TEST_CASE("C# is decompiled as it was written", "[clr][cs]") {
 	CHECK_THAT(shape, ContainsSubstring("public interface IShape"));
 	CHECK_THAT(shape, ContainsSubstring("double Area { get; }"));
 	CHECK_THAT(shape, ContainsSubstring("event EventHandler Changed;"));
+
+	auto settings = Narrow(DecompileClrType(pe, md, FindTypeNamed(md, L"Settings")));
+	UNSCOPED_INFO(settings);
+	CHECK_THAT(settings, ContainsSubstring("private static readonly string[] s_names = new string[] { \"low\", \"high\" };"));
+	CHECK_THAT(settings, ContainsSubstring("private static int s_created;"));
+	CHECK_THAT(settings, ContainsSubstring("private int _level = 2;"));
+	CHECK_THAT(settings, ContainsSubstring("private readonly List<string> _log = new List<string>();"));
+	CHECK_THAT(settings, ContainsSubstring("Console.WriteLine(\"settings\");"));
+	CHECK_THAT(settings, ContainsSubstring("public Settings(int level) : this()"));
+	CHECK(settings.find("_level = 2;\r\n\t\ts_created") == std::string::npos);	// not in the constructor any more
+	CHECK(settings.find("base()") == std::string::npos);
 
 	auto color = Narrow(DecompileClrType(pe, md, FindTypeNamed(md, L"Color")));
 	CHECK_THAT(color, ContainsSubstring("Green = 5,"));

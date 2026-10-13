@@ -295,3 +295,193 @@ TEST_CASE("What the decompiler cannot do", "[decompiler]") {
 		CHECK((!done ? !error.empty() : !code.empty()));
 	}
 }
+
+namespace {
+	// int f(int n): a local on the stack whose address is passed to a function, and the value it returns kept in a register
+	// across another call
+	//   push rbx; sub rsp, 30h; mov [rsp+20h], ecx; lea rcx, [rsp+20h]; call Fill; mov ebx, eax; call Fill2;
+	//   add eax, ebx; add eax, [rsp+20h]; add rsp, 30h; pop rbx; ret
+	void Variables(Fixture& f, uint64_t fill, uint64_t fill2) {
+		f.Image.At(Code)
+			.Bytes({ 0x53, 0x48, 0x83, 0xEC, 0x30, 0x89, 0x4C, 0x24, 0x20, 0x48, 0x8D, 0x4C, 0x24, 0x20 })
+			.Call(fill)
+			.Bytes({ 0x89, 0xC3 })
+			.Call(fill2)
+			.Bytes({ 0x01, 0xD8, 0x03, 0x44, 0x24, 0x20, 0x48, 0x83, 0xC4, 0x30, 0x5B, 0xC3 });
+		f.Image.At(fill).Bytes({ 0xC7, 0x01, 0x05, 0x00, 0x00, 0x00, 0xB8, 0x07, 0x00, 0x00, 0x00, 0xC3 });	// mov dword [rcx], 5; mov eax, 7; ret
+		f.Image.At(fill2).Bytes({ 0xB8, 0x09, 0x00, 0x00, 0x00, 0xC3 });	// mov eax, 9; ret
+	}
+
+	GhidraDecompiler::Variable const* Find(GhidraDecompiler::Variables const& variables, std::string const& prefix) {
+		for (auto const& v : variables)
+			if (v.Key.rfind(prefix, 0) == 0)
+				return &v;
+		return nullptr;
+	}
+
+	std::string Describe(GhidraDecompiler::Variables const& variables) {
+		std::string text;
+		for (auto const& v : variables)
+			text += v.Type + " " + v.Name + " (" + v.Key + ", " + std::to_string(v.Size) + ")\n";
+		return text;
+	}
+}
+
+TEST_CASE("Variables are renamed and retyped", "[decompiler]") {
+	Fixture f;
+	auto fill = Code + 0x100, fill2 = Code + 0x140;
+	Variables(f, fill, fill2);
+	std::vector<GhidraDecompiler::VariableChange> changes;
+	f.Decompiler.SetChangeSource([&](uint64_t address, std::vector<GhidraDecompiler::VariableChange>& out) {
+		out = address == Code ? changes : std::vector<GhidraDecompiler::VariableChange>();
+		return !out.empty();
+		});
+	f.Open();
+	f.Decompiler.AddFunction(fill, "Fill");
+	f.Decompiler.AddFunction(fill2, "Fill2");
+	auto decompile = [&](GhidraDecompiler::Variables& variables) {
+		std::string code, error;
+		INFO(error);
+		REQUIRE(f.Decompiler.Decompile(Code, "Sum", code, error, nullptr, nullptr, &variables));
+		UNSCOPED_INFO(code);
+		UNSCOPED_INFO(Describe(variables));
+		return code;
+	};
+
+	GhidraDecompiler::Variables before;
+	auto code = decompile(before);
+	auto parameter = Find(before, "param:0");
+	auto local = Find(before, "stack:");
+	auto temporary = Find(before, "reg:") ? Find(before, "reg:") : Find(before, "hash:");
+	REQUIRE(parameter);
+	REQUIRE(local);
+	REQUIRE(temporary);
+	CHECK(local->Key == "stack:-24");	// [rsp+20h] after 8 (rbx) and 30h: 18h below the stack pointer at the entry
+	// a variable on the stack is local_ and its offset, without its type ("aiStack_18"); bytes of no type are "undef"
+	CHECK(local->Name == "local_18");
+	CHECK(code.find("Stack_") == std::string::npos);
+	CHECK(code.find("undefined") == std::string::npos);
+	// the values in registers: Var and a number, without their types ("iVar1")
+	REQUIRE(temporary);
+	CHECK(temporary->Name.rfind("Var", 0) == 0);
+	CHECK(code.find("iVar") == std::string::npos);
+	CHECK_THAT(code, ContainsSubstring(parameter->Name));
+	CHECK_THAT(code, ContainsSubstring(local->Name));
+
+	SECTION("named, and typed") {
+		changes = {
+			{ parameter->Key, "count", "uint", true },
+			{ local->Key, "slot", local->Type, false },
+			{ temporary->Key, "first", temporary->Type, false },
+		};
+		GhidraDecompiler::Variables after;
+		code = decompile(after);
+		CHECK_THAT(code, ContainsSubstring("Sum(uint count)"));
+		CHECK_THAT(code, ContainsSubstring("slot"));
+		CHECK_THAT(code, ContainsSubstring("first"));
+		CHECK(code.find(parameter->Name) == std::string::npos);
+		// the same variables, by the same keys, with the new names
+		REQUIRE(Find(after, parameter->Key));
+		CHECK(Find(after, parameter->Key)->Name == "count");
+		CHECK(Find(after, parameter->Key)->Type == "uint");
+		REQUIRE(Find(after, local->Key));
+		CHECK(Find(after, local->Key)->Name == "slot");
+
+		// and back, when the changes are gone
+		changes.clear();
+		GhidraDecompiler::Variables again;
+		code = decompile(again);
+		CHECK_THAT(code, ContainsSubstring(parameter->Name));
+		CHECK(code.find("count") == std::string::npos);
+	}
+	SECTION("typed as a pointer to a type of the symbols") {
+		f.Decompiler.SetTypeSource([](uint32_t id, GhidraDecompiler::Type& type) {
+			if (id == 1) {
+				type = { GhidraDecompiler::TypeKind::Struct, "POINT", 8 };
+				type.Fields = { { "x", 0, 2 }, { "y", 4, 2 } };
+				return true;
+			}
+			if (id == 2) {
+				type = { GhidraDecompiler::TypeKind::Integer, "", 4 };
+				return true;
+			}
+			return false;
+			});
+		f.Decompiler.SetTypeNameSource([](std::string const& name) { return name == "POINT" ? 1u : 0u; });
+		changes = { { parameter->Key, "where", "POINT *", true } };
+		GhidraDecompiler::Variables after;
+		code = decompile(after);
+		CHECK_THAT(code, ContainsSubstring("POINT *where"));
+	}
+	SECTION("a type of the names Ghidra has (saved before they were changed)") {
+		changes = { { parameter->Key, "raw", "undefined4", true } };
+		GhidraDecompiler::Variables after;
+		code = decompile(after);
+		// (known: bytes of a size leave the decompiler free to find their type)
+		CHECK_THAT(code, ContainsSubstring(" raw)"));
+		CHECK(code.find("not known") == std::string::npos);
+	}
+	SECTION("what cannot be done is said") {
+		changes = {
+			{ local->Key, "bad", "NoSuchType", true },
+			{ temporary->Key, "wide", "char[3]", true },
+		};
+		GhidraDecompiler::Variables after;
+		code = decompile(after);
+		CHECK_THAT(code, ContainsSubstring("bad: the type 'NoSuchType' is not known"));
+		if (temporary->Key.rfind("reg:", 0) == 0)
+			CHECK_THAT(code, ContainsSubstring("wide: the variable is in"));
+	}
+}
+
+TEST_CASE("Functions and global variables are renamed", "[decompiler]") {
+	Fixture f;
+	auto helper = Code + 0x100;
+	// mov eax, [rip+data]; call Helper; ret (the global, then the call)
+	f.Image.At(Code)
+		.Bytes({ 0x48, 0x83, 0xEC, 0x28, 0x8B, 0x05 }).Rel32(Data)
+		.Bytes({ 0x89, 0xC1 })
+		.Call(helper)
+		.Bytes({ 0x48, 0x83, 0xC4, 0x28, 0xC3 });
+	f.Image.At(helper).Bytes({ 0x8D, 0x41, 0x01, 0xC3 });		// lea eax, [rcx+1]; ret
+	f.Image.At(Data).Bytes({ 1, 0, 0, 0 });
+	f.Open();
+	f.Decompiler.AddFunction(helper, "Helper");
+	auto code = f.Decompile(Code, "Caller");
+	CHECK_THAT(code, ContainsSubstring("Helper("));
+
+	// a global variable that has no name: Ram and its address, without its type ("uRam0000000140005000")
+	CHECK_THAT(code, ContainsSubstring("Helper(Ram0000000140005000)"));
+
+	f.Decompiler.RenameFunction(helper, "Increment");
+	f.Decompiler.RenameFunction(Code, "Start");
+	f.Decompiler.ChangeGlobal(Data, { "global:0x140005000", "g_count", "int", true });
+	code = f.Decompile(Code, "Caller");
+	CHECK_THAT(code, ContainsSubstring("Start("));
+	CHECK_THAT(code, ContainsSubstring("Increment(g_count)"));
+	CHECK(std::find(f.Functions.begin(), f.Functions.end(), std::pair<std::string, uint64_t>("Increment", helper)) != f.Functions.end());
+
+	// an empty name: the name the function had (one made up, without a source of names)
+	f.Decompiler.RenameFunction(helper, "");
+	f.Decompiler.ChangeGlobal(Data, { "global:0x140005000", "", "", false });
+	code = f.Decompile(Code, "Caller");
+	CHECK(code.find("Increment") == std::string::npos);
+	CHECK(code.find("g_count") == std::string::npos);
+}
+
+TEST_CASE("Comments are shown at their instructions", "[decompiler]") {
+	Fixture f;
+	// lea eax, [rcx+rdx]; ret
+	f.Image.At(Code).Bytes({ 0x8D, 0x04, 0x11, 0xC3 });
+	f.Decompiler.SetCommentSource([](std::vector<std::pair<uint64_t, std::string>>& comments) {
+		comments = { { Code, "the sum" }, { Code + 3, "back" }, { Code + 0x1000, "elsewhere" } };
+		});
+	f.Open();
+	auto code = f.Decompile(Code, "Add");
+	CHECK_THAT(code, ContainsSubstring("the sum"));
+	CHECK(code.find("elsewhere") == std::string::npos);
+	// the comment comes before the statement
+	CHECK(code.find("the sum") < code.find("return"));
+	// at the indentation of the statement after it
+	CHECK_THAT(code, ContainsSubstring("\n  /* the sum */\n"));
+}

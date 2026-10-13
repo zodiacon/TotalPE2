@@ -8,6 +8,7 @@
 
 #include "ScintillaCtrl.h"
 #include "ViewBase.h"
+#include <GhidraDecompiler.h>
 #include <optional>
 #include <functional>
 #include <unordered_map>
@@ -50,6 +51,14 @@ public:
 	// The function the view shows: its disassembly and C can be shown side by side (from the context menu). Set by the
 	// disassembly to the address it starts at.
 	void SetFunctionAddress(uint64_t address);
+	// The variables the decompiled code shows: the one under the caret (or the mouse) can be renamed (N) or retyped (Y), as
+	// can a function it calls (renamed)
+	void SetVariables(GhidraDecompiler::Variables variables);
+	// The addresses of the instructions each line of decompiled code was made from: a line's bookmark and comment are those
+	// of its first instruction (of the function, for a line without one)
+	void SetLineAddresses(GhidraDecompiler::LineAddresses lines);
+	// the comments shown again (in the disassembly), and the lines of the bookmarks marked
+	void AnnotationsChanged() override;
 
 	// The disassembly's lines: the address of a line's instruction (0 if it is not one), the line of an instruction (-1)
 	uint64_t LineAddress(int line) const;
@@ -97,6 +106,14 @@ public:
 		COMMAND_ID_HANDLER(ID_CODE_DISASSEMBLE_HERE, OnCodeLink)
 		COMMAND_ID_HANDLER(ID_CODE_SIDEBYSIDE, OnSideBySide)
 		COMMAND_ID_HANDLER(ID_CODE_GOTODEFINITION, OnGoToDefinition)
+		COMMAND_ID_HANDLER(ID_CODE_RENAME, OnRename)
+		COMMAND_ID_HANDLER(ID_CODE_RETYPE, OnRename)
+		COMMAND_ID_HANDLER(ID_HEX_BOOKMARK_TOGGLE, OnAnnotate)
+		COMMAND_ID_HANDLER(ID_NAV_COMMENT, OnAnnotate)
+		COMMAND_ID_HANDLER(ID_CODE_BOOKMARK, OnAnnotate)
+		COMMAND_ID_HANDLER(ID_CODE_COMMENT, OnAnnotate)
+		COMMAND_ID_HANDLER(ID_HEX_BOOKMARK_NEXT, OnNextBookmark)
+		COMMAND_ID_HANDLER(ID_HEX_BOOKMARK_PREV, OnNextBookmark)
 		COMMAND_ID_HANDLER(ID_EDIT_CUT, OnEdit)
 		COMMAND_ID_HANDLER(ID_EDIT_PASTE, OnEdit)
 		COMMAND_ID_HANDLER(ID_EDIT_UNDO, OnEdit)
@@ -138,6 +155,21 @@ private:
 	LRESULT OnCodeLink(WORD, WORD id, HWND, BOOL&);
 	LRESULT OnSideBySide(WORD, WORD, HWND, BOOL&);
 	LRESULT OnGoToDefinition(WORD, WORD, HWND, BOOL&);
+	LRESULT OnRename(WORD, WORD id, HWND, BOOL&);
+	// renames (or retypes) a variable or function by the name the code shows; false if it is neither
+	bool Rename(std::wstring const& name, bool type);
+	GhidraDecompiler::Variable const* VariableNamed(std::wstring const& name) const;
+	GhidraDecompiler::Variables m_Variables;
+	std::wstring m_ContextName;		// the name the context menu was opened on
+	// bookmarks and comments: of the caret's line (of the line of the context menu: ID_CODE_BOOKMARK, ID_CODE_COMMENT)
+	LRESULT OnAnnotate(WORD, WORD id, HWND, BOOL&);
+	LRESULT OnNextBookmark(WORD, WORD id, HWND, BOOL&);
+	// the address a line of code is of (0: none)
+	uint64_t AddressOfLine(int line) const;
+	void MarkBookmarks();
+	bool HasAnnotations() const;
+	GhidraDecompiler::LineAddresses m_LineAddresses;	// of decompiled code
+	static constexpr int MarkerBookmark = 2;
 	LRESULT OnSciNotify(int, LPNMHDR, BOOL&);
 	Notify m_Notify;
 	LineAction m_LineAction;

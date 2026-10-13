@@ -7,6 +7,10 @@
 #include "Overlay.h"
 #include "VirusTotal.h"
 #include "TypeExporter.h"
+#include <GhidraDecompiler.h>
+#include <optional>
+
+class Annotations;
 
 static const UINT WM_UPDATE_DARKMODE = WM_APP + 56;
 // posted by the symbol loading thread: wParam is the generation of the request, lParam a DiaSession* (or null)
@@ -149,6 +153,8 @@ enum class TreeItemType : int64_t {
 	ClrTypes,
 	// the protections of the file: ASLR, DEP, CFG, CET, its signature...
 	SecuritySummary,
+	// the user's bookmarks of the file
+	Bookmarks,
 
 	ItemMask = 255,
 };
@@ -201,6 +207,25 @@ struct IMainFrame abstract {
 	virtual bool DecompileFunction(uint64_t va) = 0;
 	// The function's disassembly and C side by side, aligned, in a view of its own (next to where its disassembly goes)
 	virtual bool ShowSideBySide(uint64_t va) = 0;
+	// The user's names and types, kept for the file: of a function (an empty name: the one it had), and of a variable that
+	// the C of a function shows ('variables': all those it shows). A name or type that is not given stays as it is; an empty
+	// name undoes the changes to the variable, an empty type the change of its type. The views of C are decompiled again.
+	// False if there is nothing to change.
+	virtual bool RenameFunction(uint64_t va, std::wstring const& name) = 0;
+	virtual bool ChangeVariable(uint64_t function, GhidraDecompiler::Variable const& variable, std::optional<std::string> const& name,
+		std::optional<std::string> const& type, GhidraDecompiler::Variables const& variables) = 0;
+	// The user's comments and bookmarks, kept for the file (with the names and types). A change is shown by the views that
+	// show them (IView::AnnotationsChanged), and by the code decompiled again.
+	virtual Annotations const& GetAnnotations() const = 0;
+	virtual std::wstring CommentAt(uint64_t va) const = 0;
+	virtual bool IsBookmarked(uint64_t va) const = 0;
+	// the comment of an address as the user enters it (an empty one: none); false if there can be none there
+	virtual bool EditComment(uint64_t va) = 0;
+	// a bookmark at an address (named by the user), or the one there removed
+	virtual bool ToggleBookmark(uint64_t va) = 0;
+	virtual bool SetBookmark(uint64_t va, std::wstring const& name) = 0;
+	virtual bool RemoveBookmark(uint64_t va) = 0;
+	virtual bool ShowBookmarks() = 0;
 	// A view in place of another ("in the same window"): 'open' opens it (as DecompileFunction does), then it takes the
 	// place of the view, which is closed. Nothing is closed if 'open' fails, or brings up the view itself.
 	virtual bool ReplaceView(HWND hView, std::function<bool()> const& open) = 0;
@@ -248,4 +273,6 @@ struct IView abstract {
 	// The cross-references were found (on a thread of their own, after the file was opened): a view that shows them shows
 	// itself again.
 	virtual void XrefsChanged() {}
+	// The user's comments or bookmarks changed: a view that shows them shows them again
+	virtual void AnnotationsChanged() {}
 };

@@ -404,6 +404,8 @@
     <ClCompile Include="VtKeyDlg.cpp" />
     <ClCompile Include="XrefView.cpp" />
     <ClCompile Include="GoToDlg.cpp" />
+    <ClCompile Include="InputDlg.cpp" />
+    <ClCompile Include="BookmarksView.cpp" />
     <ClCompile Include="HexFind.cpp" />
     <ClCompile Include="HexInspector.cpp" />
     <ClCompile Include="BoundImportView.cpp" />
@@ -473,6 +475,8 @@
     <ClInclude Include="VtKeyDlg.h" />
     <ClInclude Include="XrefView.h" />
     <ClInclude Include="GoToDlg.h" />
+    <ClInclude Include="InputDlg.h" />
+    <ClInclude Include="BookmarksView.h" />
     <ClInclude Include="HexFind.h" />
     <ClInclude Include="HexInspector.h" />
     <ClInclude Include="BoundImportView.h" />

@@ -74,6 +74,36 @@ public:
 	};
 	// The local variables of the function at an address; false if they are not known
 	using LocalSource = std::function<bool(uint64_t address, std::vector<Local>& locals)>;
+	// A type of the symbols by its name (a struct, union, enum or typedef): its id, 0 if there is none
+	using TypeNameSource = std::function<uint32_t(std::string const& name)>;
+
+	// A variable of a decompiled function as it is shown: its name, its type (as C) and its size, and what identifies it to
+	// the decompiler, the same each time the function is decompiled (so that the user can name and type it):
+	//   "param:N"            a parameter (from 0)
+	//   "stack:N"            on the stack, at an offset from the stack pointer as it is when the function is entered
+	//   "reg:NAME@ADDRESS"   in a register, from where it is first used
+	//   "hash:HASH@ADDRESS"  a value that has no storage of its own, by the operations around it
+	//   "global:ADDRESS"     a global variable
+	struct Variable {
+		std::string Name;
+		std::string Type;
+		std::string Key;
+		uint32_t Size{ 0 };
+	};
+	using Variables = std::vector<Variable>;
+	// What the user made of a variable (by its key): its name, and its type as C ("int", "char *", "MY_STRUCT *",
+	// "BYTE[16]"), which replaces the decompiler's only if it is Retyped
+	struct VariableChange {
+		std::string Key;
+		std::string Name;
+		std::string Type;
+		bool Retyped{ false };
+	};
+	// The changes to the variables of the function at an address (asked each time it is decompiled); false if there are none
+	using ChangeSource = std::function<bool(uint64_t address, std::vector<VariableChange>& changes)>;
+	// The user's comments, by the addresses of the instructions they are on (asked each time a function is decompiled: those in
+	// its code are shown before the statements made from their instructions)
+	using CommentSource = std::function<void(std::vector<std::pair<uint64_t, std::string>>& comments)>;
 
 	// Once per process: the folder of the language definitions (.ldefs, .sla, .pspec, .cspec), in it or in its
 	// subfolders (one per processor)
@@ -103,17 +133,24 @@ public:
 	void SetPrototypeSource(PrototypeSource source);
 	void SetNameSource(NameSource source);
 	void SetLocalSource(LocalSource source);
+	void SetTypeNameSource(TypeNameSource source);
+	void SetChangeSource(ChangeSource source);
+	void SetCommentSource(CommentSource source);
+	// The user's name of a function (in the place of the one it has, wherever it is shown), and of a global variable (its
+	// key is "global:ADDRESS"), with its type. What cannot be done is said in the code of the next function decompiled.
+	void RenameFunction(uint64_t address, std::string const& name);
+	void ChangeGlobal(uint64_t address, VariableChange const& change);
 	// a global variable: its name and the id of its type
 	void AddGlobal(uint64_t address, std::string const& name, uint32_t type);
 
 	// The function at an address as C; 'name' is used if the function has none yet. 'functions' (if given) gets the
 	// functions the code refers to (the function itself and those it calls), by the names it shows, and their addresses.
 	// 'lines' (if given) gets, for each line of the code, the addresses of the instructions it was made from (none for
-	// a line of declarations or braces).
+	// a line of declarations or braces). 'variables' (if given) gets the variables it shows.
 	using FunctionRefs = std::vector<std::pair<std::string, uint64_t>>;
 	using LineAddresses = std::vector<std::vector<uint64_t>>;
 	bool Decompile(uint64_t address, std::string const& name, std::string& code, std::string& error, FunctionRefs* functions = nullptr,
-		LineAddresses* lines = nullptr);
+		LineAddresses* lines = nullptr, Variables* variables = nullptr);
 
 private:
 	struct Impl;

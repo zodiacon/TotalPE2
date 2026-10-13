@@ -65,6 +65,7 @@ namespace {
 		Exception,	// what a catch caught
 		MethodGroup,	// [Args[0].]Text: what a delegate is made of
 		Base,		// base
+		ArrayInit,	// new Text[] { Args... }
 	};
 
 	struct Expr;
@@ -82,6 +83,8 @@ namespace {
 		int Var{ -1 };
 		bool IsInt{ false };
 		int64_t Int{ 0 };
+		bool IsStr{ false };	// a string literal: Str is its value
+		std::wstring Str;
 		bool Unordered{ false };	// a comparison of reals that is also true when a value is NaN (bge.un...)
 		std::vector<std::wstring> GenericArgs;
 	};
@@ -214,6 +217,7 @@ namespace {
 
 	struct Case {
 		std::vector<int64_t> Values;
+		std::vector<ExprPtr> Labels;	// of a switch on a string: "a", null
 		bool Default{ false };
 		StmtList Body;
 	};
@@ -315,6 +319,7 @@ namespace {
 		Exit Kind{ Exit::Goto };
 		ExprPtr Value;			// the condition (true goes to Succ[0]), the switch's value, the filter's result
 		std::vector<int> Succ;	// Cond: true, false; Switch: the cases, then the default
+		std::vector<std::vector<ExprPtr>> Labels;	// a switch on a string: the labels of each case (as Succ has them)
 		std::vector<int> Pred;
 		int Depth{ -1 };		// of the stack when it starts (-1: not reached)
 		bool Removed{ false };
@@ -447,6 +452,9 @@ namespace {
 		int EmitTry(int b, uint64_t key, Context const& ctx, StmtList& out);
 		uint64_t TryAt(int b, Context const& ctx) const;
 		void EmitSwitch(int b, Context const& ctx, StmtList& out, int follow);
+		// a switch on a string, as compilers make it (a dictionary, a hash, the length and characters): one block
+		bool StringSwitch(int head);
+		void StringSwitches();
 		bool InRange(int b, Context const& ctx) const;
 		int BlockAt(uint32_t offset) const;
 		StmtPtr GotoBlock(int b);
@@ -460,6 +468,7 @@ namespace {
 		void Compound(StmtList& list);
 		void ForLoops(StmtList& list);
 		void Declarations();
+		void ArrayInitializers(StmtList& list);
 
 		PEFile const& m_PE;
 		ClrMetadata const& m_Md;
@@ -694,7 +703,12 @@ namespace {
 					break;
 				case K::Char:
 					if (e->Int >= 0 && e->Int <= 0xFFFF)
-						return Make(E::Literal, CSharpChar((wchar_t)e->Int), {}, type);
+					{
+						auto c = Make(E::Literal, CSharpChar((wchar_t)e->Int), {}, type);
+						c->IsInt = true;
+						c->Int = e->Int;
+						return c;
+					}
 					break;
 				case K::Enum:
 					return EnumValue(type, e->Int);
@@ -959,8 +973,6 @@ namespace {
 		// a constructor's call of another constructor: of the base type or of this one
 		if (name == L".ctor" && target) {
 			bool own = ownMember;
-			if (isThis && !own && info.Owner.Name == L"object" && args.empty())
-				return;
 			auto e = Make(E::Call, isThis ? (own ? L"this" : L"base") : L".ctor", std::move(args), { L"void", K::Void });
 			e->Token = token;
 			if (!isThis) {
@@ -1202,7 +1214,12 @@ namespace {
 			case Op::LdStr:
 			{
 				auto text = m_Md.UserString(token);
-				Push(Make(E::Literal, text ? CSharpQuote(*text) : std::format(L"/* string 0x{:08X} */", token), {}, { L"string", K::String }));
+				auto e = Make(E::Literal, text ? CSharpQuote(*text) : std::format(L"/* string 0x{:08X} */", token), {}, { L"string", K::String });
+				if (text) {
+					e->IsStr = true;
+					e->Str = *text;
+				}
+				Push(e);
 				return;
 			}
 			case Op::Dup:
@@ -1900,6 +1917,7 @@ namespace {
 		block.Kind = next.Kind;
 		block.Value = next.Value;
 		block.Succ = next.Succ;
+		block.Labels = next.Labels;
 		block.End = next.End;
 		block.Last = next.Last;
 		next.Removed = true;
@@ -1937,8 +1955,684 @@ namespace {
 		}
 	}
 
+	//
+	// A switch on a string, as compilers make it: the C# compiler of the .NET Framework looks the string up in a dictionary
+	// (made once, in a field of <PrivateImplementationDetails>) and switches on the number it finds; Roslyn switches on the
+	// string's hash (ComputeStringHash), or on its length and characters, then compares the string. The blocks that do this
+	// (from the head, where the string is first tested) are one switch: they are followed, with the string not known (it is
+	// none of the strings it was compared with on the way) and with each of the strings it can be, to the blocks where the code
+	// of the cases starts. A string that is none of them goes to one block: the default. Anything else (a block that does more
+	// than test the string, a way the strings cannot be followed) leaves the code as it is.
+	//
+	namespace {
+		// a block reads what is not the string (nor computed from it): it is not of the switch (Block), or nothing is (-1)
+		struct NotAStringSwitch {
+			int Block{ -1 };
+		};
+
+		uint32_t StringHash(std::wstring const& s) {
+			uint32_t hash = 2166136261u;
+			for (auto c : s)
+				hash = ((uint32_t)c ^ hash) * 16777619u;
+			return hash;
+		}
+
+		struct SwitchValue {
+			enum class Kinds : uint8_t { Unknown, Int, Str, Null, Object } Kind{ Kinds::Unknown };
+			int64_t Int{};
+			std::wstring Str;
+		};
+
+		struct SwitchState {
+			bool Known{ false };	// the string is known: null, or Str
+			bool Null{ false };
+			std::wstring Str;
+			std::set<std::wstring> Excluded;	// it is none of these
+			bool NotNull{ false };
+			std::map<int, SwitchValue> Vars;	// the values the blocks compute (its hash, its length, a character...)
+			std::vector<int> Path;
+		};
+
+		// a field the C# compiler keeps the dictionary of a switch in
+		bool IsSwitchDictionary(ExprPtr const& e) {
+			return e && e->Kind == E::Member && !e->HasTarget && e->Text.find(L"$$method") != std::wstring::npos;
+		}
+
+		// the variables an expression reads (an out argument is written as well)
+		void Reads(ExprPtr const& e, std::set<int>& vars) {
+			if (!e)
+				return;
+			if (e->Kind == E::Var)
+				vars.insert(e->Var);
+			if (e->Kind == E::Assign && e->Args.size() == 2 && e->Args[0]->Kind == E::Var && e->Text == L"=") {
+				Reads(e->Args[1], vars);
+				return;
+			}
+			for (auto& a : e->Args)
+				Reads(a, vars);
+		}
+	}
+
+	bool MethodDecompiler::StringSwitch(int head) {
+		auto& h = m_Blocks[head];
+		if (h.Removed || (h.Kind != Exit::Cond && h.Kind != Exit::Switch) || !h.Value)
+			return false;
+		auto stringVar = [](ExprPtr const& e) {
+			return e && e->Kind == E::Var && e->Type.Kind == K::String ? e->Var : -1;
+		};
+		auto isNull = [](ExprPtr const& e) {
+			return e->Kind == E::Literal && e->Text == L"null";
+		};
+
+		// the statements at the end of the head that only compute what the string is tested by: copies of it, its hash
+		auto assignment = [](StmtPtr const& st) -> Expr* {
+			auto& v = st->Value;
+			return st->Kind == S::Expr && v && v->Kind == E::Assign && v->Text == L"=" && v->Args[0]->Kind == E::Var ? v.get() : nullptr;
+		};
+		size_t first = h.Stmts.size();
+		while (first > 0) {
+			auto a = assignment(h.Stmts[first - 1]);
+			if (!a)
+				break;
+			auto& value = a->Args[1];
+			bool copy = stringVar(a->Args[0]) >= 0 && stringVar(value) >= 0;
+			bool hash = value->Kind == E::Call && value->Text == L"ComputeStringHash" && value->Args.size() == 1;
+			if (!copy && !hash)
+				break;
+			first--;
+		}
+
+		// the string: what is compared with a string or null, hashed, measured or looked up (in the head's test, or what it uses)
+		int s = -1;
+		std::function<void(ExprPtr const&)> find = [&](ExprPtr const& e) {
+			if (!e || s >= 0)
+				return;
+			if (e->Kind == E::Binary && (e->Text == L"==" || e->Text == L"!=") && e->Args.size() == 2)
+				for (int i = 0; i < 2 && s < 0; i++) {
+					auto& other = e->Args[1 - i];
+					if (stringVar(e->Args[i]) >= 0 && other->Kind == E::Literal && (other->IsStr || isNull(other)))
+						s = stringVar(e->Args[i]);
+				}
+			if (s < 0 && e->Kind == E::Call && e->Text == L"ComputeStringHash" && e->Args.size() == 1)
+				s = stringVar(e->Args[0]);
+			if (s < 0 && e->Kind == E::Member && e->Text == L"Length" && e->HasTarget)
+				s = stringVar(e->Args[0]);
+			if (s < 0 && e->Kind == E::Call && e->Text == L"TryGetValue" && e->HasTarget && e->Args.size() == 3 && IsSwitchDictionary(e->Args[0]))
+				s = stringVar(e->Args[1]);
+			for (auto& a : e->Args)
+				find(a);
+		};
+		find(h.Value);
+		for (size_t i = first; i < h.Stmts.size() && s < 0; i++)
+			find(h.Stmts[i]->Value->Args[1]);
+		if (s < 0)
+			return false;
+		// its copies (made at the end of the head): the same string; the switch is on the one they are copies of
+		std::set<int> aliases{ s };
+		for (bool more = true; more; ) {
+			more = false;
+			for (size_t i = first; i < h.Stmts.size(); i++) {
+				auto a = assignment(h.Stmts[i]);
+				int to = stringVar(a->Args[0]), from = stringVar(a->Args[1]);
+				if (to >= 0 && from >= 0 && aliases.contains(to) != aliases.contains(from)) {
+					aliases.insert(to);
+					aliases.insert(from);
+					more = true;
+				}
+			}
+		}
+		// the string the others are copies of (the one that is not assigned)
+		std::set<int> copies;
+		for (size_t i = first; i < h.Stmts.size(); i++)
+			if (auto a = assignment(h.Stmts[i]); aliases.contains(a->Args[0]->Var))
+				copies.insert(a->Args[0]->Var);
+		s = -1;
+		for (int v : aliases)
+			if (!copies.contains(v))
+				s = v;
+		if (s < 0)
+			return false;
+
+		// What a block of the switch may have: expressions of the string and of what the blocks compute, and the making of the
+		// dictionary of the strings
+		std::function<bool(ExprPtr const&)> allowed = [&](ExprPtr const& e) -> bool {
+			if (!e)
+				return true;
+			switch (e->Kind) {
+				case E::Literal: case E::Var:
+					return true;
+				case E::Binary: case E::Unary: case E::Cast: case E::Conditional:
+					break;
+				case E::Member:
+					if (IsSwitchDictionary(e))
+						return true;
+					if (e->Text != L"Length" || !e->HasTarget || !aliases.contains(stringVar(e->Args[0])))
+						return false;
+					return true;
+				case E::Index:
+					if (e->Args.size() != 2 || !aliases.contains(stringVar(e->Args[0])))
+						return false;
+					break;
+				case E::Call:
+					if (e->Text == L"ComputeStringHash" && e->Args.size() == 1)
+						break;
+					if (e->Text == L"TryGetValue" && e->HasTarget && e->Args.size() == 3 && IsSwitchDictionary(e->Args[0]))
+						break;
+					return false;
+				case E::AddressOf:
+					return e->Args.size() == 1 && e->Args[0]->Kind == E::Var;
+				default:
+					return false;
+			}
+			for (auto& a : e->Args)
+				if (!allowed(a))
+					return false;
+			return true;
+		};
+		// the dictionary: made in a block of its own (t = new Dictionary<string, int>(n); t.Add("a", 0)...; field = t)
+		std::map<std::wstring, int64_t> dictionary;
+		auto makesDictionary = [&](Block const& block) {
+			if (block.Stmts.empty())
+				return false;
+			for (auto& st : block.Stmts) {
+				auto& v = st->Value;
+				if (st->Kind != S::Expr || !v)
+					return false;
+				if (v->Kind == E::Assign && v->Text == L"=" && v->Args[0]->Kind == E::Var && v->Args[1]->Kind == E::New &&
+					v->Args[1]->Text.starts_with(L"Dictionary<string, int>"))
+					continue;
+				if (v->Kind == E::Assign && v->Text == L"=" && IsSwitchDictionary(v->Args[0]) && v->Args[1]->Kind == E::Var)
+					continue;
+				if (v->Kind == E::Call && v->Text == L"Add" && v->HasTarget && v->Args.size() == 3 && v->Args[0]->Kind == E::Var &&
+					v->Args[1]->Kind == E::Literal && v->Args[1]->IsStr && v->Args[2]->Kind == E::Literal && v->Args[2]->IsInt)
+					continue;
+				return false;
+			}
+			return true;
+		};
+		auto dispatches = [&](int b) {
+			auto& block = m_Blocks[b];
+			if (block.Removed || block.Root || block.Region != h.Region)
+				return false;
+			if (block.Kind != Exit::Goto && block.Kind != Exit::Cond && block.Kind != Exit::Switch)
+				return false;
+			if (block.Kind == Exit::Goto && makesDictionary(block))
+				return true;
+			for (auto& st : block.Stmts) {
+				auto a = assignment(st);
+				if (!a || aliases.contains(a->Args[0]->Var) || !allowed(a->Args[1]))
+					return false;
+			}
+			return allowed(block.Value);
+		};
+
+		if (!allowed(h.Value))
+			return false;
+		for (size_t i = first; i < h.Stmts.size(); i++)
+			if (!allowed(h.Stmts[i]->Value->Args[1]))
+				return false;
+
+		// the blocks: those reached from the head that only test the string, that only it reaches, and whose values are only
+		// used by them
+		std::set<int> region{ head };
+		for (std::vector<int> work{ head }; !work.empty(); ) {
+			int b = work.back();
+			work.pop_back();
+			for (int next : m_Blocks[b].Succ)
+				if (next >= 0 && !region.contains(next) && dispatches(next)) {
+					region.insert(next);
+					work.push_back(next);
+				}
+		}
+		// (again when a block is found not to be of the switch)
+		auto prepare = [&]() -> bool {
+		for (bool changed = true; changed; ) {
+			changed = false;
+			std::set<int> readOutside;
+			for (int b = 0; b < (int)m_Blocks.size(); b++) {
+				auto& block = m_Blocks[b];
+				if (block.Removed || (region.contains(b) && b != head))
+					continue;
+				size_t end = b == head ? first : block.Stmts.size();
+				for (size_t i = 0; i < end; i++) {
+					auto& st = block.Stmts[i];
+					ForEachExprOf(*st, [&](ExprPtr& e) { Reads(e, readOutside); });
+					ForEachStmt(st->Body, [&](Stmt& inner) { ForEachExprOf(inner, [&](ExprPtr& e) { Reads(e, readOutside); }); });
+				}
+				if (b != head)
+					Reads(block.Value, readOutside);
+			}
+			// what the head computes is the switch's only
+			for (size_t i = first; i < h.Stmts.size(); i++)
+				if (auto a = assignment(h.Stmts[i]); !aliases.contains(a->Args[0]->Var) && readOutside.contains(a->Args[0]->Var))
+					return false;
+			for (auto it = region.begin(); it != region.end(); ) {
+				int b = *it;
+				bool keep = b == head;
+				if (!keep) {
+					keep = true;
+					for (int p : m_Blocks[b].Pred)
+						keep &= m_Blocks[p].Removed || region.contains(p);
+					for (auto& st : m_Blocks[b].Stmts)
+						if (auto a = assignment(st); a && readOutside.contains(a->Args[0]->Var))
+							keep = false;
+				}
+				if (keep)
+					++it;
+				else {
+					it = region.erase(it);
+					changed = true;
+				}
+			}
+		}
+
+		// something only a compiler makes: a dictionary, a hash, the length or a character of the string (if statements on the
+		// string are left as they are)
+		bool made = false;
+		dictionary.clear();
+		std::function<void(ExprPtr const&)> artifact = [&](ExprPtr const& e) {
+			if (!e || made)
+				return;
+			made = (e->Kind == E::Call && (e->Text == L"ComputeStringHash" || e->Text == L"TryGetValue")) ||
+				(e->Kind == E::Member && e->Text == L"Length") || e->Kind == E::Index;
+			for (auto& a : e->Args)
+				artifact(a);
+		};
+		for (int b : region) {
+			auto& block = m_Blocks[b];
+			artifact(block.Value);
+			for (size_t i = b == head ? first : 0; i < block.Stmts.size(); i++)
+				artifact(block.Stmts[i]->Value);
+			if (makesDictionary(block))
+				for (auto& st : block.Stmts)
+					if (st->Value->Kind == E::Call)
+						dictionary[st->Value->Args[1]->Str] = st->Value->Args[2]->Int;
+		}
+		return made;
+		};
+
+		// what the blocks compute, for a state of the string
+		int current = -1;	// the block that is followed
+		using V = SwitchValue::Kinds;
+		auto fail = [] { throw NotAStringSwitch(); };
+		std::function<SwitchValue(ExprPtr const&, SwitchState const&)> eval = [&](ExprPtr const& e, SwitchState const& st) -> SwitchValue {
+			auto integer = [](int64_t v) { return SwitchValue{ V::Int, v }; };
+			size_t const arity[] = { 0, 0, 2, 1, 1 };	// Literal, Var, Binary, Unary, Cast
+			if ((size_t)e->Kind < std::size(arity) && e->Args.size() != arity[(size_t)e->Kind])
+				fail();
+			if ((e->Kind == E::Index && e->Args.size() != 2) || (e->Kind == E::Conditional && e->Args.size() != 3) ||
+				(e->Kind == E::Call && e->Args.size() != 1) || (e->Kind == E::Member && !IsSwitchDictionary(e) && (!e->HasTarget || e->Args.size() != 1)))
+				fail();
+			switch (e->Kind) {
+				case E::Literal:
+					if (e->IsStr)
+						return { V::Str, 0, e->Str };
+					if (e->IsInt)
+						return integer(e->Int);
+					if (e->Text == L"null")
+						return { V::Null };
+					fail();
+				case E::Var:
+					if (aliases.contains(e->Var)) {
+						if (!st.Known)
+							return {};
+						return st.Null ? SwitchValue{ V::Null } : SwitchValue{ V::Str, 0, st.Str };
+					}
+					if (auto it = st.Vars.find(e->Var); it != st.Vars.end())
+						return it->second;
+					throw NotAStringSwitch{ current };	// a variable of the code around the switch
+				case E::Member:
+					if (IsSwitchDictionary(e))
+						return { V::Object };
+					{
+						auto target = eval(e->Args[0], st);
+						if (target.Kind == V::Null)
+							fail();
+						return target.Kind == V::Str ? integer((int64_t)target.Str.size()) : SwitchValue{};
+					}
+				case E::Index:
+				{
+					auto target = eval(e->Args[0], st);
+					auto index = eval(e->Args[1], st);
+					if (target.Kind == V::Null)
+						fail();
+					if (target.Kind != V::Str || index.Kind != V::Int)
+						return {};
+					if (index.Int < 0 || index.Int >= (int64_t)target.Str.size())
+						fail();
+					return integer(target.Str[(size_t)index.Int]);
+				}
+				case E::Call:
+				{
+					if (e->Text != L"ComputeStringHash")
+						fail();
+					auto value = eval(e->Args[0], st);
+					if (value.Kind == V::Null)
+						return integer(0);
+					return value.Kind == V::Str ? integer(StringHash(value.Str)) : SwitchValue{};
+				}
+				case E::Cast:
+				{
+					auto value = eval(e->Args[0], st);
+					if (value.Kind != V::Int)
+						return value.Kind == V::Unknown ? value : (fail(), value);
+					auto& t = e->Text;
+					auto v = value.Int;
+					if (t == L"int") v = (int32_t)v;
+					else if (t == L"uint") v = (uint32_t)v;
+					else if (t == L"char" || t == L"ushort") v = (uint16_t)v;
+					else if (t == L"short") v = (int16_t)v;
+					else if (t == L"byte") v = (uint8_t)v;
+					else if (t == L"sbyte") v = (int8_t)v;
+					else if (t != L"long" && t != L"ulong")
+						fail();
+					return integer(v);
+				}
+				case E::Unary:
+				{
+					auto value = eval(e->Args[0], st);
+					if (value.Kind == V::Unknown)
+						return value;
+					if (value.Kind != V::Int)
+						fail();
+					if (e->Text == L"!") return integer(value.Int == 0);
+					if (e->Text == L"-") return integer(-value.Int);
+					if (e->Text == L"~") return integer(~value.Int);
+					fail();
+				}
+				case E::Conditional:
+				{
+					auto c = eval(e->Args[0], st);
+					if (c.Kind == V::Unknown)
+						return c;
+					return eval(c.Int ? e->Args[1] : e->Args[2], st);
+				}
+				case E::Binary:
+				{
+					auto& op = e->Text;
+					auto a = eval(e->Args[0], st);
+					if (op == L"&&" || op == L"||") {
+						if (a.Kind == V::Int && (a.Int != 0) == (op == L"||"))
+							return a;
+						auto b = eval(e->Args[1], st);
+						if (a.Kind == V::Unknown || b.Kind == V::Unknown)
+							return {};
+						return integer(b.Int != 0);
+					}
+					auto b = eval(e->Args[1], st);
+					if (a.Kind == V::Unknown || b.Kind == V::Unknown)
+						return {};
+					if (a.Kind != V::Int || b.Kind != V::Int) {
+						// strings (and null, and the dictionary, which is there): equal or not
+						if (op != L"==" && op != L"!=")
+							fail();
+						bool equal = a.Kind == b.Kind && a.Str == b.Str;
+						return integer(equal == (op == L"=="));
+					}
+					auto unsignedOf = [](ClrTypeInfo const& t) { return t.Name == L"uint" ? 32 : t.Name == L"ulong" ? 64 : 0; };
+					int bits = std::max(unsignedOf(e->Args[0]->Type), unsignedOf(e->Args[1]->Type));
+					auto x = a.Int, y = b.Int;
+					auto less = [&] { return bits == 32 ? (uint32_t)x < (uint32_t)y : bits == 64 ? (uint64_t)x < (uint64_t)y : x < y; };
+					auto equal = [&] { return bits == 32 ? (uint32_t)x == (uint32_t)y : x == y; };
+					if (op == L"==") return integer(equal());
+					if (op == L"!=") return integer(!equal());
+					if (op == L"<") return integer(less());
+					if (op == L">=") return integer(!less());
+					if (op == L">") return integer(!less() && !equal());
+					if (op == L"<=") return integer(less() || equal());
+					if (op == L"+") return integer(x + y);
+					if (op == L"-") return integer(x - y);
+					if (op == L"*") return integer(x * y);
+					if (op == L"&") return integer(x & y);
+					if (op == L"|") return integer(x | y);
+					if (op == L"^") return integer(x ^ y);
+					fail();
+				}
+			}
+			fail();
+			return {};
+		};
+		// the ways a test goes, with what each way tells of the string
+		std::function<std::vector<std::pair<bool, SwitchState>>(ExprPtr const&, SwitchState const&)> decide =
+			[&](ExprPtr const& e, SwitchState const& st) -> std::vector<std::pair<bool, SwitchState>> {
+			std::vector<std::pair<bool, SwitchState>> ways;
+			if ((e->Kind == E::Binary && e->Args.size() != 2) || (e->Kind == E::Unary && e->Args.size() != 1) ||
+				(e->Kind == E::Call && e->Text == L"TryGetValue" && e->Args.size() != 3))
+				fail();
+			if (e->Kind == E::Unary && e->Text == L"!") {
+				for (auto& [way, next] : decide(e->Args[0], st))
+					ways.push_back({ !way, std::move(next) });
+				return ways;
+			}
+			if (e->Kind == E::Binary && (e->Text == L"&&" || e->Text == L"||")) {
+				bool shortWay = e->Text == L"||";
+				for (auto& [way, next] : decide(e->Args[0], st)) {
+					if (way == shortWay)
+						ways.push_back({ way, std::move(next) });
+					else
+						for (auto& more : decide(e->Args[1], next))
+							ways.push_back(std::move(more));
+				}
+				return ways;
+			}
+			if (!st.Known && e->Kind == E::Binary && (e->Text == L"==" || e->Text == L"!=")) {
+				for (int i = 0; i < 2; i++) {
+					auto& other = e->Args[1 - i];
+					if (!aliases.contains(stringVar(e->Args[i])) || other->Kind != E::Literal || !(other->IsStr || isNull(other)))
+						continue;
+					bool equal = e->Text == L"==";
+					auto is = st, isNot = st;
+					is.Known = true;
+					if (other->IsStr) {
+						is.Str = other->Str;
+						isNot.Excluded.insert(other->Str);
+						if (!st.Excluded.contains(other->Str))
+							ways.push_back({ equal, std::move(is) });
+					}
+					else {
+						is.Null = true;
+						isNot.NotNull = true;
+						if (!st.NotNull)
+							ways.push_back({ equal, std::move(is) });
+					}
+					ways.push_back({ !equal, std::move(isNot) });
+					return ways;
+				}
+			}
+			if (e->Kind == E::Call && e->Text == L"TryGetValue") {
+				auto out = e->Args[2]->Kind == E::AddressOf ? e->Args[2]->Args[0] : e->Args[2];
+				if (out->Kind != E::Var)
+					fail();
+				if (st.Known) {
+					if (st.Null)
+						fail();
+					auto next = st;
+					auto it = dictionary.find(st.Str);
+					next.Vars[out->Var] = { V::Int, it == dictionary.end() ? 0 : it->second };
+					ways.push_back({ it != dictionary.end(), std::move(next) });
+					return ways;
+				}
+				auto none = st;
+				for (auto& [key, value] : dictionary) {
+					none.Excluded.insert(key);
+					if (st.Excluded.contains(key))
+						continue;
+					auto next = st;
+					next.Known = true;
+					next.Str = key;
+					next.Vars[out->Var] = { V::Int, value };
+					ways.push_back({ true, std::move(next) });
+				}
+				none.Vars[out->Var] = { V::Int, 0 };
+				ways.push_back({ false, std::move(none) });
+				return ways;
+			}
+			auto value = eval(e, st);
+			if (value.Kind == V::Unknown) {
+				ways.push_back({ true, st });
+				ways.push_back({ false, st });
+			}
+			else
+				ways.push_back({ value.Kind == V::Int ? value.Int != 0 : value.Kind == V::Object, st });
+			return ways;
+		};
+
+		// the ways, to the blocks where the cases start
+		std::map<std::wstring, int> labels;		// the strings ("\x01" + the string; "\x00": null) and where they go
+		std::set<int> defaults;
+		size_t steps = 0;
+		std::function<void(int, SwitchState)> follow = [&](int b, SwitchState st) {
+			if (!region.contains(b)) {
+				if (!st.Known)
+					defaults.insert(b);
+				else {
+					auto key = st.Null ? std::wstring(1, L'\0') : L"\x01" + st.Str;
+					if (auto [it, added] = labels.insert({ key, b }); !added && it->second != b)
+						fail();
+				}
+				return;
+			}
+			if (++steps > 20000 || std::find(st.Path.begin(), st.Path.end(), b) != st.Path.end())
+				fail();
+			st.Path.push_back(b);
+			current = b;
+			auto& block = m_Blocks[b];
+			for (size_t i = b == head ? first : 0; i < block.Stmts.size(); i++) {
+				auto a = assignment(block.Stmts[i]);
+				if (!a || aliases.contains(a->Args[0]->Var))
+					continue;	// (the making of the dictionary, which is there; a copy of the string)
+				st.Vars[a->Args[0]->Var] = eval(a->Args[1], st);
+			}
+			switch (block.Kind) {
+				case Exit::Goto:
+					follow(block.Succ[0], std::move(st));
+					return;
+				case Exit::Cond:
+					for (auto& [way, next] : decide(block.Value, st))
+						follow(block.Succ[way ? 0 : 1], std::move(next));
+					return;
+				case Exit::Switch:
+				{
+					auto value = eval(block.Value, st);
+					if (value.Kind == V::Int) {
+						auto index = value.Int >= 0 && value.Int + 1 < (int64_t)block.Succ.size() ? (size_t)value.Int : block.Succ.size() - 1;
+						follow(block.Succ[index], std::move(st));
+						return;
+					}
+					if (value.Kind != V::Unknown)
+						fail();
+					std::set<int> seen;
+					for (int next : block.Succ)
+						if (seen.insert(next).second)
+							follow(next, st);
+					return;
+				}
+			}
+			fail();
+		};
+		if (h.Kind == Exit::Switch && h.Succ.empty())
+			return false;
+		for (int attempt = 0; ; attempt++) {
+			if (attempt > 64 || !prepare())
+				return false;
+			labels.clear();
+			defaults.clear();
+			steps = 0;
+			try {
+				follow(head, {});
+				break;
+			}
+			catch (NotAStringSwitch const& e) {
+				// a block that is not of the switch: where it goes on
+				if (e.Block < 0 || e.Block == head)
+					return false;
+				region.erase(e.Block);
+			}
+		}
+		if (defaults.size() != 1 || std::count_if(labels.begin(), labels.end(), [](auto& l) { return l.first[0] != 0; }) < 2)
+			return false;
+
+		// the head is the switch, the other blocks go
+		int fallback = *defaults.begin();
+		std::vector<int> targets;
+		std::vector<std::vector<ExprPtr>> caseLabels;
+		ClrTypeInfo stringType{ L"string", K::String };
+		for (auto& [key, target] : labels) {
+			if (target == fallback)
+				continue;
+			auto it = std::find(targets.begin(), targets.end(), target);
+			if (it == targets.end()) {
+				targets.push_back(target);
+				caseLabels.emplace_back();
+				it = targets.end() - 1;
+			}
+			ExprPtr label;
+			if (key[0] == 0)
+				label = Make(E::Literal, L"null", {}, stringType);
+			else {
+				label = Make(E::Literal, CSharpQuote(key.substr(1)), {}, stringType);
+				label->IsStr = true;
+				label->Str = key.substr(1);
+			}
+			caseLabels[it - targets.begin()].push_back(label);
+		}
+		// the cases in the order of their code; the labels of one as the dictionary has them (null first), or by their text
+		auto order = [&](ExprPtr const& label) {
+			if (!label->IsStr)
+				return std::pair<int64_t, std::wstring>(-1, L"");
+			auto it = dictionary.find(label->Str);
+			return std::pair<int64_t, std::wstring>(it == dictionary.end() ? 0 : it->second, label->Str);
+		};
+		for (auto& list : caseLabels)
+			std::ranges::sort(list, {}, order);
+		std::vector<size_t> byCode(targets.size());
+		std::iota(byCode.begin(), byCode.end(), size_t(0));
+		std::ranges::stable_sort(byCode, {}, [&](size_t i) { return m_Blocks[targets[i]].Start; });
+		std::vector<int> sortedTargets;
+		std::vector<std::vector<ExprPtr>> sortedLabels;
+		for (auto i : byCode) {
+			sortedTargets.push_back(targets[i]);
+			sortedLabels.push_back(std::move(caseLabels[i]));
+		}
+		targets = std::move(sortedTargets);
+		caseLabels = std::move(sortedLabels);
+
+		// the copies of the string that are read elsewhere stay
+		std::set<int> readElsewhere;
+		for (int b = 0; b < (int)m_Blocks.size(); b++) {
+			if (m_Blocks[b].Removed || region.contains(b))
+				continue;
+			for (auto& st : m_Blocks[b].Stmts)
+				ForEachExprOf(*st, [&](ExprPtr& e) { Reads(e, readElsewhere); });
+			Reads(m_Blocks[b].Value, readElsewhere);
+		}
+		StmtList kept(h.Stmts.begin(), h.Stmts.begin() + first);
+		for (size_t i = first; i < h.Stmts.size(); i++)
+			if (auto a = assignment(h.Stmts[i]); aliases.contains(a->Args[0]->Var) && readElsewhere.contains(a->Args[0]->Var))
+				kept.push_back(h.Stmts[i]);
+		for (int b : region)
+			if (b != head) {
+				m_Blocks[b].Removed = true;
+				m_Blocks[b].Succ.clear();
+			}
+		h.Stmts = std::move(kept);
+		h.Kind = Exit::Switch;
+		h.Value = VarExpr(s);
+		h.Succ = targets;
+		h.Succ.push_back(fallback);
+		h.Labels = std::move(caseLabels);
+		Connect();
+		return true;
+	}
+
+	void MethodDecompiler::StringSwitches() {
+		for (int b = 0; b < (int)m_Blocks.size(); b++)
+			StringSwitch(b);
+	}
+
 	void MethodDecompiler::Simplify() {
 		Connect();
+		StringSwitches();
 		for (bool changed = true; changed; ) {
 			changed = false;
 			Bypass();
@@ -2318,6 +3012,31 @@ namespace {
 	void MethodDecompiler::EmitSwitch(int b, Context const& ctx, StmtList& out, int follow) {
 		auto& block = m_Blocks[b];
 		auto s = MakeStmt(S::Switch, block.Value);
+		// on a string: a case for each target, with its labels
+		if (!block.Labels.empty()) {
+			Context sub = ctx;
+			sub.Follow = follow;
+			sub.InSwitch = true;
+			for (size_t i = 0; i + 1 < block.Succ.size() && i < block.Labels.size(); i++) {
+				Case c;
+				c.Labels = block.Labels[i];
+				if (block.Succ[i] != follow)
+					Emit(block.Succ[i], sub, c.Body);
+				if (!EndsWithJump(c.Body))
+					c.Body.push_back(MakeStmt(S::Break));
+				s->Cases.push_back(std::move(c));
+			}
+			if (int fallback = block.Succ.back(); fallback != follow) {
+				Case c;
+				c.Default = true;
+				Emit(fallback, sub, c.Body);
+				if (!EndsWithJump(c.Body))
+					c.Body.push_back(MakeStmt(S::Break));
+				s->Cases.push_back(std::move(c));
+			}
+			out.push_back(s);
+			return;
+		}
 		// switch (x - 1) with cases 0, 1... is switch (x) with cases 1, 2...
 		int64_t bias = 0;
 		if (s->Value->Kind == E::Binary && s->Value->Text == L"-" && s->Value->Args[1]->Kind == E::Literal && s->Value->Args[1]->IsInt) {
@@ -2915,6 +3634,53 @@ namespace {
 
 	// a local that is read once, right after it is set: the value goes where it is read (as debug builds write
 	// "bool flag = x > 5; if (flag)")
+	// t = new T[n]; t[0] = a; ... t[n - 1] = z; is t = new T[] { a, ..., z } (the variable is then where it is read)
+	void MethodDecompiler::ArrayInitializers(StmtList& list) {
+		auto assignment = [](StmtPtr const& st) -> Expr* {
+			auto& v = st->Value;
+			return st->Kind == S::Expr && v && v->Kind == E::Assign && v->Text == L"=" && v->Args.size() == 2 ? v.get() : nullptr;
+		};
+		for (size_t i = 0; i < list.size(); i++) {
+			auto a = assignment(list[i]);
+			if (!a || a->Args[0]->Kind != E::Var || a->Args[1]->Kind != E::NewArray || a->Args[1]->Args.size() != 1)
+				continue;
+			auto& count = a->Args[1]->Args[0];
+			if (count->Kind != E::Literal || !count->IsInt || count->Int <= 0 || count->Int > 100000 || i + (size_t)count->Int >= list.size() + 1)
+				continue;
+			int var = a->Args[0]->Var;
+			auto n = (size_t)count->Int;
+			std::vector<ExprPtr> elements;
+			for (size_t k = 0; k < n && i + 1 + k < list.size(); k++) {
+				auto set = assignment(list[i + 1 + k]);
+				if (!set || set->Args[0]->Kind != E::Index || set->Args[0]->Args.size() != 2)
+					break;
+				auto& target = set->Args[0]->Args[0];
+				auto& index = set->Args[0]->Args[1];
+				if (target->Kind != E::Var || target->Var != var || index->Kind != E::Literal || !index->IsInt || index->Int != (int64_t)k)
+					break;
+				bool reads = false;
+				ForEach(set->Args[1], [&](Expr const& x) { reads |= x.Kind == E::Var && x.Var == var; });
+				if (reads)
+					break;
+				elements.push_back(set->Args[1]);
+			}
+			if (elements.size() != n)
+				continue;
+			auto init = Make(E::ArrayInit, a->Args[1]->Text, std::move(elements), a->Args[1]->Type);
+			init->Token = a->Args[1]->Token;
+			a->Args[1] = init;
+			list.erase(list.begin() + (ptrdiff_t)i + 1, list.begin() + (ptrdiff_t)(i + 1 + n));
+		}
+		for (auto& st : list) {
+			ArrayInitializers(st->Body);
+			ArrayInitializers(st->Else);
+			for (auto& c : st->Cases)
+				ArrayInitializers(c.Body);
+			for (auto& h : st->Handlers)
+				ArrayInitializers(h.Body);
+		}
+	}
+
 	void MethodDecompiler::InlineLocals(StmtList& list) {
 		// the places where a variable is set and, right after, read: (the list, the statement that sets it, where it is read)
 		struct Site {
@@ -3208,6 +3974,7 @@ namespace {
 		};
 		labels(m_Result);
 		Clean(m_Result, true);
+		ArrayInitializers(m_Result);
 		InlineLocals(m_Result);
 		Clean(m_Result, true);
 		Compound(m_Result);
@@ -3429,6 +4196,18 @@ namespace {
 				text = Expression(target, 17) + L"[" + Arguments(a, 1) + L"]";
 				break;
 			}
+			case E::ArrayInit:
+			{
+				// new string[] { "a", "b" }, new int[][] { a, b }
+				auto name = e->Text;
+				auto brackets = name.find(L'[');
+				text = L"new " + (brackets == std::wstring::npos ? name : name.substr(0, brackets)) + L"[]" +
+					(brackets == std::wstring::npos ? L"" : name.substr(brackets)) + L" {";
+				for (size_t i = 0; i < a.size(); i++)
+					text += (i ? L", " : L" ") + Expression(a[i], 0);
+				text += a.empty() ? L"}" : L" }";
+				break;
+			}
 			case E::NewArray:
 			{
 				// new int[5], new int[5][] (an array of arrays)
@@ -3553,6 +4332,8 @@ namespace {
 				m_W.Open();
 				auto type = s.Value->Type;
 				for (auto& c : s.Cases) {
+					for (auto& label : c.Labels)
+						Line(L"case " + Expression(label, 0) + L":");
 					for (auto v : c.Values) {
 						std::wstring value;
 						if (type.Kind == K::Char && v >= 0 && v <= 0xFFFF)
@@ -3725,10 +4506,117 @@ namespace {
 			std::wstring error;
 			if (!decompiler.Run(error) || !decompiler.Info().Signature.Params.empty())
 				return false;
-			auto& body = decompiler.Body();
+			auto body = decompiler.Body();
+			if (auto it = m_Moved.find(method); it != m_Moved.end())
+				body.erase(body.begin(), body.begin() + std::min(it->second, body.size()));
 			return body.empty() || (body.size() == 1 && body[0]->Kind == S::Expr && body[0]->Value->Kind == E::Call &&
 				body[0]->Value->Text == L"base" && body[0]->Value->Args.empty());
 		}
+
+		// The field initializers of a type: the first statements of its static constructor that set its static fields, and
+		// those of its constructors before they call the base type's (the same in each of them) that set its fields. The C# of
+		// the values (that read no variables) goes to the fields; the constructors say the rest.
+		void FindInitializers(uint32_t type) {
+			m_Initializers.clear();
+			m_Moved.clear();
+			m_Hidden.clear();
+			if (!m_PE)
+				return;
+			std::set<uint32_t> fields;
+			for (auto f : m_Md.FieldsOf(type))
+				fields.insert(f);
+			CSharpPrinter printer(m_Md, m_W, type);
+			// "F = value": a field of the type, set to a value of no variables
+			auto initializer = [&](StmtPtr const& st, bool isStatic, std::vector<Variable> const& vars) -> std::pair<uint32_t, std::wstring> {
+				auto& v = st->Value;
+				if (st->Kind != S::Expr || !v || v->Kind != E::Assign || v->Text != L"=" || v->Args.size() != 2)
+					return {};
+				auto& target = v->Args[0];
+				if (target->Kind != E::Member || TableOf(target->Token) != ClrTableId::Field || !fields.contains(RowOf(target->Token)))
+					return {};
+				auto row = RowOf(target->Token);
+				bool fieldStatic = (m_Md.Fields()[row - 1].Flags & 0x10) != 0;
+				if (fieldStatic != isStatic || (isStatic ? target->HasTarget : !(target->HasTarget && target->Args.size() == 1 &&
+					target->Args[0]->Kind == E::Var && target->Args[0]->Var >= 0 && target->Args[0]->Var < (int)vars.size() &&
+					vars[target->Args[0]->Var].Role == Variable::Roles::This)))
+					return {};
+				bool pure = true;
+				ForEach(v->Args[1], [&](Expr const& x) { pure &= x.Kind != E::Var && x.Kind != E::Base && x.Kind != E::Exception; });
+				if (!pure)
+					return {};
+				return { row, printer.Expression(v->Args[1], 0) };
+			};
+			auto run = [&](uint32_t m, MethodDecompiler& decompiler) {
+				std::wstring error;
+				try {
+					return decompiler.Run(error);
+				}
+				catch (std::exception const&) {
+					return false;
+				}
+			};
+			// static: the first statements of the static constructor (all of them: it is not said)
+			for (auto m : m_Md.MethodsOf(type)) {
+				if (m_Md.Methods()[m - 1].Name != L".cctor")
+					continue;
+				MethodDecompiler decompiler(*m_PE, m_Md, m);
+				if (!run(m, decompiler))
+					continue;
+				auto& body = decompiler.Body();
+				size_t n = 0;
+				for (; n < body.size(); n++) {
+					auto [row, value] = initializer(body[n], true, decompiler.Variables());
+					if (!row || m_Initializers.contains(row))
+						break;
+					m_Initializers[row] = value;
+				}
+				m_Moved[m] = n;
+				if (n > 0 && n == body.size() && m_Md.CustomAttributes(MethodToken(m)).empty())
+					m_Hidden.insert(m);
+			}
+			// instance: before the call of the base type's constructor, the same in each constructor that calls it
+			std::optional<std::vector<std::pair<uint32_t, std::wstring>>> common;
+			std::map<uint32_t, size_t> counts;
+			for (auto m : m_Md.MethodsOf(type)) {
+				if (m_Md.Methods()[m - 1].Name != L".ctor")
+					continue;
+				MethodDecompiler decompiler(*m_PE, m_Md, m);
+				if (!run(m, decompiler))
+					return;
+				auto& body = decompiler.Body();
+				size_t call = 0;
+				while (call < body.size() && !(body[call]->Kind == S::Expr && body[call]->Value && body[call]->Value->Kind == E::Call &&
+					!body[call]->Value->HasTarget && (body[call]->Value->Text == L"base" || body[call]->Value->Text == L"this")))
+					call++;
+				if (call == body.size())
+					return;		// (a struct's)
+				if (body[call]->Value->Text == L"this") {
+					if (call > 0)
+						return;
+					continue;
+				}
+				std::vector<std::pair<uint32_t, std::wstring>> list;
+				for (size_t i = 0; i < call; i++) {
+					auto one = initializer(body[i], false, decompiler.Variables());
+					if (!one.first)
+						return;
+					list.push_back(std::move(one));
+				}
+				if (common && *common != list)
+					return;
+				common = std::move(list);
+				counts[m] = call;
+			}
+			if (!common)
+				return;
+			for (auto& [row, value] : *common)
+				m_Initializers[row] = value;
+			for (auto [m, count] : counts)
+				m_Moved[m] = count;
+		}
+		std::map<uint32_t, std::wstring> m_Initializers;	// the C# of the value of each field that has one (by its row)
+		std::map<uint32_t, size_t> m_Moved;	// how many of the first statements of a constructor initialize fields
+		std::set<uint32_t> m_Hidden;		// a static constructor that only initializes fields
 
 		std::wstring GenericParams(uint32_t token) {
 			auto names = m_Md.GenericParamNames(token);
@@ -3820,6 +4708,8 @@ namespace {
 				return;
 			}
 			auto body = decompiler.Body();
+			if (auto it = m_Moved.find(method); it != m_Moved.end())
+				body.erase(body.begin(), body.begin() + std::min(it->second, body.size()));
 			// a constructor's call of the base type's (or another of its own) goes in its declaration
 			if (m.Name == L".ctor" && !body.empty() && body[0]->Kind == S::Expr && body[0]->Value->Kind == E::Call &&
 				(body[0]->Value->Text == L"base" || body[0]->Value->Text == L"this") && !body[0]->Value->HasTarget) {
@@ -3831,6 +4721,11 @@ namespace {
 				}
 				body.erase(body.begin());
 			}
+			else if (m.Name == L".ctor")
+				std::erase_if(body, [](StmtPtr const& st) {
+					return st->Kind == S::Expr && st->Value && st->Value->Kind == E::Call && !st->Value->HasTarget &&
+						st->Value->Text == L"base" && st->Value->Args.empty();
+				});
 			m_W.Line(header, MethodToken(method));
 			m_W.Open();
 			if (!error.empty())
@@ -3880,6 +4775,8 @@ namespace {
 			text += TypeText(info.FieldType.Name, f.Type) + L" " + Identifier(f.Name);
 			if (!value.empty())
 				text += L" = " + value;
+			else if (auto it = m_Initializers.find(field); it != m_Initializers.end())
+				text += L" = " + it->second;
 			m_W.Line(text + L";", FieldToken(field));
 		}
 
@@ -3907,8 +4804,13 @@ namespace {
 			auto declaration = modifiers + propertyType.Name + L" " + name;
 			// an automatic property: its backing field is there
 			bool automatic = false;
+			std::wstring initial;
 			for (auto f : m_Md.FieldsOf(type))
-				automatic |= m_Md.Fields()[f - 1].Name == L"<" + p.Name + L">k__BackingField";
+				if (m_Md.Fields()[f - 1].Name == L"<" + p.Name + L">k__BackingField") {
+					automatic = true;
+					if (auto it = m_Initializers.find(f); it != m_Initializers.end())
+						initial = L" = " + it->second + L";";
+				}
 			bool bodies = !automatic && !inInterface;
 			auto hasBody = [&](uint32_t m) { return m && m_Md.Methods()[m - 1].Rva != 0; };
 			if (!bodies || (!hasBody(p.Getter) && !hasBody(p.Setter))) {
@@ -3922,7 +4824,7 @@ namespace {
 					text += L" " + access(p.Getter) + L"get;";
 				if (p.Setter)
 					text += L" " + access(p.Setter) + L"set;";
-				m_W.Line(declaration + text + L" }", (ClrTableId::Property << 24) | property);
+				m_W.Line(declaration + text + L" }" + initial, (ClrTableId::Property << 24) | property);
 				return;
 			}
 			m_W.Line(declaration, (ClrTableId::Property << 24) | property);
@@ -4036,6 +4938,7 @@ namespace {
 			}
 			// the members: fields (not the backing fields of properties and events), properties, events, methods (not
 			// accessors), nested types
+			FindInitializers(type);
 			std::set<std::wstring> hidden;
 			for (auto p : m_Md.PropertiesOf(type))
 				hidden.insert(L"<" + m_Md.Properties()[p - 1].Name + L">k__BackingField");
@@ -4066,7 +4969,7 @@ namespace {
 			for (auto m : m_Md.MethodsOf(type)) {
 				if (m_Md.AccessorOf(m).second != ClrAccessor::None)
 					continue;
-				if (constructors == 1 && IsDefaultConstructor(m))
+				if ((constructors == 1 && IsDefaultConstructor(m)) || m_Hidden.contains(m))
 					continue;
 				if (any)
 					m_W.Blank();

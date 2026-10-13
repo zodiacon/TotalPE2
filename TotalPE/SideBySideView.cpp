@@ -56,13 +56,18 @@ bool CSideBySideView::SetAsm(std::span<const std::byte> code, uint64_t address, 
 	return true;
 }
 
-void CSideBySideView::SetC(std::string const& c, GhidraDecompiler::LineAddresses lines, std::unordered_map<std::wstring, uint64_t> links) {
+void CSideBySideView::SetC(std::string const& c, GhidraDecompiler::LineAddresses lines, std::unordered_map<std::wstring, uint64_t> links,
+	GhidraDecompiler::Variables variables) {
 	auto& ctrl = m_C->GetCtrl();
+	auto caret = ctrl.GetCurrentPos();
 	ctrl.SetReadOnly(false);
 	m_C->SetText(c.c_str());
 	ctrl.SetReadOnly(true);
 	ctrl.EmptyUndoBuffer();
+	ctrl.SendMessage(SCI_SETSEL, caret, caret);
 	m_C->SetFunctionLinks(std::move(links));
+	m_C->SetVariables(std::move(variables));
+	m_C->SetLineAddresses(lines);
 	m_Lines = std::move(lines);
 	Align();
 	// the caret's line on the side the user is in marks the other side's lines
@@ -213,4 +218,10 @@ void CSideBySideView::XrefsChanged() {
 	Align();
 	if (m_Active)
 		LinkFrom(*m_Active);
+}
+
+void CSideBySideView::AnnotationsChanged() {
+	m_Asm->AnnotationsChanged();
+	m_C->AnnotationsChanged();
+	Align();
 }

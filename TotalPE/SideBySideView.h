@@ -19,12 +19,14 @@ public:
 	// the disassembly of the function, then its C (again when it changes: the C of a function is made on another thread),
 	// with the addresses of the instructions of each line
 	bool SetAsm(std::span<const std::byte> code, uint64_t address, CpuArch arch);
-	void SetC(std::string const& c, GhidraDecompiler::LineAddresses lines, std::unordered_map<std::wstring, uint64_t> links);
+	void SetC(std::string const& c, GhidraDecompiler::LineAddresses lines, std::unordered_map<std::wstring, uint64_t> links,
+		GhidraDecompiler::Variables variables = {});
 
 	int64_t GetNavigationPosition() const override;
 	void SetNavigationPosition(int64_t va) override;
 	bool GoToAddress(uint64_t va) override;
 	void XrefsChanged() override;
+	void AnnotationsChanged() override;
 
 	BEGIN_MSG_MAP(CSideBySideView)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)

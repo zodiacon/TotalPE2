@@ -230,6 +230,12 @@
     <ClCompile Include="GoToDlg.cpp">
       <Filter>Dialogs</Filter>
     </ClCompile>
+    <ClCompile Include="InputDlg.cpp">
+      <Filter>Dialogs</Filter>
+    </ClCompile>
+    <ClCompile Include="BookmarksView.cpp">
+      <Filter>Dialogs</Filter>
+    </ClCompile>
     <ClCompile Include="SearchDlg.cpp">
       <Filter>Dialogs</Filter>
     </ClCompile>
@@ -445,6 +451,12 @@
       <Filter>Views</Filter>
     </ClInclude>
     <ClInclude Include="GoToDlg.h">
+      <Filter>Dialogs</Filter>
+    </ClInclude>
+    <ClInclude Include="InputDlg.h">
+      <Filter>Dialogs</Filter>
+    </ClInclude>
+    <ClInclude Include="BookmarksView.h">
       <Filter>Dialogs</Filter>
     </ClInclude>
     <ClInclude Include="GlobalPtrView.h">

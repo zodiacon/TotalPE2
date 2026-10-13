@@ -73,10 +73,11 @@ namespace {
 			types->setCoreType("double", 8, TYPE_FLOAT, false);
 			types->setCoreType("float10", 10, TYPE_FLOAT, false);
 			types->setCoreType("float16", 16, TYPE_FLOAT, false);
-			types->setCoreType("undefined", 1, TYPE_UNKNOWN, false);
-			types->setCoreType("undefined2", 2, TYPE_UNKNOWN, false);
-			types->setCoreType("undefined4", 4, TYPE_UNKNOWN, false);
-			types->setCoreType("undefined8", 8, TYPE_UNKNOWN, false);
+			// bytes of a size whose type is not known (Ghidra's "undefined")
+			types->setCoreType("undef", 1, TYPE_UNKNOWN, false);
+			types->setCoreType("undef2", 2, TYPE_UNKNOWN, false);
+			types->setCoreType("undef4", 4, TYPE_UNKNOWN, false);
+			types->setCoreType("undef8", 8, TYPE_UNKNOWN, false);
 			types->setCoreType("code", 1, TYPE_CODE, false);
 			types->setCoreType("wchar_t", 2, TYPE_INT, true);
 			types->setCoreType("wchar32", 4, TYPE_INT, true);
@@ -196,6 +197,11 @@ struct GhidraDecompiler::Impl {
 	PrototypeSource Prototypes;
 	NameSource Names;
 	LocalSource Locals;
+	TypeNameSource TypeNames;
+	ChangeSource Changes;
+	CommentSource Comments;
+	std::unordered_map<uint64_t, std::string> Applied;	// the changes each function was last decompiled with (as text)
+	std::string Pending;	// what is to be said in the code of the next function decompiled (a change that could not be made)
 	std::unordered_map<uint32_t, Datatype*> Converted;	// the decompiler's types of the caller's ids
 	std::unordered_set<uint64_t> Prototyped;			// the functions whose prototypes were asked for
 	std::unordered_set<uint64_t> Localized;				// the functions whose local variables were asked for
@@ -222,6 +228,14 @@ struct GhidraDecompiler::Impl {
 	bool ApplyPrototype(Funcdata* fd);
 	void ApplyLocals(Funcdata* fd);
 	bool ApplyFixup(Funcdata* fd);
+
+	// the user's changes: types written as C, the changes to the variables of a function, and the variables it shows
+	Datatype* NamedType(std::string const& name);
+	Datatype* ParseType(std::string const& text, std::string& error);
+	static std::string TypeText(Datatype const* type);
+	void ApplyChanges(Funcdata* fd, std::vector<VariableChange> const& changes);
+	std::string KeyOf(Funcdata* fd, Symbol* sym, Varnode* vn) const;
+	void CollectVariables(Funcdata* fd, Variables& variables) const;
 };
 
 // Bytes of a size: the core type of the size, or an array of bytes
@@ -576,6 +590,435 @@ bool GhidraDecompiler::Impl::ApplyFixup(Funcdata* fd) {
 	return true;
 }
 
+namespace {
+	std::string Trim(std::string const& text) {
+		auto first = text.find_first_not_of(" \t");
+		if (first == std::string::npos)
+			return {};
+		return text.substr(first, text.find_last_not_of(" \t") - first + 1);
+	}
+
+	// the words of a type, without those that do not change its storage ("const struct _X" -> "_X")
+	std::string WithoutQualifiers(std::string const& text) {
+		std::istringstream in(text);
+		std::string result;
+		for (std::string word; in >> word; ) {
+			if (word == "const" || word == "volatile" || word == "struct" || word == "union" || word == "enum" || word == "class")
+				continue;
+			result += (result.empty() ? "" : " ") + word;
+		}
+		return result;
+	}
+
+	bool StartsWith(std::string const& text, char const* prefix) {
+		return text.rfind(prefix, 0) == 0;
+	}
+
+	// Ghidra puts a comment of its own line at a column of its own (20): it goes where the statement after it starts
+	void IndentComments(std::string& code) {
+		std::vector<std::string> lines;
+		std::istringstream in(code);
+		for (std::string line; std::getline(in, line); )
+			lines.push_back(line);
+		auto isComment = [](std::string const& line) {
+			auto first = line.find_first_not_of(' ');
+			return first != std::string::npos && line.compare(first, 2, "/*") == 0 && line.size() >= first + 4 &&
+				line.compare(line.size() - 2, 2, "*/") == 0;
+		};
+		for (size_t i = 0; i < lines.size(); i++) {
+			if (!isComment(lines[i]))
+				continue;
+			// the indentation of the next line that is not a comment
+			size_t next = i + 1;
+			while (next < lines.size() && isComment(lines[next]))
+				next++;
+			if (next >= lines.size())
+				continue;
+			auto indent = lines[next].find_first_not_of(' ');
+			if (indent == std::string::npos)
+				continue;
+			lines[i] = std::string(indent, ' ') + lines[i].substr(lines[i].find_first_not_of(' '));
+		}
+		std::string result;
+		for (auto const& line : lines)
+			result += line + "\n";
+		if (!code.empty() && code.back() != '\n' && !result.empty())
+			result.pop_back();
+		code = std::move(result);
+	}
+
+	// Ghidra names a variable on the stack by its type, then the space and its offset ("uStack_c", "auStack_28", "lStackX_10"):
+	// it is named local_ and the offset ("local_c", "local_28"; "localX_10" in the caller's part of the stack)
+	std::string StackName(std::string const& name) {
+		auto at = name.find("Stack");
+		if (at == std::string::npos || name.find_first_not_of("abcdefghijklmnopqrstuvwxyz") != at)
+			return {};
+		auto rest = name.substr(at + 5);	// [X|Y]_offset
+		size_t i = 0;
+		if (i < rest.size() && (rest[i] == 'X' || rest[i] == 'Y'))
+			i++;
+		if (i + 1 >= rest.size() || rest[i] != '_' || rest.find_first_not_of("0123456789abcdef", i + 1) != std::string::npos)
+			return {};
+		return "local" + rest;
+	}
+
+	// Ghidra names the other variables by their type as well: a value in a register "uVar1" ("pcVar3"...), a global
+	// variable "uRam0000000140003000". Without the type: "Var1", "Ram0000000140003000".
+	std::string Untyped(std::string const& name) {
+		auto prefix = name.find_first_not_of("abcdefghijklmnopqrstuvwxyz");
+		if (prefix == 0 || prefix == std::string::npos)
+			return {};
+		auto rest = name.substr(prefix);
+		for (char const* kind : { "Var", "Ram" }) {
+			auto length = strlen(kind);
+			if (rest.compare(0, length, kind) == 0 && rest.size() > length &&
+				rest.find_first_not_of(*kind == 'V' ? "0123456789" : "0123456789abcdef", length) == std::string::npos)
+				return rest;
+		}
+		return {};
+	}
+
+	std::string Hex(uint64_t value) {
+		std::ostringstream text;
+		text << "0x" << std::hex << std::uppercase << value;
+		return text.str();
+	}
+}
+
+// A type by its name: the decompiler's (its own, and those of the symbols it was given), one of the symbols, or a name C
+// and Windows have for an integer or a pointer
+Datatype* GhidraDecompiler::Impl::NamedType(std::string const& name) {
+	auto types = Arch->types;
+	if (name == "void")
+		return types->getTypeVoid();
+	if (auto type = types->findByName(name))
+		return type;
+	if (StartsWith(name, "undefined"))
+		if (auto type = types->findByName("undef" + name.substr(9)))
+			return type;
+	if (TypeNames && Types)
+		if (auto id = TypeNames(name))
+			if (auto type = Convert(id); type && type->getSize() > 0)
+				return type;
+	auto space = Arch->getDefaultDataSpace();
+	int4 pointer = space->getAddrSize();
+	bool windows = Target.find("windows") != std::string::npos;
+	struct Synonym {
+		char const* Name;
+		int4 Size;		// 0: of a pointer, -1: of a long (4 on Windows, 8 elsewhere)
+		type_metatype Meta;
+		char const* Pointee;	// of a pointer: what it points to
+	};
+	static const Synonym synonyms[] = {
+		{ "signed char", 1, TYPE_INT }, { "unsigned char", 1, TYPE_UINT }, { "short", 2, TYPE_INT }, { "short int", 2, TYPE_INT },
+		{ "signed short", 2, TYPE_INT }, { "unsigned short", 2, TYPE_UINT }, { "signed", 4, TYPE_INT }, { "signed int", 4, TYPE_INT },
+		{ "unsigned", 4, TYPE_UINT }, { "unsigned int", 4, TYPE_UINT }, { "long", -1, TYPE_INT }, { "long int", -1, TYPE_INT },
+		{ "signed long", -1, TYPE_INT }, { "unsigned long", -1, TYPE_UINT }, { "long long", 8, TYPE_INT },
+		{ "signed long long", 8, TYPE_INT }, { "unsigned long long", 8, TYPE_UINT }, { "__int8", 1, TYPE_INT },
+		{ "__int16", 2, TYPE_INT }, { "__int32", 4, TYPE_INT }, { "__int64", 8, TYPE_INT }, { "unsigned __int8", 1, TYPE_UINT },
+		{ "unsigned __int16", 2, TYPE_UINT }, { "unsigned __int32", 4, TYPE_UINT }, { "unsigned __int64", 8, TYPE_UINT },
+		{ "int8_t", 1, TYPE_INT }, { "uint8_t", 1, TYPE_UINT }, { "int16_t", 2, TYPE_INT }, { "uint16_t", 2, TYPE_UINT },
+		{ "int32_t", 4, TYPE_INT }, { "uint32_t", 4, TYPE_UINT }, { "int64_t", 8, TYPE_INT }, { "uint64_t", 8, TYPE_UINT },
+		{ "size_t", 0, TYPE_UINT }, { "uintptr_t", 0, TYPE_UINT }, { "intptr_t", 0, TYPE_INT }, { "ptrdiff_t", 0, TYPE_INT },
+		{ "ssize_t", 0, TYPE_INT }, { "BYTE", 1, TYPE_UINT }, { "UCHAR", 1, TYPE_UINT }, { "CHAR", 1, TYPE_INT },
+		{ "BOOLEAN", 1, TYPE_UINT }, { "WORD", 2, TYPE_UINT }, { "USHORT", 2, TYPE_UINT }, { "SHORT", 2, TYPE_INT },
+		{ "DWORD", 4, TYPE_UINT }, { "UINT", 4, TYPE_UINT }, { "ULONG", 4, TYPE_UINT }, { "INT", 4, TYPE_INT }, { "LONG", 4, TYPE_INT },
+		{ "BOOL", 4, TYPE_INT }, { "NTSTATUS", 4, TYPE_INT }, { "HRESULT", 4, TYPE_INT }, { "QWORD", 8, TYPE_UINT },
+		{ "DWORD64", 8, TYPE_UINT }, { "ULONG64", 8, TYPE_UINT }, { "ULONGLONG", 8, TYPE_UINT }, { "LONG64", 8, TYPE_INT },
+		{ "LONGLONG", 8, TYPE_INT }, { "SIZE_T", 0, TYPE_UINT }, { "ULONG_PTR", 0, TYPE_UINT }, { "DWORD_PTR", 0, TYPE_UINT },
+		{ "UINT_PTR", 0, TYPE_UINT }, { "LONG_PTR", 0, TYPE_INT }, { "INT_PTR", 0, TYPE_INT },
+		{ "HANDLE", 0, TYPE_PTR, "void" }, { "PVOID", 0, TYPE_PTR, "void" }, { "LPVOID", 0, TYPE_PTR, "void" },
+		{ "LPCVOID", 0, TYPE_PTR, "void" }, { "HMODULE", 0, TYPE_PTR, "void" }, { "HINSTANCE", 0, TYPE_PTR, "void" },
+		{ "HKEY", 0, TYPE_PTR, "void" }, { "HWND", 0, TYPE_PTR, "void" }, { "LPSTR", 0, TYPE_PTR, "char" },
+		{ "LPCSTR", 0, TYPE_PTR, "char" }, { "PSTR", 0, TYPE_PTR, "char" }, { "PCSTR", 0, TYPE_PTR, "char" },
+		{ "LPWSTR", 0, TYPE_PTR, "wchar_t" }, { "LPCWSTR", 0, TYPE_PTR, "wchar_t" }, { "PWSTR", 0, TYPE_PTR, "wchar_t" },
+		{ "PCWSTR", 0, TYPE_PTR, "wchar_t" },
+	};
+	if (name == "WCHAR")
+		return types->findByName("wchar_t");
+	for (auto const& synonym : synonyms) {
+		if (name != synonym.Name)
+			continue;
+		if (synonym.Meta == TYPE_PTR)
+			return types->getTypePointer(pointer, NamedType(synonym.Pointee), space->getWordSize());
+		auto size = synonym.Size == 0 ? pointer : synonym.Size < 0 ? (windows ? 4 : 8) : synonym.Size;
+		return types->getBase(size, synonym.Meta);
+	}
+	return nullptr;
+}
+
+// A type as C writes it: a name, then '*'s, then an array's count ("char *", "BYTE[16]", "struct _LIST_ENTRY *"). Null,
+// with the reason, if it is not one a variable can have.
+Datatype* GhidraDecompiler::Impl::ParseType(std::string const& text, std::string& error) {
+	auto rest = Trim(text);
+	uint32_t count = 0;
+	if (!rest.empty() && rest.back() == ']') {
+		auto open = rest.rfind('[');
+		auto digits = open == std::string::npos ? std::string() : Trim(rest.substr(open + 1, rest.size() - open - 2));
+		if (digits.empty() || digits.find_first_not_of("0123456789") != std::string::npos || digits.size() > 7) {
+			error = "'" + text + "' is not a type (the size of an array is a number)";
+			return nullptr;
+		}
+		count = (uint32_t)std::stoul(digits);
+		rest = Trim(rest.substr(0, open));
+	}
+	int pointers = 0;
+	while (!rest.empty() && rest.back() == '*') {
+		pointers++;
+		rest = Trim(rest.substr(0, rest.size() - 1));
+	}
+	auto name = WithoutQualifiers(rest);
+	if (name.empty()) {
+		error = "'" + text + "' is not a type";
+		return nullptr;
+	}
+	auto type = NamedType(name);
+	if (!type) {
+		error = "the type '" + name + "' is not known";
+		return nullptr;
+	}
+	auto types = Arch->types;
+	auto space = Arch->getDefaultDataSpace();
+	for (int i = 0; i < pointers; i++)
+		type = types->getTypePointer(space->getAddrSize(), type, space->getWordSize());
+	if (count) {
+		if (type->getSize() <= 0) {
+			error = "'" + text + "' is not a type a variable can have";
+			return nullptr;
+		}
+		type = types->getTypeArray((int4)count, type);
+	}
+	if (type->getMetatype() == TYPE_VOID || type->getSize() <= 0) {
+		error = "a variable cannot be '" + text + "'";
+		return nullptr;
+	}
+	return type;
+}
+
+// a type as C writes it (as ParseType reads it)
+std::string GhidraDecompiler::Impl::TypeText(Datatype const* type) {
+	if (!type)
+		return {};
+	switch (type->getMetatype()) {
+		case TYPE_PTR:
+		{
+			auto pointee = TypeText(static_cast<TypePointer const*>(type)->getPtrTo());
+			return pointee + (!pointee.empty() && pointee.back() == '*' ? "*" : " *");
+		}
+		case TYPE_ARRAY:
+		{
+			auto array = static_cast<TypeArray const*>(type);
+			return TypeText(array->getBase()) + "[" + std::to_string(array->numElements()) + "]";
+		}
+		default:
+			return type->getDisplayName().empty() ? "undef" + std::to_string(type->getSize()) : type->getDisplayName();
+	}
+}
+
+// The user's changes to the variables of a function (made before it is decompiled, after the prototype and the locals of
+// the symbols are set): the parameters are set together, in the prototype, which is then locked; the others are symbols
+// of the function's scope, their names (and, if retyped, their types) locked
+void GhidraDecompiler::Impl::ApplyChanges(Funcdata* fd, std::vector<VariableChange> const& changes) {
+	auto say = [&](VariableChange const& change, std::string const& what) {
+		Messages << change.Name << ": " << what << "\n";
+	};
+	auto typeOf = [&](VariableChange const& change) -> Datatype* {
+		std::string error;
+		auto type = ParseType(change.Type, error);
+		if (!type)
+			say(change, error);
+		return type;
+	};
+
+	// the parameters
+	std::map<int, VariableChange const*> parameters;
+	for (auto const& change : changes)
+		if (StartsWith(change.Key, "param:"))
+			parameters[std::atoi(change.Key.c_str() + 6)] = &change;
+	if (!parameters.empty() && parameters.begin()->first >= 0 && parameters.rbegin()->first < 256) {
+		auto& proto = fd->getFuncProto();
+		bool locked = proto.isInputLocked(), outputLocked = proto.isOutputLocked(), modelLocked = proto.isModelLocked();
+		PrototypePieces pieces;
+		if (locked)
+			proto.getPieces(pieces);
+		else {
+			// the parameters the decompiler found: all of them are among the changes (the user's, and the others with it)
+			pieces.model = proto.hasModel() ? Arch->getModel(proto.getModelName()) : Arch->defaultfp;
+			pieces.outtype = proto.getOutputType();
+			pieces.firstVarArgSlot = -1;
+			for (int i = 0; i <= parameters.rbegin()->first; i++) {
+				pieces.intypes.push_back(Unknown((uint32_t)Arch->getDefaultDataSpace()->getAddrSize()));
+				pieces.innames.push_back("param_" + std::to_string(i + 1));
+			}
+		}
+		pieces.name = fd->getName();
+		bool ok = true;
+		for (auto [index, change] : parameters) {
+			if (index >= (int)pieces.intypes.size()) {
+				say(*change, "the function has no parameter " + std::to_string(index + 1));
+				continue;
+			}
+			if (change->Retyped || !locked) {
+				if (auto type = typeOf(*change))
+					pieces.intypes[index] = type;
+				else if (!locked)
+					ok = false;
+			}
+			pieces.innames[index] = change->Name;
+		}
+		if (ok) {
+			try {
+				proto.setPieces(pieces);
+				proto.setOutputLock(outputLocked);
+				proto.setModelLock(modelLocked);
+			}
+			catch (LowlevelError const& e) {
+				Messages << "The parameters could not be changed: " << e.explain << "\n";
+			}
+		}
+	}
+
+	// The other variables. A symbol is kept from one analysis to the next only if its type is locked: one that is only
+	// renamed is locked to bytes of its size (which leaves the decompiler free to find their type, as Ghidra does with
+	// "undef" types), unless it is larger than a register (an array: its type is kept).
+	auto scope = fd->getScopeLocal();
+	for (auto const& change : changes) {
+		if (StartsWith(change.Key, "param:"))
+			continue;
+		auto type = typeOf(change);
+		if (!type)
+			continue;
+		if (!change.Retyped)
+			if (auto size = type->getSize(); size == 1 || size == 2 || size == 4 || size == 8)
+				type = Unknown((uint32_t)size);
+		uint4 locks = Varnode::namelock | Varnode::typelock;
+		try {
+			auto at = change.Key.find('@');
+			auto where = at == std::string::npos ? 0 : std::stoull(change.Key.substr(at + 1), nullptr, 0);
+			Address usepoint = where ? Address(Arch->getDefaultCodeSpace(), where) : Address();
+			if (StartsWith(change.Key, "stack:")) {
+				auto stack = Arch->getStackSpace();
+				Address addr(stack, stack->wrapOffset((uintb)std::stoll(change.Key.substr(6))));
+				// a variable of the symbols there is changed, rather than replaced
+				if (auto entry = scope->findAddr(addr, Address()); entry && entry->getAddr() == addr) {
+					auto sym = entry->getSymbol();
+					scope->renameSymbol(sym, change.Name);
+					if (change.Retyped)
+						scope->retypeSymbol(sym, type);
+					scope->setAttribute(sym, locks);
+				}
+				else if (scope->findOverlap(addr, type->getSize()))
+					say(change, "the type is larger than the variable's place on the stack");
+				else
+					scope->setAttribute(scope->addSymbol(change.Name, type, addr, Address())->getSymbol(), locks);
+			}
+			else if (StartsWith(change.Key, "reg:") && at != std::string::npos) {
+				auto name = change.Key.substr(4, at - 4);
+				auto const& reg = Arch->translate->getRegister(name);
+				if ((uint4)type->getSize() != reg.size) {
+					say(change, "the variable is in " + name + ", its type is of " + std::to_string(reg.size) + " bytes");
+					continue;
+				}
+				scope->setAttribute(scope->addSymbol(change.Name, type, Address(reg.space, reg.offset), usepoint)->getSymbol(), locks);
+			}
+			else if (StartsWith(change.Key, "hash:") && at != std::string::npos) {
+				auto hash = std::stoull(change.Key.substr(5, at - 5), nullptr, 16);
+				scope->setAttribute(scope->addDynamicSymbol(change.Name, type, usepoint, hash), locks);
+			}
+		}
+		catch (LowlevelError const& e) {
+			say(change, e.explain);
+		}
+		catch (std::exception const&) {
+			say(change, "it is not known which variable it is (" + change.Key + ")");
+		}
+	}
+}
+
+// What identifies a variable from one decompilation to the next (see Variable); empty if there is nothing that does
+std::string GhidraDecompiler::Impl::KeyOf(Funcdata* fd, Symbol* sym, Varnode* vn) const {
+	if (sym->getCategory() == Symbol::function_parameter)
+		return "param:" + std::to_string(sym->getCategoryIndex());
+	auto entry = sym->getFirstWholeMap();
+	if (!entry)
+		return {};
+	auto use = [&] {
+		auto first = entry->getFirstUseAddress();
+		return first.isInvalid() ? std::string("0") : Hex(first.getOffset());
+	};
+	if (sym->getScope()->isGlobal())
+		return entry->isDynamic() ? std::string() : "global:" + Hex(entry->getAddr().getOffset());
+	if (entry->isDynamic()) {
+		std::ostringstream text;
+		text << "hash:" << std::hex << std::uppercase << entry->getHash() << "@" << use();
+		return text.str();
+	}
+	auto const& addr = entry->getAddr();
+	auto space = addr.getSpace();
+	if (space == Arch->getStackSpace()) {
+		auto bits = space->getAddrSize() * 8;
+		auto offset = (int64_t)addr.getOffset();
+		if (bits < 64 && (offset & (1LL << (bits - 1))))
+			offset -= 1LL << bits;
+		return "stack:" + std::to_string(offset);
+	}
+	if (space->getType() == IPTR_PROCESSOR && space != Arch->getDefaultDataSpace()) {
+		auto name = Arch->translate->getRegisterName(space, addr.getOffset(), entry->getSize());
+		return name.empty() ? std::string() : "reg:" + name + "@" + use();
+	}
+	if (space->getType() == IPTR_INTERNAL && vn) {
+		// a temporary: by the operations it is between
+		DynamicHash hash;
+		hash.uniqueHash(vn, fd);
+		if (hash.getHash() == 0)
+			return {};
+		std::ostringstream text;
+		text << "hash:" << std::hex << std::uppercase << hash.getHash() << "@" << Hex(hash.getAddress().getOffset());
+		return text.str();
+	}
+	return {};
+}
+
+// The variables a function shows: those that have a name of their own (not the part of another one)
+void GhidraDecompiler::Impl::CollectVariables(Funcdata* fd, Variables& variables) const {
+	variables.clear();
+	std::unordered_set<Symbol*> seen;
+	auto constants = Arch->getConstantSpace();
+	for (int4 i = 0; i < Arch->numSpaces(); i++) {
+		auto space = Arch->getSpace(i);
+		if (!space || space == constants)
+			continue;
+		for (auto it = fd->beginLoc(space); it != fd->endLoc(space); ++it) {
+			auto vn = *it;
+			if (vn->isFree())
+				continue;
+			auto high = vn->getHigh();
+			if (!high || high->getNameRepresentative() != vn || high->getSymbolOffset() >= 0)
+				continue;
+			auto sym = high->getSymbol();
+			if (!sym || sym->getName().empty() || !seen.insert(sym).second)
+				continue;
+			auto key = KeyOf(fd, sym, vn);
+			if (!key.empty())
+				variables.push_back({ sym->getName(), TypeText(sym->getType()), key, (uint32_t)std::max(0, sym->getType()->getSize()) });
+		}
+	}
+	// and those of the function that are only referred to (an array on the stack, whose address is passed on)
+	auto scope = fd->getScopeLocal();
+	auto add = [&](SymbolEntry const* entry) {
+		auto sym = entry->getSymbol();
+		if (!sym || sym->getName().empty() || !seen.insert(sym).second)
+			return;
+		auto key = KeyOf(fd, sym, nullptr);
+		if (!key.empty())
+			variables.push_back({ sym->getName(), TypeText(sym->getType()), key, (uint32_t)std::max(0, sym->getType()->getSize()) });
+	};
+	for (auto it = scope->begin(); it != scope->end(); ++it)
+		add(*it);
+	for (auto it = scope->beginDynamic(); it != scope->endDynamic(); ++it)
+		add(&*it);
+}
+
 bool GhidraDecompiler::Initialize(std::wstring const& languagesFolder, std::string& error) {
 	if (s_Initialized)
 		return true;
@@ -722,6 +1165,86 @@ void GhidraDecompiler::SetLocalSource(LocalSource source) {
 	m_Impl->Locals = std::move(source);
 }
 
+void GhidraDecompiler::SetTypeNameSource(TypeNameSource source) {
+	m_Impl->TypeNames = std::move(source);
+}
+
+void GhidraDecompiler::SetChangeSource(ChangeSource source) {
+	m_Impl->Changes = std::move(source);
+}
+
+void GhidraDecompiler::SetCommentSource(CommentSource source) {
+	m_Impl->Comments = std::move(source);
+}
+
+// The function gets the name (an empty one: the name it had, from the caller, or one made up)
+void GhidraDecompiler::RenameFunction(uint64_t address, std::string const& name) {
+	auto arch = m_Impl->Arch.get();
+	if (!arch)
+		return;
+	try {
+		Address addr(arch->getDefaultCodeSpace(), address);
+		auto fname = name;
+		if (fname.empty() && m_Impl->Names)
+			fname = m_Impl->Names(address);
+		if (fname.empty())
+			arch->nameFunction(addr, fname);
+		// (a function keeps the name it was made with: one with another name is made in its place, and its prototype and
+		// changes are set again when it is decompiled)
+		auto global = arch->symboltab->getGlobalScope();
+		if (auto fd = global->queryFunction(addr)) {
+			if (fd->getName() == fname)
+				return;
+			global->removeSymbol(fd->getSymbol());
+			m_Impl->Prototyped.erase(address);
+			m_Impl->Localized.erase(address);
+			m_Impl->Applied.erase(address);
+		}
+		AddFunction(address, fname);
+	}
+	catch (LowlevelError const& e) {
+		m_Impl->Pending += name + ": " + e.explain + "\n";
+	}
+}
+
+// A symbol of the global scope at the address is renamed (and retyped), or made; an empty name removes the symbol
+void GhidraDecompiler::ChangeGlobal(uint64_t address, VariableChange const& change) {
+	auto arch = m_Impl->Arch.get();
+	if (!arch)
+		return;
+	try {
+		Address addr(arch->getDefaultDataSpace(), address);
+		auto global = arch->symboltab->getGlobalScope();
+		auto entry = global->findAddr(addr, Address());
+		auto sym = entry && entry->getAddr() == addr ? entry->getSymbol() : nullptr;
+		if (sym && dynamic_cast<FunctionSymbol*>(sym))
+			return;		// code, not a variable
+		if (change.Name.empty()) {
+			if (sym)
+				global->removeSymbol(sym);
+			return;
+		}
+		std::string error;
+		auto type = m_Impl->ParseType(change.Type, error);
+		if (!type) {
+			m_Impl->Pending += change.Name + ": " + error + "\n";
+			return;
+		}
+		uint4 locks = Varnode::namelock | (change.Retyped ? Varnode::typelock : 0);
+		if (sym) {
+			global->renameSymbol(sym, change.Name);
+			if (change.Retyped)
+				global->retypeSymbol(sym, type);
+			global->setAttribute(sym, locks);
+		}
+		else
+			global->setAttribute(global->addSymbol(change.Name, type, addr, Address())->getSymbol(), locks);
+	}
+	catch (LowlevelError const& e) {
+		m_Impl->Pending += change.Name + ": " + e.explain + "\n";
+	}
+}
+
 void GhidraDecompiler::AddGlobal(uint64_t address, std::string const& name, uint32_t type) {
 	auto arch = m_Impl->Arch.get();
 	if (!arch || name.empty())
@@ -803,7 +1326,7 @@ namespace {
 }
 
 bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std::string& code, std::string& error, FunctionRefs* functions,
-	LineAddresses* lines) {
+	LineAddresses* lines, Variables* variables) {
 	if (!Open(error))
 		return false;
 	auto arch = m_Impl->Arch.get();
@@ -821,11 +1344,32 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 			auto scope = ScopeOf(arch, fname, basename);
 			fd = scope->addFunction(addr, basename)->getFunction();
 		}
+		// The user's changes to its variables: a function decompiled with others (or none) starts over, without the symbols
+		// and the prototype they made
+		std::vector<VariableChange> changes;
+		if (m_Impl->Changes)
+			m_Impl->Changes(address, changes);
+		std::string applied;
+		for (auto const& change : changes)
+			applied += change.Key + "\t" + change.Name + "\t" + change.Type + (change.Retyped ? "\t+" : "") + "\n";
+		bool changed = m_Impl->Applied[address] != applied;
+		if (changed) {
+			auto fname = fd->getName();
+			global->removeSymbol(fd->getSymbol());
+			m_Impl->Prototyped.erase(address);
+			m_Impl->Localized.erase(address);
+			fd = global->addFunction(addr, fname)->getFunction();
+			m_Impl->Applied[address] = applied;
+		}
 		if (fd->isProcStarted())
 			arch->clearAnalysis(fd);
 		m_Impl->Messages.str({});		// what is said about this function
+		m_Impl->Messages << m_Impl->Pending;
+		m_Impl->Pending.clear();
 		m_Impl->ApplyPrototype(fd);
 		m_Impl->ApplyLocals(fd);
+		if (changed)
+			m_Impl->ApplyChanges(fd, changes);
 
 		auto action = arch->allacts.getCurrent();
 		action->reset(*fd);
@@ -881,6 +1425,75 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 			result = action->perform(*fd);
 		}
 
+		// The variables the decompiler named are named without their types: those on the stack local_ and their offset,
+		// those in registers Var and a number, the global ones Ram and their address
+		{
+			auto scope = fd->getScopeLocal();
+			std::vector<std::pair<Symbol*, std::string>> renames;
+			std::unordered_set<std::string> names;
+			std::unordered_set<Symbol*> seen;
+			auto consider = [&](Symbol* sym) {
+				if (!sym || sym->isNameLocked() || !seen.insert(sym).second)
+					return;
+				auto name = sym->getScope()->isGlobal() ? std::string() : StackName(sym->getName());
+				if (name.empty())
+					name = Untyped(sym->getName());
+				if (name.empty())
+					return;
+				// (unique: a variable of the symbols may have the name already)
+				auto unique = name;
+				for (int n = 2; names.count(unique); n++)
+					unique = name + "_" + std::to_string(n);
+				names.insert(unique);
+				renames.emplace_back(sym, unique);
+			};
+			for (auto it = scope->begin(); it != scope->end(); ++it)
+				if (auto sym = (*it)->getSymbol())
+					names.insert(sym->getName());
+			for (auto it = scope->beginDynamic(); it != scope->endDynamic(); ++it)
+				if (auto sym = it->getSymbol())
+					names.insert(sym->getName());
+			for (auto it = scope->begin(); it != scope->end(); ++it)
+				consider((*it)->getSymbol());
+			for (auto it = scope->beginDynamic(); it != scope->endDynamic(); ++it)
+				consider(it->getSymbol());
+			// the global variables the function uses (read and written, or referred to by their addresses)
+			for (auto it = fd->beginLoc(); it != fd->endLoc(); ++it) {
+				auto vn = *it;
+				Symbol* sym = nullptr;
+				if (auto entry = vn->getSymbolEntry())
+					sym = entry->getSymbol();
+				if (!sym && !vn->isAnnotation() && (!vn->isFree() || vn->isConstant()))
+					try {
+						sym = vn->getHigh()->getSymbol();
+					}
+					catch (LowlevelError const&) {
+					}
+				if (sym && sym->getScope()->isGlobal() && !dynamic_cast<FunctionSymbol*>(sym))
+					consider(sym);
+			}
+			for (auto& [sym, name] : renames)
+				sym->getScope()->renameSymbol(sym, name);
+		}
+
+		// the user's comments in the function's code (in its blocks: an instruction may not be an operation of its own)
+		if (m_Impl->Comments) {
+			std::vector<std::pair<uint64_t, std::string>> comments;
+			m_Impl->Comments(comments);
+			arch->commentdb->clearType(fd->getAddress(), Comment::user2);
+			auto const& blocks = fd->getBasicBlocks();
+			for (auto const& [at, text] : comments) {
+				Address where(arch->getDefaultCodeSpace(), at);
+				for (int4 i = 0; i < blocks.getSize(); i++) {
+					auto block = static_cast<BlockBasic*>(blocks.getBlock(i));
+					if (block->getStart() <= where && where <= block->getStop()) {
+						arch->commentdb->addComment(Comment::user2, fd->getAddress(), where, text);
+						break;
+					}
+				}
+			}
+		}
+
 		std::ostringstream out;
 		if (result < 0)
 			out << "/* The decompiler stopped before it was done */\n";
@@ -930,6 +1543,9 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 			code = out.str();
 		}
 
+		IndentComments(code);
+		if (variables)
+			m_Impl->CollectVariables(fd, *variables);
 		if (functions) {
 			functions->clear();
 			functions->emplace_back(fd->getName(), address);

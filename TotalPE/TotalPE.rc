@@ -303,6 +303,10 @@ BEGIN
         MENUITEM "&Back\tAlt+Left",             ID_NAV_BACK
         MENUITEM "&Forward\tAlt+Right",         ID_NAV_FORWARD
         MENUITEM SEPARATOR
+        MENUITEM "Toggle &Bookmark\tCtrl+B",      ID_HEX_BOOKMARK_TOGGLE
+        MENUITEM "Boo&kmarks",                  ID_NAV_BOOKMARKS
+        MENUITEM "&Comment...\t;",              ID_NAV_COMMENT
+        MENUITEM SEPARATOR
         MENUITEM "&Find...\tCtrl+F",            ID_EDIT_FIND
         MENUITEM "Find &Next\tF3",              ID_EDIT_FIND_NEXT
         MENUITEM "Find &Previous\tShift+F3",    ID_EDIT_FIND_PREVIOUS
@@ -571,6 +575,18 @@ BEGIN
     LTEXT           "",IDC_GOANY_STATUS,5,217,410,9
 END
 
+IDD_INPUT DIALOGEX 0, 0, 260, 84
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Rename"
+FONT 9, "Segoe UI", 0, 0, 0x0
+BEGIN
+    LTEXT           "",IDC_INPUT_PROMPT,7,7,246,8
+    EDITTEXT        IDC_INPUT_TEXT,7,17,246,14,ES_AUTOHSCROLL
+    LTEXT           "",IDC_INPUT_HINT,7,36,246,20
+    DEFPUSHBUTTON   "OK",IDOK,147,63,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,203,63,50,14
+END
+
 IDD_SEARCH DIALOGEX 0, 0, 440, 260
 STYLE DS_SETFONT | DS_FIXEDSYS | WS_MAXIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
 CAPTION "Search All"
@@ -827,6 +843,10 @@ BEGIN
     ID_PE_STRINGS           "The ASCII and UTF-16 strings of the file\nStrings"
     ID_NAV_BACK             "Go back to where you were\nBack (Alt+Left)"
     ID_NAV_FORWARD          "Go forward again\nForward (Alt+Right)"
+    ID_CODE_RENAME          "Rename the variable or function under the caret\nRename"
+    ID_CODE_RETYPE          "Change the type of the variable under the caret\nChange Type"
+    ID_NAV_BOOKMARKS        "The bookmarks of the file\nBookmarks"
+    ID_NAV_COMMENT          "Comment the instruction of the caret\nComment"
 END
 
 STRINGTABLE

@@ -5,6 +5,9 @@
 #include "pch.h"
 #include "resource.h"
 #include "ScintillaView.h"
+#include "InputDlg.h"
+#include <Annotations.h>
+#include <unordered_set>
 #include <lexilla/Lexilla.h>
 #include <lexilla/SciLexer.h>
 #include "ClrIL.h"
@@ -229,7 +232,15 @@ CStringA CScintillaView::Disassemble(std::span<const std::byte> code, uint64_t a
 		line.Memory = info.Memory;
 		m_LineOfVa.insert({ inst->address, (int)m_Lines.size() });
 		m_Lines.push_back(line);
-		text += FormatInstruction(*inst, info, Frame()) + "\r\n";
+		text += FormatInstruction(*inst, info, Frame());
+		if (auto comment = Frame()->CommentAt(inst->address); !comment.empty()) {
+			// one line (a comment of several is shown on one)
+			for (auto& ch : comment)
+				if (ch == L'\r' || ch == L'\n')
+					ch = L' ';
+			text += "  ; " + CStringA(CW2A(comment.c_str(), CP_UTF8));
+		}
+		text += "\r\n";
 
 		if (EndsFlow(*inst, m_Arch) && !IsJumpTarget(xrefs, address))
 			break;
@@ -252,6 +263,7 @@ bool CScintillaView::SetAsmCode(std::span<const std::byte> code, uint64_t addres
 	m_Sci.SetText(Disassemble(code, address));
 	if (!m_Function)
 		m_Function = address;
+	MarkBookmarks();
 	return true;
 }
 
@@ -338,6 +350,21 @@ BOOL CScintillaView::PreTranslateMessage(MSG* pMsg) {
 	if (pMsg->message == WM_KEYDOWN && m_LineAction && m_Sci.m_hWnd && pMsg->hwnd == m_Sci.m_hWnd && pMsg->wParam == VK_RETURN &&
 		::GetKeyState(VK_CONTROL) >= 0 && ::GetKeyState(VK_MENU) >= 0 && ::GetKeyState(VK_SHIFT) >= 0) {
 		if (!m_LineAction(CurrentLine()))
+			::MessageBeep(MB_ICONWARNING);
+		return TRUE;
+	}
+	// ';' comments the instruction of the caret
+	if (pMsg->message == WM_CHAR && pMsg->wParam == L';' && HasAnnotations() && m_Sci.m_hWnd && pMsg->hwnd == m_Sci.m_hWnd &&
+		m_Sci.SendMessage(SCI_GETREADONLY)) {
+		BOOL handled;
+		OnAnnotate(0, ID_NAV_COMMENT, nullptr, handled);
+		return TRUE;
+	}
+	// N renames the variable or function at the caret, Y changes the variable's type
+	if (pMsg->message == WM_KEYDOWN && m_Language == LexLanguage::C && m_Function && m_Sci.m_hWnd && pMsg->hwnd == m_Sci.m_hWnd &&
+		(pMsg->wParam == 'N' || pMsg->wParam == 'Y') && m_Sci.SendMessage(SCI_GETREADONLY) &&
+		::GetKeyState(VK_CONTROL) >= 0 && ::GetKeyState(VK_MENU) >= 0 && ::GetKeyState(VK_SHIFT) >= 0) {
+		if (!Rename(NameAt(m_Sci.GetCurrentPos()), pMsg->wParam == 'Y'))
 			::MessageBeep(MB_ICONWARNING);
 		return TRUE;
 	}
@@ -461,6 +488,9 @@ void CScintillaView::SetLanguage(LexLanguage lang) {
 	extern const LexerModule lmCPP;	// C, C++ and C# (from the Lexilla library, where it is const): the keywords tell them apart
 
 	m_Language = lang;
+	// the code of the image is ASCII, with the user's comments (and C strings) in UTF-8
+	if (lang == LexLanguage::Asm || lang == LexLanguage::C)
+		m_Sci.SetCodePage(SC_CP_UTF8);
 
 	switch (lang) {
 		case LexLanguage::Asm:
@@ -542,6 +572,10 @@ void CScintillaView::UpdateColors() {
 	// the lines marked as related to the other side of a side-by-side view
 	m_Sci.SendMessage(SCI_MARKERDEFINE, MarkerRelated, SC_MARK_BACKGROUND);
 	m_Sci.SendMessage(SCI_MARKERSETBACK, MarkerRelated, dark ? RGB(70, 60, 20) : RGB(255, 240, 170));
+	// a bookmark: in the margin
+	m_Sci.SendMessage(SCI_MARKERDEFINE, MarkerBookmark, SC_MARK_BOOKMARK);
+	m_Sci.SendMessage(SCI_MARKERSETFORE, MarkerBookmark, RGB(30, 90, 200));
+	m_Sci.SendMessage(SCI_MARKERSETBACK, MarkerBookmark, RGB(60, 130, 230));
 
 	// the selection and the caret: Scintilla's own colors are for a light background
 	using Scintilla::Element;
@@ -657,7 +691,7 @@ LRESULT CScintillaView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
 		x = pt.x;
 		y = pt.y;
 	}
-	if ((m_Language == LexLanguage::Asm || m_LineAction) && pos >= 0)
+	if ((m_Language == LexLanguage::Asm || m_Language == LexLanguage::C || m_LineAction) && pos >= 0)
 		m_ContextLine = (int)m_Sci.LineFromPosition(pos);
 	UpdateUI();
 	CMenu menu;
@@ -685,6 +719,29 @@ LRESULT CScintillaView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
 		sub.InsertMenu(0, MF_BYPOSITION | MF_SEPARATOR);
 		sub.InsertMenu(0, MF_BYPOSITION | MF_STRING, ID_CODE_GOTODEFINITION, L"&Go to Definition\tEnter");
 	}
+	// a variable (or a function) of the decompiled code under the mouse: it can be renamed, and a variable retyped
+	m_ContextName.clear();
+	if (m_Language == LexLanguage::C && m_Function && pos >= 0) {
+		auto name = NameAt(pos);
+		auto variable = VariableNamed(name);
+		if (variable || FunctionOf(name)) {
+			m_ContextName = name;
+			auto shown = name.size() > 60 ? name.substr(0, 57) + L"..." : name;
+			for (auto& ch : shown)
+				if (ch == L'&')
+					ch = L'+';
+			sub.InsertMenu(0, MF_BYPOSITION | MF_SEPARATOR);
+			if (variable)
+				sub.InsertMenu(0, MF_BYPOSITION | MF_STRING, ID_CODE_RETYPE, (L"Change &Type of " + shown + L"...\tY").c_str());
+			sub.InsertMenu(0, MF_BYPOSITION | MF_STRING, ID_CODE_RENAME, (L"&Rename " + shown + L"...\tN").c_str());
+		}
+	}
+	// the line's bookmark and comment
+	if (HasAnnotations() && m_ContextLine >= 0 && AddressOfLine(m_ContextLine)) {
+		sub.AppendMenu(MF_SEPARATOR);
+		sub.AppendMenu(MF_STRING, ID_CODE_BOOKMARK, Frame()->IsBookmarked(AddressOfLine(m_ContextLine)) ? L"Remove &Bookmark\tCtrl+B" : L"Add &Bookmark...\tCtrl+B");
+		sub.AppendMenu(MF_STRING, ID_CODE_COMMENT, L"Co&mment...\t;");
+	}
 	// the function of the view: its disassembly and C side by side
 	if (m_Function && !m_Notify && (m_Language == LexLanguage::Asm || m_Language == LexLanguage::C)) {
 		sub.AppendMenu(MF_SEPARATOR);
@@ -700,6 +757,170 @@ void CScintillaView::SetFunctionLinks(std::unordered_map<std::wstring, uint64_t>
 
 void CScintillaView::SetFunctionAddress(uint64_t address) {
 	m_Function = address;
+}
+
+void CScintillaView::SetVariables(GhidraDecompiler::Variables variables) {
+	m_Variables = std::move(variables);
+}
+
+void CScintillaView::SetLineAddresses(GhidraDecompiler::LineAddresses lines) {
+	m_LineAddresses = std::move(lines);
+	MarkBookmarks();
+}
+
+// code of the image: a disassembly, or the C of one of its functions
+bool CScintillaView::HasAnnotations() const {
+	return m_Language == LexLanguage::Asm ? !m_Lines.empty() : m_Language == LexLanguage::C && m_Function != 0;
+}
+
+uint64_t CScintillaView::AddressOfLine(int line) const {
+	if (m_Language == LexLanguage::Asm) {
+		auto info = GetLine(InstructionLine(line));
+		return info ? info->Va : 0;
+	}
+	if (m_Language != LexLanguage::C || !m_Function)
+		return 0;
+	if (line >= 0 && line < (int)m_LineAddresses.size() && !m_LineAddresses[line].empty())
+		return *std::ranges::min_element(m_LineAddresses[line]);
+	return m_Function;
+}
+
+void CScintillaView::MarkBookmarks() {
+	if (!m_Sci.m_hWnd)
+		return;
+	m_Sci.SendMessage(SCI_MARKERDELETEALL, MarkerBookmark);
+	if (!HasAnnotations() || Frame()->GetAnnotations().Bookmarks.empty())
+		return;
+	if (m_Language == LexLanguage::Asm) {
+		for (auto const& [va, line] : m_LineOfVa)
+			if (Frame()->IsBookmarked(va))
+				m_Sci.SendMessage(SCI_MARKERADD, line, MarkerBookmark);
+		return;
+	}
+	// a bookmark at an instruction of a line of the C: on the first such line, a statement rather than the comment before it
+	auto commentOnly = [&](int line) {
+		auto text = m_Sci.GetLine(line);
+		auto first = text.find_first_not_of(" \t");
+		return first != std::string::npos && text.compare(first, 2, "/*") == 0;
+	};
+	std::unordered_set<uint64_t> marked;
+	for (bool comments : { false, true })
+		for (int line = 0; line < (int)m_LineAddresses.size(); line++)
+			for (auto va : m_LineAddresses[line])
+				if (!marked.contains(va) && commentOnly(line) == comments && Frame()->IsBookmarked(va)) {
+					marked.insert(va);
+					m_Sci.SendMessage(SCI_MARKERADD, line, MarkerBookmark);
+				}
+}
+
+void CScintillaView::AnnotationsChanged() {
+	if (m_Language == LexLanguage::Asm)
+		XrefsChanged();		// (disassembled again: with the comments)
+	MarkBookmarks();
+}
+
+LRESULT CScintillaView::OnAnnotate(WORD, WORD id, HWND, BOOL&) {
+	auto line = (id == ID_CODE_BOOKMARK || id == ID_CODE_COMMENT) && m_ContextLine >= 0 ? m_ContextLine : CurrentLine();
+	auto va = HasAnnotations() ? AddressOfLine(line) : 0;
+	bool done = false;
+	if (va)
+		done = id == ID_NAV_COMMENT || id == ID_CODE_COMMENT ? Frame()->EditComment(va) : Frame()->ToggleBookmark(va);
+	if (!done)
+		::MessageBeep(MB_ICONWARNING);
+	return 0;
+}
+
+// the next (or previous) line with a bookmark, around the end
+LRESULT CScintillaView::OnNextBookmark(WORD, WORD id, HWND, BOOL&) {
+	auto mask = 1 << MarkerBookmark;
+	auto lines = (int)m_Sci.SendMessage(SCI_GETLINECOUNT);
+	auto current = CurrentLine();
+	int line = id == ID_HEX_BOOKMARK_NEXT ? (int)m_Sci.SendMessage(SCI_MARKERNEXT, current + 1, mask) : (int)m_Sci.SendMessage(SCI_MARKERPREVIOUS, current - 1, mask);
+	if (line < 0)
+		line = id == ID_HEX_BOOKMARK_NEXT ? (int)m_Sci.SendMessage(SCI_MARKERNEXT, 0, mask) : (int)m_Sci.SendMessage(SCI_MARKERPREVIOUS, lines - 1, mask);
+	if (line < 0) {
+		::MessageBeep(MB_ICONWARNING);
+		return 0;
+	}
+	ShowLine(line);
+	m_Sci.GotoPos(m_Sci.PositionFromLine(line));
+	return 0;
+}
+
+GhidraDecompiler::Variable const* CScintillaView::VariableNamed(std::wstring const& name) const {
+	if (name.empty())
+		return nullptr;
+	auto narrow = std::string(CW2A(name.c_str()));
+	for (auto const& v : m_Variables)
+		if (v.Name == narrow)
+			return &v;
+	return nullptr;
+}
+
+LRESULT CScintillaView::OnRename(WORD, WORD id, HWND, BOOL&) {
+	if (!Rename(m_ContextName, id == ID_CODE_RETYPE))
+		::MessageBeep(MB_ICONWARNING);
+	return 0;
+}
+
+namespace {
+	// a C identifier; of a function also a C++ name ("ns::Class::Method")
+	bool IsIdentifier(std::wstring const& text, bool qualified) {
+		if (text.empty() || iswdigit(text[0]))
+			return false;
+		for (size_t i = 0; i < text.size(); i++) {
+			auto ch = text[i];
+			if (ch < 128 && (iswalnum(ch) || ch == L'_'))
+				continue;
+			if (qualified && ch == L':' && i + 1 < text.size() && text[i + 1] == L':' && i > 0) {
+				i++;
+				continue;
+			}
+			if (qualified && ch == L'~')
+				continue;
+			return false;
+		}
+		return true;
+	}
+}
+
+bool CScintillaView::Rename(std::wstring const& name, bool type) {
+	auto variable = VariableNamed(name);
+	auto function = variable ? 0 : FunctionOf(name);
+	if (!variable && (!function || type))
+		return false;
+	// (copies: the variables are replaced when the code is decompiled again)
+	auto variables = m_Variables;
+	std::wstring text;
+	if (type) {
+		text = std::wstring(CA2W(variable->Type.c_str()));
+		auto hint = L"In C: \"int\", \"char *\", \"BYTE[16]\", \"MY_STRUCT *\" (a type of the symbols). Empty: the type the decompiler finds.";
+		CInputDlg dlg(L"Change Type", (L"&Type of " + name + L":").c_str(), hint, text, [](std::wstring const& t) {
+			return t.find_first_of(L"(){};,=") != std::wstring::npos ? std::wstring(L"That is not a type") : std::wstring();
+			});
+		if (dlg.DoModal() != IDOK || text == std::wstring(CA2W(variable->Type.c_str())))
+			return true;
+		auto copy = *variable;
+		return Frame()->ChangeVariable(m_Function, copy, std::nullopt, std::string(CW2A(text.c_str())), variables);
+	}
+	text = name;
+	auto hint = variable ? L"Empty: the name (and type) the decompiler gives it." : L"Empty: the name the function had.";
+	CInputDlg dlg(L"Rename", variable ? L"&Name of the variable:" : L"&Name of the function:", hint, text, [&](std::wstring const& t) {
+		if (t.empty())
+			return std::wstring();
+		if (!IsIdentifier(t, !variable))
+			return std::wstring(L"A name is made of letters, digits and '_', and does not start with a digit");
+		if (variable && t != name && VariableNamed(t))
+			return L"Another variable is named " + t;
+		return std::wstring();
+		});
+	if (dlg.DoModal() != IDOK || text == name)
+		return true;
+	if (variable) {
+		auto copy = *variable;
+		return Frame()->ChangeVariable(m_Function, copy, std::string(CW2A(text.c_str())), std::nullopt, variables);
+	}
+	return Frame()->RenameFunction(function, text);
 }
 
 uint64_t CScintillaView::LineAddress(int line) const {
