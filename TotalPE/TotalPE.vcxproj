@@ -527,6 +527,7 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="res\array.ico" />
+    <Image Include="res\Back.ico" />
     <Image Include="res\Binary.ico" />
     <Image Include="res\bitfield.ico" />
     <Image Include="res\bitmap.ico" />
@@ -554,6 +555,7 @@
     <Image Include="res\find_next.ico" />
     <Image Include="res\find_previous.ico" />
     <Image Include="res\Flow.ico" />
+    <Image Include="res\Forward.ico" />
     <Image Include="res\property.ico" />
     <Image Include="res\event.ico" />
     <Image Include="res\folder.ico" />

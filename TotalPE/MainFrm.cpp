@@ -163,7 +163,8 @@ void CMainFrame::InitMenu(HMENU hMenu) {
 		{ ID_EXPORT_FLOWGRAPH, IDI_FLOW },
 		{ ID_ASSEMBLY_FLOWGRAPH, IDI_FLOW },
 		{ ID_PE_STRINGS, IDI_TEXT },
-
+		{ ID_NAV_BACK, IDI_BACK },
+		{ ID_NAV_FORWARD, IDI_FORWARD },
 	};
 	WTLHelper::InitMenu(hMenu, commands, _countof(commands));
 }
@@ -220,6 +221,9 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 	m_StatusBar.SetParts(_countof(parts), parts);
 
 	ToolBarButtonInfo const buttons[] = {
+		{ ID_NAV_BACK, IDI_BACK },
+		{ ID_NAV_FORWARD, IDI_FORWARD },
+		{ 0 },
 		{ ID_FILE_OPEN, IDI_OPEN },
 		{ 0 },
 		{ ID_EDIT_COPY, IDI_COPY },
@@ -242,6 +246,7 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 
 	AddSimpleReBarBand(tb);
 	UIAddToolBar(tb);
+	UpdateNavigationUI();	// nothing to go back or forward to yet
 
 	// the tree and the views in a docking area. The tree is made a child of the frame: a tree view sends its notifications
 	// (double click, right click...) to the window it was created in, whichever window of the docking area holds it later.

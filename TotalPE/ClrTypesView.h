@@ -11,8 +11,8 @@ class PEFile;
 //
 // The types of a .NET file by namespace, with their nested types, fields, events, properties (with their accessors) and
 // methods, and the code of the one selected, decompiled to C# or as IL (of a type: all of it). Double-click or Enter on a
-// line of the code goes to the definition of what it refers to, when the file defines it. The filter shows the types and
-// members whose names contain its text.
+// line of the code goes to the definition of what it refers to, when the file defines it (Back returns from it). The filter
+// shows the types and members whose names contain its text.
 //
 class CClrTypesView : public CViewBase<CClrTypesView> {
 public:
@@ -22,6 +22,9 @@ public:
 	void UpdateUI(bool first = false);
 	// Selects a type, method or field of the file (a TypeDef, MethodDef or Field token). False if there is no such one.
 	bool SelectToken(uint32_t token);
+	// Back and Forward return to the item that was selected, and to where its code was scrolled
+	int64_t GetNavigationPosition() const override;
+	void SetNavigationPosition(int64_t position) override;
 
 	BEGIN_MSG_MAP(CClrTypesView)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
@@ -85,6 +88,7 @@ private:
 	void Show(HTREEITEM hItem);
 	void SetCode(std::wstring const& text);
 	bool GoToLine(int line);
+	bool SelectNamespace(uint32_t index);
 
 	PEFile const& m_PE;
 	ClrMetadata m_Md;

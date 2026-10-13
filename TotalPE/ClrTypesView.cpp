@@ -508,7 +508,49 @@ bool CClrTypesView::GoToLine(int line) {
 	// the line of the selected item itself leads nowhere new
 	if (auto selected = m_Tree.GetSelectedItem(); selected && TokenOf(selected) == definition)
 		return false;
-	return SelectToken(definition);
+	// Back returns to the line it was followed from
+	Frame()->RecordNavigation();
+	if (!SelectToken(definition))
+		return false;
+	Frame()->RecordNavigation();
+	return true;
+}
+
+namespace {
+	// the position of a namespace (others are tokens, of a table below 0xFF)
+	constexpr uint32_t NamespacePosition = 0xFF000000;
+}
+
+// the selected item (its token, or the index of a namespace) in the low 32 bits, the first line of the code shown above them
+int64_t CClrTypesView::GetNavigationPosition() const {
+	auto hItem = m_Tree.GetSelectedItem();
+	if (!hItem || !m_Code)
+		return -1;
+	auto data = m_Tree.GetItemData(hItem);
+	uint32_t item = KindOf(data) == Kind::Namespace ? NamespacePosition | IndexOf(data) : TokenOf(hItem);
+	auto first = (int64_t)m_Code->GetCtrl().SendMessage(SCI_GETFIRSTVISIBLELINE);
+	return (std::min<int64_t>(first, INT32_MAX) << 32) | item;
+}
+
+void CClrTypesView::SetNavigationPosition(int64_t position) {
+	auto item = (uint32_t)position;
+	bool selected = (item & 0xFF000000) == NamespacePosition ? SelectNamespace(item & 0xFFFFFF) : SelectToken(item);
+	if (selected)
+		m_Code->GetCtrl().SendMessage(SCI_SETFIRSTVISIBLELINE, (WPARAM)(position >> 32));
+}
+
+bool CClrTypesView::SelectNamespace(uint32_t index) {
+	if (!m_FilterText.empty()) {
+		m_FilterText.clear();
+		m_Filter.SetWindowText(L"");
+		Fill();
+	}
+	auto hItem = FindChild(nullptr, Data(Kind::Namespace, index));
+	if (!hItem)
+		return false;
+	m_Tree.SelectItem(hItem);
+	m_Tree.EnsureVisible(hItem);
+	return true;
 }
 
 uint32_t CClrTypesView::TokenOf(HTREEITEM hItem) const {

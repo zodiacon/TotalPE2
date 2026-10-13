@@ -370,11 +370,19 @@ bool CMainFrame::GoToSearchItem(SearchItem const& item) {
 			case SearchKind::ClrMember:
 			{
 				auto hItem = FindTreeItem(TreeItemType::ClrTypes);
-				if (!hItem || !ShowView(hItem))
+				if (!hItem)
+					return false;
+				RecordNavigation();
+				if (!ShowView(hItem))
 					return false;
 				auto it = m_Views.find(TreeItemType::ClrTypes);
 				auto view = it == m_Views.end() ? nullptr : dynamic_cast<CClrTypesView*>(it->second);
-				return view && view->SelectToken((uint32_t)item.Value);
+				if (!view)
+					return false;
+				RecordNavigation();
+				auto selected = view->SelectToken((uint32_t)item.Value);
+				RecordNavigation();
+				return selected;
 			}
 			case SearchKind::ImportModule:
 			case SearchKind::Import:

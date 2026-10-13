@@ -1,6 +1,7 @@
 #pragma once
 
 #include <PEFile.h>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -33,7 +34,7 @@ namespace ClrTableId {
 		ParamPtr = 0x07, Param = 0x08, InterfaceImpl = 0x09, MemberRef = 0x0A, Constant = 0x0B, CustomAttribute = 0x0C,
 		StandAloneSig = 0x11, EventMap = 0x12, EventPtr = 0x13, Event = 0x14, PropertyMap = 0x15, PropertyPtr = 0x16,
 		Property = 0x17, MethodSemantics = 0x18, ModuleRef = 0x1A,
-		TypeSpec = 0x1B, Assembly = 0x20, AssemblyRef = 0x23, NestedClass = 0x29, GenericParam = 0x2A, MethodSpec = 0x2B,
+		TypeSpec = 0x1B, Assembly = 0x20, AssemblyRef = 0x23, ExportedType = 0x27, NestedClass = 0x29, GenericParam = 0x2A, MethodSpec = 0x2B,
 		UserString = 0x70,	// not a table: the tokens of ldstr are offsets in the #US heap
 	};
 }
@@ -139,6 +140,22 @@ struct ClrMemberInfo {
 	uint32_t Definition{};	// the MethodDef or Field of this file it is, 0 if it is elsewhere
 };
 
+// An enum (of the file or of an assembly it refers to): its values by name, as the C# decompiler shows them
+struct ClrEnumInfo {
+	struct Member {
+		std::wstring Name;
+		int64_t Value{};
+		uint32_t Field{};	// its Field token, if the enum is of the file (0 if it is of another assembly)
+	};
+	std::wstring Name;		// in C#
+	uint8_t Underlying{ 0x08 };	// the ELEMENT_TYPE of the values (int32 if it is not known)
+	bool Flags{ false };	// [Flags]: a value can be the | of several
+	std::vector<Member> Values;	// in the order they are declared
+	// What a value is made of: the value that is equal to it, or (of [Flags]) those whose | it is, in the order they are
+	// declared. Empty if there are none.
+	std::vector<size_t> Parts(int64_t value) const;
+};
+
 // The names (and kinds) of the generic parameters that !0 and !!0 stand for
 struct ClrGenericContext {
 	std::vector<std::wstring> const* TypeNames{ nullptr };
@@ -157,6 +174,7 @@ std::wstring CSharpReal(double value, bool single);
 
 class ClrMetadata {
 public:
+	ClrMetadata();
 	bool Parse(PEFile const& pe);
 
 	bool HasHeader() const { return m_HasHeader; }
@@ -270,6 +288,15 @@ public:
 	// C#'s name of a type of the file, with the types it is nested in ("Outer.Inner"), without the namespace or arity
 	std::wstring CSharpTypeDefName(uint32_t type) const;
 
+	// The type a TypeRef refers to: the metadata of its assembly and the TypeDef row in it (through the assemblies that
+	// forward it), or this file's for a TypeDef. Null if it is not found. The assemblies are looked for next to this file,
+	// then in the .NET Framework (and its GAC) or the .NET runtime, whichever the file is for; they stay loaded.
+	std::pair<ClrMetadata const*, uint32_t> ResolveType(uint32_t token) const;
+	// The enum a type is (a TypeDef, or a TypeRef to an enum of another assembly); null if it is not one
+	std::shared_ptr<ClrEnumInfo const> EnumInfo(uint32_t token) const;
+	// The enum a custom attribute names ("Ns.Outer+Inner, Assembly, Version=..."); null if it is not found
+	std::shared_ptr<ClrEnumInfo const> EnumInfoByName(std::wstring const& name) const;
+
 private:
 	bool ParseTables(std::span<const std::byte> md, ClrStream const& tables);
 	friend struct ClrRowReader;
@@ -289,6 +316,14 @@ private:
 	std::wstring MethodRefText(uint32_t parent, std::wstring const& name, std::span<const std::byte> sig, std::wstring const& generic = {}) const;
 	std::vector<std::wstring> const* GenericParams(uint32_t owner) const;
 	uint32_t Indirect(int ptrTable, uint32_t row) const;
+	// the types and assemblies found for the references of the file
+	struct ResolvedReferences;
+	ClrMetadata const* ReferencedAssembly(uint32_t assemblyRef) const;
+	ClrMetadata const* FindAssembly(std::wstring const& name, uint16_t major) const;
+	// a type of this assembly by its namespace and name (not a nested one), or of the one it forwards it to
+	std::pair<ClrMetadata const*, uint32_t> FindType(std::wstring const& ns, std::wstring const& name, int depth = 0) const;
+	std::shared_ptr<ClrEnumInfo const> MakeEnumInfo(uint32_t type, std::wstring name) const;
+	bool IsCoreApp() const;
 
 	IMAGE_COR20_HEADER m_Header{};
 	bool m_HasHeader{ false }, m_HasMetadata{ false }, m_HasAssembly{ false };
@@ -319,4 +354,5 @@ private:
 	std::unordered_map<uint32_t, std::vector<std::wstring>> m_GenericParams;	// by the token of the type or method
 	std::vector<std::pair<uint32_t, uint32_t>> m_Interfaces;	// type row, interface token (sorted by the row)
 	std::unordered_map<uint32_t, uint32_t> m_Constants;	// the Constant row of a field, parameter or property (by its token)
+	std::shared_ptr<ResolvedReferences> m_References;
 };

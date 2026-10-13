@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "ClrMetadata.h"
 #include <cstring>
+#include <mutex>
 
 namespace {
 	// bounds-checked little-endian reader over a byte span
@@ -258,6 +259,9 @@ struct ClrSignature {
 			{
 				auto token = TypeToken();
 				auto type = Md.CSharpType(token, Context);
+				// a value type of another assembly may be an enum
+				if (et == 0x11 && type.Kind == K::Unknown && TokenTable(token) == ClrTableId::TypeRef && Md.EnumInfo(token))
+					type.Kind = K::Enum;
 				if (et == 0x12 && type.Kind != K::String)
 					type.Kind = K::Object;
 				else if (et == 0x11 && type.Kind != K::Enum && type.Kind != K::Bool && type.Kind != K::Char &&
@@ -1938,7 +1942,7 @@ struct ClrAttributeReader {
 		uint8_t Element{};		// ELEMENT_TYPE (0x02 to 0x0E), 0x50 System.Type, 0x51 boxed (object), 0x55 an enum
 		uint8_t Underlying{ 0x08 };	// of an enum: int32 if it is not known
 		std::wstring EnumIl, EnumCs;
-		uint32_t EnumType{};	// an enum of this file (TypeDef row)
+		std::shared_ptr<ClrEnumInfo const> Enum;	// its values, if the enum is found
 		bool Array{ false };
 	};
 
@@ -1960,16 +1964,14 @@ struct ClrAttributeReader {
 		return type.Element == 0x55 ? type.EnumCs : ElementCs(type.Element);
 	}
 
+	// an enum of the file or of an assembly it refers to (taken to be of int32 if it is not found)
 	void SetEnum(ValueType& type, uint32_t token) {
 		type.Element = 0x55;
 		type.EnumIl = Md.TypeName(token);
 		type.EnumCs = Md.CSharpType(token).Name;
-		if (TokenTable(token) == ClrTableId::TypeDef && TokenRow(token) && TokenRow(token) <= Md.m_Types.size()) {
-			type.EnumType = TokenRow(token);
-			type.Underlying = UnderlyingElement(type.EnumType);
-		}
+		SetEnum(type, Md.EnumInfo(token));
 	}
-	// an enum named in the value ("Ns.Outer+Inner, Assembly"): of this file, or taken to be of int32
+	// an enum named in the value ("Ns.Outer+Inner, Assembly")
 	void SetEnum(ValueType& type, std::wstring const& name) {
 		type.Element = 0x55;
 		auto full = name.substr(0, name.find(L','));
@@ -1978,27 +1980,14 @@ struct ClrAttributeReader {
 		type.EnumIl = il;
 		auto last = full.find_last_of(L".+");
 		type.EnumCs = last == std::wstring::npos ? full : full.substr(last + 1);
-		for (uint32_t t = 1; t <= Md.m_Types.size(); t++)
-			if (Md.TypeDefName(t) == il) {
-				type.EnumType = t;
-				type.EnumCs = Md.CSharpTypeDefName(t);
-				type.Underlying = UnderlyingElement(t);
-				break;
-			}
+		SetEnum(type, Md.EnumInfoByName(name));
 	}
-	uint8_t UnderlyingElement(uint32_t type) const {
-		for (auto f : Md.FieldsOf(type)) {
-			auto& field = Md.m_Fields[f - 1];
-			if (field.Flags & 0x10)
-				continue;
-			auto blob = Md.Blob(field.Signature);
-			if (blob.size() >= 2) {
-				auto et = std::to_integer<uint8_t>(blob[1]);
-				if (et >= 0x02 && et <= 0x0B)
-					return et;
-			}
-		}
-		return 0x08;
+	void SetEnum(ValueType& type, std::shared_ptr<ClrEnumInfo const> info) {
+		if (!info)
+			return;
+		type.Enum = info;
+		type.EnumCs = info->Name;
+		type.Underlying = info->Underlying;
 	}
 
 	// the type of a parameter of the constructor
@@ -2259,13 +2248,13 @@ struct ClrAttributeReader {
 					return false;
 				arg.Il = std::format(L"{}({})", ElementIl(underlying), v);
 				arg.CSharp = std::format(L"({}){}", type.EnumCs, v);
-				// the name of the value, for an enum of this file
-				if (type.EnumType)
-					for (auto f : Md.FieldsOf(type.EnumType))
-						if (auto value = Md.ConstantInteger((ClrTableId::Field << 24) | f); value && *value == v) {
-							arg.CSharp = type.EnumCs + L"." + Md.m_Fields[f - 1].Name;
-							break;
-						}
+				// the names of the value ("AttributeTargets.Class | AttributeTargets.Method")
+				if (type.Enum)
+					if (auto parts = type.Enum->Parts(v); !parts.empty()) {
+						arg.CSharp.clear();
+						for (auto i : parts)
+							arg.CSharp += (arg.CSharp.empty() ? L"" : L" | ") + type.EnumCs + L"." + type.Enum->Values[i].Name;
+					}
 				return true;
 			}
 		}
@@ -2404,4 +2393,458 @@ std::optional<ClrPInvoke> ClrMetadata::PInvoke(uint32_t method) const {
 		return info;
 	}
 	return {};
+}
+
+//
+// The assemblies the file refers to, and the enums of theirs that it uses
+//
+
+std::vector<size_t> ClrEnumInfo::Parts(int64_t value) const {
+	// the values are compared in the size of the enum's (an int's -1 is a uint's 0xFFFFFFFF)
+	int bits = Underlying == 0x04 || Underlying == 0x05 ? 8 : Underlying == 0x06 || Underlying == 0x07 || Underlying == 0x03 ? 16 :
+		Underlying == 0x0A || Underlying == 0x0B ? 64 : 32;
+	auto mask = bits == 64 ? ~0ULL : (1ULL << bits) - 1;
+	auto v = (uint64_t)value & mask;
+	for (size_t i = 0; i < Values.size(); i++)
+		if (((uint64_t)Values[i].Value & mask) == v)
+			return { i };
+	if (!Flags || v == 0)
+		return {};
+	// the largest values first, so that a value that names several bits is used rather than each of them
+	std::vector<size_t> order(Values.size());
+	std::iota(order.begin(), order.end(), size_t(0));
+	std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+		return ((uint64_t)Values[a].Value & mask) > ((uint64_t)Values[b].Value & mask);
+	});
+	std::vector<size_t> parts;
+	auto left = v;
+	for (auto i : order) {
+		auto part = (uint64_t)Values[i].Value & mask;
+		if (part && (v & part) == part && (left & part)) {
+			parts.push_back(i);
+			left &= ~part;
+		}
+	}
+	if (left)
+		return {};
+	std::sort(parts.begin(), parts.end());
+	return parts;
+}
+
+struct ClrMetadata::ResolvedReferences {
+	std::mutex Lock;
+	std::unordered_map<uint32_t, ClrMetadata const*> Assemblies;	// by the AssemblyRef row
+	std::unordered_map<uint32_t, std::pair<ClrMetadata const*, uint32_t>> Types;	// by the TypeRef row
+	std::unordered_map<std::wstring, std::shared_ptr<ClrEnumInfo const>> EnumsByName;
+	std::unordered_map<uint32_t, std::shared_ptr<ClrEnumInfo const>> Enums;	// by the token
+	std::unordered_map<std::wstring, uint32_t> TypeDefs;	// the types that are not nested, by "namespace|name"
+	bool Indexed{ false };
+};
+
+namespace {
+	// The assemblies that files refer to, loaded once (by their path) and kept for as long as the process runs
+	class LoadedAssemblies {
+	public:
+		static LoadedAssemblies& Get() {
+			static LoadedAssemblies loaded;
+			return loaded;
+		}
+		ClrMetadata const* Load(std::wstring const& path) {
+			auto key = path;
+			for (auto& c : key)
+				c = towlower(c);
+			std::lock_guard lock(m_Lock);
+			if (auto it = m_Files.find(key); it != m_Files.end())
+				return it->second ? &it->second->Md : nullptr;
+			auto file = std::make_unique<File>();
+			if (!file->Pe.Open(path) || !file->Md.Parse(file->Pe) || !file->Md.HasMetadata())
+				file.reset();
+			auto md = file ? &file->Md : nullptr;
+			m_Files[key] = std::move(file);
+			return md;
+		}
+
+	private:
+		struct File {
+			PEFile Pe;
+			ClrMetadata Md;
+		};
+		std::mutex m_Lock;
+		std::unordered_map<std::wstring, std::unique_ptr<File>> m_Files;
+	};
+
+	std::wstring Environment(PCWSTR name) {
+		WCHAR value[MAX_PATH];
+		auto len = ::GetEnvironmentVariableW(name, value, _countof(value));
+		return len && len < _countof(value) ? std::wstring(value, len) : std::wstring();
+	}
+
+	std::vector<std::wstring> Subdirectories(std::wstring const& dir) {
+		std::vector<std::wstring> names;
+		WIN32_FIND_DATAW fd;
+		wil::unique_hfind find(::FindFirstFileW((dir + L"\\*").c_str(), &fd));
+		if (!find)
+			return names;
+		do {
+			if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && fd.cFileName[0] != L'.')
+				names.push_back(fd.cFileName);
+		} while (::FindNextFileW(find.get(), &fd));
+		return names;
+	}
+
+	// "8.0.11" -> { 8, 0, 11 }; empty if it is not a version
+	std::vector<int> VersionOf(std::wstring const& text) {
+		std::vector<int> parts;
+		for (size_t i = 0; i < text.size(); ) {
+			if (!iswdigit(text[i]))
+				return {};
+			parts.push_back(_wtoi(text.c_str() + i));
+			while (i < text.size() && iswdigit(text[i]))
+				i++;
+			if (i < text.size() && text[i] != L'.')
+				return {};
+			if (i < text.size())
+				i++;
+		}
+		return parts;
+	}
+
+	// the folders of a shared framework of the .NET runtime ("Microsoft.NETCore.App"): the latest version of each major
+	// one (by the major one), the latest first
+	std::vector<std::pair<int, std::wstring>> RuntimeVersions(std::wstring const& framework) {
+		static std::mutex lock;
+		static std::unordered_map<std::wstring, std::vector<std::pair<int, std::wstring>>> found;
+		std::lock_guard guard(lock);
+		if (auto it = found.find(framework); it != found.end())
+			return it->second;
+		auto root = Environment(L"DOTNET_ROOT");
+		if (root.empty())
+			root = Environment(L"ProgramFiles") + L"\\dotnet";
+		auto dir = root + L"\\shared\\" + framework;
+		std::vector<std::pair<std::vector<int>, std::wstring>> versions;
+		for (auto& name : Subdirectories(dir))
+			if (auto v = VersionOf(name); !v.empty())
+				versions.push_back({ v, dir + L"\\" + name });
+		std::sort(versions.begin(), versions.end(), [](auto& a, auto& b) { return a.first > b.first; });
+		auto& list = found[framework];
+		for (auto& [v, path] : versions)
+			if (std::none_of(list.begin(), list.end(), [&](auto& e) { return e.first == v[0]; }))
+				list.push_back({ v[0], path });
+		return list;
+	}
+
+	// the folder of the .NET Framework 4 (with mscorlib)
+	std::wstring const& FrameworkFolder() {
+		static std::wstring const dir = [] {
+			auto windows = Environment(L"WINDIR");
+			auto dir = windows + L"\\Microsoft.NET\\Framework64\\v4.0.30319";
+			if (::GetFileAttributesW((dir + L"\\mscorlib.dll").c_str()) == INVALID_FILE_ATTRIBUTES)
+				dir = windows + L"\\Microsoft.NET\\Framework\\v4.0.30319";
+			return dir;
+		}();
+		return dir;
+	}
+
+	bool FileExists(std::wstring const& path) {
+		auto attributes = ::GetFileAttributesW(path.c_str());
+		return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
+	}
+
+	// the C# name of a type an attribute names ("Outer+Inner`1" -> "Outer.Inner")
+	std::wstring AttributeEnumName(std::vector<std::wstring> const& path) {
+		std::wstring name;
+		for (size_t i = 0; i < path.size(); i++) {
+			auto part = path[i];
+			if (i == 0)
+				if (auto dot = part.rfind(L'.'); dot != std::wstring::npos)
+					part = part.substr(dot + 1);
+			name += (i ? L"." : L"") + part.substr(0, part.find(L'`'));
+		}
+		return name;
+	}
+}
+
+ClrMetadata::ClrMetadata() : m_References(std::make_shared<ResolvedReferences>()) {
+}
+
+bool ClrMetadata::IsCoreApp() const {
+	for (auto& r : m_Refs)
+		if (_wcsicmp(r.Name.c_str(), L"mscorlib") == 0)
+			return false;
+	for (auto& r : m_Refs)
+		if (_wcsicmp(r.Name.c_str(), L"System.Runtime") == 0 || _wcsicmp(r.Name.c_str(), L"System.Private.CoreLib") == 0)
+			return true;
+	if (m_HasAssembly && _wcsicmp(m_Assembly.Name.c_str(), L"System.Private.CoreLib") == 0)
+		return true;
+	if (m_PE) {
+		auto path = m_PE->GetPath();
+		for (auto& c : path)
+			c = towlower(c);
+		if (path.find(L"\\dotnet\\shared\\") != std::wstring::npos)
+			return true;
+		if (path.find(L"\\microsoft.net\\") != std::wstring::npos)
+			return false;
+	}
+	// netstandard: whichever there is
+	return !RuntimeVersions(L"Microsoft.NETCore.App").empty();
+}
+
+// next to the file, then in the .NET runtime or the .NET Framework (the one the file is for first)
+ClrMetadata const* ClrMetadata::FindAssembly(std::wstring const& name, uint16_t major) const {
+	if (name.empty() || name.find_first_of(L"\\/:") != std::wstring::npos)
+		return nullptr;
+	std::vector<std::wstring> folders;
+	if (m_PE) {
+		auto& path = m_PE->GetPath();
+		if (auto slash = path.find_last_of(L"\\/"); slash != std::wstring::npos)
+			folders.push_back(path.substr(0, slash));
+	}
+	std::vector<std::wstring> runtime;
+	for (auto framework : { L"Microsoft.NETCore.App", L"Microsoft.WindowsDesktop.App", L"Microsoft.AspNetCore.App" }) {
+		// the version the assembly is of, or the latest one
+		auto versions = RuntimeVersions(framework);
+		auto it = std::find_if(versions.begin(), versions.end(), [&](auto& v) { return v.first == major; });
+		if (it == versions.end())
+			it = versions.begin();
+		if (it != versions.end())
+			runtime.push_back(it->second);
+	}
+	std::vector<std::wstring> framework{ FrameworkFolder(), FrameworkFolder() + L"\\WPF" };
+	auto windows = Environment(L"WINDIR");
+	for (auto gac : { L"GAC_MSIL", L"GAC_64", L"GAC_32" }) {
+		auto dir = windows + L"\\Microsoft.NET\\assembly\\" + gac + L"\\" + name;
+		for (auto& version : Subdirectories(dir))
+			if (version.starts_with(L"v4.0_"))
+				framework.push_back(dir + L"\\" + version);
+	}
+	auto core = IsCoreApp();
+	auto& first = core ? runtime : framework;
+	auto& second = core ? framework : runtime;
+	folders.insert(folders.end(), first.begin(), first.end());
+	folders.insert(folders.end(), second.begin(), second.end());
+
+	for (auto& folder : folders)
+		for (auto extension : { L".dll", L".exe" }) {
+			auto path = folder + L"\\" + name + extension;
+			if (!FileExists(path))
+				continue;
+			if (auto md = LoadedAssemblies::Get().Load(path); md && md->m_HasAssembly && _wcsicmp(md->m_Assembly.Name.c_str(), name.c_str()) == 0)
+				return md;
+		}
+	return nullptr;
+}
+
+ClrMetadata const* ClrMetadata::ReferencedAssembly(uint32_t assemblyRef) const {
+	if (assemblyRef == 0 || assemblyRef > m_Refs.size())
+		return nullptr;
+	{
+		std::lock_guard lock(m_References->Lock);
+		if (auto it = m_References->Assemblies.find(assemblyRef); it != m_References->Assemblies.end())
+			return it->second;
+	}
+	auto& ref = m_Refs[assemblyRef - 1];
+	auto md = FindAssembly(ref.Name, ref.Major);
+	std::lock_guard lock(m_References->Lock);
+	m_References->Assemblies[assemblyRef] = md;
+	return md;
+}
+
+std::pair<ClrMetadata const*, uint32_t> ClrMetadata::FindType(std::wstring const& ns, std::wstring const& name, int depth) const {
+	{
+		std::lock_guard lock(m_References->Lock);
+		if (!m_References->Indexed) {
+			for (uint32_t t = 1; t <= m_Types.size(); t++)
+				if (m_Types[t - 1].Enclosing == 0)
+					m_References->TypeDefs.emplace(m_Types[t - 1].Namespace + L"|" + m_Types[t - 1].Name, t);
+			m_References->Indexed = true;
+		}
+		if (auto it = m_References->TypeDefs.find(ns + L"|" + name); it != m_References->TypeDefs.end())
+			return { this, it->second };
+	}
+	// a type forwarded to another assembly (ExportedType: Flags, TypeDefId, TypeName, TypeNamespace, Implementation)
+	if (depth > 8)
+		return {};
+	for (uint32_t row = 1; row <= m_Rows[ClrTableId::ExportedType]; row++) {
+		ClrRowReader r(*this, ClrTableId::ExportedType, row);
+		r.U32();
+		r.U32();
+		auto typeName = r.Str();
+		auto typeNamespace = r.Str();
+		auto implementation = r.Coded(Implementation);
+		if (!r.R.Ok || TokenTable(implementation) != ClrTableId::AssemblyRef || String(typeName) != name || String(typeNamespace) != ns)
+			continue;
+		if (auto md = ReferencedAssembly(TokenRow(implementation)))
+			return md->FindType(ns, name, depth + 1);
+		return {};
+	}
+	return {};
+}
+
+std::pair<ClrMetadata const*, uint32_t> ClrMetadata::ResolveType(uint32_t token) const {
+	auto row = TokenRow(token);
+	if (TokenTable(token) == ClrTableId::TypeDef) {
+		if (row == 0 || row > m_Types.size())
+			return {};
+		return { this, row };
+	}
+	if (TokenTable(token) != ClrTableId::TypeRef || row == 0 || row > m_Rows[ClrTableId::TypeRef])
+		return {};
+	{
+		std::lock_guard lock(m_References->Lock);
+		if (auto it = m_References->Types.find(row); it != m_References->Types.end())
+			return it->second;
+	}
+	std::pair<ClrMetadata const*, uint32_t> found{};
+	ClrRowReader r(*this, ClrTableId::TypeRef, row);
+	auto scope = r.Coded(ResolutionScope);
+	auto name = String(r.Str());
+	auto ns = String(r.Str());
+	if (r.R.Ok) {
+		switch (TokenTable(scope)) {
+			case ClrTableId::AssemblyRef:
+				if (auto md = ReferencedAssembly(TokenRow(scope)))
+					found = md->FindType(ns, name);
+				break;
+			case ClrTableId::Module:
+				found = FindType(ns, name);
+				break;
+			case ClrTableId::TypeRef:
+			{
+				// a nested type: in the type it is nested in
+				static thread_local int depth = 0;
+				if (depth < 16) {
+					depth++;
+					auto [md, outer] = ResolveType(scope);
+					depth--;
+					if (md)
+						for (auto nested : md->NestedTypes(outer))
+							if (md->m_Types[nested - 1].Name == name) {
+								found = { md, nested };
+								break;
+							}
+				}
+				break;
+			}
+		}
+	}
+	std::lock_guard lock(m_References->Lock);
+	m_References->Types[row] = found;
+	return found;
+}
+
+std::shared_ptr<ClrEnumInfo const> ClrMetadata::MakeEnumInfo(uint32_t type, std::wstring name) const {
+	if (type == 0 || type > m_Types.size() || TypeKind(type) != L"enum")
+		return nullptr;
+	auto info = std::make_shared<ClrEnumInfo>();
+	info->Name = std::move(name);
+	for (auto f : FieldsOf(type)) {
+		auto& field = m_Fields[f - 1];
+		if ((field.Flags & 0x10) == 0) {	// value__
+			auto blob = Blob(field.Signature);
+			if (blob.size() >= 2) {
+				auto et = std::to_integer<uint8_t>(blob[1]);
+				if (et >= 0x02 && et <= 0x0B)
+					info->Underlying = et;
+			}
+			continue;
+		}
+		if (auto value = ConstantInteger((ClrTableId::Field << 24) | f))
+			info->Values.push_back({ field.Name, *value, (ClrTableId::Field << 24) | f });
+	}
+	for (auto& attribute : CustomAttributes((ClrTableId::TypeDef << 24) | type)) {
+		auto attributeName = TypeName(attribute.AttributeType);
+		if (attributeName == L"System.FlagsAttribute" || attributeName.ends_with(L"]System.FlagsAttribute"))
+			info->Flags = true;
+	}
+	return info;
+}
+
+// an enum of another assembly, for this file: its fields are not this file's
+static std::shared_ptr<ClrEnumInfo const> WithoutFields(std::shared_ptr<ClrEnumInfo const> info) {
+	if (!info)
+		return info;
+	auto copy = std::make_shared<ClrEnumInfo>(*info);
+	for (auto& v : copy->Values)
+		v.Field = 0;
+	return copy;
+}
+
+std::shared_ptr<ClrEnumInfo const> ClrMetadata::EnumInfo(uint32_t token) const {
+	auto table = TokenTable(token);
+	if (table != ClrTableId::TypeDef && table != ClrTableId::TypeRef)
+		return nullptr;
+	{
+		std::lock_guard lock(m_References->Lock);
+		if (auto it = m_References->Enums.find(token); it != m_References->Enums.end())
+			return it->second;
+	}
+	std::shared_ptr<ClrEnumInfo const> info;
+	if (auto [md, type] = ResolveType(token); md) {
+		info = md->MakeEnumInfo(type, CSharpType(token).Name);
+		if (md != this)
+			info = WithoutFields(info);
+	}
+	std::lock_guard lock(m_References->Lock);
+	m_References->Enums[token] = info;
+	return info;
+}
+
+std::shared_ptr<ClrEnumInfo const> ClrMetadata::EnumInfoByName(std::wstring const& serialized) const {
+	{
+		std::lock_guard lock(m_References->Lock);
+		if (auto it = m_References->EnumsByName.find(serialized); it != m_References->EnumsByName.end())
+			return it->second;
+	}
+	// "Ns.Outer+Inner, Assembly, Version=4.0.0.0, ...": the type in that assembly; without one, in this one or the core library
+	auto comma = serialized.find(L',');
+	auto full = serialized.substr(0, comma);
+	std::wstring assembly;
+	if (comma != std::wstring::npos)
+		if (auto start = serialized.find_first_not_of(L' ', comma + 1); start != std::wstring::npos)
+			assembly = serialized.substr(start, serialized.find(L',', start) - start);
+	std::vector<std::wstring> path;
+	for (size_t start = 0; ; ) {
+		auto plus = full.find(L'+', start);
+		path.push_back(full.substr(start, plus == std::wstring::npos ? std::wstring::npos : plus - start));
+		if (plus == std::wstring::npos)
+			break;
+		start = plus + 1;
+	}
+	auto dot = path[0].rfind(L'.');
+	auto ns = dot == std::wstring::npos ? std::wstring() : path[0].substr(0, dot);
+	auto name = dot == std::wstring::npos ? path[0] : path[0].substr(dot + 1);
+
+	std::vector<ClrMetadata const*> places;
+	if (!assembly.empty())
+		places.push_back(m_HasAssembly && _wcsicmp(m_Assembly.Name.c_str(), assembly.c_str()) == 0 ? this : FindAssembly(assembly, 0));
+	else {
+		places.push_back(this);
+		for (auto core : { L"mscorlib", L"System.Private.CoreLib", L"System.Runtime" }) {
+			auto it = std::find_if(m_Refs.begin(), m_Refs.end(), [&](auto& r) { return _wcsicmp(r.Name.c_str(), core) == 0; });
+			if (it != m_Refs.end())
+				places.push_back(ReferencedAssembly((uint32_t)(it - m_Refs.begin()) + 1));
+		}
+	}
+	std::shared_ptr<ClrEnumInfo const> info;
+	for (auto place : places) {
+		if (!place)
+			continue;
+		auto [md, type] = place->FindType(ns, name);
+		for (size_t i = 1; md && type && i < path.size(); i++) {
+			uint32_t inner = 0;
+			for (auto nested : md->NestedTypes(type))
+				if (md->m_Types[nested - 1].Name == path[i])
+					inner = nested;
+			type = inner;
+		}
+		if (!md || !type)
+			continue;
+		info = md->MakeEnumInfo(type, md == this ? CSharpTypeDefName(type) : AttributeEnumName(path));
+		if (md != this)
+			info = WithoutFields(info);
+		break;
+	}
+	std::lock_guard lock(m_References->Lock);
+	m_References->EnumsByName[serialized] = info;
+	return info;
 }

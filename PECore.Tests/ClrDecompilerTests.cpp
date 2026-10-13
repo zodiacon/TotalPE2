@@ -99,6 +99,28 @@ namespace Sample
 
 	public static class Algorithms
 	{
+		// enums: of other assemblies, [Flags] ones, 0
+		public static FileStream Open(string path)
+		{
+			return File.Open(path, FileMode.OpenOrCreate, FileAccess.Read);
+		}
+
+		public static bool Same(string a, string b)
+		{
+			return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+		}
+
+		public static int Mode(FileAttributes attributes, Access access)
+		{
+			if ((attributes & FileAttributes.Hidden) != 0)
+				return 1;
+			if (access == (Access.Read | Access.Write))
+				return 2;
+			if ((access & ~Access.Write) == Access.Read)
+				return 5;
+			return attributes == FileAttributes.Normal ? 3 : 4;
+		}
+
 		public static int Sum(int[] values)
 		{
 			int sum = 0;
@@ -218,6 +240,69 @@ namespace Sample
 	}
 }
 )cs";
+}
+
+// The values of an enum that a value is made of: equal to it, or (of [Flags]) whose | it is
+TEST_CASE("Enum values are named", "[clr][cs]") {
+	ClrEnumInfo info;
+	info.Values = { { L"None", 0 }, { L"Read", 1 }, { L"Write", 2 }, { L"ReadWrite", 3 }, { L"Delete", 8 } };
+	CHECK(info.Parts(2) == std::vector<size_t>{ 2 });
+	CHECK(info.Parts(9).empty());	// not [Flags]
+	info.Flags = true;
+	CHECK(info.Parts(0) == std::vector<size_t>{ 0 });
+	CHECK(info.Parts(11) == std::vector<size_t>{ 3, 4 });	// ReadWrite | Delete, not Read | Write | Delete
+	CHECK(info.Parts(9) == std::vector<size_t>{ 1, 4 });
+	CHECK(info.Parts(16).empty());	// a bit that has no name
+	// compared in the size of the enum: -1 is a uint's 0xFFFFFFFF
+	ClrEnumInfo all;
+	all.Underlying = 0x09;
+	all.Values = { { L"All", 0xFFFFFFFF } };
+	CHECK(all.Parts(-1) == std::vector<size_t>{ 0 });
+}
+
+// A library of .NET (most of them) refers to the types of System.Runtime, which forwards them to System.Private.CoreLib
+TEST_CASE("Types of other assemblies are found through type forwarders", "[clr][system]") {
+	WCHAR programs[MAX_PATH];
+	if (!::GetEnvironmentVariableW(L"ProgramFiles", programs, MAX_PATH))
+		SKIP("no Program Files");
+	std::wstring path;
+	auto shared = std::wstring(programs) + L"\\dotnet\\shared\\Microsoft.NETCore.App\\";
+	WIN32_FIND_DATAW fd;
+	if (auto find = ::FindFirstFileW((shared + L"*").c_str(), &fd); find != INVALID_HANDLE_VALUE) {
+		do {
+			auto file = shared + fd.cFileName + L"\\System.Text.RegularExpressions.dll";
+			if (fd.cFileName[0] != L'.' && ::GetFileAttributesW(file.c_str()) != INVALID_FILE_ATTRIBUTES)
+				path = file;
+		} while (::FindNextFileW(find, &fd));
+		::FindClose(find);
+	}
+	PEFile pe;
+	if (path.empty() || !pe.Open(path))
+		SKIP("no .NET runtime");
+	ClrMetadata md;
+	REQUIRE(md.Parse(pe));
+	uint32_t object = 0, comparison = 0;
+	for (uint32_t row = 1; row <= md.Rows(ClrTableId::TypeRef); row++) {
+		auto name = md.TypeName((ClrTableId::TypeRef << 24) | row);
+		if (name == L"[System.Runtime]System.Object")
+			object = (ClrTableId::TypeRef << 24) | row;
+		else if (name == L"[System.Runtime]System.StringComparison")
+			comparison = (ClrTableId::TypeRef << 24) | row;
+	}
+	REQUIRE(object);
+	auto [other, type] = md.ResolveType(object);
+	REQUIRE(other);
+	CHECK(other->Assembly().Name == L"System.Private.CoreLib");
+	CHECK(other->FullName(type) == L"System.Object");
+	CHECK_FALSE(md.EnumInfo(object));
+	if (comparison) {
+		auto info = md.EnumInfo(comparison);
+		REQUIRE(info);
+		CHECK(info->Name == L"StringComparison");
+		REQUIRE(info->Parts(5).size() == 1);
+		CHECK(info->Values[info->Parts(5)[0]].Name == L"OrdinalIgnoreCase");
+		CHECK(info->Values[0].Field == 0);	// not a field of this file
+	}
 }
 
 // Every type of a large library: nothing fails, and little is left as goto
@@ -366,7 +451,7 @@ TEST_CASE("Properties, events and custom attributes are read", "[clr][cs]") {
 	// [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true)]: an enum of another assembly
 	auto usage = md.CustomAttributes((ClrTableId::TypeDef << 24) | FindTypeNamed(md, L"NoteAttribute"));
 	REQUIRE(usage.size() == 1);
-	CHECK(md.AttributeCSharp(usage[0]) == L"AttributeUsage((AttributeTargets)68, AllowMultiple = true)");
+	CHECK(md.AttributeCSharp(usage[0]) == L"AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true)");
 
 	auto beep = FindMethodNamed(md, FindTypeNamed(md, L"Algorithms"), L"Beep");
 	auto native = md.PInvoke(beep);
@@ -441,6 +526,15 @@ TEST_CASE("C# is decompiled as it was written", "[clr][cs]") {
 	CHECK_THAT(count, ContainsSubstring("num++;"));
 
 	CHECK_THAT(method(algorithms, L"Repeat"), ContainsSubstring("} while (n > 0);"));
+
+	// the values of enums by name, those of other assemblies as well
+	CHECK_THAT(method(algorithms, L"Open"), ContainsSubstring("return File.Open(path, FileMode.OpenOrCreate, FileAccess.Read);"));
+	CHECK_THAT(method(algorithms, L"Same"), ContainsSubstring("return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);"));
+	auto mode = method(algorithms, L"Mode");
+	CHECK_THAT(mode, ContainsSubstring("if ((attributes & FileAttributes.Hidden) != 0)"));
+	CHECK_THAT(mode, ContainsSubstring("if (access == (Access.Read | Access.Write))"));
+	CHECK_THAT(mode, ContainsSubstring("if ((access & ~Access.Write) == Access.Read)"));
+	CHECK_THAT(mode, ContainsSubstring("FileAttributes.Normal"));
 
 	auto guarded = method(algorithms, L"Guarded");
 	CHECK_THAT(guarded, ContainsSubstring("throw new InvalidOperationException(\"too long\");"));

@@ -259,6 +259,10 @@ IDI_EVENT               ICON                    "res\\event.ico"
 
 IDI_CLASS               ICON                    "res\\class.ico"
 
+IDI_BACK                ICON                    "res\\Back.ico"
+
+IDI_FORWARD             ICON                    "res\\Forward.ico"
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -293,11 +297,12 @@ BEGIN
         MENUITEM SEPARATOR
         MENUITEM "&Go to...\tCtrl+G",           ID_NAV_GOTO
         MENUITEM "Go &Anywhere...\tCtrl+P",     ID_NAV_GOANYWHERE
-        MENUITEM "&Back\tAlt+Left",             ID_NAV_BACK
-        MENUITEM "&Forward\tAlt+Right",         ID_NAV_FORWARD
     END
     POPUP "&View"
     BEGIN
+        MENUITEM "&Back\tAlt+Left",             ID_NAV_BACK
+        MENUITEM "&Forward\tAlt+Right",         ID_NAV_FORWARD
+        MENUITEM SEPARATOR
         MENUITEM "&Find...\tCtrl+F",            ID_EDIT_FIND
         MENUITEM "Find &Next\tF3",              ID_EDIT_FIND_NEXT
         MENUITEM "Find &Previous\tShift+F3",    ID_EDIT_FIND_PREVIOUS
@@ -820,6 +825,8 @@ BEGIN
     ID_PE_VIRUSTOTAL        "\nScan the file with VirusTotal"
     ID_PE_VTAPIKEY          "\nSet the VirusTotal API key"
     ID_PE_STRINGS           "The ASCII and UTF-16 strings of the file\nStrings"
+    ID_NAV_BACK             "Go back to where you were\nBack (Alt+Left)"
+    ID_NAV_FORWARD          "Go forward again\nForward (Alt+Right)"
 END
 
 STRINGTABLE

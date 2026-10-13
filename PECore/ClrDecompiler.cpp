@@ -655,16 +655,30 @@ namespace {
 		return VarExpr(temp);
 	}
 
+	// the names of an enum's value ("FileMode.Open", "BindingFlags.Public | BindingFlags.Static"), or a cast of the number
 	ExprPtr MethodDecompiler::EnumValue(ClrTypeInfo const& type, int64_t value) {
-		if (TableOf(type.Token) == ClrTableId::TypeDef) {
-			for (auto f : m_Md.FieldsOf(RowOf(type.Token)))
-				if (auto v = m_Md.ConstantInteger(FieldToken(f)); v && *v == value) {
-					auto e = Make(E::Member, m_Md.Fields()[f - 1].Name, {}, type);
-					e->Owner = type.Name;
-					e->Token = FieldToken(f);
-					return e;
-				}
+		auto info = m_Md.EnumInfo(type.Token);
+		auto named = [&](std::vector<size_t> const& parts) {
+			ExprPtr result;
+			for (auto i : parts) {
+				auto e = Make(E::Member, info->Values[i].Name, {}, type);
+				e->Owner = type.Name;
+				e->Token = info->Values[i].Field;
+				result = result ? Make(E::Binary, L"|", { result, e }, type) : e;
+			}
+			return result;
+		};
+		if (info) {
+			if (auto result = named(info->Parts(value)))
+				return result;
+			// a mask of [Flags]: all but some ("options & ~RegexOptions.IgnoreCase")
+			if (info->Flags && value != 0)
+				if (auto result = named(info->Parts(~value)))
+					return Make(E::Unary, L"~", { result }, type);
 		}
+		// 0 is any enum's
+		if (value == 0)
+			return IntLiteral(0, type);
 		return Make(E::Cast, type.Name, { IntLiteral(value) }, type);
 	}
 
@@ -815,6 +829,13 @@ namespace {
 		}
 		if (e->Type.Name == name && !overflow)
 			return e;
+		// an enum's value made the size it is (conv.u1 after the & of a byte enum's values)
+		if (e->Type.Kind == K::Enum && !overflow)
+			if (auto info = m_Md.EnumInfo(e->Type.Token); info && info->Underlying >= 0x04 && info->Underlying <= 0x0B) {
+				static const PCWSTR names[] = { L"sbyte", L"byte", L"short", L"ushort", L"int", L"uint", L"long", L"ulong" };
+				if (name == names[info->Underlying - 0x04])
+					return e;
+			}
 		auto cast = Make(E::Cast, name, { e }, type);
 		return overflow ? Make(E::Checked, {}, { cast }, type) : cast;
 	}
@@ -1801,7 +1822,8 @@ namespace {
 		for (int which = 0; which < 2; which++) {
 			int x = b1.Succ[which];
 			auto& b2 = m_Blocks[x];
-			if (x == b || b2.Root || b2.Kind != Exit::Cond || !b2.Stmts.empty() || b2.Pred.size() != 1 || b2.Region != b1.Region)
+			if (x == b || b2.Root || b2.Kind != Exit::Cond || b2.Succ.size() != 2 || !b2.Stmts.empty() || b2.Pred.size() != 1 ||
+				b2.Region != b1.Region)
 				continue;
 			int t1 = b1.Succ[0], f1 = b1.Succ[1], t2 = b2.Succ[0], f2 = b2.Succ[1];
 			auto c1 = b1.Value, c2 = b2.Value;
