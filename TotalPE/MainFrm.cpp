@@ -2287,16 +2287,19 @@ std::vector<GhidraDecompiler::Block> CMainFrame::ExceptionBlocks(uint64_t va) co
 				auto handler = nameOf(scope.HandlerRva, "finally");
 				block.Links.emplace_back(handler, base + scope.HandlerRva);
 				block.Close = { "} __finally {", "\t/* " + handler + ", if an exception leaves it; else the code that follows runs it */", "}" };
+				block.Bodies.push_back({ 1, base + scope.HandlerRva });
 				break;
 			}
 			case ExceptionScope::Kinds::Try:
 			{
 				block.Open = "try {";
+				block.Approximate = true;
 				for (auto const& c : scope.Catches) {
 					auto handler = nameOf(c.HandlerRva, "catch");
 					block.Links.emplace_back(handler, base + c.HandlerRva);
 					block.Close.push_back("} catch (" + CatchText(c) + ") {");
 					block.Close.push_back("\t/* the handler: " + handler + " */");
+					block.Bodies.push_back({ block.Close.size() - 1, base + c.HandlerRva });
 				}
 				block.Close.push_back("}");
 				break;
@@ -2445,9 +2448,33 @@ bool CMainFrame::X64Frame(uint32_t rva, uint32_t& size, uint32_t& frameRegister,
 	return true;
 }
 
-// Only the locals the stack pointer (or the frame pointer) locates are given (not those in registers): with their offsets
-// from the stack pointer at the entry, which the frame the prologue makes tells
-bool CMainFrame::FunctionLocals(uint64_t va, std::vector<GhidraDecompiler::Local>& locals) const {
+namespace {
+	// The decompiler's name of a register of x86 or x64 by its CodeView number; empty if it has none
+	std::string X86RegisterName(uint32_t reg) {
+		static char const* const legacy[] = { nullptr, "AL", "CL", "DL", "BL", "AH", "CH", "DH", "BH", "AX", "CX", "DX", "BX", "SP", "BP",
+			"SI", "DI", "EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI" };
+		static char const* const extended[] = { "SIL", "DIL", "BPL", "SPL", "RAX", "RBX", "RCX", "RDX", "RSI", "RDI", "RBP", "RSP" };
+		if (reg < _countof(legacy))
+			return legacy[reg] ? legacy[reg] : "";
+		if (reg >= CV_REG_XMM0 && reg <= CV_REG_XMM0 + 7)
+			return "XMM" + std::to_string(reg - CV_REG_XMM0);
+		if (reg >= CV_AMD64_XMM8 && reg <= CV_AMD64_XMM8 + 7)
+			return "XMM" + std::to_string(reg - CV_AMD64_XMM8 + 8);
+		if (reg >= CV_AMD64_SIL && reg < CV_AMD64_SIL + _countof(extended))
+			return extended[reg - CV_AMD64_SIL];
+		// R8-R15, then their bytes, words and dwords
+		if (reg >= CV_AMD64_R8 && reg < CV_AMD64_R8 + 32) {
+			static char const* const suffix[] = { "", "B", "W", "D" };
+			auto index = reg - CV_AMD64_R8;
+			return "R" + std::to_string(8 + index % 8) + suffix[index / 8];
+		}
+		return {};
+	}
+}
+
+// The locals the stack pointer (or the frame pointer) locates, with their offsets from the stack pointer at the entry, which
+// the frame the prologue makes tells; and of optimized code, those in registers (x86, x64): where each is at the instructions
+bool CMainFrame::FunctionLocals(uint64_t va, std::vector<uint64_t> const& instructions, std::vector<GhidraDecompiler::Local>& locals) const {
 	auto base = m_PE.GetImageBase();
 	if (!m_Symbols || va < base || va - base > 0xFFFFFFFFULL)
 		return false;
@@ -2503,6 +2530,49 @@ bool CMainFrame::FunctionLocals(uint64_t va, std::vector<GhidraDecompiler::Local
 		}
 	};
 	collect(function);
+
+	// in registers: asked at each instruction, of the function and of the blocks it is in (not of the functions put inline in
+	// it: their variables are of those)
+	if (machine == IMAGE_FILE_MACHINE_AMD64 || machine == IMAGE_FILE_MACHINE_I386) {
+		std::vector<std::tuple<uint32_t, uint32_t, DiaSymbol>> scopes{ { rva, (uint32_t)function.Length(), function } };
+		std::function<void(DiaSymbol const&)> blocks = [&](DiaSymbol const& parent) {
+			for (auto const& block : parent.FindChildren(nullptr, SymbolTag::Block)) {
+				scopes.emplace_back(block.RelativeVirtualAddress(), (uint32_t)block.Length(), block);
+				blocks(block);
+			}
+		};
+		blocks(function);
+		// (by name, register and type: its ranges)
+		std::map<std::tuple<std::string, uint32_t, uint32_t>, std::set<std::pair<uint64_t, uint64_t>>> places;
+		for (auto address : instructions) {
+			if (address < base || address - base > 0xFFFFFFFFULL)
+				continue;
+			auto at = (uint32_t)(address - base);
+			for (auto const& [begin, size, scope] : scopes) {
+				if (at < begin || at - begin >= size)
+					continue;
+				for (auto const& child : scope.FindChildrenAt(at, SymbolTag::Data)) {
+					uint32_t start;
+					uint64_t length;
+					if (child.Kind() != DataItemKind::Local || child.Location() != LocationKind::Enregistered || !child.LiveRange(start, length) ||
+						at < start || at - start >= length)
+						continue;
+					auto type = child.Type();
+					if (type)
+						places[{ Narrow(child.Name()), child.RegisterId(), type.Id() }].insert({ base + start, base + start + length });
+				}
+			}
+		}
+		for (auto const& [key, ranges] : places) {
+			auto const& [name, reg, type] = key;
+			auto registerName = X86RegisterName(reg);
+			if (registerName.empty())
+				continue;
+			GhidraDecompiler::Local local{ name, type, 0, registerName };
+			local.Ranges.assign(ranges.begin(), ranges.end());
+			locals.push_back(std::move(local));
+		}
+	}
 	return !locals.empty();
 }
 
@@ -2720,9 +2790,9 @@ GhidraDecompiler* CMainFrame::DecompilerSession::Open(std::string& error) {
 		return known;
 		});
 	if (Symbols) {
-		decompiler->SetLocalSource([this](uint64_t va, std::vector<GhidraDecompiler::Local>& locals) {
+		decompiler->SetLocalSource([this](uint64_t va, std::vector<uint64_t> const& instructions, std::vector<GhidraDecompiler::Local>& locals) {
 			bool known = false;
-			Ask([&] { known = !Stale && Frame->FunctionLocals(va, locals); });
+			Ask([&] { known = !Stale && Frame->FunctionLocals(va, instructions, locals); });
 			return known;
 			});
 		for (auto const& g : Globals)

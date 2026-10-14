@@ -423,7 +423,7 @@ private:
 	std::string FileModuleName() const;
 	bool IsWindowsFile() const;
 	// the local variables of a function on the stack, from the symbols (of private symbols)
-	bool FunctionLocals(uint64_t va, std::vector<GhidraDecompiler::Local>& locals) const;
+	bool FunctionLocals(uint64_t va, std::vector<uint64_t> const& instructions, std::vector<GhidraDecompiler::Local>& locals) const;
 	// the frame an x64 function's prologue makes, from its unwind information: its size (what is pushed and allocated), and
 	// the frame register (its CodeView number; 0 if there is none) and its offset from the stack pointer at the entry
 	bool X64Frame(uint32_t rva, uint32_t& size, uint32_t& frameRegister, int64_t& frameOffset) const;

@@ -67,15 +67,21 @@ public:
 	using PrototypeSource = std::function<bool(uint64_t address, uint32_t& type, std::vector<std::string>& parameterNames)>;
 	// The name of the function at an address (a C identifier, or a qualified C++ name); empty if it has none
 	using NameSource = std::function<std::string(uint64_t address)>;
-	// A local variable of a function, on the stack: its name, the id of its type and its offset from the stack pointer as
-	// it is when the function is entered (on x86 and x64 the return address is at 0, the parameters on the stack after it)
+	// A local variable of a function: its name, the id of its type and where it is. On the stack: its offset from the stack
+	// pointer as it is when the function is entered (on x86 and x64 the return address is at 0, the parameters on the stack
+	// after it). In a register (optimized code): the register (as the decompiler names it: "RBX", "EDI") and the ranges of
+	// addresses where the variable is in it ([begin, end), each from the instruction after the one that sets it, or from the
+	// entry). The same name more than once (in other registers, or on the stack too) is the same variable.
 	struct Local {
 		std::string Name;
 		uint32_t Type;
 		int64_t Offset;
+		std::string Register;
+		std::vector<std::pair<uint64_t, uint64_t>> Ranges;
 	};
-	// The local variables of the function at an address; false if they are not known
-	using LocalSource = std::function<bool(uint64_t address, std::vector<Local>& locals)>;
+	// The local variables of the function at an address, given the addresses of its instructions (where the places of those
+	// in registers are asked about); false if they are not known
+	using LocalSource = std::function<bool(uint64_t address, std::vector<uint64_t> const& instructions, std::vector<Local>& locals)>;
 	// A type of the symbols by its name (a struct, union, enum or typedef): its id, 0 if there is none
 	using TypeNameSource = std::function<uint32_t(std::string const& name)>;
 
@@ -115,6 +121,16 @@ public:
 		std::string Open;
 		std::vector<std::string> Close;
 		std::vector<std::pair<std::string, uint64_t>> Links;
+		// Code shown in it (a handler's): after the line 'Line' of 'Close', the statements of the function at 'Address'. What
+		// cannot be decompiled is not shown.
+		struct Body {
+			size_t Line;
+			uint64_t Address;
+		};
+		std::vector<Body> Bodies;
+		// Its ranges may go on after its code (a C++ try: the compiler keeps the state of the code only where it may throw,
+		// at calls): when its lines are not whole statements, the most from its first that are is shown in it
+		bool Approximate{ false };
 	};
 	// the blocks of the function at an address (asked each time it is decompiled), inner ones first
 	using BlockSource = std::function<void(uint64_t address, std::vector<Block>& blocks)>;
@@ -169,6 +185,7 @@ public:
 		LineAddresses* lines = nullptr, Variables* variables = nullptr);
 
 private:
+	std::vector<std::string> BodyOf(uint64_t address);
 	struct Impl;
 	std::unique_ptr<Impl> m_Impl;
 };

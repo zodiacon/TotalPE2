@@ -76,6 +76,10 @@ public:
     int32_t GetFieldOffset(std::wstring_view name, CompareOptions options = CompareOptions::None) const;
 
     std::vector<DiaSymbol> FindChildren(PCWSTR name = nullptr, SymbolTag tag = SymbolTag::Null, CompareOptions options = CompareOptions::None) const;
+    // the children where they are at an address (a local of optimized code is in a place of its own in each of its ranges)
+    std::vector<DiaSymbol> FindChildrenAt(uint32_t rva, SymbolTag tag = SymbolTag::Null) const;
+    // where a child that FindChildrenAt finds is in its place: false if it is not known
+    bool LiveRange(uint32_t& rva, uint64_t& length) const;
 
     static std::wstring SimpleTypeToString(SimpleType type, DWORD len);
 

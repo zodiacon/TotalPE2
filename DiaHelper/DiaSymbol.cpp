@@ -293,6 +293,30 @@ std::vector<DiaSymbol> DiaSymbol::FindChildren(PCWSTR name, SymbolTag tag, Compa
 	return symbols;
 }
 
+std::vector<DiaSymbol> DiaSymbol::FindChildrenAt(uint32_t rva, SymbolTag tag) const {
+	std::vector<DiaSymbol> symbols;
+	CComPtr<IDiaEnumSymbols> spEnum;
+	if (SUCCEEDED(m_spSym->findChildrenExByRVA((enum SymTagEnum)tag, nullptr, nsNone, rva, &spEnum)) && spEnum) {
+		CComPtr<IDiaSymbol> sym;
+		ULONG ret;
+		while (spEnum->Next(1, &sym, &ret) == S_OK && ret == 1) {
+			symbols.push_back(DiaSymbol(sym));
+			sym.Release();
+		}
+	}
+	return symbols;
+}
+
+bool DiaSymbol::LiveRange(uint32_t& rva, uint64_t& length) const {
+	DWORD start = 0;
+	ULONGLONG size = 0;
+	if (m_spSym->get_liveRangeStartRelativeVirtualAddress(&start) != S_OK || m_spSym->get_liveRangeLength(&size) != S_OK)
+		return false;
+	rva = start;
+	length = size;
+	return true;
+}
+
 bool DiaSymbol::IsVolatile() const {
 	BOOL b = FALSE;
 	m_spSym->get_volatileType(&b);

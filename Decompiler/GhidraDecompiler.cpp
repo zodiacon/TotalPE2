@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <map>
+#include <set>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
@@ -213,12 +214,31 @@ struct GhidraDecompiler::Impl {
 	ChangeSource Changes;
 	CommentSource Comments;
 	BlockSource Blocks;
+	// (the code of a handler decompiled in a block's: its blocks not shown)
+	bool Nested{ false };
 	std::unordered_map<uint64_t, std::string> Applied;	// the changes each function was last decompiled with (as text)
 	std::string Pending;	// what is to be said in the code of the next function decompiled (a change that could not be made)
 	std::unordered_map<uint32_t, Datatype*> Converted;	// the decompiler's types of the caller's ids
 	StringPrintC* Printer{ nullptr };
 	std::unordered_set<uint64_t> Prototyped;			// the functions whose prototypes were asked for
 	std::unordered_set<uint64_t> Localized;				// the functions whose local variables were asked for
+	// The variables of the symbols in registers, by function: where their values are made. A value is rarely in the register
+	// in the end (an instruction of x86 makes it in a temporary, copies it to the register, and the copy is propagated): a
+	// value that an instruction that sets the register in the variable's ranges makes is the variable's; and one that is put
+	// in the register by a copy of another register (a call's result kept), that register's value before it.
+	struct RegisterLocal {
+		std::string Name;
+		Datatype* Type;
+		std::set<uint64_t> Makes;
+		std::map<uint64_t, std::vector<VarnodeData>> Results;
+	};
+	std::unordered_map<uint64_t, std::vector<RegisterLocal>> RegisterLocals;
+	std::unordered_set<uint64_t> RegisterTyped;		// the functions whose variables in registers were given their types
+	// What the user made of them (by function, by their names in the symbols: "pdb:" and the name is their key, which the
+	// decompiler's variables they are in, and their types, do not change), and the keys of the decompiler's variables that are
+	// theirs in the function decompiled last
+	std::unordered_map<uint64_t, std::map<std::string, VariableChange>> RegisterChanges;
+	std::unordered_map<Symbol*, std::string> RegisterKeys;
 	std::unordered_map<std::string, std::string> Fixups;	// the call fixups of the compiler, by the names of the functions they replace
 
 	Datatype* Unknown(uint32_t size);
@@ -241,6 +261,7 @@ struct GhidraDecompiler::Impl {
 	static constexpr int MaxDepth = 1000;
 	bool ApplyPrototype(Funcdata* fd);
 	void ApplyLocals(Funcdata* fd);
+	std::vector<std::pair<Varnode*, RegisterLocal const*>> RegisterValues(Funcdata* fd) const;
 	bool ApplyFixup(Funcdata* fd);
 
 	// the user's changes: types written as C, the changes to the variables of a function, and the variables it shows
@@ -558,22 +579,39 @@ bool GhidraDecompiler::Impl::ApplyPrototype(Funcdata* fd) {
 	}
 }
 
-// The local variables of a function from the caller (once per function): symbols of the function's scope on the stack,
-// their names and types locked, as Ghidra's own symbols from a PDB are. One that overlaps another (a variable of an inner
-// block in the same place as one of another block) is left out.
+// The local variables of a function from the caller (once per function): symbols of the function's scope, their names and
+// types locked, as Ghidra's own symbols from a PDB are. One on the stack that overlaps another (a variable of an inner block
+// in the same place as one of another block) is left out.
+//
+// One in a register is known by where its values are made (see RegisterLocal), which its ranges and the instructions tell:
+// the flow of the function is followed ahead of the decompiler, which then uses it.
 void GhidraDecompiler::Impl::ApplyLocals(Funcdata* fd) {
 	auto address = fd->getAddress().getOffset();
 	if (!Locals || !Localized.insert(address).second)
 		return;
+	auto code = fd->getAddress().getSpace();
+	std::vector<uint64_t> instructions;
+	try {
+		fd->followFlow(Address(code, 0), Address(code, code->getHighest()));
+		for (auto it = fd->beginOpAll(); it != fd->endOpAll(); ++it)
+			instructions.push_back(it->second->getAddr().getOffset());
+		std::sort(instructions.begin(), instructions.end());
+		instructions.erase(std::unique(instructions.begin(), instructions.end()), instructions.end());
+	}
+	catch (LowlevelError const&) {
+		// (the decompiler finds it again, and says so)
+		Arch->clearAnalysis(fd);
+		instructions.clear();
+	}
 	std::vector<Local> locals;
-	if (!Locals(address, locals))
+	if (!Locals(address, instructions, locals))
 		return;
 	auto stack = Arch->getStackSpace();
 	if (!stack)
 		return;
 	auto scope = fd->getScopeLocal();
 	for (auto const& local : locals) {
-		if (local.Name.empty())
+		if (local.Name.empty() || !local.Register.empty())
 			continue;
 		try {
 			auto type = Convert(local.Type);
@@ -591,6 +629,125 @@ void GhidraDecompiler::Impl::ApplyLocals(Funcdata* fd) {
 			// one the decompiler does not take: the variable gets a name of its own
 		}
 	}
+	if (instructions.empty())
+		return;
+
+	// in registers: the instructions in their ranges that set the register (the one before a range, and those in it but the
+	// last, which may set it for the next variable)
+	std::map<uint64_t, std::vector<PcodeOp*>> ops;
+	for (auto it = fd->beginOpAll(); it != fd->endOpAll(); ++it)
+		ops[it->second->getAddr().getOffset()].push_back(it->second);
+	std::set<uint64_t> starts;
+	auto const& blocks = fd->getBasicBlocks();
+	for (int4 i = 0; i < blocks.getSize(); i++)
+		if (auto start = blocks.getBlock(i)->getStart(); !start.isInvalid())
+			starts.insert(start.getOffset());
+	auto setter = [&](uint64_t at, VarnodeData const& place) -> PcodeOp* {
+		auto it = ops.find(at);
+		if (it != ops.end())
+			for (auto op : it->second)
+				if (auto out = op->getOut(); out && out->getSpace() == place.space && out->getOffset() < place.offset + place.size &&
+					place.offset < out->getOffset() + out->getSize())
+					return op;
+		return nullptr;
+	};
+	auto& known = RegisterLocals[address];
+	for (auto const& local : locals) {
+		if (local.Name.empty() || local.Register.empty() || local.Ranges.empty())
+			continue;
+		try {
+			auto type = Convert(local.Type);
+			auto const& reg = Arch->translate->getRegister(local.Register);
+			if (type->getSize() <= 0 || (uint4)type->getSize() > reg.size)
+				continue;
+			RegisterLocal result{ local.Name, type };
+			auto add = [&](std::vector<uint64_t>::const_iterator at) {
+				auto op = setter(*at, reg);
+				if (!op)
+					return;
+				result.Makes.insert(*at);
+				// a copy of another register: where that was set before it in its block (by a call: its result)
+				Varnode* source = nullptr;
+				for (auto copy : ops[*at])
+					if (copy->code() == CPUI_COPY && copy->getIn(0)->getSpace() == reg.space && copy->getIn(0)->getOffset() != reg.offset) {
+						source = copy->getIn(0);
+						break;
+					}
+				if (!source)
+					return;
+				VarnodeData from{ source->getSpace(), source->getOffset(), (uint4)source->getSize() };
+				for (auto back = at; !starts.count(*back) && back != instructions.begin(); ) {
+					--back;
+					auto const& those = ops[*back];
+					if (setter(*back, from) || std::any_of(those.begin(), those.end(), [](PcodeOp* other) { return other->isCall(); })) {
+						result.Results[*back].push_back(from);
+						break;
+					}
+				}
+			};
+			for (auto [begin, end] : local.Ranges) {
+				auto first = std::lower_bound(instructions.begin(), instructions.end(), begin);
+				auto last = std::lower_bound(instructions.begin(), instructions.end(), end);
+				if (first != instructions.begin())
+					add(first - 1);
+				if (first != last)
+					for (auto it = first; it != last - 1; ++it)
+						add(it);
+			}
+			if (result.Makes.empty())
+				continue;
+			// (the same variable of other blocks)
+			auto same = std::find_if(known.begin(), known.end(), [&](auto const& other) { return other.Name == local.Name && other.Type == type; });
+			if (same == known.end())
+				known.push_back(std::move(result));
+			else {
+				same->Makes.insert(result.Makes.begin(), result.Makes.end());
+				for (auto& [at, places] : result.Results)
+					same->Results[at].insert(same->Results[at].end(), places.begin(), places.end());
+			}
+		}
+		catch (LowlevelError const&) {
+			// a register the decompiler does not know, a type it does not take: the variable gets a name of its own
+		}
+	}
+}
+
+// The values of the variables of the symbols in registers (see RegisterLocal) in a function's code: of an instruction, the
+// last it makes (what it puts in the register: an address it loads from is made before)
+std::vector<std::pair<Varnode*, GhidraDecompiler::Impl::RegisterLocal const*>> GhidraDecompiler::Impl::RegisterValues(Funcdata* fd) const {
+	std::vector<std::pair<Varnode*, RegisterLocal const*>> values;
+	auto known = RegisterLocals.find(fd->getAddress().getOffset());
+	if (known == RegisterLocals.end())
+		return values;
+	std::map<std::pair<RegisterLocal const*, uint64_t>, size_t> made;
+	auto later = [](Varnode* a, Varnode* b) {
+		auto x = a->getDef(), y = b->getDef();
+		return x->getParent() == y->getParent() && x->getSeqNum().getOrder() > y->getSeqNum().getOrder();
+	};
+	for (auto it = fd->beginLoc(); it != fd->endLoc(); ++it) {
+		auto vn = *it;
+		if (!vn->isWritten() || vn->isAnnotation())
+			continue;
+		auto at = vn->getDef()->getAddr().getOffset();
+		for (auto const& local : known->second) {
+			auto size = local.Type->getSize();
+			bool match = vn->getSize() == size && local.Makes.count(at);
+			if (auto results = local.Results.find(at); !match && results != local.Results.end())
+				for (auto const& from : results->second)
+					if (vn->getSize() >= size && vn->getSpace() == from.space && vn->getOffset() < from.offset + from.size &&
+						from.offset < vn->getOffset() + vn->getSize())
+						match = true;
+			if (match) {
+				auto [where, added] = made.try_emplace({ &local, at }, values.size());
+				if (added)
+					values.emplace_back(vn, &local);
+				else if (later(vn, values[where->second].first))
+					values[where->second].first = vn;
+				break;
+			}
+		}
+	}
+	return values;
 }
 
 // A function that the compiler's specification replaces at its calls (by p-code of what the call does: one that moves the
@@ -718,6 +875,22 @@ namespace {
 			auto indent = line.find_first_not_of(' ');
 			return indent == std::string::npos ? std::string() : line.substr(0, indent);
 		};
+		auto trimmed = [](std::string const& line) {
+			auto first = line.find_first_not_of(' '), last = line.find_last_not_of(' ');
+			return first == std::string::npos ? std::string() : line.substr(first, last - first + 1);
+		};
+		// a line that ends a statement (or is none: empty, a comment, a label, "{"); one that does not goes on in the next
+		auto terminated = [&](size_t i) {
+			auto text = trimmed(lines[i]);
+			return text.empty() || text.back() == ';' || text.back() == '{' || text.back() == '}' || text.back() == ':' ||
+				(text.size() >= 2 && text.compare(text.size() - 2, 2, "*/") == 0);
+		};
+		auto begins = [&](size_t i, size_t bodyBegin) { return i <= bodyBegin || terminated(i - 1); };
+		// a label (the decompiler's, at the start of the line, not at the level of its statements)
+		auto isLabel = [&](size_t i) {
+			auto text = trimmed(lines[i]);
+			return text.size() > 1 && text.back() == ':' && text.find(' ') == std::string::npos && text != "default:";
+		};
 		auto closeLine = [&](std::string const& indent, std::string const& text) {
 			size_t tabs = 0;
 			while (tabs < text.size() && text[tabs] == '\t')
@@ -771,9 +944,15 @@ namespace {
 						last = i;
 					}
 			}
+			// (as comments: the closing lines without the code of the handlers in them)
+			auto isClosing = [](std::string const& text) {
+				auto first = text.find_first_not_of('\t');
+				return first != std::string::npos && (text[first] == '}' || text.compare(first, 2, "/*") == 0);
+			};
 			std::string closing;
 			for (auto const& text : block.Close)
-				closing += (closing.empty() ? "" : " ") + uncommented(text.substr(std::min(text.size(), text.find_first_not_of('\t'))));
+				if (isClosing(text))
+					closing += (closing.empty() ? "" : " ") + uncommented(text.substr(std::min(text.size(), text.find_first_not_of('\t'))));
 			if (first == bodyEnd) {
 				// none of its code is shown (the decompiler took it away, or it is only in other functions)
 				if (bodyBegin > 0) {
@@ -786,12 +965,12 @@ namespace {
 			// Whole statements: none of other code among them, the braces they close opened in them, those they open closed (by
 			// the lines after them that are not of other code). A block that begins in one the caller placed (an inner one, of
 			// lines of their own) begins before it.
-			bool whole = false;
-			for (int attempt = 0; attempt < 64 && !whole; attempt++) {
-				bool ok = true;
+			// (the last line of the statements from 'from' to 'to', and after it those that close their braces; npos if they are not)
+			auto closes = [&](size_t from, size_t to) {
+				bool ok = begins(from, bodyBegin);
 				int depth = 0;
-				size_t end = last;
-				for (size_t i = first; i <= end && ok; i++) {
+				size_t end = to;
+				for (size_t i = from; i <= end && ok; i++) {
 					int lowest;
 					auto change = BraceBalance(lines[i], lowest);
 					ok = kindOf(i) != -1 && depth + lowest >= 0;
@@ -804,7 +983,17 @@ namespace {
 					ok = depth + lowest >= 0;
 					depth += change;
 				}
-				if (ok && depth == 0) {
+				return ok && depth == 0 && terminated(end) ? end : std::string::npos;
+			};
+			// (from the start of the statement it begins in, to its end)
+			while (first > bodyBegin && !terminated(first - 1) && kindOf(first - 1) != -1)
+				first--;
+			while (last + 1 < bodyEnd && !terminated(last) && kindOf(last + 1) != -1)
+				last++;
+			bool whole = false;
+			auto start = first;
+			for (int attempt = 0; attempt < 64 && !whole; attempt++) {
+				if (auto end = closes(first, last); end != std::string::npos) {
 					whole = true;
 					last = end;
 				}
@@ -814,7 +1003,42 @@ namespace {
 				else
 					break;
 			}
+			// (of one that may go on after its code: the whole statements that have the most lines of its code)
+			if (!whole && block.Approximate) {
+				size_t best = 0, bestFirst = 0, bestLast = 0;
+				for (size_t from = start; from <= last; from++) {
+					if (kindOf(from) != 1 || !begins(from, bodyBegin))
+						continue;
+					int depth = 0;
+					size_t count = 0;
+					for (size_t i = from; i < bodyEnd && kindOf(i) != -1; i++) {
+						int lowest;
+						auto change = BraceBalance(lines[i], lowest);
+						if (depth + lowest < 0)
+							break;
+						depth += change;
+						if (kindOf(i) == 1)
+							count++;
+						if (depth == 0 && terminated(i) && count > best) {
+							best = count;
+							bestFirst = from;
+							bestLast = i;
+						}
+					}
+				}
+				if (best) {
+					whole = true;
+					first = bestFirst;
+					last = bestLast;
+				}
+			}
+			// (of its first statement: a label is before the level of the statements)
 			auto indent = indentOf(lines[first]);
+			for (size_t i = first; i <= last; i++)
+				if (!isLabel(i) && !trimmed(lines[i]).empty()) {
+					indent = indentOf(lines[i]);
+					break;
+				}
 			std::vector<std::string> after;
 			if (whole) {
 				for (size_t i = first; i <= last; i++)
@@ -828,6 +1052,8 @@ namespace {
 				// (a comment for each part: "} catch (...) { ... }")
 				std::string part;
 				for (auto const& text : block.Close) {
+					if (!isClosing(text))
+						continue;
 					auto line = uncommented(text.substr(std::min(text.size(), text.find_first_not_of('\t'))));
 					if (!part.empty() && line.size() > 1 && line[0] == '}') {	// (a "}" alone ends the part)
 						after.push_back(indent + "/* " + part + " */");
@@ -1093,6 +1319,12 @@ void GhidraDecompiler::Impl::ApplyChanges(Funcdata* fd, std::vector<VariableChan
 	for (auto const& change : changes) {
 		if (StartsWith(change.Key, "param:"))
 			continue;
+		// one of the symbols in a register: when its values are found
+		if (StartsWith(change.Key, "pdb:")) {
+			if (!change.Retyped || typeOf(change))
+				RegisterChanges[fd->getAddress().getOffset()][change.Key.substr(4)] = change;
+			continue;
+		}
 		auto type = typeOf(change);
 		if (!type)
 			continue;
@@ -1147,6 +1379,8 @@ void GhidraDecompiler::Impl::ApplyChanges(Funcdata* fd, std::vector<VariableChan
 std::string GhidraDecompiler::Impl::KeyOf(Funcdata* fd, Symbol* sym, Varnode* vn) const {
 	if (sym->getCategory() == Symbol::function_parameter)
 		return "param:" + std::to_string(sym->getCategoryIndex());
+	if (auto it = RegisterKeys.find(sym); it != RegisterKeys.end())
+		return it->second;
 	auto entry = sym->getFirstWholeMap();
 	if (!entry)
 		return {};
@@ -1540,6 +1774,77 @@ namespace {
 	};
 }
 
+// The statements of a function, as lines of a block: a tab for its level, then those of their own. What it returns at its end
+// is not one (a catch's handler returns where to continue, a __finally's nothing).
+std::vector<std::string> GhidraDecompiler::BodyOf(uint64_t address) {
+	std::string text, error;
+	m_Impl->Nested = true;
+	bool ok = false;
+	try {
+		ok = Decompile(address, {}, text, error);
+	}
+	catch (...) {
+	}
+	m_Impl->Nested = false;
+	if (!ok)
+		return {};
+	std::vector<std::string> lines;
+	std::istringstream in(text);
+	for (std::string line; std::getline(in, line); )
+		lines.push_back(line);
+	size_t open = lines.size(), close = 0;
+	for (size_t i = 0; i < lines.size(); i++)
+		if (lines[i] == "{") {
+			open = i;
+			break;
+		}
+	for (size_t i = lines.size(); i > 0; i--)
+		if (lines[i - 1] == "}") {
+			close = i - 1;
+			break;
+		}
+	if (open >= close)
+		return {};
+	std::vector<std::string> body(lines.begin() + open + 1, lines.begin() + close);
+	auto trimmed = [](std::string const& line) {
+		auto first = line.find_first_not_of(' ');
+		return first == std::string::npos ? std::string() : line.substr(first);
+	};
+	auto indentOf = [](std::string const& line) {
+		auto first = line.find_first_not_of(' ');
+		return first == std::string::npos ? std::string::npos : first;
+	};
+	// the halts (where it does not return), and the return at its end
+	size_t base = std::string::npos;
+	for (auto const& line : body)
+		if (!trimmed(line).empty()) {
+			base = indentOf(line);
+			break;
+		}
+	if (base == std::string::npos)
+		return {};
+	std::vector<std::string> result;
+	for (auto const& line : body) {
+		auto statement = trimmed(line);
+		if (statement.rfind("halt_", 0) == 0 || statement.rfind("halt(", 0) == 0)
+			continue;
+		result.push_back(line);
+	}
+	while (!result.empty() && trimmed(result.back()).empty())
+		result.pop_back();
+	if (!result.empty() && indentOf(result.back()) == base && trimmed(result.back()).rfind("return", 0) == 0)
+		result.pop_back();
+	while (!result.empty() && trimmed(result.back()).empty())
+		result.pop_back();
+	// (the empty line after the declarations, at the start, and none at all: nothing)
+	bool any = std::any_of(result.begin(), result.end(), [&](auto const& line) { return !trimmed(line).empty(); });
+	if (!any)
+		return {};
+	for (auto& line : result)
+		line = line.size() > base ? "\t" + line.substr(base) : std::string("\t");
+	return result;
+}
+
 bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std::string& code, std::string& error, FunctionRefs* functions,
 	LineAddresses* lines, Variables* variables) {
 	if (!Open(error))
@@ -1573,6 +1878,9 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 			global->removeSymbol(fd->getSymbol());
 			m_Impl->Prototyped.erase(address);
 			m_Impl->Localized.erase(address);
+			m_Impl->RegisterLocals.erase(address);
+			m_Impl->RegisterTyped.erase(address);
+			m_Impl->RegisterChanges.erase(address);
 			fd = global->addFunction(addr, fname)->getFunction();
 			m_Impl->Applied[address] = applied;
 		}
@@ -1587,8 +1895,11 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 			m_Impl->ApplyChanges(fd, changes);
 
 		auto action = arch->allacts.getCurrent();
-		action->reset(*fd);
-		int4 result = action->perform(*fd);
+		auto run = [&] {
+			action->reset(*fd);
+			return action->perform(*fd);
+		};
+		int4 result = run();
 
 		// An indirect jump to a known function (through the slot of an import, as a thunk does) is a tail call: a call, then a
 		// return. Ghidra first takes it for a switch whose table it cannot find, with warnings, so it is told what it is.
@@ -1641,21 +1952,115 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 		}
 		if (more) {
 			arch->clearAnalysis(fd);
-			action->reset(*fd);
-			result = action->perform(*fd);
+			result = run();
+		}
+
+		// The variables of the symbols in registers, of their types: once, a symbol (of the value, as the decompiler finds it
+		// again) for a value of one whose type tells more than the decompiler's (a pointer to a structure...), then again
+		auto& registerChanges = m_Impl->RegisterChanges[address];
+		auto changeOf = [&](Impl::RegisterLocal const* local) -> VariableChange const* {
+			auto it = registerChanges.find(local->Name);
+			return it == registerChanges.end() ? nullptr : &it->second;
+		};
+		if (m_Impl->RegisterLocals.count(address) && m_Impl->RegisterTyped.insert(address).second) {
+			auto scope = fd->getScopeLocal();
+			bool typed = false;
+			std::unordered_set<Impl::RegisterLocal const*> done;
+			for (auto [vn, local] : m_Impl->RegisterValues(fd))
+				try {
+					auto type = local->Type;
+					auto change = changeOf(local);
+					std::string error;
+					if (change && change->Retyped)
+						type = m_Impl->ParseType(change->Type, error);
+					if (!type)
+						continue;
+					auto meta = type->getMetatype();
+					bool telling = (change && change->Retyped) || type->isEnumType() || meta == TYPE_STRUCT || meta == TYPE_UNION ||
+						meta == TYPE_FLOAT || (meta == TYPE_PTR && ((TypePointer*)type)->getPtrTo()->getMetatype() != TYPE_VOID &&
+							((TypePointer*)type)->getPtrTo()->getMetatype() != TYPE_UNKNOWN);
+					auto high = vn->getHigh();
+					if (!telling || high->getType() == type || (high->getSymbol() && high->getSymbol()->isTypeLocked()) ||
+						!done.insert(local).second)
+						continue;
+					DynamicHash hash;
+					hash.uniqueHash(vn, fd);
+					if (hash.getHash() == 0)
+						continue;
+					scope->setAttribute(scope->addDynamicSymbol(change ? change->Name : local->Name, type, hash.getAddress(), hash.getHash()),
+						Varnode::namelock | Varnode::typelock);
+					typed = true;
+				}
+				catch (LowlevelError const&) {
+				}
+			if (typed) {
+				arch->clearAnalysis(fd);
+				result = run();
+			}
 		}
 
 		// The variables the decompiler named are named without their types: those on the stack local_ and their offset,
 		// those in registers Var and a number, the global ones Ram and their address
 		{
 			auto scope = fd->getScopeLocal();
+			// the variables of the symbols in registers (one that has a symbol of its own is named)
+			std::unordered_map<Symbol*, std::string> registerNames;
+			m_Impl->RegisterKeys.clear();
+			for (auto [vn, local] : m_Impl->RegisterValues(fd))
+				try {
+					auto sym = vn->getHigh()->getSymbol();
+					if (!sym || m_Impl->RegisterKeys.count(sym))
+						continue;
+					m_Impl->RegisterKeys[sym] = "pdb:" + local->Name;
+					if (!sym->isNameLocked())
+						registerNames[sym] = changeOf(local) ? changeOf(local)->Name : local->Name;
+				}
+				catch (LowlevelError const&) {
+				}
+			// the same variable on the stack where the code of the function does not use it (a handler of an exception does): its
+			// name is the register's (and the decompiler's warning that it is not used is not shown)
+			if (!registerNames.empty()) {
+				std::unordered_set<Symbol*> used;
+				for (auto it = fd->beginLoc(); it != fd->endLoc(); ++it) {
+					auto vn = *it;
+					if (auto entry = vn->getSymbolEntry())
+						used.insert(entry->getSymbol());
+					if (!vn->isAnnotation() && (!vn->isFree() || vn->isConstant()))
+						try {
+							if (auto sym = vn->getHigh()->getSymbol())
+								used.insert(sym);
+						}
+						catch (LowlevelError const&) {
+						}
+				}
+				std::unordered_set<std::string> unused;
+				for (auto const& [sym, name] : registerNames) {
+					std::vector<Symbol*> named;
+					scope->findByName(name, named);
+					for (auto other : named)
+						if (auto entry = other->getFirstWholeMap(); other != sym && !used.count(other) && entry &&
+							entry->getAddr().getSpace() == arch->getStackSpace() && other->getCategory() == Symbol::no_category) {
+							scope->removeSymbol(other);
+							unused.insert(name);
+						}
+				}
+				std::vector<Comment*> warnings;
+				for (auto it = arch->commentdb->beginComment(fd->getAddress()); it != arch->commentdb->endComment(fd->getAddress()); ++it)
+					for (auto const& name : unused)
+						if ((*it)->getType() == Comment::warningheader && (*it)->getText() == "WARNING: Variable defined which should be unmapped: " + name)
+							warnings.push_back(*it);
+				for (auto comment : warnings)
+					arch->commentdb->deleteComment(comment);
+			}
 			std::vector<std::pair<Symbol*, std::string>> renames;
 			std::unordered_set<std::string> names;
 			std::unordered_set<Symbol*> seen;
 			auto consider = [&](Symbol* sym) {
 				if (!sym || sym->isNameLocked() || !seen.insert(sym).second)
 					return;
-				auto name = sym->getScope()->isGlobal() ? std::string() : StackName(sym->getName());
+				auto registerName = registerNames.find(sym);
+				auto name = registerName != registerNames.end() ? registerName->second :
+					sym->getScope()->isGlobal() ? std::string() : StackName(sym->getName());
 				if (name.empty())
 					name = Untyped(sym->getName());
 				if (name.empty())
@@ -1716,7 +2121,7 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 
 		// the caller's blocks (its __try regions, its C++ try blocks), and the names of the functions they refer to
 		std::vector<Block> blocks;
-		if (m_Impl->Blocks)
+		if (m_Impl->Blocks && !m_Impl->Nested)
 			m_Impl->Blocks(address, blocks);
 		for (auto const& block : blocks)
 			for (auto const& [linkName, at] : block.Links)
@@ -1776,6 +2181,15 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 		}
 
 		IndentComments(code);
+		// the code of the blocks' handlers, in them (after the code of this function is made: the decompiler is used again)
+		for (auto& block : blocks) {
+			std::sort(block.Bodies.begin(), block.Bodies.end(), [](auto const& a, auto const& b) { return a.Line > b.Line; });
+			for (auto const& body : block.Bodies)
+				if (body.Line < block.Close.size()) {
+					auto statements = BodyOf(body.Address);
+					block.Close.insert(block.Close.begin() + body.Line + 1, statements.begin(), statements.end());
+				}
+		}
 		if (lineMap && !blocks.empty())
 			ShowBlocks(code, *lineMap, blocks);
 		if (variables)

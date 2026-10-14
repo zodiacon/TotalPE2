@@ -248,6 +248,105 @@ TEST_CASE("A prototype and the types it uses", "[decompiler]") {
 	CHECK_THAT(y, ContainsSubstring("point->y"));
 }
 
+TEST_CASE("A local variable of optimized code, in a register", "[decompiler]") {
+	Fixture f;
+	auto a = Code + 0x100;
+	f.Image.At(a).Bytes({ 0xB8, 0x2A, 0x00, 0x00, 0x00, 0xC3 });	// mov eax, 42; ret
+	f.Decompiler.SetTypeSource(Describe);
+	std::vector<GhidraDecompiler::Local> given;
+	std::vector<uint64_t> asked;
+	f.Decompiler.SetLocalSource([&](uint64_t address, std::vector<uint64_t> const& instructions, std::vector<GhidraDecompiler::Local>& locals) {
+		if (address != Code)
+			return false;
+		asked = instructions;
+		locals = given;
+		return true;
+		});
+
+	SECTION("the variable its value is in is named") {
+		f.Image.At(Code)
+			.Bytes({ 0x53, 0x48, 0x83, 0xEC, 0x20 })	// push rbx; sub rsp, 20h
+			.Bytes({ 0x31, 0xDB })						// xor ebx, ebx
+			.Bytes({ 0x8B, 0xCB })						// loop: mov ecx, ebx
+			.Call(a)
+			.Bytes({ 0xFF, 0xC3 })						// inc ebx
+			.Bytes({ 0x83, 0xFB, 0x0A, 0x7C, 0xF2 })	// cmp ebx, 10; jl loop
+			.Bytes({ 0x48, 0x83, 0xC4, 0x20, 0x5B, 0xC3 });	// add rsp, 20h; pop rbx; ret
+		// in EBX from after "xor ebx, ebx" to after "jl loop"
+		GhidraDecompiler::Local i{ "i", 1, 0, "EBX" };
+		i.Ranges = { { Code + 7, Code + 0x15 } };
+		given = { i };
+		f.Open();
+		f.Decompiler.AddFunction(a, "A");
+		auto code = f.Decompile(Code, "Loop");
+		CHECK(std::find(asked.begin(), asked.end(), Code + 5) != asked.end());
+		CHECK(std::find(asked.begin(), asked.end(), Code + 0x1A) != asked.end());
+		CHECK_THAT(code, ContainsSubstring("A(i)"));
+		CHECK(Count(code, " i;") == 1);
+		CHECK_THAT(code, !ContainsSubstring("WARNING"));
+	}
+	SECTION("of its type") {
+		f.Image.At(Code)
+			.Bytes({ 0x53, 0x48, 0x83, 0xEC, 0x20 })	// push rbx; sub rsp, 20h
+			.Bytes({ 0x48, 0x8B, 0x59, 0x08 })			// mov rbx, [rcx+8]
+			.Call(a)
+			.Bytes({ 0x8B, 0x43, 0x04 })				// mov eax, [rbx+4]
+			.Bytes({ 0x03, 0x03 })						// add eax, [rbx]
+			.Bytes({ 0x48, 0x83, 0xC4, 0x20, 0x5B, 0xC3 });	// add rsp, 20h; pop rbx; ret
+		GhidraDecompiler::Local point{ "point", 3, 0, "RBX" };
+		point.Ranges = { { Code + 9, Code + 0x13 } };
+		given = { point };
+		f.Open();
+		f.Decompiler.AddFunction(a, "A");
+		auto code = f.Decompile(Code, "Sum");
+		CHECK_THAT(code, ContainsSubstring("POINT *point;"));
+		CHECK_THAT(code, ContainsSubstring("point->y"));
+		CHECK_THAT(code, !ContainsSubstring("WARNING"));
+
+		// renamed by the user: still of its type
+		std::string text, error;
+		GhidraDecompiler::Variables variables;
+		REQUIRE(f.Decompiler.Decompile(Code, "Sum", text, error, nullptr, nullptr, &variables));
+		auto variable = std::find_if(variables.begin(), variables.end(), [](auto const& v) { return v.Name == "point"; });
+		REQUIRE(variable != variables.end());
+		std::vector<GhidraDecompiler::VariableChange> changes{ { variable->Key, "pt", variable->Type } };
+		f.Decompiler.SetChangeSource([&](uint64_t address, std::vector<GhidraDecompiler::VariableChange>& out) {
+			out = address == Code ? changes : std::vector<GhidraDecompiler::VariableChange>();
+			return !out.empty();
+			});
+		code = f.Decompile(Code, "Sum");
+		CHECK_THAT(code, ContainsSubstring("POINT *pt;"));
+		CHECK_THAT(code, ContainsSubstring("pt->y"));
+	}
+	SECTION("a call's result kept in it") {
+		f.Image.At(Code)
+			.Bytes({ 0x53, 0x48, 0x83, 0xEC, 0x20 })	// push rbx; sub rsp, 20h
+			.Call(a)
+			.Bytes({ 0x8B, 0xD8 })						// mov ebx, eax
+			.Bytes({ 0x8B, 0xCB })						// mov ecx, ebx
+			.Call(a)
+			.Bytes({ 0x03, 0xC3 })						// add eax, ebx
+			.Bytes({ 0x48, 0x83, 0xC4, 0x20, 0x5B, 0xC3 });	// add rsp, 20h; pop rbx; ret
+		GhidraDecompiler::Local result{ "result", 1, 0, "EBX" };
+		result.Ranges = { { Code + 0xC, Code + 0x15 } };
+		given = { result };
+		f.Open();
+		f.Decompiler.AddFunction(a, "A");
+		auto code = f.Decompile(Code, "Twice");
+		CHECK_THAT(code, ContainsSubstring("result = A();"));
+		CHECK_THAT(code, ContainsSubstring("A(result)"));
+	}
+	SECTION("one that no value is in is not shown") {
+		f.Image.At(Code).Bytes({ 0x8D, 0x04, 0x11, 0xC3 });		// lea eax, [rcx+rdx]; ret
+		GhidraDecompiler::Local unused{ "unused", 1, 0, "EBX" };
+		unused.Ranges = { { Code, Code + 3 } };
+		given = { unused };
+		f.Open();
+		auto code = f.Decompile(Code, "Add");
+		CHECK_THAT(code, !ContainsSubstring("unused"));
+	}
+}
+
 TEST_CASE("A global variable", "[decompiler]") {
 	Fixture f;
 	f.Image.At(Code).Bytes({ 0x8B, 0x05 }).Rel32(Data).Bytes({ 0xC3 });	// mov eax, [Counter]; ret
@@ -589,10 +688,73 @@ TEST_CASE("Blocks of the caller's are placed around the lines of their code", "[
 		CHECK_THAT(code, ContainsSubstring("  /* __try { */\n  A();\n  B();\n  C();\n"
 			"  /* } __except (EXCEPTION_EXECUTE_HANDLER) { the handler: Main$except_0 } */\n"));
 	}
+	SECTION("whose ranges may go on after its code (a C++ try): the most from its first line that are whole statements") {
+		GhidraDecompiler::Block tried{ { { callA, callA + 5 }, { callC, callC + 5 } }, "try {", { "} catch (...) {", "}" }, {} };
+		tried.Approximate = true;
+		blocks = { tried };
+		auto code = f.Decompile(Code, "Main");
+		CHECK_THAT(code, ContainsSubstring("  try {\n    A();\n  } catch (...) {\n  }\n  B();\n  C();\n"));
+	}
 	SECTION("none of its code shown") {
 		GhidraDecompiler::Block elsewhere{ { { Code + 0x200, Code + 0x210 } }, "__try {", guarded.Close, {} };
 		blocks = { elsewhere };
 		auto code = f.Decompile(Code, "Main");
 		CHECK_THAT(code, ContainsSubstring("/* __try { } __except (EXCEPTION_EXECUTE_HANDLER) { the handler: Main$except_0 } (the code it guards is not shown) */"));
 	}
+}
+
+TEST_CASE("A C++ try whose ranges are not whole statements: those that have the most of its code", "[decompiler]") {
+	Fixture f;
+	auto a = Code + 0x100, x = Code + 0x110, b = Code + 0x120, c = Code + 0x130;
+	// sub rsp, 28h; call A; call X; call B; call C; add rsp, 28h; ret
+	f.Image.At(Code)
+		.Bytes({ 0x48, 0x83, 0xEC, 0x28 })
+		.Call(a)
+		.Call(x)
+		.Call(b)
+		.Call(c)
+		.Bytes({ 0x48, 0x83, 0xC4, 0x28, 0xC3 });
+	for (auto at : { a, x, b, c })
+		f.Image.At(at).Bytes({ 0xC3 });
+	auto callA = Code + 4, callB = Code + 14, callC = Code + 19;
+	GhidraDecompiler::Block tried{ { { callA, callA + 5 }, { callB, callC + 5 } }, "try {", { "} catch (...) {", "}" }, {} };
+	tried.Approximate = true;
+	f.Decompiler.SetBlockSource([&](uint64_t address, std::vector<GhidraDecompiler::Block>& out) {
+		if (address == Code)
+			out = { tried };
+		});
+	f.Open();
+	for (auto [at, name] : { std::pair{ a, "A" }, { x, "X" }, { b, "B" }, { c, "C" } })
+		f.Decompiler.AddFunction(at, name);
+	auto code = f.Decompile(Code, "Main");
+	CHECK_THAT(code, ContainsSubstring("  A();\n  X();\n  try {\n    B();\n    C();\n  } catch (...) {\n  }\n"));
+}
+
+TEST_CASE("The code of a block's handler is shown in it", "[decompiler]") {
+	Fixture f;
+	auto a = Code + 0x100, b = Code + 0x110, funclet = Code + 0x140;
+	// sub rsp, 28h; call A; mov eax, 1; add rsp, 28h; ret
+	f.Image.At(Code)
+		.Bytes({ 0x48, 0x83, 0xEC, 0x28 })
+		.Call(a)
+		.Bytes({ 0xB8, 0x01, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x28, 0xC3 });
+	// a funclet of its own: sub rsp, 28h; call B; add rsp, 28h; ret
+	f.Image.At(funclet).Bytes({ 0x48, 0x83, 0xEC, 0x28 }).Call(b).Bytes({ 0x48, 0x83, 0xC4, 0x28, 0xC3 });
+	for (auto at : { a, b })
+		f.Image.At(at).Bytes({ 0xC3 });
+	std::vector<GhidraDecompiler::Block> blocks;
+	f.Decompiler.SetBlockSource([&](uint64_t address, std::vector<GhidraDecompiler::Block>& out) {
+		if (address == Code)
+			out = blocks;
+		});
+	f.Open();
+	f.Decompiler.AddFunction(a, "A");
+	f.Decompiler.AddFunction(b, "B");
+	GhidraDecompiler::Block guarded{ { { Code + 4, Code + 9 } }, "__try {",
+		{ "} __except (EXCEPTION_EXECUTE_HANDLER) {", "\t/* the handler */", "}" }, {} };
+	// what it returns is not shown
+	guarded.Bodies = { { 1, funclet } };
+	blocks = { guarded };
+	auto code = f.Decompile(Code, "Main");
+	CHECK_THAT(code, ContainsSubstring("    /* the handler */\n    B();\n  }\n"));
 }
