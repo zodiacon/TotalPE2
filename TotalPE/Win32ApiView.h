@@ -4,6 +4,7 @@
 #include "resource.h"
 #include "ScintillaView.h"
 #include "Win32Api.h"
+#include "DocPane.h"
 #include <QuickFindEdit.h>
 #include <VirtualListView.h>
 #include <unordered_set>
@@ -14,7 +15,8 @@
 // values, a struct's fields and their offsets, an interface's methods. Enter (or a double-click) on a line of the
 // declaration shows the type the line refers to (Back, or Alt+Left, returns). Ctrl+Q or Ctrl+F goes to the filter; Down or
 // Enter there goes to the list. References: where the file calls the function selected (if it imports it), in the main
-// window. It is in a window of its own (CWin32ApiFrame).
+// window. Documentation: Microsoft's page of the one selected, below its declaration (CDocPane); Open in Browser shows it in
+// the default browser. It is in a window of its own (CWin32ApiFrame).
 //
 class CWin32ApiView :
 	public CViewBase<CWin32ApiView>,
@@ -52,6 +54,8 @@ public:
 		COMMAND_CODE_HANDLER(EN_DELAYCHANGE, OnFilterChanged)
 		COMMAND_ID_HANDLER(ID_WIN32_IMPORTS, OnImports)
 		COMMAND_ID_HANDLER(ID_WIN32_REFERENCES, OnReferences)
+		COMMAND_ID_HANDLER(ID_WIN32_DOCS, OnDocumentation)
+		COMMAND_ID_HANDLER(ID_WIN32_BROWSER, OnOpenInBrowser)
 		COMMAND_ID_HANDLER(ID_NAV_BACK, OnBack)
 		COMMAND_ID_HANDLER(ID_NAV_FORWARD, OnForwardCommand)
 		CHAIN_MSG_MAP(CVirtualListView<CWin32ApiView>)
@@ -74,6 +78,10 @@ private:
 	LRESULT OnBack(WORD, WORD, HWND, BOOL&);
 	LRESULT OnReferences(WORD, WORD, HWND, BOOL&);
 	LRESULT OnForwardCommand(WORD, WORD, HWND, BOOL&);
+	LRESULT OnDocumentation(WORD, WORD, HWND, BOOL&);
+	LRESULT OnOpenInBrowser(WORD, WORD, HWND, BOOL&);
+	// the documentation of the one shown (if it is shown)
+	void ShowDocumentation();
 
 	void Fill();
 	void UpdateImportsButton();
@@ -95,6 +103,9 @@ private:
 	std::vector<size_t> m_Items;	// the entries shown (indices into the API's entries)
 	std::vector<std::string> m_LineTypes;	// what each line of the declaration refers to
 	CSplitterWindow m_Splitter;
+	CHorSplitterWindow m_Right;		// the declaration, and below it the documentation
+	CDocPane m_Doc;
+	std::wstring m_DocUrl;			// of the one shown
 	CListViewCtrl m_List;
 	CScintillaView* m_Code{ nullptr };
 	CQuickFindEdit m_FilterEdit;

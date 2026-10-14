@@ -856,6 +856,8 @@ BEGIN
     ID_PE_WIN32API          "The functions and types of Windows, with their declarations\nWindows API"
     ID_WIN32_IMPORTS        "Only the functions the file imports\nImports"
     ID_WIN32_REFERENCES     "The places the file calls the function (in the main window)\nReferences"
+    ID_WIN32_DOCS           "Show Microsoft's documentation of the function or type\nDocumentation"
+    ID_WIN32_BROWSER        "Open the documentation in the default browser\nOpen in Browser"
 END
 
 STRINGTABLE

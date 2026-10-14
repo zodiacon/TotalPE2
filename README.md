@@ -63,7 +63,7 @@ The kind of file is recognized by its contents, not its extension. Open files fr
 * Flow graphs of functions, exported as SVG
 * Go To (address, RVA or file offset), Back and Forward
 * Decompiled C (Ghidra's decompiler): rename and retype variables and functions (N, Y), comment instructions (;) and bookmark them (Ctrl+B), kept for the file; the functions of Windows that the code calls have their prototypes, and their constants (flags, `HRESULT`, `NTSTATUS`...) their names, from the Win32 metadata (a value of several names shows the one chosen: the tip of a constant lists them, its menu shows another); x64 functions show their `__try`/`__except`/`__finally` regions and C++ `try`/`catch` blocks (from the exception data: `__C_specific_handler`, `__CxxFrameHandler3` and `4`), with the code of the handlers that are functions of their own (`__finally`, `catch`) in them (the function's variables they use by name: `frame->h`) and links to the others; the local variables of the PDB have their names, those optimized code keeps in registers too (x86, x64)
-* Windows API: the functions and types of Windows from the Win32 metadata (all of them, or the file's imports), with their C declarations: prototypes, enums and their values, structs with the offsets of their fields, callbacks, COM interfaces; in a window of its own (Tools > Windows API), with Back/Forward through the types followed, and the places the file calls a function (References)
+* Windows API: the functions and types of Windows from the Win32 metadata (all of them, or the file's imports), with their C declarations: prototypes, enums and their values, structs with the offsets of their fields, callbacks, COM interfaces; in a window of its own (Tools > Windows API), with Back/Forward through the types followed, and the places the file calls a function (References); Microsoft's documentation of the one selected below its declaration (Microsoft Edge WebView2), or in the default browser
 
 ## Hex view
 
@@ -94,7 +94,7 @@ The kind of file is recognized by its contents, not its extension. Open files fr
 Visual Studio 2026 (toolset v145), C++20. The dependencies come from [vcpkg](https://vcpkg.io) (classic mode, triplet `x64-windows-static`):
 
 ```
-vcpkg install lief capstone scintilla lexilla wil nlohmann-json catch2 --triplet x64-windows-static
+vcpkg install lief capstone scintilla lexilla wil nlohmann-json catch2 webview2 --triplet x64-windows-static
 ```
 
 The `WTLHelper` submodule is needed as well (`git submodule update --init`).

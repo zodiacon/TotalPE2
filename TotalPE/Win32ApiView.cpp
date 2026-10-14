@@ -2,6 +2,7 @@
 #include "Win32ApiView.h"
 #include <ToolbarHelper.h>
 #include <SortHelper.h>
+#include "AppSettings.h"
 
 namespace {
 	std::string Lower(std::string text) {
@@ -34,6 +35,9 @@ LRESULT CWin32ApiView::OnCreate(UINT, WPARAM, LPARAM, BOOL& handled) {
 		{ 0 },
 		{ ID_WIN32_IMPORTS, 0, BTNS_CHECK | BTNS_SHOWTEXT | BTNS_AUTOSIZE, L"Imports" },
 		{ ID_WIN32_REFERENCES, 0, BTNS_SHOWTEXT | BTNS_AUTOSIZE, L"References" },
+		{ 0 },
+		{ ID_WIN32_DOCS, 0, BTNS_CHECK | BTNS_SHOWTEXT | BTNS_AUTOSIZE, L"Documentation" },
+		{ ID_WIN32_BROWSER, 0, BTNS_SHOWTEXT | BTNS_AUTOSIZE, L"Open in Browser" },
 	};
 	CreateSimpleReBar(ATL_SIMPLE_REBAR_NOBORDER_STYLE);
 	m_tb = ToolbarHelper::CreateAndInitToolBar(m_hWnd, buttons, _countof(buttons), 16);
@@ -55,6 +59,8 @@ LRESULT CWin32ApiView::OnCreate(UINT, WPARAM, LPARAM, BOOL& handled) {
 	rebar.SetBandInfo(0, &band);
 	UpdateImportsButton();
 	UpdateHistoryButtons();
+	UISetCheck(ID_WIN32_DOCS, AppSettings::Get().Win32ApiDocumentation());
+	UIEnable(ID_WIN32_BROWSER, false);
 
 	m_hWndClient = m_Splitter.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
 	// (the icons are the frame's: shared, not destroyed with the list)
@@ -67,14 +73,20 @@ LRESULT CWin32ApiView::OnCreate(UINT, WPARAM, LPARAM, BOOL& handled) {
 	cm->AddColumn(L"Kind", LVCFMT_LEFT, 70);
 	cm->AddColumn(L"DLL or Namespace", LVCFMT_LEFT, 200);
 
+	m_Right.Create(m_Splitter, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
 	m_Code = new CScintillaView(Frame(), m_PE, GetTitle());
-	m_Code->DoCreate(m_Splitter);
+	m_Code->DoCreate(m_Right);
 	m_Code->SetLanguage(LexLanguage::C);
 	m_Code->GetCtrl().SetReadOnly(true);
 	m_Code->GetCtrl().SendMessage(SCI_SETTABWIDTH, 4);
 	m_Code->SetLineAction([this](int line) { return GoToLine(line); });
 
-	m_Splitter.SetSplitterPanes(m_List, *m_Code);
+	m_Doc.Create(m_Right, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
+	m_Right.SetSplitterPanes(*m_Code, m_Doc);
+	m_Right.SetSplitterPosPct(40);
+	if (!AppSettings::Get().Win32ApiDocumentation())
+		m_Right.SetSinglePaneMode(SPLIT_PANE_TOP);
+	m_Splitter.SetSplitterPanes(m_List, m_Right);
 	m_Splitter.SetSplitterPosPct(40);
 
 	{
@@ -214,6 +226,32 @@ void CWin32ApiView::Show(int entry) {
 		m_Code->SetText(m_Api->Declaration(m_Api->Entries()[entry], &m_LineTypes).c_str());
 	ctrl.SetReadOnly(true);
 	ctrl.EmptyUndoBuffer();
+	m_DocUrl = entry < 0 ? std::wstring() : m_Api->DocumentationUrl(m_Api->Entries()[entry]);
+	UIEnable(ID_WIN32_BROWSER, !m_DocUrl.empty());
+	ShowDocumentation();
+}
+
+void CWin32ApiView::ShowDocumentation() {
+	if (!AppSettings::Get().Win32ApiDocumentation() || !m_Doc)
+		return;
+	if (m_Shown < 0 && m_Doc.Url().empty())
+		return;		// (the browser is started for a page)
+	m_Doc.Navigate(m_DocUrl, m_Shown < 0 ? std::wstring() : std::wstring(CA2W(m_Api->Entries()[m_Shown].Name.c_str())));
+}
+
+LRESULT CWin32ApiView::OnDocumentation(WORD, WORD, HWND, BOOL&) {
+	bool show = !AppSettings::Get().Win32ApiDocumentation();
+	AppSettings::Get().Win32ApiDocumentation(show);
+	UISetCheck(ID_WIN32_DOCS, show);
+	m_Right.SetSinglePaneMode(show ? SPLIT_PANE_NONE : SPLIT_PANE_TOP);
+	ShowDocumentation();
+	return 0;
+}
+
+LRESULT CWin32ApiView::OnOpenInBrowser(WORD, WORD, HWND, BOOL&) {
+	if (!m_DocUrl.empty())
+		::ShellExecute(nullptr, L"open", m_DocUrl.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+	return 0;
 }
 
 LRESULT CWin32ApiView::OnItemChanged(int, LPNMHDR hdr, BOOL& handled) {

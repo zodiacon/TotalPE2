@@ -658,6 +658,22 @@ std::string Win32Api::Referred(uint32_t id) {
 	return {};
 }
 
+std::wstring Win32Api::DocumentationUrl(Entry const& entry) {
+	auto& md = m_Data.Md;
+	auto token = ((entry.Kind == Entry::Kinds::Function ? ClrTableId::MethodDef : ClrTableId::TypeDef) << 24) | entry.Row;
+	for (auto const& attribute : md.CustomAttributes(token)) {
+		if (!md.TypeName(attribute.AttributeType).ends_with(L"DocumentationAttribute"))
+			continue;
+		// [Documentation("https://...")]
+		auto text = md.AttributeCSharp(attribute);
+		auto open = text.find(L'"');
+		auto close = open == std::wstring::npos ? open : text.find(L'"', open + 1);
+		if (close != std::wstring::npos && text.compare(open + 1, 8, L"https://") == 0)
+			return text.substr(open + 1, close - open - 1);
+	}
+	return {};
+}
+
 std::string Win32Api::Declaration(Entry const& entry, std::vector<std::string>* lines) {
 	auto& md = m_Data.Md;
 	std::string text;

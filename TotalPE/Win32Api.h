@@ -50,6 +50,8 @@ public:
 	Entry const* Find(std::string const& name);
 	// The C declaration of an entry; 'lines' gets, for each line, the type it refers to (empty for none)
 	std::string Declaration(Entry const& entry, std::vector<std::string>* lines = nullptr);
+	// the page of Microsoft's documentation of an entry (from its [Documentation] attribute); empty if it has none
+	std::wstring DocumentationUrl(Entry const& entry);
 	// a type as C writes it ("HANDLE", "WIN32_FIND_DATAW *", "wchar_t[260]")
 	std::string TypeText(uint32_t id);
 

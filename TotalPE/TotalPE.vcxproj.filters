@@ -239,6 +239,9 @@
     <ClCompile Include="Win32ApiView.cpp">
       <Filter>Dialogs</Filter>
     </ClCompile>
+    <ClCompile Include="DocPane.cpp">
+      <Filter>Dialogs</Filter>
+    </ClCompile>
     <ClCompile Include="Win32ApiFrame.cpp">
       <Filter>Dialogs</Filter>
     </ClCompile>
@@ -469,6 +472,9 @@
       <Filter>Dialogs</Filter>
     </ClInclude>
     <ClInclude Include="Win32ApiView.h">
+      <Filter>Dialogs</Filter>
+    </ClInclude>
+    <ClInclude Include="DocPane.h">
       <Filter>Dialogs</Filter>
     </ClInclude>
     <ClInclude Include="Win32ApiFrame.h">

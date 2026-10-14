@@ -267,6 +267,8 @@
 #define ID_CODE_WIN32API                32920
 #define ID_WIN32_IMPORTS                32921
 #define ID_WIN32_REFERENCES             32922
+#define ID_WIN32_DOCS                   32962
+#define ID_WIN32_BROWSER                32963
 #define ID_CODE_SHOWAS_FIRST            32930
 #define ID_CODE_SHOWAS_LAST             32961
 
@@ -275,7 +277,7 @@
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        286
-#define _APS_NEXT_COMMAND_VALUE         32962
+#define _APS_NEXT_COMMAND_VALUE         32964
 #define _APS_NEXT_CONTROL_VALUE         1044
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
