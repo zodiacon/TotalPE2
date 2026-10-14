@@ -225,6 +225,7 @@ struct GhidraDecompiler::Impl {
 	};
 	std::vector<FrameVariable> const* Frame{ nullptr };
 	std::string FrameFunction;		// (the name of that function)
+	std::string FrameRegister;		// (where the handler has the frame: its second parameter if none)
 	FrameSource Frames;
 	std::unordered_map<uint64_t, std::pair<std::vector<FrameVariable>, std::string>> HandlerFrames;	// (of handlers by themselves)
 	std::unordered_map<std::string, std::string> FrameTypes;	// the structures of frames, by name: their fields
@@ -248,6 +249,7 @@ struct GhidraDecompiler::Impl {
 	std::unordered_map<uint64_t, std::vector<RegisterLocal>> RegisterLocals;
 	std::unordered_set<uint64_t> RegisterTyped;		// the functions whose variables in registers were given their types
 	std::unordered_map<uint64_t, std::unordered_set<Symbol*>> StackLocals;	// the symbols of those on the stack, by function
+	std::unordered_map<uint64_t, std::vector<std::string>> SmallLocals;		// the names of those that are small (Local::Small)
 	// What the user made of them (by function, by their names in the symbols: "pdb:" and the name is their key, which the
 	// decompiler's variables they are in, and their types, do not change), and the keys of the decompiler's variables that are
 	// theirs in the function decompiled last
@@ -277,7 +279,7 @@ struct GhidraDecompiler::Impl {
 	void ApplyLocals(Funcdata* fd);
 	std::vector<std::pair<Varnode*, RegisterLocal const*>> RegisterValues(Funcdata* fd) const;
 	bool ApplyFixup(Funcdata* fd);
-	void ApplyFrame(Funcdata* fd, std::vector<FrameVariable> const& frame, std::string const& function);
+	void ApplyFrame(Funcdata* fd, std::vector<FrameVariable> const& frame, std::string const& function, std::string const& reg = {});
 
 	// the user's changes: types written as C, the changes to the variables of a function, and the variables it shows
 	Datatype* NamedType(std::string const& name);
@@ -633,7 +635,7 @@ void GhidraDecompiler::Impl::ApplyLocals(Funcdata* fd) {
 		if (local.Name.empty() || !local.Register.empty())
 			continue;
 		try {
-			auto type = Convert(local.Type);
+			auto type = local.Type ? Convert(local.Type) : Arch->types->getBase(4, TYPE_INT);
 			if (type->getSize() <= 0)
 				continue;
 			Address addr(stack, stack->wrapOffset((uintb)local.Offset));
@@ -644,6 +646,8 @@ void GhidraDecompiler::Impl::ApplyLocals(Funcdata* fd) {
 			auto sym = scope->addSymbol(local.Name, type, addr, Address())->getSymbol();
 			scope->setAttribute(sym, Varnode::namelock | Varnode::typelock);
 			StackLocals[address].insert(sym);
+			if (local.Small)
+				SmallLocals[address].push_back(local.Name);
 		}
 		catch (LowlevelError const&) {
 			// one the decompiler does not take: the variable gets a name of its own
@@ -786,7 +790,13 @@ std::vector<GhidraDecompiler::Impl::FrameVariable> GhidraDecompiler::Impl::Frame
 // A handler (a funclet) of the function a block is in: its second parameter is that function's establisher frame, a pointer
 // to a structure of the variables there ("frame->h"). One that overlaps one placed before it (of another block, or the
 // decompiler's where the symbols have one) is left out.
-void GhidraDecompiler::Impl::ApplyFrame(Funcdata* fd, std::vector<FrameVariable> const& frame, std::string const& function) {
+void GhidraDecompiler::Impl::ApplyFrame(Funcdata* fd, std::vector<FrameVariable> const& frame, std::string const& function,
+	std::string const& reg) {
+	// (in a register, the frame points among its variables: the structure begins at the lowest, the pointer is into it)
+	int64_t shift = 0;
+	if (!reg.empty())
+		for (auto const& v : frame)
+			shift = std::max(shift, -v.Offset);
 	std::vector<Member> fields;
 	std::unordered_set<std::string> names;
 	int4 alignment = 1;
@@ -794,23 +804,27 @@ void GhidraDecompiler::Impl::ApplyFrame(Funcdata* fd, std::vector<FrameVariable>
 	std::map<int64_t, int64_t> placed;	// [begin, end)
 	for (auto const& v : frame) {
 		auto size = (int64_t)v.Type->getSize();
-		if (v.Name.empty() || v.Offset < 0 || size <= 0 || names.count(v.Name))
+		auto offset = v.Offset + shift;
+		if (v.Name.empty() || offset < 0 || size <= 0 || names.count(v.Name))
 			continue;
-		auto next = placed.lower_bound(v.Offset + size);
-		if (next != placed.begin() && std::prev(next)->second > v.Offset)
+		auto next = placed.lower_bound(offset + size);
+		if (next != placed.begin() && std::prev(next)->second > offset)
 			continue;
-		placed[v.Offset] = v.Offset + size;
+		placed[offset] = offset + size;
 		names.insert(v.Name);
-		fields.push_back({ v.Name, (int4)v.Offset, v.Type });
+		fields.push_back({ v.Name, (int4)offset, v.Type });
 		alignment = std::max(alignment, v.Type->getAlignment());
-		end = std::max(end, v.Offset + size);
+		end = std::max(end, offset + size);
 	}
 	if (fields.empty())
 		return;
+	// (and to where the register points, at least: the saved ebp is there; a pointer is into its structure)
+	if (!reg.empty())
+		end = std::max(end, shift + 4);
 	std::sort(fields.begin(), fields.end(), [](auto const& a, auto const& b) { return a.Offset < b.Offset; });
 	// Named by the function ("Copy_frame": the last part of a qualified name, its letters and digits). Another set of variables
 	// (the names the user gives the function's change them) has a structure of its own: "Copy_frame_2".
-	std::string signature;
+	std::string signature = reg + "+" + std::to_string(shift) + ";";
 	for (auto const& f : fields)
 		signature += f.Name + ":" + std::to_string(f.Offset) + ":" + f.Type->getName() + ";";
 	auto base = function.substr(function.rfind(':') == std::string::npos ? 0 : function.rfind(':') + 1);
@@ -827,6 +841,25 @@ void GhidraDecompiler::Impl::ApplyFrame(Funcdata* fd, std::vector<FrameVariable>
 	auto type = existing && existing->getMetatype() == TYPE_STRUCT ? (TypeStruct*)existing : Arch->types->getTypeStruct(name);
 	if (type->isIncomplete())
 		DefineFields(type, "struct", (uint32_t)((end + alignment - 1) / alignment * alignment), alignment, fields);
+	if (!reg.empty()) {
+		// the register as the function is entered: "frame", a pointer into the structure (once: it is kept)
+		try {
+			auto const& r = Arch->translate->getRegister(reg);
+			auto space = Arch->getDefaultDataSpace();
+			Datatype* pointer = shift == 0 ? (Datatype*)Arch->types->getTypePointer((int4)r.size, type, space->getWordSize()) :
+				Arch->types->getTypePointerRel((int4)r.size, type, Unknown(1), space->getWordSize(), (int4)shift, name + "_ptr");
+			auto scope = fd->getScopeLocal();
+			Address storage(r.space, r.offset), usepoint = fd->getAddress() + -1;
+			if (auto entry = scope->findAddr(storage, usepoint)) {
+				scope->retypeSymbol(entry->getSymbol(), pointer);
+				return;
+			}
+			scope->setAttribute(scope->addSymbol("frame", pointer, storage, usepoint)->getSymbol(), Varnode::namelock | Varnode::typelock);
+		}
+		catch (LowlevelError const&) {
+		}
+		return;
+	}
 	try {
 		auto& proto = fd->getFuncProto();
 		auto space = Arch->getDefaultDataSpace();
@@ -2093,6 +2126,7 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 			m_Impl->RegisterTyped.erase(address);
 			m_Impl->RegisterChanges.erase(address);
 			m_Impl->StackLocals.erase(address);
+			m_Impl->SmallLocals.erase(address);
 			fd = global->addFunction(addr, fname)->getFunction();
 			m_Impl->Applied[address] = applied;
 		}
@@ -2103,7 +2137,7 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 		m_Impl->Pending.clear();
 		m_Impl->ApplyPrototype(fd);
 		if (m_Impl->Nested && m_Impl->Frame && !m_Impl->Frame->empty())
-			m_Impl->ApplyFrame(fd, *m_Impl->Frame, m_Impl->FrameFunction);
+			m_Impl->ApplyFrame(fd, *m_Impl->Frame, m_Impl->FrameFunction, m_Impl->FrameRegister);
 		else if (!m_Impl->Nested && m_Impl->Frames) {
 			// a handler by itself: the variables of its function, as the symbols have them
 			auto it = m_Impl->HandlerFrames.find(address);
@@ -2406,6 +2440,19 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 		}
 
 		IndentComments(code);
+		// a store of the low byte of a small variable is a store of it
+		if (auto small = m_Impl->SmallLocals.find(address); small != m_Impl->SmallLocals.end())
+			for (auto const& variable : small->second) {
+				auto pattern = variable + " = CONCAT31(" + variable + "._1_3_,";
+				for (size_t at = code.find(pattern); at != std::string::npos; at = code.find(pattern, at)) {
+					auto value = at + pattern.size();
+					auto close = code.find(");", value);
+					if (close == std::string::npos || code.find('\n', value) < close)
+						break;
+					code.replace(at, close + 2 - at, variable + " = " + code.substr(value, close - value) + ";");
+					at += variable.size();
+				}
+			}
 		// the code of the blocks' handlers, in them (after the code of this function is made: the decompiler is used again).
 		// The variables of this function on the stack that they reach: those of the symbols, then those the decompiler found.
 		std::vector<Impl::FrameVariable> stack;
@@ -2434,6 +2481,7 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 							frame.push_back({ v.Name, v.Offset + body.FrameSize, v.Type });
 					m_Impl->Frame = &frame;
 					m_Impl->FrameFunction = fd->getName();
+					m_Impl->FrameRegister = body.FrameRegister;
 					auto statements = BodyOf(body.Address);
 					m_Impl->Frame = nullptr;
 					block.Close.insert(block.Close.begin() + body.Line + 1, statements.begin(), statements.end());

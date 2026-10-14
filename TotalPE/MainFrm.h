@@ -435,7 +435,7 @@ private:
 	std::vector<GhidraDecompiler::Block> ExceptionBlocks(uint64_t va) const;
 	ExceptionHandling ExceptionHandlingOf(uint32_t rva) const;
 	// the variables of a function in its establisher frame (as its handlers are given it); false if they are not known
-	bool EstablisherFrame(uint64_t va, std::vector<GhidraDecompiler::Local>& frame, uint32_t& frameSize) const;
+	bool EstablisherFrame(uint64_t va, std::vector<GhidraDecompiler::Local>& frame, uint32_t& frameSize, std::string* frameRegister = nullptr) const;
 	bool HandlerFrame(uint64_t va, std::vector<GhidraDecompiler::Local>& frame, std::string& function) const;
 	// for the decompiler: the user's changes to the variables of a function, a type of the symbols by name, and the user's
 	// names of functions and global variables

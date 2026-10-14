@@ -389,6 +389,35 @@ TEST_CASE("A member function that returns a structure: \"this\" before where it 
 	CHECK_THAT(code, ContainsSubstring("this->y"));
 }
 
+TEST_CASE("A small variable: a store of its low byte is a store of it", "[decompiler]") {
+	Fixture f(X86);
+	constexpr uint64_t Start = 0x401000, A = 0x401100;
+	// (its address is passed on, as the registration of a handler has it: what is stored there is kept)
+	f.Image.At(Start).Bytes({
+		0x55, 0x8B, 0xEC, 0x51,							// push ebp; mov ebp, esp; push ecx
+		0xC7, 0x45, 0xFC, 0x00, 0x00, 0x00, 0x00,		// mov dword ptr [ebp-4], 0
+		0x8D, 0x45, 0xFC, 0x50 })						// lea eax, [ebp-4]; push eax
+		.Call(A)
+		.Bytes({ 0x83, 0xC4, 0x04,						// add esp, 4
+			0xC6, 0x45, 0xFC, 0x01,						// mov byte ptr [ebp-4], 1
+			0x8D, 0x45, 0xFC, 0x50 })					// lea eax, [ebp-4]; push eax
+		.Call(A)
+		.Bytes({ 0x83, 0xC4, 0x04, 0x8B, 0xE5, 0x5D, 0xC3 });	// add esp, 4; mov esp, ebp; pop ebp; ret
+	f.Image.At(A).Bytes({ 0xC3 });
+	f.Decompiler.SetLocalSource([](uint64_t address, std::vector<uint64_t> const&, std::vector<GhidraDecompiler::Local>& locals) {
+		GhidraDecompiler::Local state{ "__state", 0, -8 };
+		state.Small = true;
+		locals = { state };
+		return address == Start;
+		});
+	f.Open();
+	f.Decompiler.AddFunction(A, "A");
+	auto code = f.Decompile(Start, "Main");
+	CHECK_THAT(code, ContainsSubstring("int __state;"));
+	CHECK_THAT(code, ContainsSubstring("__state = 1;"));
+	CHECK_THAT(code, !ContainsSubstring("CONCAT31"));
+}
+
 TEST_CASE("A global variable", "[decompiler]") {
 	Fixture f;
 	f.Image.At(Code).Bytes({ 0x8B, 0x05 }).Rel32(Data).Bytes({ 0xC3 });	// mov eax, [Counter]; ret
@@ -743,6 +772,32 @@ TEST_CASE("Blocks of the caller's are placed around the lines of their code", "[
 		auto code = f.Decompile(Code, "Main");
 		CHECK_THAT(code, ContainsSubstring("/* __try { } __except (EXCEPTION_EXECUTE_HANDLER) { the handler: Main$except_0 } (the code it guards is not shown) */"));
 	}
+}
+
+TEST_CASE("x86: a handler has the function's frame in EBP, its variables below it", "[decompiler]") {
+	Fixture f(X86);
+	constexpr uint64_t Start = 0x401000, A = 0x401100, Handler = 0x401200;
+	// push ebp; mov ebp, esp; call A; pop ebp; ret
+	f.Image.At(Start).Bytes({ 0x55, 0x8B, 0xEC }).Call(A).Bytes({ 0x5D, 0xC3 });
+	f.Image.At(A).Bytes({ 0xC3 });
+	// the handler: mov dword ptr [ebp-30h], -1; ret
+	f.Image.At(Handler).Bytes({ 0xC7, 0x45, 0xD0, 0xFF, 0xFF, 0xFF, 0xFF, 0xC3 });
+	GhidraDecompiler::Block tried{ { { Start + 3, Start + 8 } }, "try {", { "} catch (...) {", "\t/* the handler */", "}" }, {} };
+	tried.Bodies = { { 1, Handler, { { "value", 1, -0x30 }, { "count", 1, -0x34 } }, 0, "EBP" } };
+	f.Decompiler.SetBlockSource([&](uint64_t address, std::vector<GhidraDecompiler::Block>& out) {
+		if (address == Start)
+			out = { tried };
+		});
+	f.Decompiler.SetTypeSource([](uint32_t id, GhidraDecompiler::Type& type) {
+		type.Kind = GhidraDecompiler::TypeKind::Integer;
+		type.Name = "int";
+		type.Size = 4;
+		return id == 1;
+		});
+	f.Open();
+	f.Decompiler.AddFunction(A, "A");
+	auto code = f.Decompile(Start, "Main");
+	CHECK_THAT(code, ContainsSubstring("ADJ(frame)->value = -1;"));
 }
 
 TEST_CASE("A C++ try whose ranges are not whole statements: those that have the most of its code", "[decompiler]") {

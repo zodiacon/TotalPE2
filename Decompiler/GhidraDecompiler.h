@@ -73,13 +73,17 @@ public:
 	// pointer as it is when the function is entered (on x86 and x64 the return address is at 0, the parameters on the stack
 	// after it). In a register (optimized code): the register (as the decompiler names it: "RBX", "EDI") and the ranges of
 	// addresses where the variable is in it ([begin, end), each from the instruction after the one that sets it, or from the
-	// entry). The same name more than once (in other registers, or on the stack too) is the same variable.
+	// entry). The same name more than once (in other registers, or on the stack too) is the same variable. A type of 0 is an
+	// int (of 4 bytes: one the caller knows of without the symbols).
 	struct Local {
 		std::string Name;
 		uint32_t Type;
 		int64_t Offset;
 		std::string Register;
 		std::vector<std::pair<uint64_t, uint64_t>> Ranges;
+		// its values are small (0 to 255), though it has 4 bytes: a store of its low byte is a store of it ("x = 1;", not
+		// "x = CONCAT31(x._1_3_,1);")
+		bool Small{ false };
 	};
 	// The local variables of the function at an address, given the addresses of its instructions (where the places of those
 	// in registers are asked about); false if they are not known
@@ -128,11 +132,14 @@ public:
 		// The handler's second parameter is the establisher frame of the function the block is in (its stack pointer after
 		// its prologue, 'FrameSize' below the one at its entry): 'Frame' has the variables of that function there, by their
 		// offsets from it (and the other variables of the function on the stack, as the decompiler names them, are there too).
+		// Of x86 code: the handler has the frame in a register ('FrameRegister': "EBP", the function's), and the offsets
+		// are from what it points to (those below it, negative).
 		struct Body {
 			size_t Line;
 			uint64_t Address;
 			std::vector<Local> Frame;
 			uint32_t FrameSize{ 0 };
+			std::string FrameRegister;
 		};
 		std::vector<Body> Bodies;
 		// Its ranges may go on after its code (a C++ try: the compiler keeps the state of the code only where it may throw,

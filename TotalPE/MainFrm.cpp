@@ -2265,12 +2265,23 @@ ExceptionHandling CMainFrame::ExceptionHandlingOf(uint32_t rva) const {
 
 // Its stack pointer after its prologue ('frameSize' below the one at its entry): the variables of the symbols there, by their
 // offsets from it
-bool CMainFrame::EstablisherFrame(uint64_t va, std::vector<GhidraDecompiler::Local>& frame, uint32_t& frameSize) const {
-	uint32_t rva, frameRegister;
+bool CMainFrame::EstablisherFrame(uint64_t va, std::vector<GhidraDecompiler::Local>& frame, uint32_t& frameSize, std::string* frameRegister) const {
+	uint32_t rva, frameReg;
 	int64_t frameOffset;
 	frameSize = 0;
+	// x86: its handlers have its ebp (which is the stack pointer at the entry, less the ebp pushed there): the variables by
+	// their offsets from it
+	if (m_PE.GetNTHeader()->NTHdr32.FileHeader.Machine == IMAGE_FILE_MACHINE_I386) {
+		if (!frameRegister || !FunctionLocals(va, {}, frame, true))
+			return false;
+		for (auto& local : frame)
+			local.Offset += 4;
+		frameSize = 4;
+		*frameRegister = "EBP";
+		return true;
+	}
 	// (of x64 code: ARM64's unwind data is of another kind)
-	if (m_PE.GetNTHeader()->NTHdr32.FileHeader.Machine != IMAGE_FILE_MACHINE_AMD64 || !RvaOf(va, rva) || !X64Frame(rva, frameSize, frameRegister, frameOffset)) {
+	if (m_PE.GetNTHeader()->NTHdr32.FileHeader.Machine != IMAGE_FILE_MACHINE_AMD64 || !RvaOf(va, rva) || !X64Frame(rva, frameSize, frameReg, frameOffset)) {
 		frameSize = 0;
 		return false;
 	}
@@ -2329,7 +2340,8 @@ std::vector<GhidraDecompiler::Block> CMainFrame::ExceptionBlocks(uint64_t va) co
 	// the variables of the function in its establisher frame (its stack pointer after its prologue), which its handlers are given
 	std::vector<GhidraDecompiler::Local> frame;
 	uint32_t frameSize = 0;
-	EstablisherFrame(va, frame, frameSize);
+	std::string frameRegister;
+	EstablisherFrame(va, frame, frameSize, &frameRegister);
 	auto function = DecompilerFunctionName(va);
 	if (function.empty())
 		function = std::format("func_0x{:012x}", va);	// (as the decompiler names it)
@@ -2363,7 +2375,7 @@ std::vector<GhidraDecompiler::Block> CMainFrame::ExceptionBlocks(uint64_t va) co
 				auto handler = nameOf(scope.HandlerRva, "finally");
 				block.Links.emplace_back(handler, base + scope.HandlerRva);
 				block.Close = { "} __finally {", "\t/* " + handler + ", if an exception leaves it; else the code that follows runs it */", "}" };
-				block.Bodies.push_back({ 1, base + scope.HandlerRva, frame, frameSize });
+				block.Bodies.push_back({ 1, base + scope.HandlerRva, frame, frameSize, frameRegister });
 				break;
 			}
 			case ExceptionScope::Kinds::Try:
@@ -2375,7 +2387,7 @@ std::vector<GhidraDecompiler::Block> CMainFrame::ExceptionBlocks(uint64_t va) co
 					block.Links.emplace_back(handler, base + c.HandlerRva);
 					block.Close.push_back("} catch (" + CatchText(c) + ") {");
 					block.Close.push_back("\t/* the handler: " + handler + " */");
-					block.Bodies.push_back({ block.Close.size() - 1, base + c.HandlerRva, frame, frameSize });
+					block.Bodies.push_back({ block.Close.size() - 1, base + c.HandlerRva, frame, frameSize, frameRegister });
 				}
 				block.Close.push_back("}");
 				break;
@@ -2553,13 +2565,24 @@ namespace {
 // ('parameters': and those on the stack, in the places the function keeps them: of what a handler of it reaches there)
 bool CMainFrame::FunctionLocals(uint64_t va, std::vector<uint64_t> const& instructions, std::vector<GhidraDecompiler::Local>& locals, bool parameters) const {
 	auto base = m_PE.GetImageBase();
-	if (!m_Symbols || va < base || va - base > 0xFFFFFFFFULL)
+	if (va < base || va - base > 0xFFFFFFFFULL)
 		return false;
 	auto rva = (uint32_t)(va - base);
+	// x86 code that has a handler keeps its state at [ebp-4] (ebp: the stack pointer at the entry, less the ebp it pushed):
+	// the try level of __try regions, the state of C++ objects and try blocks (known without the symbols)
+	if (!parameters && m_PE.GetNTHeader()->NTHdr32.FileHeader.Machine == IMAGE_FILE_MACHINE_I386) {
+		auto eh = ExceptionHandlingOf(rva);
+		GhidraDecompiler::Local state{ eh.Kind == ExceptionHandlerKind::Seh ? "__try_level" : "__state", 0, -8 };
+		state.Small = true;		// (the compiler sets its low byte when the others are 0)
+		if (eh.Kind == ExceptionHandlerKind::Seh || eh.Kind == ExceptionHandlerKind::Cxx3)
+			locals.push_back(std::move(state));
+	}
+	if (!m_Symbols)
+		return !locals.empty();
 	long displacement = 0;
 	auto function = m_Symbols.GetSymbolByRVA(rva, SymbolTag::Function, &displacement);
 	if (!function || displacement != 0)
-		return false;
+		return !locals.empty();
 
 	// the stack pointer at the entry, relative to the register that locals are relative to
 	auto machine = m_PE.GetFileInfo()->IsPE64 ? m_PE.GetNTHeader()->NTHdr64.FileHeader.Machine : m_PE.GetNTHeader()->NTHdr32.FileHeader.Machine;
@@ -2868,12 +2891,13 @@ GhidraDecompiler* CMainFrame::DecompilerSession::Open(std::string& error) {
 			});
 		return known;
 		});
+	// (without the symbols too: the state of x86 code that has a handler)
+	decompiler->SetLocalSource([this](uint64_t va, std::vector<uint64_t> const& instructions, std::vector<GhidraDecompiler::Local>& locals) {
+		bool known = false;
+		Ask([&] { known = !Stale && Frame->FunctionLocals(va, instructions, locals); });
+		return known;
+		});
 	if (Symbols) {
-		decompiler->SetLocalSource([this](uint64_t va, std::vector<uint64_t> const& instructions, std::vector<GhidraDecompiler::Local>& locals) {
-			bool known = false;
-			Ask([&] { known = !Stale && Frame->FunctionLocals(va, instructions, locals); });
-			return known;
-			});
 		for (auto const& g : Globals)
 			decompiler->AddGlobal(g.Address, g.Name, g.Type);
 	}
