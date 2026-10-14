@@ -25,6 +25,7 @@
 #include "HexView.h"
 #include "CompareView.h"
 #include "ItaniumDemangle.h"
+#include "ExceptionScopes.h"
 #include <DbgHelp.h>
 #include <thread>
 #include <WTLHelper.h>
@@ -2204,6 +2205,108 @@ std::string CMainFrame::DecompilerFunctionName(uint64_t va) const {
 	return Narrow(FunctionName(name));
 }
 
+namespace {
+	// "const std::exception&" of a catch: the type descriptor's decorated name, and the handler's adjectives
+	std::string CatchText(ExceptionScope::Catch const& c) {
+		if (c.Type.empty() || (c.Adjectives & 0x40))		// (HT_IsStdDotDot)
+			return "...";
+		std::string type = c.Type;
+		char name[1024];
+		// (".?AVexception@std@@": a type, without the dot)
+		if (type.size() > 1 && ::UnDecorateSymbolName(type.c_str() + 1, name, sizeof(name), 0x2800) && name[0] && name[0] != '?') {
+			type = name;
+			for (auto prefix : { "class ", "struct ", "union ", "enum " })
+				if (type.starts_with(prefix))
+					type = type.substr(strlen(prefix));
+		}
+		if (c.Adjectives & 0x01)
+			type = "const " + type;
+		if (c.Adjectives & 0x08)
+			type += "&";
+		return type;
+	}
+}
+
+std::vector<GhidraDecompiler::Block> CMainFrame::ExceptionBlocks(uint64_t va) const {
+	std::vector<GhidraDecompiler::Block> blocks;
+	uint32_t rva;
+	if (!m_PE || !RvaOf(va, rva) || m_PE.GetNTHeader()->NTHdr32.FileHeader.Machine != IMAGE_FILE_MACHINE_AMD64)
+		return blocks;
+	auto base = m_PE.GetImageBase();
+	// the handler: by its symbol, or by the import its thunk jumps to (through an incremental linking stub: jmp rel32)
+	auto eh = ReadExceptionHandling(m_PE, rva, [&](uint32_t handler) {
+		auto at = base + handler;
+		for (int hops = 0; hops < 2; hops++) {
+			auto name = DecompilerFunctionName(at);
+			if (name.empty())
+				if (auto imp = ThunkImport(at))
+					name = imp->Name;
+			if (!name.empty())
+				return name;
+			uint8_t code[5];
+			int32_t displacement;
+			if (!ReadImage(at, code, sizeof(code)) || code[0] != 0xE9)
+				break;
+			memcpy(&displacement, code + 1, 4);
+			at += 5 + (int64_t)displacement;
+		}
+		return std::string();
+		});
+	if (eh.Scopes.empty())
+		return blocks;
+	auto function = DecompilerFunctionName(va);
+	if (function.empty())
+		function = std::format("func_0x{:012x}", va);	// (as the decompiler names it)
+	// the name of a handler or filter: its symbol's, else one of the function's
+	int number = 0;
+	auto nameOf = [&](uint32_t target, char const* what) {
+		auto name = DecompilerFunctionName(base + target);
+		return name.empty() ? std::format("{}${}_{}", function, what, number++) : name;
+	};
+	for (auto const& scope : eh.Scopes) {
+		GhidraDecompiler::Block block;
+		for (auto const& [begin, end] : scope.Ranges)
+			block.Ranges.emplace_back(base + begin, base + end);
+		switch (scope.Kind) {
+			case ExceptionScope::Kinds::Except:
+			{
+				block.Open = "__try {";
+				std::string filter = "EXCEPTION_EXECUTE_HANDLER";
+				if (scope.FilterRva) {
+					filter = nameOf(scope.FilterRva, "filter");
+					block.Links.emplace_back(filter, base + scope.FilterRva);
+				}
+				auto handler = nameOf(scope.HandlerRva, "except");
+				block.Links.emplace_back(handler, base + scope.HandlerRva);
+				block.Close = { "} __except (" + filter + ") {", "\t/* the handler: " + handler + " */", "}" };
+				break;
+			}
+			case ExceptionScope::Kinds::Finally:
+			{
+				block.Open = "__try {";
+				auto handler = nameOf(scope.HandlerRva, "finally");
+				block.Links.emplace_back(handler, base + scope.HandlerRva);
+				block.Close = { "} __finally {", "\t/* " + handler + ", if an exception leaves it; else the code that follows runs it */", "}" };
+				break;
+			}
+			case ExceptionScope::Kinds::Try:
+			{
+				block.Open = "try {";
+				for (auto const& c : scope.Catches) {
+					auto handler = nameOf(c.HandlerRva, "catch");
+					block.Links.emplace_back(handler, base + c.HandlerRva);
+					block.Close.push_back("} catch (" + CatchText(c) + ") {");
+					block.Close.push_back("\t/* the handler: " + handler + " */");
+				}
+				block.Close.push_back("}");
+				break;
+			}
+		}
+		blocks.push_back(std::move(block));
+	}
+	return blocks;
+}
+
 // The name an export of the file has at an address (empty if none), and the name of the file as a DLL ("kernel32.dll")
 std::string CMainFrame::ExportName(uint64_t va) const {
 	uint32_t rva;
@@ -2648,6 +2751,9 @@ GhidraDecompiler* CMainFrame::DecompilerSession::Open(std::string& error) {
 		Ask([&] { changes = Frame->VariableChanges(va); });
 		return !changes.empty();
 		});
+	decompiler->SetBlockSource([this](uint64_t va, std::vector<GhidraDecompiler::Block>& blocks) {
+		Ask([&] { blocks = Frame->ExceptionBlocks(va); });
+		});
 	decompiler->SetCommentSource([this](std::vector<std::pair<uint64_t, std::string>>& comments) {
 		Ask([&] {
 			auto base = Frame->m_PE.GetImageBase();
@@ -2695,6 +2801,14 @@ void CMainFrame::CloseDecompiler(bool closed) {
 }
 
 void CMainFrame::DecompileAsync(uint64_t address, std::wstring const& name, bool lines, HWND hView, std::function<void(Decompiled&)> done) {
+	// (a view decompiled again after the decompiler was closed, to be made again: it is made now)
+	std::wstring reason;
+	if (!Decompiler(reason)) {
+		Decompiled failed;
+		failed.Error = Narrow(reason);
+		done(failed);
+		return;
+	}
 	auto id = ++m_LastDecompile;
 	auto cancel = std::make_shared<std::atomic<bool>>(false);
 	m_PendingDecompiles[id] = { hView, name.empty() ? std::format(L"0x{:X}", address) : name, std::move(done), cancel };
@@ -3227,6 +3341,66 @@ bool CMainFrame::ShowWin32Api(std::string const& name) {
 	}
 	m_Win32Frame->Activate();
 	return name.empty() || m_Win32Frame->Select(name);
+}
+
+std::vector<std::string> CMainFrame::ConstantNames(std::string const& name, uint64_t& value, std::string& type) {
+	auto api = Win32ForFile();
+	auto constant = api ? api->ConstantOf(name) : std::nullopt;
+	if (!constant)
+		return {};
+	value = constant->Value;
+	type = constant->Type;
+	return constant->Names;
+}
+
+// The choice is the user's, for all files (kept in the settings): the other names of the value are no longer preferred
+void CMainFrame::PreferConstantName(std::string const& name) {
+	uint64_t value;
+	std::string type;
+	auto names = ConstantNames(name, value, type);
+	if (names.empty() || names[0] == name)
+		return;
+	auto preferred = Win32Api::PreferredNames();
+	std::erase_if(preferred, [&](auto const& n) { return std::ranges::find(names, n) != names.end(); });
+	preferred.insert(preferred.begin(), name);
+	std::wstring text;
+	for (auto const& n : preferred)
+		text += (text.empty() ? L"" : L";") + std::wstring(CA2W(n.c_str()));
+	AppSettings::Get().PreferredConstants(text.c_str());
+	Win32Api::SetPreferredNames(std::move(preferred));
+	// the decompiler has the enums it was given: made again, with them as they are now
+	CloseDecompiler(false);
+	RedecompileViews();
+}
+
+// By the entry of its import address table (or of the delay loaded one's), which the calls go through
+bool CMainFrame::ShowImportReferences(std::string const& name) {
+	if (!m_PE || name.empty())
+		return false;
+	auto base = m_PE.GetImageBase();
+	uint64_t size = m_PE.GetFileInfo()->IsPE64 ? 8 : 4, slot = 0;
+	if (auto list = m_PE.GetImport())
+		for (auto const& mod : *list)
+			for (size_t i = 0; i < mod.ImportFunc.size() && !slot && mod.ImportDesc.FirstThunk; i++)
+				if (mod.ImportFunc[i].FuncName == name)
+					slot = base + mod.ImportDesc.FirstThunk + i * size;
+	if (auto list = m_PE.GetDelayImport(); list && !slot)
+		for (auto const& mod : *list) {
+			auto const& desc = mod.DelayImpDesc;
+			uint64_t rebase = (desc.grAttrs & dlattrRva) ? 0 : base;		// (the oldest kind: virtual addresses)
+			if (desc.rvaIAT == 0 || desc.rvaIAT < rebase)
+				continue;
+			for (size_t i = 0; i < mod.DelayImpFunc.size() && !slot; i++)
+				if (mod.DelayImpFunc[i].FuncName == name)
+					slot = base + desc.rvaIAT - rebase + i * size;
+		}
+	if (!slot)
+		return false;
+	// (asked from the window of the Windows API: they are shown in this one)
+	if (IsIconic())
+		ShowWindow(SW_RESTORE);
+	::SetForegroundWindow(m_hWnd);
+	return ShowXrefs(slot);
 }
 
 LRESULT CMainFrame::OnViewWin32Api(WORD, WORD, HWND, BOOL&) {

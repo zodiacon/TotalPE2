@@ -73,9 +73,78 @@ Win32Api::Data* Win32Api::Shared() {
 	return data.get();
 }
 
-Win32Api* Win32Api::Get(Machine machine) {
+std::unique_ptr<Win32Api>* Win32Api::Instances() {
 	static std::unique_ptr<Win32Api> apis[3];
-	auto& api = apis[(int)machine];
+	return apis;
+}
+
+namespace {
+	std::vector<std::string> s_Preferred;
+	// the names code uses, of those that a value has (the others are older, or of other uses)
+	char const* const s_Common[] = {
+		"MB_ICONERROR", "MB_ICONWARNING", "MB_ICONINFORMATION", "SW_SHOWNORMAL", "SW_SHOWMAXIMIZED", "ERROR_SUCCESS",
+		"STATUS_SUCCESS", "WAIT_OBJECT_0", "IDOK", "HWND_TOP", "GENERIC_ALL",
+	};
+}
+
+std::vector<std::string> const& Win32Api::PreferredNames() {
+	return s_Preferred;
+}
+
+int Win32Api::NameRank(std::string const& name) {
+	if (std::ranges::find(s_Preferred, name) != s_Preferred.end())
+		return 0;
+	for (auto common : s_Common)
+		if (name == common)
+			return 1;
+	return 2;
+}
+
+// by value, and of a value's names the preferred ones first (the decompiler shows the first)
+void Win32Api::OrderNames(std::vector<std::pair<std::string, uint64_t>>& values) {
+	std::stable_sort(values.begin(), values.end(), [](auto const& a, auto const& b) {
+		return a.second != b.second ? a.second < b.second : NameRank(a.first) < NameRank(b.first);
+	});
+}
+
+void Win32Api::SetPreferredNames(std::vector<std::string> names) {
+	s_Preferred = std::move(names);
+	for (int i = 0; i < 3; i++)
+		if (auto& api = Instances()[i])
+			std::erase_if(api->m_Described, [](auto const& entry) { return entry.second.Kind == Kind::Enum; });
+}
+
+std::optional<Win32Api::Constant> Win32Api::ConstantOf(std::string const& name) {
+	if (m_ConstantTypes.empty()) {
+		// the constants of the enums, and those of HRESULT and NTSTATUS (they are read when the types are described)
+		auto& md = m_Data.Md;
+		for (auto const& e : Entries())
+			if (e.Kind == Entry::Kinds::Enum)
+				if (auto info = md.EnumInfo((ClrTableId::TypeDef << 24) | e.Row))
+					for (auto const& v : info->Values)
+						m_ConstantTypes.emplace(Narrow(v.Name), IdBit | e.Row);
+		GhidraDecompiler::Type type;
+		for (auto typeName : { "HRESULT", "NTSTATUS" })
+			if (auto id = TypeByName(typeName); id && Describe(id, type) && type.Kind == Kind::Enum)
+				for (auto const& v : type.Values)
+					m_ConstantTypes.emplace(v.first, id);
+	}
+	auto it = m_ConstantTypes.find(name);
+	GhidraDecompiler::Type type;
+	if (it == m_ConstantTypes.end() || !Describe(it->second, type))
+		return std::nullopt;
+	auto value = std::ranges::find(type.Values, name, &std::pair<std::string, uint64_t>::first);
+	if (value == type.Values.end())
+		return std::nullopt;
+	Constant constant{ type.Name, value->second };
+	for (auto const& [n, v] : type.Values)
+		if (v == constant.Value)
+			constant.Names.push_back(n);
+	return constant;
+}
+
+Win32Api* Win32Api::Get(Machine machine) {
+	auto& api = Instances()[(int)machine];
 	if (!api)
 		if (auto data = Shared())
 			api.reset(new Win32Api(*data, machine));
@@ -265,6 +334,7 @@ bool Win32Api::DescribeRow(uint32_t row, GhidraDecompiler::Type& type) {
 		type.Signed = info->Underlying == 0x04 || info->Underlying == 0x06 || info->Underlying == 0x08 || info->Underlying == 0x0A;
 		for (auto const& v : info->Values)
 			type.Values.emplace_back(Narrow(v.Name), (uint64_t)v.Value);
+		OrderNames(type.Values);
 		type.Exact = !info->Flags;
 		return true;
 	}
@@ -343,6 +413,7 @@ bool Win32Api::DescribeRow(uint32_t row, GhidraDecompiler::Type& type) {
 				std::stable_sort(it->second.begin(), it->second.end(), [&](auto const& a, auto const& b) {
 					return a.second != b.second ? a.second < b.second : rank(a.first) < rank(b.first);
 				});
+				OrderNames(it->second);	// (the user's choices first)
 				type.Kind = Kind::Enum;
 				type.Size = 4;
 				type.Signed = true;

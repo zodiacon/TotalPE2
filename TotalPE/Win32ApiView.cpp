@@ -33,6 +33,7 @@ LRESULT CWin32ApiView::OnCreate(UINT, WPARAM, LPARAM, BOOL& handled) {
 		{ ID_NAV_FORWARD, IDI_FORWARD },
 		{ 0 },
 		{ ID_WIN32_IMPORTS, 0, BTNS_CHECK | BTNS_SHOWTEXT | BTNS_AUTOSIZE, L"Imports" },
+		{ ID_WIN32_REFERENCES, 0, BTNS_SHOWTEXT | BTNS_AUTOSIZE, L"References" },
 	};
 	CreateSimpleReBar(ATL_SIMPLE_REBAR_NOBORDER_STYLE);
 	m_tb = ToolbarHelper::CreateAndInitToolBar(m_hWnd, buttons, _countof(buttons), 16);
@@ -121,7 +122,10 @@ LRESULT CWin32ApiView::OnForward(UINT msg, WPARAM wp, LPARAM lp, BOOL&) {
 	return m_Code ? m_Code->SendMessage(msg, wp, lp) : 0;
 }
 
+// The one selected stays selected if it is still there; else none is (the rows are others: what a row showed is not what it
+// is now)
 void CWin32ApiView::Fill() {
+	auto selected = SelectedEntry();
 	auto const& entries = m_Api->Entries();
 	m_Items.clear();
 	for (size_t i = 0; i < entries.size(); i++) {
@@ -134,6 +138,12 @@ void CWin32ApiView::Fill() {
 	}
 	m_List.SetItemCountEx((int)m_Items.size(), 0);
 	Sort(m_List);
+	if (auto it = std::ranges::find(m_Items, (size_t)selected); selected >= 0 && it != m_Items.end()) {
+		auto row = (int)(it - m_Items.begin());
+		m_List.SelectItem(row);
+	}
+	else
+		m_List.SetItemState(-1, 0, LVIS_SELECTED | LVIS_FOCUSED);
 	m_List.RedrawItems(0, m_List.GetItemCount());
 	UpdateUI();
 }
@@ -193,6 +203,7 @@ void CWin32ApiView::Show(int entry) {
 		return;
 	m_Shown = entry;
 	m_ShownAt = ::GetTickCount64();
+	UIEnable(ID_WIN32_REFERENCES, CanShowReferences());
 	auto& ctrl = m_Code->GetCtrl();
 	ctrl.SetReadOnly(false);
 	if (entry < 0) {
@@ -236,13 +247,7 @@ LRESULT CWin32ApiView::OnFilterChanged(WORD, WORD, HWND hWnd, BOOL& handled) {
 	CString text;
 	m_FilterEdit.GetWindowText(text);
 	m_Filter = Lower(std::string(CW2A(text)));
-	auto selected = SelectedEntry();
 	Fill();
-	// the one that was selected, if it is still there
-	if (auto it = std::ranges::find(m_Items, (size_t)selected); selected >= 0 && it != m_Items.end()) {
-		auto row = (int)(it - m_Items.begin());
-		m_List.SelectItem(row);
-	}
 	return 0;
 }
 
@@ -271,9 +276,35 @@ void CWin32ApiView::SetFile(Win32Api& api, std::unordered_set<std::string> impor
 	m_Navigating = false;
 }
 
+bool CWin32ApiView::CanShowReferences() const {
+	if (m_Shown < 0)
+		return false;
+	auto const& e = m_Api->Entries()[m_Shown];
+	return e.Kind == Win32Api::Entry::Kinds::Function && m_Imports.contains(e.Name);
+}
+
+LRESULT CWin32ApiView::OnReferences(WORD, WORD, HWND, BOOL&) {
+	if (!CanShowReferences() || !Frame()->ShowImportReferences(m_Api->Entries()[m_Shown].Name))
+		::MessageBeep(MB_ICONWARNING);
+	return 0;
+}
+
+bool CWin32ApiView::OnRightClickList(HWND, int row, int, POINT const& pt) {
+	if (row < 0)
+		return false;
+	CMenu menu;
+	menu.CreatePopupMenu();
+	menu.AppendMenu(MF_STRING | (CanShowReferences() ? 0 : MF_GRAYED), ID_WIN32_REFERENCES, L"&References in the File");
+	auto command = menu.TrackPopupMenu(TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, m_hWnd);
+	if (command)
+		PostMessage(WM_COMMAND, command);
+	return true;
+}
+
 void CWin32ApiView::UpdateImportsButton() {
 	// (without a file, there are no imports)
 	UIEnable(ID_WIN32_IMPORTS, !m_Imports.empty());
+	UIEnable(ID_WIN32_REFERENCES, CanShowReferences());
 }
 
 bool CWin32ApiView::Select(std::string const& name) {

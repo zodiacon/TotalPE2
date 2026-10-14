@@ -264,13 +264,16 @@
 #define ID_PE_WIN32API                  32919
 #define ID_CODE_WIN32API                32920
 #define ID_WIN32_IMPORTS                32921
+#define ID_WIN32_REFERENCES             32922
+#define ID_CODE_SHOWAS_FIRST            32930
+#define ID_CODE_SHOWAS_LAST             32961
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        286
-#define _APS_NEXT_COMMAND_VALUE         32922
+#define _APS_NEXT_COMMAND_VALUE         32962
 #define _APS_NEXT_CONTROL_VALUE         1042
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

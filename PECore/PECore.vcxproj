@@ -274,6 +274,7 @@
     <ClInclude Include="SecuritySummary.h" />
     <ClInclude Include="TypeLibText.h" />
     <ClInclude Include="UnwindInfo.h" />
+    <ClInclude Include="ExceptionScopes.h" />
     <ClInclude Include="VirusTotal.h" />
     <ClInclude Include="PEStrings.h" />
     <ClInclude Include="PEDiff.h" />
@@ -326,6 +327,7 @@
     <ClCompile Include="SecuritySummary.cpp" />
     <ClCompile Include="TypeLibText.cpp" />
     <ClCompile Include="UnwindInfo.cpp" />
+    <ClCompile Include="ExceptionScopes.cpp" />
     <ClCompile Include="VirusTotal.cpp" />
     <ClCompile Include="PEStrings.cpp" />
     <ClCompile Include="PEDiff.cpp" />

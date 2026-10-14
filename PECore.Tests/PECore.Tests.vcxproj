@@ -125,6 +125,7 @@
     <ClCompile Include="OverlayTests.cpp" />
     <ClCompile Include="FileStringsTests.cpp" />
     <ClCompile Include="UnwindInfoTests.cpp" />
+    <ClCompile Include="ExceptionScopesTests.cpp" />
     <ClCompile Include="ResourceContentTests.cpp" />
     <ClCompile Include="CoffObjectTests.cpp" />
     <ClCompile Include="CodeViewTests.cpp" />

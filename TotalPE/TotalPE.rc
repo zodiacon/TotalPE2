@@ -853,6 +853,7 @@ BEGIN
     ID_NAV_COMMENT          "Comment the instruction of the caret\nComment"
     ID_PE_WIN32API          "The functions and types of Windows, with their declarations\nWindows API"
     ID_WIN32_IMPORTS        "Only the functions the file imports\nImports"
+    ID_WIN32_REFERENCES     "The places the file calls the function (in the main window)\nReferences"
 END
 
 STRINGTABLE

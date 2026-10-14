@@ -231,6 +231,12 @@ struct IMainFrame abstract {
 	// The Windows API view, at a function or type (by its name); whether the Win32 metadata has one of the name
 	virtual bool ShowWin32Api(std::string const& name) = 0;
 	virtual bool IsWin32Api(std::string const& name) = 0;
+	// the places the file calls a function it imports (by its name), in the main window; false if it does not import it
+	virtual bool ShowImportReferences(std::string const& name) = 0;
+	// A constant of Windows (of an enum): the names of its value, the one shown first; empty if it is not one
+	virtual std::vector<std::string> ConstantNames(std::string const& name, uint64_t& value, std::string& type) = 0;
+	// one of the names of a value is shown wherever the value is (the code decompiled is decompiled again)
+	virtual void PreferConstantName(std::string const& name) = 0;
 	// A view in place of another ("in the same window"): 'open' opens it (as DecompileFunction does), then it takes the
 	// place of the view, which is closed. Nothing is closed if 'open' fails, or brings up the view itself.
 	virtual bool ReplaceView(HWND hView, std::function<bool()> const& open) = 0;

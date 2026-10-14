@@ -534,3 +534,65 @@ TEST_CASE("Imports have prototypes, and the values of enums are named", "[decomp
 	CHECK(code.find("X_TWO") == std::string::npos);
 	CHECK_THAT(code, ContainsSubstring("0x80004007") || ContainsSubstring("-0x7fffbff9"));
 }
+
+TEST_CASE("Blocks of the caller's are placed around the lines of their code", "[decompiler]") {
+	Fixture f;
+	auto a = Code + 0x100, b = Code + 0x110, c = Code + 0x120, handler = Code + 0x130;
+	// sub rsp, 28h; call A; call B; call C; add rsp, 28h; ret
+	f.Image.At(Code)
+		.Bytes({ 0x48, 0x83, 0xEC, 0x28 })
+		.Call(a)
+		.Call(b)
+		.Call(c)
+		.Bytes({ 0x48, 0x83, 0xC4, 0x28, 0xC3 });
+	for (auto at : { a, b, c, handler })
+		f.Image.At(at).Bytes({ 0xC3 });
+	auto callA = Code + 4, callB = Code + 9, callC = Code + 14;
+	std::vector<GhidraDecompiler::Block> blocks;
+	f.Decompiler.SetBlockSource([&](uint64_t address, std::vector<GhidraDecompiler::Block>& out) {
+		if (address == Code)
+			out = blocks;
+		});
+	f.Open();
+	f.Decompiler.AddFunction(a, "A");
+	f.Decompiler.AddFunction(b, "B");
+	f.Decompiler.AddFunction(c, "C");
+	GhidraDecompiler::Block guarded{ { { callB, callB + 5 } }, "__try {",
+		{ "} __except (EXCEPTION_EXECUTE_HANDLER) {", "\t/* the handler: Main$except_0 */", "}" }, { { "Main$except_0", handler } } };
+	auto lineCount = [](std::string const& code) { return (size_t)std::count(code.begin(), code.end(), '\n'); };
+
+	SECTION("one statement") {
+		blocks = { guarded };
+		auto code = f.Decompile(Code, "Main");
+		CHECK_THAT(code, ContainsSubstring("  A();\n  __try {\n    B();\n  } __except (EXCEPTION_EXECUTE_HANDLER) {\n"
+			"    /* the handler: Main$except_0 */\n  }\n  C();\n"));
+		// the lines keep their addresses (those the block adds have none)
+		CHECK(f.Lines.size() >= lineCount(code));
+		auto lines = std::count_if(f.Lines.begin(), f.Lines.end(), [&](auto const& l) {
+			return std::find(l.begin(), l.end(), callB) != l.end();
+			});
+		CHECK(lines == 1);
+		// its links are functions of the code, with their names
+		CHECK(std::find(f.Functions.begin(), f.Functions.end(), std::pair<std::string, uint64_t>("Main$except_0", handler)) != f.Functions.end());
+	}
+	SECTION("in another, inner ones first") {
+		GhidraDecompiler::Block outer{ { { callB, callC + 5 } }, "try {", { "} catch (...) {", "}" }, {} };
+		blocks = { guarded, outer };
+		auto code = f.Decompile(Code, "Main");
+		CHECK_THAT(code, ContainsSubstring("  A();\n  try {\n    __try {\n      B();\n    } __except (EXCEPTION_EXECUTE_HANDLER) {\n"
+			"      /* the handler: Main$except_0 */\n    }\n    C();\n  } catch (...) {\n  }\n"));
+	}
+	SECTION("with other code among its lines: comments where it begins and ends") {
+		GhidraDecompiler::Block apart{ { { callA, callA + 5 }, { callC, callC + 5 } }, "__try {", guarded.Close, {} };
+		blocks = { apart };
+		auto code = f.Decompile(Code, "Main");
+		CHECK_THAT(code, ContainsSubstring("  /* __try { */\n  A();\n  B();\n  C();\n"
+			"  /* } __except (EXCEPTION_EXECUTE_HANDLER) { the handler: Main$except_0 } */\n"));
+	}
+	SECTION("none of its code shown") {
+		GhidraDecompiler::Block elsewhere{ { { Code + 0x200, Code + 0x210 } }, "__try {", guarded.Close, {} };
+		blocks = { elsewhere };
+		auto code = f.Decompile(Code, "Main");
+		CHECK_THAT(code, ContainsSubstring("/* __try { } __except (EXCEPTION_EXECUTE_HANDLER) { the handler: Main$except_0 } (the code it guards is not shown) */"));
+	}
+}

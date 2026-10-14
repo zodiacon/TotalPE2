@@ -13,7 +13,8 @@
 // Imports: the functions the file imports), and the C declaration of the one selected: a function's prototype, an enum's
 // values, a struct's fields and their offsets, an interface's methods. Enter (or a double-click) on a line of the
 // declaration shows the type the line refers to (Back, or Alt+Left, returns). Ctrl+Q or Ctrl+F goes to the filter; Down or
-// Enter there goes to the list. It is in a window of its own (CWin32ApiFrame).
+// Enter there goes to the list. References: where the file calls the function selected (if it imports it), in the main
+// window. It is in a window of its own (CWin32ApiFrame).
 //
 class CWin32ApiView :
 	public CViewBase<CWin32ApiView>,
@@ -41,6 +42,7 @@ public:
 	int GetRowImage(HWND, int row, int col) const;
 	void DoSort(SortInfo const* si);
 	bool OnDoubleClickList(HWND, int row, int col, CPoint const& pt);
+	bool OnRightClickList(HWND, int row, int col, POINT const& pt);
 
 	BEGIN_MSG_MAP(CWin32ApiView)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
@@ -49,6 +51,7 @@ public:
 		NOTIFY_CODE_HANDLER(LVN_ITEMCHANGED, OnItemChanged)
 		COMMAND_CODE_HANDLER(EN_DELAYCHANGE, OnFilterChanged)
 		COMMAND_ID_HANDLER(ID_WIN32_IMPORTS, OnImports)
+		COMMAND_ID_HANDLER(ID_WIN32_REFERENCES, OnReferences)
 		COMMAND_ID_HANDLER(ID_NAV_BACK, OnBack)
 		COMMAND_ID_HANDLER(ID_NAV_FORWARD, OnForwardCommand)
 		CHAIN_MSG_MAP(CVirtualListView<CWin32ApiView>)
@@ -69,11 +72,14 @@ private:
 	LRESULT OnFilterChanged(WORD, WORD, HWND, BOOL&);
 	LRESULT OnImports(WORD, WORD, HWND, BOOL&);
 	LRESULT OnBack(WORD, WORD, HWND, BOOL&);
+	LRESULT OnReferences(WORD, WORD, HWND, BOOL&);
 	LRESULT OnForwardCommand(WORD, WORD, HWND, BOOL&);
 
 	void Fill();
 	void UpdateImportsButton();
 	void UpdateHistoryButtons();
+	// a function of the file's imports is shown: where it is called can be shown
+	bool CanShowReferences() const;
 	void Remember(std::string const& name);
 	// the entry shown again from the history (by name: it may be of another machine)
 	bool ShowFromHistory(std::string const& name);

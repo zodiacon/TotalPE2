@@ -491,6 +491,9 @@ void CScintillaView::SetLanguage(LexLanguage lang) {
 	// the code of the image is ASCII, with the user's comments (and C strings) in UTF-8
 	if (lang == LexLanguage::Asm || lang == LexLanguage::C)
 		m_Sci.SetCodePage(SC_CP_UTF8);
+	// (a constant of Windows the mouse rests on: the names of its value)
+	if (lang == LexLanguage::C)
+		m_Sci.SendMessage(SCI_SETMOUSEDWELLTIME, 600);
 
 	switch (lang) {
 		case LexLanguage::Asm:
@@ -729,6 +732,26 @@ LRESULT CScintillaView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
 			sub.InsertMenu(0, MF_BYPOSITION | MF_STRING, ID_CODE_WIN32API, (L"Show " + name + L" in &Windows API").c_str());
 		}
 	}
+	// a constant of Windows whose value has other names: one of them can be shown
+	m_ContextNames.clear();
+	if (m_Language == LexLanguage::C && pos >= 0) {
+		auto name = std::string(CW2A(NameAt(pos).c_str()));
+		uint64_t value = 0;
+		std::string type;
+		auto names = name.empty() ? std::vector<std::string>() : Frame()->ConstantNames(name, value, type);
+		if (names.size() > 1) {
+			CMenu showAs;
+			showAs.CreatePopupMenu();
+			for (auto const& n : names)
+				if (n != names[0] && m_ContextNames.size() <= ID_CODE_SHOWAS_LAST - ID_CODE_SHOWAS_FIRST) {
+					showAs.AppendMenu(MF_STRING, ID_CODE_SHOWAS_FIRST + (UINT)m_ContextNames.size(), CA2W(n.c_str()));
+					m_ContextNames.push_back(n);
+				}
+			sub.InsertMenu(0, MF_BYPOSITION | MF_SEPARATOR);
+			sub.InsertMenu(0, MF_BYPOSITION | MF_POPUP, (UINT_PTR)showAs.Detach(),
+				std::format(L"Show {} (0x{:X}) &as", std::wstring(CA2W(names[0].c_str())), value).c_str());
+		}
+	}
 	// a variable (or a function) of the decompiled code under the mouse: it can be renamed, and a variable retyped
 	m_ContextName.clear();
 	if (m_Language == LexLanguage::C && m_Function && pos >= 0) {
@@ -865,6 +888,40 @@ GhidraDecompiler::Variable const* CScintillaView::VariableNamed(std::wstring con
 		if (v.Name == narrow)
 			return &v;
 	return nullptr;
+}
+
+LRESULT CScintillaView::OnShowAs(WORD, WORD id, HWND, BOOL&) {
+	auto index = id - ID_CODE_SHOWAS_FIRST;
+	if (index < m_ContextNames.size())
+		Frame()->PreferConstantName(m_ContextNames[index]);
+	return 0;
+}
+
+// The names of the value of a constant of Windows the mouse rests on (the others it has)
+LRESULT CScintillaView::OnDwell(int, LPNMHDR hdr, BOOL&) {
+	auto scn = (SCNotification*)hdr;
+	if (hdr->code == SCN_DWELLEND) {
+		m_Sci.SendMessage(SCI_CALLTIPCANCEL);
+		return 0;
+	}
+	if (m_Language != LexLanguage::C || scn->position < 0)
+		return 0;
+	auto name = std::string(CW2A(NameAt(scn->position).c_str()));
+	uint64_t value = 0;
+	std::string type;
+	auto names = name.empty() ? std::vector<std::string>() : Frame()->ConstantNames(name, value, type);
+	if (names.empty())
+		return 0;
+	auto tip = std::format("{} = 0x{:X} ({})", name, value, type);
+	if (names.size() > 1) {
+		std::string others;
+		for (auto const& n : names)
+			if (n != name)
+				others += (others.empty() ? "" : ", ") + n;
+		tip += "\nAlso: " + others + "\n(the context menu shows another of them)";
+	}
+	m_Sci.SendMessage(SCI_CALLTIPSHOW, scn->position, (LPARAM)tip.c_str());
+	return 0;
 }
 
 LRESULT CScintillaView::OnWin32Api(WORD, WORD, HWND, BOOL&) {

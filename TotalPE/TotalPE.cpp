@@ -6,6 +6,7 @@
 #include "MainFrm.h"
 #include "Helpers.h"
 #include "AppSettings.h"
+#include "Win32Api.h"
 #include <WTLHelper.h>
 #include "DecompilerThread.h"
 
@@ -48,6 +49,19 @@ int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPTSTR lp
 
 	auto& settings = AppSettings::Get();
 	settings.LoadFromKey(L"SOFTWARE\\ScorpioSoftware\\TotalPE");
+	// of the names of a value of Windows, those the user chose to see
+	{
+		std::vector<std::string> names;
+		std::wstring text = settings.PreferredConstants();
+		for (size_t start = 0, end; start < text.size(); start = end + 1) {
+			end = text.find(L';', start);
+			if (end == std::wstring::npos)
+				end = text.size();
+			if (end > start)
+				names.emplace_back(CW2A(text.substr(start, end - start).c_str()));
+		}
+		Win32Api::SetPreferredNames(std::move(names));
+	}
 
 	hRes = _Module.Init(nullptr, hInstance);
 	ATLASSERT(SUCCEEDED(hRes));

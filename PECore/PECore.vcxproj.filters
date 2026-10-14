@@ -129,6 +129,9 @@
     <ClInclude Include="UnwindInfo.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ExceptionScopes.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="VirusTotal.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -258,6 +261,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="UnwindInfo.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ExceptionScopes.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="VirusTotal.cpp">

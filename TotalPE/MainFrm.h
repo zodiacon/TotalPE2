@@ -306,6 +306,9 @@ private:
 	bool ShowBookmarks() override;
 	bool ShowWin32Api(std::string const& name) override;
 	bool IsWin32Api(std::string const& name) override;
+	bool ShowImportReferences(std::string const& name) override;
+	std::vector<std::string> ConstantNames(std::string const& name, uint64_t& value, std::string& type) override;
+	void PreferConstantName(std::string const& name) override;
 	// the Win32 API of the file's machine; null if there is no metadata (or no PE file)
 	Win32Api* Win32ForFile() const;
 	// the names of the functions the file imports
@@ -426,6 +429,8 @@ private:
 	bool X64Frame(uint32_t rva, uint32_t& size, uint32_t& frameRegister, int64_t& frameOffset) const;
 	// the name of the function at an address for the decompiler (of an incremental linking stub, the function it jumps to)
 	std::string DecompilerFunctionName(uint64_t va) const;
+	// the __try regions and C++ try blocks of an x64 function (from its unwind information), as blocks of its C code
+	std::vector<GhidraDecompiler::Block> ExceptionBlocks(uint64_t va) const;
 	// for the decompiler: the user's changes to the variables of a function, a type of the symbols by name, and the user's
 	// names of functions and global variables
 	std::vector<GhidraDecompiler::VariableChange> VariableChanges(uint64_t va) const;

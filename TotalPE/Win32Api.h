@@ -5,6 +5,7 @@
 #include <PEFile.h>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -52,10 +53,27 @@ public:
 	// a type as C writes it ("HANDLE", "WIN32_FIND_DATAW *", "wchar_t[260]")
 	std::string TypeText(uint32_t id);
 
+	// A constant of an enum (or of HRESULT, NTSTATUS) by its name: its type, its value, and the names of the value, the one
+	// the decompiler shows first
+	struct Constant {
+		std::string Type;
+		uint64_t Value;
+		std::vector<std::string> Names;
+	};
+	std::optional<Constant> ConstantOf(std::string const& name);
+	// Of the names of a value, those shown (the user's choices; then some common ones: MB_ICONERROR rather than MB_ICONHAND):
+	// for all machines. The enums described are described again.
+	static void SetPreferredNames(std::vector<std::string> names);
+	static std::vector<std::string> const& PreferredNames();
+
 private:
 	struct Data;
 	Win32Api(Data& data, Machine machine);
 	static Data* Shared();
+	static std::unique_ptr<Win32Api>* Instances();
+	// the place of a name among those of its value (lower first)
+	static int NameRank(std::string const& name);
+	static void OrderNames(std::vector<std::pair<std::string, uint64_t>>& values);
 
 	uint32_t TypeId(ClrSigType const& type);
 	uint32_t RowOf(uint32_t token);
@@ -81,5 +99,6 @@ private:
 	std::unordered_map<uint32_t, GhidraDecompiler::Type> m_Described;
 	std::unordered_map<uint32_t, uint32_t> m_Alignment;	// of the structs and unions described
 	std::set<uint32_t> m_Laying;	// the structs whose layout is being found (a struct does not hold itself)
+	std::unordered_map<std::string, uint32_t> m_ConstantTypes;	// the enum (its id) each constant is of
 	static constexpr uint32_t MadeBit = 0x40000000;
 };

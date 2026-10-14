@@ -106,6 +106,18 @@ public:
 	// The user's comments, by the addresses of the instructions they are on (asked each time a function is decompiled: those in
 	// its code are shown before the statements made from their instructions)
 	using CommentSource = std::function<void(std::vector<std::pair<uint64_t, std::string>>& comments)>;
+	// A block of the code (a __try, a C++ try): the lines made from the instructions of its ranges are shown in it, between
+	// 'Open' and the lines of 'Close' (a tab at the start of one: a level of indentation more). When those lines are not
+	// whole statements of their own, comments mark where it begins and ends. 'Links': the functions the lines name (they
+	// are given those names, if they have none).
+	struct Block {
+		std::vector<std::pair<uint64_t, uint64_t>> Ranges;	// [begin, end)
+		std::string Open;
+		std::vector<std::string> Close;
+		std::vector<std::pair<std::string, uint64_t>> Links;
+	};
+	// the blocks of the function at an address (asked each time it is decompiled), inner ones first
+	using BlockSource = std::function<void(uint64_t address, std::vector<Block>& blocks)>;
 
 	// Once per process: the folder of the language definitions (.ldefs, .sla, .pspec, .cspec), in it or in its
 	// subfolders (one per processor)
@@ -139,6 +151,7 @@ public:
 	void SetTypeNameSource(TypeNameSource source);
 	void SetChangeSource(ChangeSource source);
 	void SetCommentSource(CommentSource source);
+	void SetBlockSource(BlockSource source);
 	// The user's name of a function (in the place of the one it has, wherever it is shown), and of a global variable (its
 	// key is "global:ADDRESS"), with its type. What cannot be done is said in the code of the next function decompiled.
 	void RenameFunction(uint64_t address, std::string const& name);

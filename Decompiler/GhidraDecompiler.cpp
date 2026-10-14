@@ -212,6 +212,7 @@ struct GhidraDecompiler::Impl {
 	TypeNameSource TypeNames;
 	ChangeSource Changes;
 	CommentSource Comments;
+	BlockSource Blocks;
 	std::unordered_map<uint64_t, std::string> Applied;	// the changes each function was last decompiled with (as text)
 	std::string Pending;	// what is to be said in the code of the next function decompiled (a change that could not be made)
 	std::unordered_map<uint32_t, Datatype*> Converted;	// the decompiler's types of the caller's ids
@@ -659,6 +660,196 @@ namespace {
 			result += line + "\n";
 		if (!code.empty() && code.back() != '\n' && !result.empty())
 			result.pop_back();
+		code = std::move(result);
+	}
+
+	// The braces a line opens (+) and closes (-), in order, outside of strings, characters and comments; 'lowest': the
+	// lowest the count gets in it
+	int BraceBalance(std::string const& line, int& lowest) {
+		int depth = 0;
+		lowest = 0;
+		for (size_t i = 0; i < line.size(); i++) {
+			auto ch = line[i];
+			if (ch == '"' || ch == '\'') {
+				for (i++; i < line.size() && line[i] != ch; i++)
+					if (line[i] == '\\')
+						i++;
+			}
+			else if (ch == '/' && i + 1 < line.size() && line[i + 1] == '*') {
+				auto end = line.find("*/", i + 2);
+				if (end == std::string::npos)
+					break;
+				i = end + 1;
+			}
+			else if (ch == '/' && i + 1 < line.size() && line[i + 1] == '/')
+				break;
+			else if (ch == '{')
+				depth++;
+			else if (ch == '}')
+				lowest = std::min(lowest, --depth);
+		}
+		return depth;
+	}
+
+	// The caller's blocks (a __try, a C++ try) in the code: the lines made from the instructions of a block's ranges are put
+	// between its opening line and its closing lines, a level deeper. They must be a sequence of whole statements: none of
+	// other code among them, and the braces they open closed in them (the lines that close those that are left open are
+	// taken too). Else, comments mark where the block begins and ends.
+	void ShowBlocks(std::string& code, GhidraDecompiler::LineAddresses& addresses, std::vector<GhidraDecompiler::Block> const& blocks) {
+		std::vector<std::string> lines;
+		std::istringstream in(code);
+		for (std::string line; std::getline(in, line); )
+			lines.push_back(line);
+		// (the addresses may have an entry for the end of the text, after its last line)
+		if (addresses.size() < lines.size() || addresses.size() > lines.size() + 1)
+			return;
+		GhidraDecompiler::LineAddresses extra(addresses.begin() + lines.size(), addresses.end());
+		addresses.resize(lines.size());
+		// the indentation of a level: of the first line of the body
+		std::string unit = "  ";
+		for (size_t i = 0; i + 1 < lines.size(); i++)
+			if (lines[i] == "{") {
+				auto indent = lines[i + 1].find_first_not_of(' ');
+				if (indent != std::string::npos && indent > 0)
+					unit = std::string(indent, ' ');
+				break;
+			}
+		auto indentOf = [](std::string const& line) {
+			auto indent = line.find_first_not_of(' ');
+			return indent == std::string::npos ? std::string() : line.substr(0, indent);
+		};
+		auto closeLine = [&](std::string const& indent, std::string const& text) {
+			size_t tabs = 0;
+			while (tabs < text.size() && text[tabs] == '\t')
+				tabs++;
+			std::string line = indent;
+			for (size_t i = 0; i < tabs; i++)
+				line += unit;
+			return line + text.substr(tabs);
+		};
+
+		// the body of the function: between its braces (the line of its name has the address of its entry)
+		size_t bodyBegin = 0, bodyEnd = lines.size();
+		for (size_t i = 0; i < lines.size(); i++)
+			if (lines[i] == "{") {
+				bodyBegin = i + 1;
+				break;
+			}
+		for (size_t i = lines.size(); i > bodyBegin; i--)
+			if (lines[i - 1] == "}") {
+				bodyEnd = i - 1;
+				break;
+			}
+		// (a comment cannot be in a comment: the closing lines, as a comment, without theirs)
+		auto uncommented = [](std::string text) {
+			for (auto marker : { "/* ", " */", "/*", "*/" })
+				for (size_t at; (at = text.find(marker)) != std::string::npos; )
+					text.erase(at, strlen(marker));
+			return text;
+		};
+
+		for (auto const& block : blocks) {
+			auto inside = [&](uint64_t address) {
+				return std::any_of(block.Ranges.begin(), block.Ranges.end(), [&](auto const& r) { return address >= r.first && address < r.second; });
+			};
+			// 1: of the block's code, -1: of other code, 0: of none (braces, declarations, comments) or of both (a statement
+			// the decompiler made of instructions in it and after it): it may be in the block, but does not make it longer
+			// (if none is only of its code, those of both are its: "return *p;" of a __try that is only that)
+			bool loose = false;
+			auto kindOf = [&](size_t i) {
+				if (addresses[i].empty())
+					return 0;
+				auto in = std::count_if(addresses[i].begin(), addresses[i].end(), inside);
+				return in == 0 ? -1 : in == (ptrdiff_t)addresses[i].size() || loose ? 1 : 0;
+			};
+			size_t first = bodyEnd, last = 0;
+			for (int pass = 0; pass < 2 && first == bodyEnd; pass++) {
+				loose = pass == 1;
+				for (size_t i = bodyBegin; i < bodyEnd; i++)
+					if (kindOf(i) == 1) {
+						first = std::min(first, i);
+						last = i;
+					}
+			}
+			std::string closing;
+			for (auto const& text : block.Close)
+				closing += (closing.empty() ? "" : " ") + uncommented(text.substr(std::min(text.size(), text.find_first_not_of('\t'))));
+			if (first == bodyEnd) {
+				// none of its code is shown (the decompiler took it away, or it is only in other functions)
+				if (bodyBegin > 0) {
+					lines.insert(lines.begin() + bodyBegin, unit + "/* " + block.Open + " " + closing + " (the code it guards is not shown) */");
+					addresses.insert(addresses.begin() + bodyBegin, std::vector<uint64_t>());
+					bodyEnd++;
+				}
+				continue;
+			}
+			// Whole statements: none of other code among them, the braces they close opened in them, those they open closed (by
+			// the lines after them that are not of other code). A block that begins in one the caller placed (an inner one, of
+			// lines of their own) begins before it.
+			bool whole = false;
+			for (int attempt = 0; attempt < 64 && !whole; attempt++) {
+				bool ok = true;
+				int depth = 0;
+				size_t end = last;
+				for (size_t i = first; i <= end && ok; i++) {
+					int lowest;
+					auto change = BraceBalance(lines[i], lowest);
+					ok = kindOf(i) != -1 && depth + lowest >= 0;
+					depth += change;
+				}
+				while (ok && depth > 0 && end + 1 < bodyEnd && kindOf(end + 1) != -1) {
+					int lowest;
+					end++;
+					auto change = BraceBalance(lines[end], lowest);
+					ok = depth + lowest >= 0;
+					depth += change;
+				}
+				if (ok && depth == 0) {
+					whole = true;
+					last = end;
+				}
+				else if (first > bodyBegin && kindOf(first - 1) == 0 && addresses[first - 1].empty() &&
+					lines[first - 1].find('{') != std::string::npos)
+					first--;	// (the line that opens the block it begins in)
+				else
+					break;
+			}
+			auto indent = indentOf(lines[first]);
+			std::vector<std::string> after;
+			if (whole) {
+				for (size_t i = first; i <= last; i++)
+					if (!lines[i].empty())
+						lines[i] = unit + lines[i];
+				for (auto const& text : block.Close)
+					after.push_back(closeLine(indent, text));
+				lines.insert(lines.begin() + first, indent + block.Open);
+			}
+			else {
+				// (a comment for each part: "} catch (...) { ... }")
+				std::string part;
+				for (auto const& text : block.Close) {
+					auto line = uncommented(text.substr(std::min(text.size(), text.find_first_not_of('\t'))));
+					if (!part.empty() && line.size() > 1 && line[0] == '}') {	// (a "}" alone ends the part)
+						after.push_back(indent + "/* " + part + " */");
+						part.clear();
+					}
+					part += (part.empty() ? "" : " ") + line;
+				}
+				if (!part.empty())
+					after.push_back(indent + "/* " + part + " */");
+				lines.insert(lines.begin() + first, indent + "/* " + uncommented(block.Open) + " */");
+			}
+			addresses.insert(addresses.begin() + first, std::vector<uint64_t>());
+			last++;
+			lines.insert(lines.begin() + last + 1, after.begin(), after.end());
+			addresses.insert(addresses.begin() + last + 1, after.size(), std::vector<uint64_t>());
+			bodyEnd += 1 + after.size();
+		}
+
+		addresses.insert(addresses.end(), extra.begin(), extra.end());
+		std::string result;
+		for (auto const& line : lines)
+			result += line + "\n";
 		code = std::move(result);
 	}
 
@@ -1197,6 +1388,10 @@ void GhidraDecompiler::SetCommentSource(CommentSource source) {
 	m_Impl->Comments = std::move(source);
 }
 
+void GhidraDecompiler::SetBlockSource(BlockSource source) {
+	m_Impl->Blocks = std::move(source);
+}
+
 // The function gets the name (an empty one: the name it had, from the caller, or one made up)
 void GhidraDecompiler::RenameFunction(uint64_t address, std::string const& name) {
 	auto arch = m_Impl->Arch.get();
@@ -1519,6 +1714,18 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 			}
 		}
 
+		// the caller's blocks (its __try regions, its C++ try blocks), and the names of the functions they refer to
+		std::vector<Block> blocks;
+		if (m_Impl->Blocks)
+			m_Impl->Blocks(address, blocks);
+		for (auto const& block : blocks)
+			for (auto const& [linkName, at] : block.Links)
+				if (!global->queryFunction(Address(arch->getDefaultCodeSpace(), at)))
+					AddFunction(at, linkName);
+		// (the blocks are placed by the addresses of the lines)
+		GhidraDecompiler::LineAddresses ownLines;
+		auto lineMap = lines ? lines : blocks.empty() ? nullptr : &ownLines;
+
 		std::ostringstream out;
 		if (result < 0)
 			out << "/* The decompiler stopped before it was done */\n";
@@ -1531,13 +1738,13 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 					out << " * " << line << "\n";
 			out << " */\n";
 		}
-		if (lines) {
+		if (lineMap) {
 			// marked up: the text is read back from it, with the addresses of its lines (the lines of the comment above have none)
-			lines->clear();
+			lineMap->clear();
 			auto header = out.str();
 			for (auto ch : header)
 				if (ch == '\n')
-					lines->emplace_back();
+					lineMap->emplace_back();
 			std::ostringstream markup;
 			arch->print->setMarkup(true);
 			arch->print->setOutputStream(&markup);
@@ -1560,7 +1767,7 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 			code = header + text;
 			if (!code.empty() && code.back() != '\n')
 				code += '\n';
-			lines->insert(lines->end(), body.begin(), body.end());
+			lineMap->insert(lineMap->end(), body.begin(), body.end());
 		}
 		else {
 			arch->print->setOutputStream(&out);
@@ -1569,6 +1776,8 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 		}
 
 		IndentComments(code);
+		if (lineMap && !blocks.empty())
+			ShowBlocks(code, *lineMap, blocks);
 		if (variables)
 			m_Impl->CollectVariables(fd, *variables);
 		if (functions) {
@@ -1584,6 +1793,9 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 				if (auto callee = fc->getFuncdata(); callee && callee->getName() != fc->getName())
 					functions->emplace_back(callee->getName(), entry.getOffset());
 			}
+			for (auto const& block : blocks)
+				for (auto const& link : block.Links)
+					functions->push_back(link);
 		}
 		return true;
 	}
