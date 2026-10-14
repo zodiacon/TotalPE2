@@ -360,6 +360,69 @@ void CMainFrame::BuildSearchIndex() {
 	}
 }
 
+// An export of code (not one forwarded to another module), a function of the symbols (or one the user named), a public
+// symbol in code; in an ELF file, a function symbol or one of the debug information
+bool CMainFrame::FunctionAddress(SearchItem const& item, uint64_t& address) {
+	if (m_Elf) {
+		// (not those of a relocatable object: their values are offsets in their sections)
+		if (item.Kind != SearchKind::Symbol || !item.Code || item.Index != -1 || !item.Value)
+			return false;
+		address = item.Value;
+		return true;
+	}
+	if (!m_PE)
+		return false;
+	auto base = m_PE.GetImageBase();
+	uint64_t rva = 0;
+	if (item.Kind == SearchKind::Export) {
+		auto exports = m_PE.GetExport();
+		if (!exports)
+			return false;
+		auto it = std::ranges::find_if(exports->Funcs, [&](auto const& f) { return f.Ordinal == item.Value; });
+		if (it == exports->Funcs.end() || !it->FuncRVA || !it->ForwarderName.empty())
+			return false;
+		rva = it->FuncRVA;
+	}
+	else if (item.Kind == SearchKind::Symbol && (item.Details.starts_with(L"Function") || item.Details.starts_with(L"Public symbol"))) {
+		if (item.Value < base || item.Value - base > 0xFFFFFFFFULL)
+			return false;
+		rva = item.Value - base;
+	}
+	else
+		return false;
+	// in code (a public symbol may be of data)
+	for (auto const& s : *m_PE.GetSecHeaders()) {
+		auto& h = s.SecHdr;
+		if (rva >= h.VirtualAddress && rva < h.VirtualAddress + std::max(h.Misc.VirtualSize, h.SizeOfRawData)) {
+			if (!(h.Characteristics & (IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_CNT_CODE)))
+				return false;
+			address = base + rva;
+			return true;
+		}
+	}
+	return false;
+}
+
+// The public symbol at the address, undecorated (a C++ function's decorated name has its parameters): its name and its
+// parameters, without what the return type, the calling convention and the like add
+std::wstring CMainFrame::FunctionDeclaration(uint64_t address) {
+	auto base = m_PE ? m_PE.GetImageBase() : 0;
+	if (!m_PE || !m_Symbols || address < base || address - base > 0xFFFFFFFFULL)
+		return {};
+	long displacement = 0;
+	auto sym = m_Symbols.GetSymbolByRVA((uint32_t)(address - base), SymbolTag::PublicSymbol, &displacement);
+	if (!sym || displacement != 0 || !sym.Name().starts_with(L'?'))
+		return {};
+	// (and the undecorator's own: no "class", "struct", "enum" before a type's name, no __ptr64)
+	constexpr DWORD NoClassPrefixes = 0x8000, NoPtr64 = 0x20000;
+	WCHAR text[2048];
+	auto flags = UNDNAME_NO_FUNCTION_RETURNS | UNDNAME_NO_MS_KEYWORDS | UNDNAME_NO_ALLOCATION_MODEL | UNDNAME_NO_ACCESS_SPECIFIERS |
+		UNDNAME_NO_THROW_SIGNATURES | UNDNAME_NO_MEMBER_TYPE | UNDNAME_NO_RETURN_UDT_MODEL | NoClassPrefixes | NoPtr64;
+	if (!::UnDecorateSymbolNameW(sym.Name().c_str(), text, _countof(text), flags))
+		return sym.UndecoratedName();
+	return text;
+}
+
 bool CMainFrame::GoToSearchItem(SearchItem const& item) {
 	// a view of the tree, whatever the file
 	if (item.Kind == SearchKind::View) {

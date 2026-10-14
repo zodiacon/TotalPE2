@@ -448,6 +448,8 @@ private:
 	LRESULT OnNavGoTo(WORD, WORD, HWND, BOOL&);
 	LRESULT OnNavGoAnywhere(WORD, WORD, HWND, BOOL&);
 	std::vector<SearchItem> AddressItems(std::wstring const& text) override;
+	bool FunctionAddress(SearchItem const& item, uint64_t& address) override;
+	std::wstring FunctionDeclaration(uint64_t address) override;
 	void AddViewsToSearchIndex(HTREEITEM hParent, std::wstring const& parent, int depth);
 	LRESULT OnEditSearchAll(WORD, WORD, HWND, BOOL&);
 	LRESULT OnFileCompare(WORD, WORD, HWND, BOOL&);

@@ -14,6 +14,11 @@ struct ISearchHost abstract {
 	virtual HIMAGELIST GetImageList() const = 0;
 	// the places a number can be (Go Anywhere): a VA, an RVA, a file offset (SearchKind::Address); none if it is not a number
 	virtual std::vector<SearchItem> AddressItems(std::wstring const& text) { return {}; }
+	// the address of an item that is a function (the Disassemble and Decompile Function dialogs list them); false if it is
+	// not one
+	virtual bool FunctionAddress(SearchItem const& item, uint64_t& address) { return false; }
+	// the declaration of the function at an address (its parameters tell overloads apart); empty if it is not known
+	virtual std::wstring FunctionDeclaration(uint64_t address) { return {}; }
 };
 
 // Search All: one search through the imports, exports, strings, resources, symbols and section names of the file.

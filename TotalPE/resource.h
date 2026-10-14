@@ -132,6 +132,8 @@
 #define IDC_INPUT_PROMPT                1039
 #define IDC_INPUT_TEXT                  1040
 #define IDC_INPUT_HINT                  1041
+#define IDC_DISASM_LIST                 1042
+#define IDC_DISASM_STATUS               1043
 #define ID_WINDOW_CLOSE                 32772
 #define ID_WINDOW_CLOSE_ALL             32773
 #define ID_FILE_RUNASADMINISTRATOR      32775
@@ -274,7 +276,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        286
 #define _APS_NEXT_COMMAND_VALUE         32962
-#define _APS_NEXT_CONTROL_VALUE         1042
+#define _APS_NEXT_CONTROL_VALUE         1044
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

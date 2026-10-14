@@ -558,16 +558,18 @@ BEGIN
     PUSHBUTTON      "Cancel",IDCANCEL,173,89,50,14
 END
 
-IDD_DISASM_FUNCTION DIALOGEX 0, 0, 260, 92
+IDD_DISASM_FUNCTION DIALOGEX 0, 0, 420, 236
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Disassemble Function"
 FONT 9, "Segoe UI", 0, 0, 0x0
 BEGIN
-    LTEXT           "Function &name or address (hexadecimal):",IDC_STATIC,7,7,246,8
-    EDITTEXT        IDC_DISASM_TEXT,7,17,246,14,ES_AUTOHSCROLL
-    LTEXT           "A name is looked up in the exports and then in the symbols. An address at the image base or above is a VA; otherwise it is an RVA.",IDC_STATIC,7,37,246,26
-    DEFPUSHBUTTON   "Disassemble",IDOK,147,71,50,14
-    PUSHBUTTON      "Cancel",IDCANCEL,203,71,50,14
+    LTEXT           "Function &name or address (hexadecimal):",IDC_STATIC,7,7,406,8
+    EDITTEXT        IDC_DISASM_TEXT,7,17,406,14,ES_AUTOHSCROLL
+    CONTROL         "",IDC_DISASM_LIST,"SysListView32",LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_SHAREIMAGELISTS | LVS_OWNERDATA | LVS_NOCOLUMNHEADER | WS_BORDER | WS_TABSTOP,7,35,406,130
+    LTEXT           "",IDC_DISASM_STATUS,7,168,406,8
+    LTEXT           "Choose a function in the list (Up and Down move in it), or type a name or an address: a name is looked up in the exports and then in the symbols; an address at the image base or above is a VA, otherwise an RVA.",IDC_STATIC,7,181,406,26
+    DEFPUSHBUTTON   "Disassemble",IDOK,307,215,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,363,215,50,14
 END
 
 IDD_GOANYWHERE DIALOGEX 0, 0, 420, 230

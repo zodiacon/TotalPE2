@@ -58,7 +58,7 @@ The kind of file is recognized by its contents, not its extension. Open files fr
 
 ## Code
 
-* Disassembly (x86, x64 and ARM64) with symbol names, cross references and switch tables (x86 and x64); the addresses that ARM64 code builds with `adrp` and `add` / `ldr` are resolved
+* Disassembly (x86, x64 and ARM64) with symbol names, cross references and switch tables (x86 and x64); the addresses that ARM64 code builds with `adrp` and `add` / `ldr` are resolved; the Disassemble and Decompile Function boxes list the functions whose names match what is typed (exports, symbols, the ones you named), with their parameters
 * Cross references: who calls a function, who uses an import, a string or an address
 * Flow graphs of functions, exported as SVG
 * Go To (address, RVA or file offset), Back and Forward

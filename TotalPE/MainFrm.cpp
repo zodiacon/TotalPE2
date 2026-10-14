@@ -1969,13 +1969,13 @@ bool CMainFrame::ResolveFunction(std::wstring const& text, uint64_t& address, st
 LRESULT CMainFrame::OnDecompileFunction(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
 	if (!m_PE)
 		return 0;
-	CDisassembleFunctionDlg dlg(m_DisassembleFunction, L"Decompile Function", L"Decompile");
+	CDisassembleFunctionDlg dlg(m_DisassembleFunction, this, L"Decompile Function", L"Decompile");
 	if (dlg.DoModal(m_hWnd) != IDOK)
 		return 0;
 
-	uint64_t address;
+	uint64_t address = dlg.Address();
 	std::wstring error;
-	if (!ResolveFunction(m_DisassembleFunction, address, error)) {
+	if (!address && !ResolveFunction(m_DisassembleFunction, address, error)) {
 		AtlMessageBox(m_hWnd, error.c_str(), IDR_MAINFRAME, MB_ICONWARNING);
 		return 0;
 	}
@@ -3652,12 +3652,12 @@ bool CMainFrame::ShowSideBySide(uint64_t address) {
 LRESULT CMainFrame::OnSideBySide(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
 	if (!m_PE)
 		return 0;
-	CDisassembleFunctionDlg dlg(m_DisassembleFunction, L"Disassembly and C Side by Side", L"Show");
+	CDisassembleFunctionDlg dlg(m_DisassembleFunction, this, L"Disassembly and C Side by Side", L"Show");
 	if (dlg.DoModal(m_hWnd) != IDOK)
 		return 0;
-	uint64_t address;
+	uint64_t address = dlg.Address();
 	std::wstring error;
-	if (!ResolveFunction(m_DisassembleFunction, address, error)) {
+	if (!address && !ResolveFunction(m_DisassembleFunction, address, error)) {
 		AtlMessageBox(m_hWnd, error.c_str(), IDR_MAINFRAME, MB_ICONWARNING);
 		return 0;
 	}
@@ -3693,13 +3693,13 @@ bool CMainFrame::ReplaceView(HWND hView, std::function<bool()> const& open) {
 LRESULT CMainFrame::OnDisassembleFunction(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
 	if (!m_PE && !m_Elf)
 		return 0;
-	CDisassembleFunctionDlg dlg(m_DisassembleFunction);
+	CDisassembleFunctionDlg dlg(m_DisassembleFunction, this);
 	if (dlg.DoModal(m_hWnd) != IDOK)
 		return 0;
 
-	uint64_t address;
+	uint64_t address = dlg.Address();
 	std::wstring error;
-	if (!ResolveFunction(m_DisassembleFunction, address, error)) {
+	if (!address && !ResolveFunction(m_DisassembleFunction, address, error)) {
 		AtlMessageBox(m_hWnd, error.c_str(), IDR_MAINFRAME, MB_ICONWARNING);
 		return 0;
 	}
