@@ -423,7 +423,7 @@ private:
 	std::string FileModuleName() const;
 	bool IsWindowsFile() const;
 	// the local variables of a function on the stack, from the symbols (of private symbols)
-	bool FunctionLocals(uint64_t va, std::vector<uint64_t> const& instructions, std::vector<GhidraDecompiler::Local>& locals) const;
+	bool FunctionLocals(uint64_t va, std::vector<uint64_t> const& instructions, std::vector<GhidraDecompiler::Local>& locals, bool parameters = false) const;
 	// the frame an x64 function's prologue makes, from its unwind information: its size (what is pushed and allocated), and
 	// the frame register (its CodeView number; 0 if there is none) and its offset from the stack pointer at the entry
 	bool X64Frame(uint32_t rva, uint32_t& size, uint32_t& frameRegister, int64_t& frameOffset) const;
@@ -450,6 +450,8 @@ private:
 	std::vector<SearchItem> AddressItems(std::wstring const& text) override;
 	bool FunctionAddress(SearchItem const& item, uint64_t& address) override;
 	std::wstring FunctionDeclaration(uint64_t address) override;
+	std::vector<SearchItem> RecentFunctions() override;
+	void RememberFunction(std::wstring const& name, uint64_t address);
 	void AddViewsToSearchIndex(HTREEITEM hParent, std::wstring const& parent, int depth);
 	LRESULT OnEditSearchAll(WORD, WORD, HWND, BOOL&);
 	LRESULT OnFileCompare(WORD, WORD, HWND, BOOL&);
@@ -560,6 +562,7 @@ private:
 	void ResetNavigation();
 	bool ResolveGoTo(GoToOptions const& options, int64_t& offset, std::wstring& error) const;
 	std::wstring m_DisassembleFunction;	// the last name or address entered
+	std::vector<SearchItem> m_RecentFunctions;	// the functions opened from it, the last first (of the file)
 	bool ResolveFunction(std::wstring const& text, uint64_t& address, std::wstring& error) const;
 	void InsertSymbolsNode(HTREEITEM hRoot);
 	HTREEITEM TypeGroupItem(DiaSymbol const& type) const;

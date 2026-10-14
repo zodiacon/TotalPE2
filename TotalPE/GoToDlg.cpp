@@ -93,7 +93,12 @@ LRESULT CDisassembleFunctionDlg::OnInitDialog(UINT, WPARAM, LPARAM, BOOL&) {
 		m_Host->GetSearchIndex();
 	}
 
-	m_Edit.SetWindowText(m_Text.c_str());	// (the functions it names are listed)
+	// with nothing in it when some were opened before (they are listed), else the last text (the functions it names are)
+	if (m_Host)
+		m_Recent = m_Host->RecentFunctions();
+	m_Setting = true;
+	m_Edit.SetWindowText(m_Recent.empty() ? m_Text.c_str() : L"");
+	m_Setting = false;
 	Update();
 	m_Edit.SetFocus();
 	m_Edit.SetSelAll();
@@ -101,6 +106,8 @@ LRESULT CDisassembleFunctionDlg::OnInitDialog(UINT, WPARAM, LPARAM, BOOL&) {
 }
 
 LRESULT CDisassembleFunctionDlg::OnTextChanged(WORD, WORD, HWND, BOOL&) {
+	if (m_Setting)
+		return 0;
 	// after a pause in the typing: the index can be large
 	SetTimer(TimerUpdateFunctions, 100);
 	return 0;
@@ -121,7 +128,10 @@ void CDisassembleFunctionDlg::Update() {
 	m_Edit.GetWindowText(text);
 	text.Trim();
 	m_Functions.clear();
-	if (m_Host && !text.IsEmpty()) {
+	if (text.IsEmpty())
+		for (auto const& item : m_Recent)
+			m_Functions.push_back({ &item, item.Value, {} });
+	else if (m_Host) {
 		auto& index = m_Host->GetSearchIndex();
 		auto kinds = SearchKindBit(SearchKind::Export) | SearchKindBit(SearchKind::Symbol);
 		// (the best of the exports and the symbols, of which those that are functions; one for each address)
@@ -138,12 +148,15 @@ void CDisassembleFunctionDlg::Update() {
 		std::stable_partition(m_Functions.begin(), m_Functions.end(), [](auto const& f) { return !f.Item->Name.starts_with(L'`'); });
 	}
 	m_List.SetItemCountEx((int)m_Functions.size(), 0);
-	// the best is chosen, unless an address is typed (it starts with a digit)
-	if (!m_Functions.empty() && !iswdigit(text[0])) {
+	// the best is chosen (the last opened), unless an address is typed (it starts with a digit)
+	if (!m_Functions.empty() && (text.IsEmpty() || !iswdigit(text[0]))) {
+		m_Selecting = true;
 		m_List.SelectItem(0);
 		m_List.EnsureVisible(0, FALSE);
+		m_Selecting = false;
 	}
-	SetDlgItemText(IDC_DISASM_STATUS, !m_Host ? L"" : text.IsEmpty() ? L"Type a part of a function's name" :
+	SetDlgItemText(IDC_DISASM_STATUS, !m_Host ? L"" :
+		text.IsEmpty() ? (m_Recent.empty() ? L"Type a part of a function's name" : L"Opened recently (type a part of a name to find others)") :
 		m_Functions.empty() ? L"No function matches" :
 		m_Functions.size() >= MaxResults ? std::format(L"The first {} functions that match", m_Functions.size()).c_str() :
 		std::format(L"{} functions match", m_Functions.size()).c_str());
@@ -181,12 +194,29 @@ LRESULT CDisassembleFunctionDlg::OnCancel(WORD, WORD wID, HWND, BOOL&) {
 	return 0;
 }
 
+// a function chosen in the list (a click; not from the box, whose keys move in it): its name in the box, to change, or to
+// take with Enter
+LRESULT CDisassembleFunctionDlg::OnListItemChanged(int, LPNMHDR hdr, BOOL& handled) {
+	handled = FALSE;	// (the list's own handling)
+	auto lv = (NMLISTVIEW*)hdr;
+	auto row = lv->iItem;
+	if (m_Selecting || !(lv->uChanged & LVIF_STATE) || !(lv->uNewState & LVIS_SELECTED) || (lv->uOldState & LVIS_SELECTED) ||
+		row < 0 || row >= (int)m_Functions.size())
+		return 0;
+	m_Setting = true;
+	m_Edit.SetWindowText(m_Functions[row].Item->Name.c_str());
+	m_Setting = false;
+	return 0;
+}
+
 LRESULT CDisassembleFunctionDlg::OnEditKeyDown(UINT msg, WPARAM wp, LPARAM lp, BOOL& handled) {
 	switch (wp) {
 		case VK_UP: case VK_DOWN: case VK_PRIOR: case VK_NEXT:
 			if (KillTimer(TimerUpdateFunctions))
 				Update();
+			m_Selecting = true;
 			m_List.SendMessage(msg, wp, lp);
+			m_Selecting = false;
 			return 0;
 	}
 	handled = FALSE;

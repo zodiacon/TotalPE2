@@ -216,6 +216,10 @@ struct GhidraDecompiler::Impl {
 	BlockSource Blocks;
 	// (the code of a handler decompiled in a block's: its blocks not shown)
 	bool Nested{ false };
+	// (and the variables of the function the block is in, in the establisher frame its handler is given; by handler, the
+	// structure of them its parameter points to)
+	std::vector<Local> const* Frame{ nullptr };
+	std::unordered_map<uint64_t, Datatype*> Frames;
 	std::unordered_map<uint64_t, std::string> Applied;	// the changes each function was last decompiled with (as text)
 	std::string Pending;	// what is to be said in the code of the next function decompiled (a change that could not be made)
 	std::unordered_map<uint32_t, Datatype*> Converted;	// the decompiler's types of the caller's ids
@@ -264,6 +268,7 @@ struct GhidraDecompiler::Impl {
 	void ApplyLocals(Funcdata* fd);
 	std::vector<std::pair<Varnode*, RegisterLocal const*>> RegisterValues(Funcdata* fd) const;
 	bool ApplyFixup(Funcdata* fd);
+	void ApplyFrame(Funcdata* fd, std::vector<Local> const& frame);
 
 	// the user's changes: types written as C, the changes to the variables of a function, and the variables it shows
 	Datatype* NamedType(std::string const& name);
@@ -754,6 +759,60 @@ std::vector<std::pair<Varnode*, GhidraDecompiler::Impl::RegisterLocal const*>> G
 		}
 	}
 	return values;
+}
+
+// A handler (a funclet) of the function a block is in: its second parameter is that function's establisher frame, a pointer
+// to a structure of the variables there ("frame->h"). Those that overlap others (of other blocks) are left out.
+void GhidraDecompiler::Impl::ApplyFrame(Funcdata* fd, std::vector<Local> const& frame) {
+	auto address = fd->getAddress().getOffset();
+	auto& type = Frames[address];
+	if (!type) {
+		std::vector<Local> sorted(frame);
+		std::stable_sort(sorted.begin(), sorted.end(), [](auto const& a, auto const& b) { return a.Offset < b.Offset; });
+		std::vector<Member> fields;
+		std::unordered_set<std::string> names;
+		int4 alignment = 1;
+		int64_t end = 0;
+		for (auto const& v : sorted) {
+			if (v.Name.empty() || v.Offset < end || !names.insert(v.Name).second)
+				continue;
+			Datatype* ft = nullptr;
+			try {
+				ft = Convert(v.Type);
+			}
+			catch (LowlevelError const&) {
+			}
+			if (!ft || ft->getSize() <= 0)
+				continue;
+			fields.push_back({ v.Name, (int4)v.Offset, ft });
+			alignment = std::max(alignment, ft->getAlignment());
+			end = v.Offset + ft->getSize();
+		}
+		if (fields.empty())
+			return;
+		std::ostringstream name;
+		name << "frame_" << std::hex << address;
+		auto st = Arch->types->getTypeStruct(name.str());
+		if (st->isIncomplete())
+			DefineFields(st, "struct", (uint32_t)((end + alignment - 1) / alignment * alignment), alignment, fields);
+		type = st;
+	}
+	try {
+		auto& proto = fd->getFuncProto();
+		auto space = Arch->getDefaultDataSpace();
+		PrototypePieces pieces;
+		pieces.model = Arch->defaultfp;
+		pieces.name = fd->getName();
+		pieces.outtype = proto.getOutputType();
+		pieces.firstVarArgSlot = -1;
+		pieces.intypes = { Unknown((uint32_t)space->getAddrSize()), Arch->types->getTypePointer(space->getAddrSize(), type, space->getWordSize()) };
+		pieces.innames = { "", "frame" };
+		proto.setPieces(pieces);
+		proto.setInputLock(true);
+		proto.setOutputLock(false);
+	}
+	catch (LowlevelError const&) {
+	}
 }
 
 // A function that the compiler's specification replaces at its calls (by p-code of what the call does: one that moves the
@@ -1782,9 +1841,10 @@ namespace {
 
 // The statements of a function, as lines of a block: a tab for its level, then those of their own. What it returns at its end
 // is not one (a catch's handler returns where to continue, a __finally's nothing).
-std::vector<std::string> GhidraDecompiler::BodyOf(uint64_t address) {
+std::vector<std::string> GhidraDecompiler::BodyOf(uint64_t address, std::vector<Local> const& frame) {
 	std::string text, error;
 	m_Impl->Nested = true;
+	m_Impl->Frame = &frame;
 	bool ok = false;
 	try {
 		ok = Decompile(address, {}, text, error);
@@ -1792,6 +1852,7 @@ std::vector<std::string> GhidraDecompiler::BodyOf(uint64_t address) {
 	catch (...) {
 	}
 	m_Impl->Nested = false;
+	m_Impl->Frame = nullptr;
 	if (!ok)
 		return {};
 	std::vector<std::string> lines;
@@ -1842,6 +1903,44 @@ std::vector<std::string> GhidraDecompiler::BodyOf(uint64_t address) {
 		result.pop_back();
 	while (!result.empty() && trimmed(result.back()).empty())
 		result.pop_back();
+	// the declarations (before the first empty line; one may go on to the next lines) of the variables its statements do not
+	// name are not shown
+	if (auto blank = std::find_if(result.begin(), result.end(), [&](auto const& line) { return trimmed(line).empty(); }); blank != result.end()) {
+		std::string statements;
+		for (auto it = blank; it != result.end(); ++it)
+			statements += *it + "\n";
+		auto identifier = [](char c) { return isalnum((unsigned char)c) || c == '_' || c == '$'; };
+		auto named = [&](std::string const& name) {
+			for (auto at = statements.find(name); at != std::string::npos; at = statements.find(name, at + 1))
+				if ((at == 0 || !identifier(statements[at - 1])) && (at + name.size() >= statements.size() || !identifier(statements[at + name.size()])))
+					return true;
+			return false;
+		};
+		std::vector<std::string> kept, declaration;
+		for (auto it = result.begin(); it != blank; ++it) {
+			declaration.push_back(*it);
+			auto text = trimmed(*it);
+			if (text.empty() || text.back() != ';')
+				continue;
+			// its name: the last identifier before the ";" (an array's before its "[")
+			auto end = std::min(text.find('['), text.size() - 1);
+			auto start = end;
+			while (start > 0 && identifier(text[start - 1]))
+				start--;
+			auto name = text.substr(start, end - start);
+			if (name.empty() || named(name))
+				kept.insert(kept.end(), declaration.begin(), declaration.end());
+			declaration.clear();
+		}
+		kept.insert(kept.end(), declaration.begin(), declaration.end());
+		if (kept.empty())
+			result.erase(result.begin(), blank + 1);
+		else {
+			auto rest = std::vector<std::string>(blank, result.end());
+			result = std::move(kept);
+			result.insert(result.end(), rest.begin(), rest.end());
+		}
+	}
 	// (the empty line after the declarations, at the start, and none at all: nothing)
 	bool any = std::any_of(result.begin(), result.end(), [&](auto const& line) { return !trimmed(line).empty(); });
 	if (!any)
@@ -1897,6 +1996,8 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 		m_Impl->Messages << m_Impl->Pending;
 		m_Impl->Pending.clear();
 		m_Impl->ApplyPrototype(fd);
+		if (m_Impl->Nested && m_Impl->Frame && !m_Impl->Frame->empty())
+			m_Impl->ApplyFrame(fd, *m_Impl->Frame);
 		m_Impl->ApplyLocals(fd);
 		if (changed)
 			m_Impl->ApplyChanges(fd, changes);
@@ -2191,7 +2292,7 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 			std::sort(block.Bodies.begin(), block.Bodies.end(), [](auto const& a, auto const& b) { return a.Line > b.Line; });
 			for (auto const& body : block.Bodies)
 				if (body.Line < block.Close.size()) {
-					auto statements = BodyOf(body.Address);
+					auto statements = BodyOf(body.Address, body.Frame);
 					block.Close.insert(block.Close.begin() + body.Line + 1, statements.begin(), statements.end());
 				}
 		}

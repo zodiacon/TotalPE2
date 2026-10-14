@@ -914,6 +914,7 @@ void CMainFrame::ResetFileState() {
 	CloseFileViews();
 	CloseDecompiler();
 	m_Annotations = {};
+	m_RecentFunctions.clear();
 	CancelXrefs();
 	m_PE.Close();
 	RefreshWin32View();
@@ -1478,6 +1479,7 @@ LRESULT CMainFrame::OnFileClose(WORD, WORD, HWND, BOOL&) {
 	CloseFileViews();
 	CloseDecompiler();
 	m_Annotations = {};
+	m_RecentFunctions.clear();
 	CancelXrefs();
 	m_PE.Close();
 	RefreshWin32View();
@@ -1979,6 +1981,7 @@ LRESULT CMainFrame::OnDecompileFunction(WORD /*wNotifyCode*/, WORD /*wID*/, HWND
 		AtlMessageBox(m_hWnd, error.c_str(), IDR_MAINFRAME, MB_ICONWARNING);
 		return 0;
 	}
+	RememberFunction(m_DisassembleFunction, address);
 	DecompileFunction(address);
 	return 0;
 }
@@ -2256,6 +2259,13 @@ std::vector<GhidraDecompiler::Block> CMainFrame::ExceptionBlocks(uint64_t va) co
 		});
 	if (eh.Scopes.empty())
 		return blocks;
+	// the variables of the function in its establisher frame (its stack pointer after its prologue), which its handlers are given
+	std::vector<GhidraDecompiler::Local> frame;
+	uint32_t frameSize, frameRegister;
+	int64_t frameOffset;
+	if (X64Frame(rva, frameSize, frameRegister, frameOffset) && FunctionLocals(va, {}, frame, true))
+		for (auto& local : frame)
+			local.Offset += frameSize;
 	auto function = DecompilerFunctionName(va);
 	if (function.empty())
 		function = std::format("func_0x{:012x}", va);	// (as the decompiler names it)
@@ -2289,7 +2299,7 @@ std::vector<GhidraDecompiler::Block> CMainFrame::ExceptionBlocks(uint64_t va) co
 				auto handler = nameOf(scope.HandlerRva, "finally");
 				block.Links.emplace_back(handler, base + scope.HandlerRva);
 				block.Close = { "} __finally {", "\t/* " + handler + ", if an exception leaves it; else the code that follows runs it */", "}" };
-				block.Bodies.push_back({ 1, base + scope.HandlerRva });
+				block.Bodies.push_back({ 1, base + scope.HandlerRva, frame });
 				break;
 			}
 			case ExceptionScope::Kinds::Try:
@@ -2301,7 +2311,7 @@ std::vector<GhidraDecompiler::Block> CMainFrame::ExceptionBlocks(uint64_t va) co
 					block.Links.emplace_back(handler, base + c.HandlerRva);
 					block.Close.push_back("} catch (" + CatchText(c) + ") {");
 					block.Close.push_back("\t/* the handler: " + handler + " */");
-					block.Bodies.push_back({ block.Close.size() - 1, base + c.HandlerRva });
+					block.Bodies.push_back({ block.Close.size() - 1, base + c.HandlerRva, frame });
 				}
 				block.Close.push_back("}");
 				break;
@@ -2476,7 +2486,8 @@ namespace {
 
 // The locals the stack pointer (or the frame pointer) locates, with their offsets from the stack pointer at the entry, which
 // the frame the prologue makes tells; and of optimized code, those in registers (x86, x64): where each is at the instructions
-bool CMainFrame::FunctionLocals(uint64_t va, std::vector<uint64_t> const& instructions, std::vector<GhidraDecompiler::Local>& locals) const {
+// ('parameters': and those on the stack, in the places the function keeps them: of what a handler of it reaches there)
+bool CMainFrame::FunctionLocals(uint64_t va, std::vector<uint64_t> const& instructions, std::vector<GhidraDecompiler::Local>& locals, bool parameters) const {
 	auto base = m_PE.GetImageBase();
 	if (!m_Symbols || va < base || va - base > 0xFFFFFFFFULL)
 		return false;
@@ -2522,7 +2533,9 @@ bool CMainFrame::FunctionLocals(uint64_t va, std::vector<uint64_t> const& instru
 				collect(child);
 				continue;
 			}
-			if (child.Tag() != SymbolTag::Data || child.Kind() != DataItemKind::Local || child.Location() != LocationKind::RegRel)
+			auto kind = child.Kind();
+			if (child.Tag() != SymbolTag::Data || child.Location() != LocationKind::RegRel ||
+				!(kind == DataItemKind::Local || (parameters && (kind == DataItemKind::Param || kind == DataItemKind::ObjectPtr))))
 				continue;
 			auto origin = origins.find(child.RegisterId());
 			auto type = child.Type();
@@ -3032,6 +3045,7 @@ bool CMainFrame::RvaOf(uint64_t va, uint32_t& rva) const {
 // The annotations are found by the SHA-256 of the file (a file larger than 1 GB is not hashed: it has none)
 void CMainFrame::LoadAnnotations(std::wstring const& path) {
 	m_Annotations = {};
+	m_RecentFunctions.clear();
 	if (m_PE.GetFileSize() > (1u << 30))
 		return;
 	auto hash = vt::HashFile(path);
@@ -3661,6 +3675,7 @@ LRESULT CMainFrame::OnSideBySide(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWnd
 		AtlMessageBox(m_hWnd, error.c_str(), IDR_MAINFRAME, MB_ICONWARNING);
 		return 0;
 	}
+	RememberFunction(m_DisassembleFunction, address);
 	ShowSideBySide(address);
 	return 0;
 }
@@ -3703,6 +3718,7 @@ LRESULT CMainFrame::OnDisassembleFunction(WORD /*wNotifyCode*/, WORD /*wID*/, HW
 		AtlMessageBox(m_hWnd, error.c_str(), IDR_MAINFRAME, MB_ICONWARNING);
 		return 0;
 	}
+	RememberFunction(m_DisassembleFunction, address);
 	if (m_Elf)
 		ShowElfAddress(address, true);
 	else

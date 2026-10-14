@@ -125,9 +125,12 @@ public:
 		std::vector<std::pair<std::string, uint64_t>> Links;
 		// Code shown in it (a handler's): after the line 'Line' of 'Close', the statements of the function at 'Address'. What
 		// cannot be decompiled is not shown.
+		// The handler's second parameter is the establisher frame of the function the block is in (its stack pointer after
+		// its prologue): 'Frame' has the variables of that function there, by their offsets from it.
 		struct Body {
 			size_t Line;
 			uint64_t Address;
+			std::vector<Local> Frame;
 		};
 		std::vector<Body> Bodies;
 		// Its ranges may go on after its code (a C++ try: the compiler keeps the state of the code only where it may throw,
@@ -187,7 +190,7 @@ public:
 		LineAddresses* lines = nullptr, Variables* variables = nullptr);
 
 private:
-	std::vector<std::string> BodyOf(uint64_t address);
+	std::vector<std::string> BodyOf(uint64_t address, std::vector<Local> const& frame);
 	struct Impl;
 	std::unique_ptr<Impl> m_Impl;
 };

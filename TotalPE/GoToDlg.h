@@ -44,7 +44,7 @@ private:
 
 // A function to disassemble (or decompile): its name or its address. The functions whose names match what is typed are
 // listed (those of the exports and of the symbols, and those the user named), the best first; Up and Down choose one,
-// Enter (or a double-click) takes it.
+// Enter (or a double-click) takes it; one chosen in the list itself (a click) has its name put in the box. With nothing typed, those opened last are listed.
 class CDisassembleFunctionDlg :
 	public CDialogImpl<CDisassembleFunctionDlg>,
 	public CDialogHelper<CDisassembleFunctionDlg>,
@@ -70,6 +70,7 @@ public:
 		COMMAND_HANDLER(IDC_DISASM_TEXT, EN_CHANGE, OnTextChanged)
 		COMMAND_ID_HANDLER(IDOK, OnOK)
 		COMMAND_ID_HANDLER(IDCANCEL, OnCancel)
+		NOTIFY_HANDLER(IDC_DISASM_LIST, LVN_ITEMCHANGED, OnListItemChanged)
 		CHAIN_MSG_MAP(CVirtualListView<CDisassembleFunctionDlg>)
 	ALT_MSG_MAP(1)
 		// the keys that move in the list go to it from the text
@@ -82,6 +83,7 @@ public:
 	LRESULT OnOK(WORD, WORD, HWND, BOOL&);
 	LRESULT OnCancel(WORD, WORD wID, HWND, BOOL&);
 	LRESULT OnEditKeyDown(UINT, WPARAM, LPARAM, BOOL&);
+	LRESULT OnListItemChanged(int, LPNMHDR, BOOL&);
 
 private:
 	void Update();
@@ -99,6 +101,9 @@ private:
 	CContainedWindowT<CEdit> m_Edit;
 	CListViewCtrl m_List;
 	std::vector<Function> m_Functions;
+	std::vector<SearchItem> m_Recent;
 	uint64_t m_Address{ 0 };
+	bool m_Setting{ false };	// (the text is set from the list: what it lists stays)
+	bool m_Selecting{ false };	// (the list's selection is the box's: its best match, its keys)
 	static constexpr size_t MaxResults = 200;
 };

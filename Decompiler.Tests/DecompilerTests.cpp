@@ -774,7 +774,7 @@ TEST_CASE("A C++ try whose ranges are not whole statements: those that have the 
 
 TEST_CASE("The code of a block's handler is shown in it", "[decompiler]") {
 	Fixture f;
-	auto a = Code + 0x100, b = Code + 0x110, funclet = Code + 0x140;
+	auto a = Code + 0x100, b = Code + 0x110, funclet = Code + 0x140, writer = Code + 0x160;
 	// sub rsp, 28h; call A; mov eax, 1; add rsp, 28h; ret
 	f.Image.At(Code)
 		.Bytes({ 0x48, 0x83, 0xEC, 0x28 })
@@ -782,6 +782,8 @@ TEST_CASE("The code of a block's handler is shown in it", "[decompiler]") {
 		.Bytes({ 0xB8, 0x01, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x28, 0xC3 });
 	// a funclet of its own: sub rsp, 28h; call B; add rsp, 28h; ret
 	f.Image.At(funclet).Bytes({ 0x48, 0x83, 0xEC, 0x28 }).Call(b).Bytes({ 0x48, 0x83, 0xC4, 0x28, 0xC3 });
+	// one that writes a variable of the function in its establisher frame (its second parameter): mov dword ptr [rdx+30h], 5; ret
+	f.Image.At(writer).Bytes({ 0xC7, 0x42, 0x30, 0x05, 0x00, 0x00, 0x00, 0xC3 });
 	for (auto at : { a, b })
 		f.Image.At(at).Bytes({ 0xC3 });
 	std::vector<GhidraDecompiler::Block> blocks;
@@ -789,14 +791,27 @@ TEST_CASE("The code of a block's handler is shown in it", "[decompiler]") {
 		if (address == Code)
 			out = blocks;
 		});
+	f.Decompiler.SetTypeSource([](uint32_t id, GhidraDecompiler::Type& type) {
+		type.Kind = GhidraDecompiler::TypeKind::Integer;
+		type.Name = "int";
+		type.Size = 4;
+		return id == 1;
+		});
 	f.Open();
 	f.Decompiler.AddFunction(a, "A");
 	f.Decompiler.AddFunction(b, "B");
 	GhidraDecompiler::Block guarded{ { { Code + 4, Code + 9 } }, "__try {",
 		{ "} __except (EXCEPTION_EXECUTE_HANDLER) {", "\t/* the handler */", "}" }, {} };
-	// what it returns is not shown
-	guarded.Bodies = { { 1, funclet } };
-	blocks = { guarded };
-	auto code = f.Decompile(Code, "Main");
-	CHECK_THAT(code, ContainsSubstring("    /* the handler */\n    B();\n  }\n"));
+	SECTION("what it returns is not shown") {
+		guarded.Bodies = { { 1, funclet } };
+		blocks = { guarded };
+		auto code = f.Decompile(Code, "Main");
+		CHECK_THAT(code, ContainsSubstring("    /* the handler */\n    B();\n  }\n"));
+	}
+	SECTION("the variables of the function in the frame it is given, by their names") {
+		guarded.Bodies = { { 1, writer, { { "count", 1, 0x30 }, { "other", 1, 0x10 } } } };
+		blocks = { guarded };
+		auto code = f.Decompile(Code, "Main");
+		CHECK_THAT(code, ContainsSubstring("    /* the handler */\n    frame->count = 5;\n  }\n"));
+	}
 }

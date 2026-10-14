@@ -19,6 +19,8 @@ struct ISearchHost abstract {
 	virtual bool FunctionAddress(SearchItem const& item, uint64_t& address) { return false; }
 	// the declaration of the function at an address (its parameters tell overloads apart); empty if it is not known
 	virtual std::wstring FunctionDeclaration(uint64_t address) { return {}; }
+	// the functions opened last (from those dialogs), the last first (Value: the address)
+	virtual std::vector<SearchItem> RecentFunctions() { return {}; }
 };
 
 // Search All: one search through the imports, exports, strings, resources, symbols and section names of the file.

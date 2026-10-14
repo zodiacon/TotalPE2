@@ -423,6 +423,23 @@ std::wstring CMainFrame::FunctionDeclaration(uint64_t address) {
 	return text;
 }
 
+std::vector<SearchItem> CMainFrame::RecentFunctions() {
+	return m_RecentFunctions;
+}
+
+// A function opened from the Disassemble or Decompile Function dialog: first in its recent ones (once)
+void CMainFrame::RememberFunction(std::wstring const& name, uint64_t address) {
+	constexpr size_t MaxRecent = 20;
+	std::erase_if(m_RecentFunctions, [&](auto const& item) { return item.Value == address; });
+	auto base = m_PE ? m_PE.GetImageBase() : 0;
+	SearchItem item{ .Kind = SearchKind::Symbol, .Name = name, .Details = L"Opened recently",
+		.Location = m_PE && address >= base ? std::format(L"RVA 0x{:X}", address - base) : std::format(L"0x{:X}", address),
+		.Value = address, .Code = true, .Image = GetTreeIcon(IDI_FUNCTION) };
+	m_RecentFunctions.insert(m_RecentFunctions.begin(), std::move(item));
+	if (m_RecentFunctions.size() > MaxRecent)
+		m_RecentFunctions.resize(MaxRecent);
+}
+
 bool CMainFrame::GoToSearchItem(SearchItem const& item) {
 	// a view of the tree, whatever the file
 	if (item.Kind == SearchKind::View) {
