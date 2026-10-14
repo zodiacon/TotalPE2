@@ -102,6 +102,7 @@ private:
 	CListViewCtrl m_List;
 	std::vector<Function> m_Functions;
 	std::vector<SearchItem> m_Recent;
+	std::vector<SearchItem> m_ByAddress;	// the functions whose addresses start with what is typed
 	uint64_t m_Address{ 0 };
 	bool m_Setting{ false };	// (the text is set from the list: what it lists stays)
 	bool m_Selecting{ false };	// (the list's selection is the box's: its best match, its keys)

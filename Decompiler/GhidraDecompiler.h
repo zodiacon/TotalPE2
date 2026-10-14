@@ -142,8 +142,8 @@ public:
 	// the blocks of the function at an address (asked each time it is decompiled), inner ones first
 	using BlockSource = std::function<void(uint64_t address, std::vector<Block>& blocks)>;
 	// Of a handler (a funclet) decompiled by itself, the variables of the function it is a handler of, in its establisher
-	// frame (see Block::Body); false if it is not one
-	using FrameSource = std::function<bool(uint64_t address, std::vector<Local>& frame)>;
+	// frame (see Block::Body), and the function's name; false if it is not one
+	using FrameSource = std::function<bool(uint64_t address, std::vector<Local>& frame, std::string& function)>;
 
 	// Once per process: the folder of the language definitions (.ldefs, .sla, .pspec, .cspec), in it or in its
 	// subfolders (one per processor)

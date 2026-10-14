@@ -303,7 +303,7 @@ BEGIN
         MENUITEM "&Back\tAlt+Left",             ID_NAV_BACK
         MENUITEM "&Forward\tAlt+Right",         ID_NAV_FORWARD
         MENUITEM SEPARATOR
-        MENUITEM "Toggle &Bookmark\tCtrl+B",      ID_HEX_BOOKMARK_TOGGLE
+        MENUITEM "Toggle &Bookmark\tCtrl+B",    ID_HEX_BOOKMARK_TOGGLE
         MENUITEM "Boo&kmarks",                  ID_NAV_BOOKMARKS
         MENUITEM "&Comment...\t;",              ID_NAV_COMMENT
         MENUITEM SEPARATOR
@@ -674,8 +674,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,3,0,0
- PRODUCTVERSION 1,3,0,0
+ FILEVERSION 2,0,0,0
+ PRODUCTVERSION 2,0,0,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -692,12 +692,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Pavel Yosifovich"
             VALUE "FileDescription", "Total PE - PE Viewer"
-            VALUE "FileVersion", "1.3.0.0"
+            VALUE "FileVersion", "2.0.0.0"
             VALUE "InternalName", "TotalPE"
             VALUE "LegalCopyright", "©2022-2026 Pavel Yosifovich"
             VALUE "OriginalFilename", "TotalPE.exe"
             VALUE "ProductName", "Total PE"
-            VALUE "ProductVersion", "1.3.0.0"
+            VALUE "ProductVersion", "2.0.0"
         END
     END
     BLOCK "VarFileInfo"
@@ -843,21 +843,33 @@ END
 
 STRINGTABLE
 BEGIN
+    ID_NAV_BACK             "Go back to where you were\nBack (Alt+Left)"
+    ID_NAV_FORWARD          "Go forward again\nForward (Alt+Right)"
     ID_VIEW_OVERLAY         "\nOverlay"
     ID_PE_VIRUSTOTAL        "\nScan the file with VirusTotal"
     ID_PE_VTAPIKEY          "\nSet the VirusTotal API key"
     ID_PE_STRINGS           "The ASCII and UTF-16 strings of the file\nStrings"
-    ID_NAV_BACK             "Go back to where you were\nBack (Alt+Left)"
-    ID_NAV_FORWARD          "Go forward again\nForward (Alt+Right)"
+END
+
+STRINGTABLE
+BEGIN
     ID_CODE_RENAME          "Rename the variable or function under the caret\nRename"
     ID_CODE_RETYPE          "Change the type of the variable under the caret\nChange Type"
+END
+
+STRINGTABLE
+BEGIN
     ID_NAV_BOOKMARKS        "The bookmarks of the file\nBookmarks"
     ID_NAV_COMMENT          "Comment the instruction of the caret\nComment"
     ID_PE_WIN32API          "The functions and types of Windows, with their declarations\nWindows API"
     ID_WIN32_IMPORTS        "Only the functions the file imports\nImports"
     ID_WIN32_REFERENCES     "The places the file calls the function (in the main window)\nReferences"
+END
+
+STRINGTABLE
+BEGIN
     ID_WIN32_DOCS           "Show Microsoft's documentation of the function or type\nDocumentation"
-    ID_WIN32_BROWSER        "Open the documentation in the default browser\nOpen in Browser"
+    ID_WIN32_BROWSER        "Open the documentation (or a search of it) in the default browser\nOpen in Browser"
 END
 
 STRINGTABLE

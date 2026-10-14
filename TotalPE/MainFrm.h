@@ -436,7 +436,7 @@ private:
 	ExceptionHandling ExceptionHandlingOf(uint32_t rva) const;
 	// the variables of a function in its establisher frame (as its handlers are given it); false if they are not known
 	bool EstablisherFrame(uint64_t va, std::vector<GhidraDecompiler::Local>& frame, uint32_t& frameSize) const;
-	bool HandlerFrame(uint64_t va, std::vector<GhidraDecompiler::Local>& frame) const;
+	bool HandlerFrame(uint64_t va, std::vector<GhidraDecompiler::Local>& frame, std::string& function) const;
 	// for the decompiler: the user's changes to the variables of a function, a type of the symbols by name, and the user's
 	// names of functions and global variables
 	std::vector<GhidraDecompiler::VariableChange> VariableChanges(uint64_t va) const;
@@ -457,6 +457,7 @@ private:
 	bool FunctionAddress(SearchItem const& item, uint64_t& address) override;
 	std::wstring FunctionDeclaration(uint64_t address) override;
 	std::vector<SearchItem> RecentFunctions() override;
+	std::vector<SearchItem> FunctionsAt(std::wstring const& digits, size_t limit) override;
 	void RememberFunction(std::wstring const& name, uint64_t address);
 	void AddViewsToSearchIndex(HTREEITEM hParent, std::wstring const& parent, int depth);
 	LRESULT OnEditSearchAll(WORD, WORD, HWND, BOOL&);

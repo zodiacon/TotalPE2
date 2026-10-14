@@ -21,6 +21,8 @@ struct ISearchHost abstract {
 	virtual std::wstring FunctionDeclaration(uint64_t address) { return {}; }
 	// the functions opened last (from those dialogs), the last first (Value: the address)
 	virtual std::vector<SearchItem> RecentFunctions() { return {}; }
+	// the functions whose addresses (VAs or RVAs, in hex) start with the digits typed, at most 'limit' (Value: the address)
+	virtual std::vector<SearchItem> FunctionsAt(std::wstring const& digits, size_t limit) { return {}; }
 };
 
 // Search All: one search through the imports, exports, strings, resources, symbols and section names of the file.

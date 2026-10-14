@@ -18,6 +18,8 @@ public:
 	void Navigate(std::wstring url, std::wstring const& name);
 	// the page asked for last (empty if there is none)
 	std::wstring const& Url() const { return m_Url; }
+	// Microsoft Learn's search for a name
+	static std::wstring SearchUrl(std::wstring const& name);
 
 	BEGIN_MSG_MAP(CDocPane)
 		MESSAGE_HANDLER(WM_SIZE, OnSize)

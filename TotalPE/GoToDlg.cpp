@@ -146,7 +146,16 @@ void CDisassembleFunctionDlg::Update() {
 		}
 		// (the compiler's pieces of functions last: "`F'::`1'::dtor$0", "`F'::`1'::catch$2")
 		std::stable_partition(m_Functions.begin(), m_Functions.end(), [](auto const& f) { return !f.Item->Name.starts_with(L'`'); });
+		// what is typed may be the start of an address: the functions there (those without names too), after those named so
+		m_ByAddress = m_Host->FunctionsAt((PCWSTR)text, MaxResults);
+		for (auto const& item : m_ByAddress)
+			if (m_Functions.size() < MaxResults && seen.insert(item.Value).second)
+				m_Functions.push_back({ &item, item.Value, {} });
 	}
+	// (none chosen: the rows are others)
+	m_Selecting = true;
+	m_List.SetItemState(-1, 0, LVIS_SELECTED | LVIS_FOCUSED);
+	m_Selecting = false;
 	m_List.SetItemCountEx((int)m_Functions.size(), 0);
 	// the best is chosen (the last opened), unless an address is typed (it starts with a digit)
 	if (!m_Functions.empty() && (text.IsEmpty() || !iswdigit(text[0]))) {

@@ -42,7 +42,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="DockViews.cpp" />
     <ClCompile Include="pch.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -91,7 +90,6 @@
     <ClCompile Include="TypeView.cpp">
       <Filter>Views</Filter>
     </ClCompile>
-    <ClCompile Include="TypeExporter.cpp" />
     <ClCompile Include="Helpers.cpp">
       <Filter>Helpers</Filter>
     </ClCompile>
@@ -284,9 +282,14 @@
     <ClCompile Include="FontView.cpp">
       <Filter>Views\Resources</Filter>
     </ClCompile>
+    <ClCompile Include="DockViews.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
+    <ClCompile Include="TypeExporter.cpp">
+      <Filter>Helpers</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="DockViews.h" />
     <ClInclude Include="pch.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -341,7 +344,6 @@
     <ClInclude Include="TypeView.h">
       <Filter>Views</Filter>
     </ClInclude>
-    <ClInclude Include="TypeExporter.h" />
     <ClInclude Include="Helpers.h">
       <Filter>Helpers</Filter>
     </ClInclude>
@@ -518,6 +520,12 @@
     </ClInclude>
     <ClInclude Include="MenuView.h">
       <Filter>Views\Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="DockViews.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="TypeExporter.h">
+      <Filter>Helpers</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

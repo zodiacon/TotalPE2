@@ -32,6 +32,11 @@ namespace {
 	}
 }
 
+std::wstring CDocPane::SearchUrl(std::wstring const& name) {
+	// (a name of Windows has letters, digits and underscores only: nothing to escape)
+	return L"https://learn.microsoft.com/search/?terms=" + name + L"&category=Documentation";
+}
+
 void CDocPane::Navigate(std::wstring url, std::wstring const& name) {
 	m_Url = std::move(url);
 	m_Name = name;
@@ -138,7 +143,10 @@ void CDocPane::Load() {
 		return;
 	}
 	auto color = [](COLORREF c) { return std::format(L"#{:02x}{:02x}{:02x}", GetRValue(c), GetGValue(c), GetBValue(c)); };
-	auto text = m_Name.empty() ? std::wstring() : L"Microsoft's documentation has no page for " + Escaped(m_Name) + L".";
+	// (and a search of the documentation for it, in this window)
+	auto text = m_Name.empty() ? std::wstring() : std::format(L"The metadata of Windows has no page of Microsoft's documentation for {}.<p>"
+		L"<a href=\"{}\" style=\"color: {}\">Search Microsoft Learn for {}</a>", Escaped(m_Name), SearchUrl(m_Name),
+		Dark() ? L"#6cb4ff" : L"#0067b8", Escaped(m_Name));
 	auto html = std::format(L"<html><body style=\"font-family: Segoe UI; font-size: 10pt; background: {}; color: {}\">{}</body></html>",
 		color(Background()), color(Foreground()), text);
 	m_WebView->NavigateToString(html.c_str());

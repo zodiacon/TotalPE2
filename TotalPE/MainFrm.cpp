@@ -2274,7 +2274,7 @@ bool CMainFrame::EstablisherFrame(uint64_t va, std::vector<GhidraDecompiler::Loc
 
 // A handler (a funclet) by its name, which has that of its function ("`F'::`1'::catch$4", "F$fin$0", "F$filt$0"): the
 // variables of the function in its establisher frame, if the function's exception data has the handler
-bool CMainFrame::HandlerFrame(uint64_t va, std::vector<GhidraDecompiler::Local>& frame) const {
+bool CMainFrame::HandlerFrame(uint64_t va, std::vector<GhidraDecompiler::Local>& frame, std::string& function) const {
 	uint32_t rva, parentRva;
 	if (!m_PE || !m_Symbols || !RvaOf(va, rva) || m_PE.GetNTHeader()->NTHdr32.FileHeader.Machine != IMAGE_FILE_MACHINE_AMD64)
 		return false;
@@ -2302,6 +2302,7 @@ bool CMainFrame::HandlerFrame(uint64_t va, std::vector<GhidraDecompiler::Local>&
 			handler |= c.HandlerRva == rva;
 	}
 	uint32_t frameSize;
+	function = parent;
 	return handler && EstablisherFrame(parentVa, frame, frameSize) && !frame.empty();
 }
 
@@ -2891,9 +2892,9 @@ GhidraDecompiler* CMainFrame::DecompilerSession::Open(std::string& error) {
 	decompiler->SetBlockSource([this](uint64_t va, std::vector<GhidraDecompiler::Block>& blocks) {
 		Ask([&] { blocks = Frame->ExceptionBlocks(va); });
 		});
-	decompiler->SetFrameSource([this](uint64_t va, std::vector<GhidraDecompiler::Local>& frame) {
+	decompiler->SetFrameSource([this](uint64_t va, std::vector<GhidraDecompiler::Local>& frame, std::string& function) {
 		bool known = false;
-		Ask([&] { known = !Stale && Frame->HandlerFrame(va, frame); });
+		Ask([&] { known = !Stale && Frame->HandlerFrame(va, frame, function); });
 		return known;
 		});
 	decompiler->SetCommentSource([this](std::vector<std::pair<uint64_t, std::string>>& comments) {

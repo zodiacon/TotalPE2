@@ -227,7 +227,7 @@ void CWin32ApiView::Show(int entry) {
 	ctrl.SetReadOnly(true);
 	ctrl.EmptyUndoBuffer();
 	m_DocUrl = entry < 0 ? std::wstring() : m_Api->DocumentationUrl(m_Api->Entries()[entry]);
-	UIEnable(ID_WIN32_BROWSER, !m_DocUrl.empty());
+	UIEnable(ID_WIN32_BROWSER, entry >= 0);
 	ShowDocumentation();
 }
 
@@ -254,9 +254,12 @@ void CWin32ApiView::ShowDocumentationPane() {
 		OnDocumentation(0, ID_WIN32_DOCS, nullptr, handled);
 }
 
+// its page, or the search of the documentation for it if it has none
 LRESULT CWin32ApiView::OnOpenInBrowser(WORD, WORD, HWND, BOOL&) {
-	if (!m_DocUrl.empty())
-		::ShellExecute(nullptr, L"open", m_DocUrl.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+	if (m_Shown < 0)
+		return 0;
+	auto url = !m_DocUrl.empty() ? m_DocUrl : CDocPane::SearchUrl(std::wstring(CA2W(m_Api->Entries()[m_Shown].Name.c_str())));
+	::ShellExecute(nullptr, L"open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 	return 0;
 }
 

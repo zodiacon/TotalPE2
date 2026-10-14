@@ -25,6 +25,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "WTLDock", "WTLHelper\WTLDoc
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Decompiler.Tests", "Decompiler.Tests\Decompiler.Tests.vcxproj", "{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{CCBFC880-667A-4B80-B7AD-80EE12BCB136}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|ARM64 = Debug|ARM64
@@ -143,21 +145,6 @@ Global
 		{5D0F1C52-7A3E-4B8F-9C61-2E4A8B7D3F10}.ReleaseSigned|x64.ActiveCfg = Release|x64
 		{5D0F1C52-7A3E-4B8F-9C61-2E4A8B7D3F10}.ReleaseSigned|x64.Build.0 = Release|x64
 		{5D0F1C52-7A3E-4B8F-9C61-2E4A8B7D3F10}.ReleaseSigned|x86.ActiveCfg = Release|x64
-		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.Debug|ARM64.ActiveCfg = Debug|x64
-		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.Debug|ARM64.Build.0 = Debug|x64
-		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.Debug|x64.ActiveCfg = Debug|x64
-		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.Debug|x64.Build.0 = Debug|x64
-		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.Debug|x86.ActiveCfg = Debug|x64
-		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.Release|ARM64.ActiveCfg = Release|x64
-		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.Release|ARM64.Build.0 = Release|x64
-		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.Release|x64.ActiveCfg = Release|x64
-		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.Release|x64.Build.0 = Release|x64
-		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.Release|x86.ActiveCfg = Release|x64
-		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.ReleaseSigned|ARM64.ActiveCfg = Release|x64
-		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.ReleaseSigned|ARM64.Build.0 = Release|x64
-		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.ReleaseSigned|x64.ActiveCfg = Release|x64
-		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.ReleaseSigned|x64.Build.0 = Release|x64
-		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.ReleaseSigned|x86.ActiveCfg = Release|x64
 		{768E9381-B6E3-4D46-8257-64E5BD8409B2}.Debug|ARM64.ActiveCfg = Debug|x64
 		{768E9381-B6E3-4D46-8257-64E5BD8409B2}.Debug|ARM64.Build.0 = Debug|x64
 		{768E9381-B6E3-4D46-8257-64E5BD8409B2}.Debug|x64.ActiveCfg = Debug|x64
@@ -230,9 +217,28 @@ Global
 		{EA1678AD-F74B-43E4-B44A-C56901C33C19}.ReleaseSigned|x64.Build.0 = Release|x64
 		{EA1678AD-F74B-43E4-B44A-C56901C33C19}.ReleaseSigned|x86.ActiveCfg = Release|Win32
 		{EA1678AD-F74B-43E4-B44A-C56901C33C19}.ReleaseSigned|x86.Build.0 = Release|Win32
+		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.Debug|ARM64.ActiveCfg = Debug|x64
+		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.Debug|ARM64.Build.0 = Debug|x64
+		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.Debug|x64.ActiveCfg = Debug|x64
+		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.Debug|x64.Build.0 = Debug|x64
+		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.Debug|x86.ActiveCfg = Debug|x64
+		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.Release|ARM64.ActiveCfg = Release|x64
+		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.Release|ARM64.Build.0 = Release|x64
+		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.Release|x64.ActiveCfg = Release|x64
+		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.Release|x64.Build.0 = Release|x64
+		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.Release|x86.ActiveCfg = Release|x64
+		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.ReleaseSigned|ARM64.ActiveCfg = Release|x64
+		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.ReleaseSigned|ARM64.Build.0 = Release|x64
+		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.ReleaseSigned|x64.ActiveCfg = Release|x64
+		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.ReleaseSigned|x64.Build.0 = Release|x64
+		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17}.ReleaseSigned|x86.ActiveCfg = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{5D0F1C52-7A3E-4B8F-9C61-2E4A8B7D3F10} = {CCBFC880-667A-4B80-B7AD-80EE12BCB136}
+		{8C3B6E21-4F5A-4D7E-A1B9-6E2F0C4D8A17} = {CCBFC880-667A-4B80-B7AD-80EE12BCB136}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {7CA91078-4784-4401-95A5-6A96B2A14E86}
