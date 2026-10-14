@@ -2,6 +2,8 @@
 #include "ExceptionScopes.h"
 #include "PEFile.h"
 #include "UnwindInfo.h"
+#include "CodeAnalysis.h"
+#include <capstone/capstone.h>
 #include <algorithm>
 #include <format>
 #include <map>
@@ -103,11 +105,11 @@ namespace {
 		return ranges;
 	}
 
-	std::string TypeName(ImageReader const& read, uint32_t typeRva) {
+	std::string TypeName(ImageReader const& read, uint32_t typeRva, uint32_t pointerSize = 8) {
 		// TypeDescriptor: the pointer to type_info's vtable and a spare pointer, then the decorated name
 		std::string name;
 		char ch;
-		for (uint32_t rva = typeRva + 16; name.size() < 1024 && read(rva, &ch, 1) && ch; rva++)
+		for (uint32_t rva = typeRva + 2 * pointerSize; name.size() < 1024 && read(rva, &ch, 1) && ch; rva++)
 			name += ch;
 		return name;
 	}
@@ -327,16 +329,276 @@ ExceptionHandling ReadExceptionHandling(ImageReader const& read, ExceptionHandle
 	return eh;
 }
 
-ExceptionHandling ReadExceptionHandling(PEFile const& pe, uint32_t functionRva, std::function<std::string(uint32_t rva)> const& handlerName) {
+// ARM64's .xdata: a word (the function's length, then X: the handler is there, E: one epilog in the word, the count of the
+// epilogs and of the words of unwind codes; both 0: in a second word), the epilogs' scopes (unless E), the unwind codes,
+// then the handler's RVA and its data
+bool ReadArm64Handler(ImageReader const& read, uint32_t xdata, uint32_t& handlerRva, uint32_t& handlerDataRva) {
+	uint32_t header;
+	if (!xdata || !read(xdata, &header, 4) || !(header & (1u << 20)))
+		return false;
+	uint32_t epilogs = (header >> 22) & 0x1F, words = (header >> 27) & 0x1F, offset = 4;
+	if (epilogs == 0 && words == 0) {
+		uint32_t extended;
+		if (!read(xdata + 4, &extended, 4))
+			return false;
+		epilogs = extended & 0xFFFF;
+		words = (extended >> 16) & 0xFF;
+		offset = 8;
+	}
+	if (!(header & (1u << 21)))
+		offset += epilogs * 4;
+	offset += words * 4;
+	handlerDataRva = xdata + offset + 4;
+	return read(xdata + offset, &handlerRva, 4) && handlerRva != 0;
+}
+
+ExceptionHandling ReadX86ExceptionHandling(ImageReader const& read, uint32_t imageBase, uint32_t functionRva,
+	uint32_t functionLength, std::function<std::string(uint32_t rva)> const& handlerName) {
 	ExceptionHandling eh;
+	size_t handle = 0;
+	if (!OpenDisassembler(CpuArch::X86, handle))
+		return eh;
+	auto cs = (csh)handle;
+	auto rvaOf = [&](uint32_t va) { return va - imageBase; };
+	// the code (to its end, or to the padding after a return)
+	constexpr uint32_t MaxLength = 0x2000;
+	std::vector<uint8_t> code(functionLength ? std::min(functionLength, MaxLength * 8) : MaxLength);
+	// (in pieces: as much as the image has)
+	size_t size = 0;
+	while (size < code.size()) {
+		size_t piece = std::min<size_t>(256, code.size() - size);
+		while (piece > 0 && !read(functionRva + (uint32_t)size, code.data() + size, piece))
+			piece = piece > 16 ? 16 : piece - 1;
+		if (!piece)
+			break;
+		size += piece;
+	}
+	if (!size) {
+		cs_close(&cs);
+		return eh;
+	}
+	cs_insn* insns = nullptr;
+	auto total = cs_disasm(cs, code.data(), size, imageBase + functionRva, 0, &insns);
+	auto count = total;
+	if (!functionLength)
+		for (size_t i = 0; i + 1 < count; i++)
+			if (insns[i].id == X86_INS_RET && insns[i + 1].id == X86_INS_INT3) {
+				count = i + 1;
+				break;
+			}
+	auto name = [&](uint32_t va) { return handlerName ? handlerName(rvaOf(va)) : std::string(); };
+
+	// the prologue: push ebp; mov ebp, esp; then the pushes of the registration
+	std::vector<uint32_t> pushes;
+	for (size_t i = 0; i < count && i < 8 && pushes.size() < 3; i++) {
+		auto const& x = insns[i].detail->x86;
+		if (insns[i].id == X86_INS_PUSH && x.op_count == 1 && x.operands[0].type == X86_OP_IMM)
+			pushes.push_back((uint32_t)x.operands[0].imm);
+	}
+	enum class Kind { None, Seh3, Seh4, Cxx } kind = Kind::None;
+	uint32_t funcInfo = 0;
+	if (pushes.size() == 3) {
+		auto handler = name(pushes[2]);
+		if (handler.find("except_handler4") != std::string::npos)
+			kind = Kind::Seh4;
+		else if (handler.find("except_handler3") != std::string::npos)
+			kind = Kind::Seh3;
+		if (kind != Kind::None)
+			eh.HandlerRva = rvaOf(pushes[2]);
+	}
+	if (kind == Kind::None && pushes.size() >= 2 && pushes[0] == 0xFFFFFFFF) {
+		// the stub: mov eax, offset FuncInfo; jmp __CxxFrameHandler3 (after the check of its cookie)
+		uint8_t stub[64];
+		if (read(rvaOf(pushes[1]), stub, sizeof(stub))) {
+			cs_insn* s = nullptr;
+			auto n = cs_disasm(cs, stub, sizeof(stub), pushes[1], 12, &s);
+			for (size_t i = 0; i < n && !funcInfo; i++) {
+				auto const& x = s[i].detail->x86;
+				if (s[i].id == X86_INS_MOV && x.op_count == 2 && x.operands[0].type == X86_OP_REG && x.operands[0].reg == X86_REG_EAX &&
+					x.operands[1].type == X86_OP_IMM) {
+					uint32_t magic = 0;
+					if (read(rvaOf((uint32_t)x.operands[1].imm), &magic, 4) && magic >= 0x19930520 && magic <= 0x19930522)
+						funcInfo = (uint32_t)x.operands[1].imm;
+				}
+			}
+			if (n)
+				cs_free(s, n);
+		}
+		if (funcInfo) {
+			kind = Kind::Cxx;
+			eh.HandlerRva = rvaOf(pushes[1]);
+		}
+	}
+	if (kind == Kind::None) {
+		if (total)
+			cs_free(insns, total);
+		cs_close(&cs);
+		return eh;
+	}
+
+	// the states of the code: where it sets [ebp-4] (mov dword or byte; and with 0), from the state the prologue pushed
+	int32_t state = kind == Kind::Cxx || kind == Kind::Seh3 ? -1 : (int32_t)pushes[0];
+	std::vector<std::pair<uint32_t, int32_t>> map{ { functionRva, state } };
+	int32_t maxState = -1;
+	uint32_t end = functionRva;
+	for (size_t i = 0; i < count; i++) {
+		auto const& insn = insns[i];
+		auto const& x = insn.detail->x86;
+		end = (uint32_t)(insn.address + insn.size - imageBase);
+		if (x.op_count != 2 || x.operands[0].type != X86_OP_MEM || x.operands[0].mem.base != X86_REG_EBP ||
+			x.operands[0].mem.disp != -4 || x.operands[0].mem.index != X86_REG_INVALID || x.operands[1].type != X86_OP_IMM)
+			continue;
+		int32_t value;
+		if (insn.id == X86_INS_MOV)
+			value = x.operands[0].size == 1 ? (int32_t)(uint8_t)x.operands[1].imm : (int32_t)x.operands[1].imm;
+		else if (insn.id == X86_INS_AND && x.operands[1].imm == 0)
+			value = 0;
+		else
+			continue;
+		maxState = std::max(maxState, value);
+		map.emplace_back(end, value);
+	}
+	if (total)
+		cs_free(insns, total);
+	cs_close(&cs);
+	auto states = RangesOf(std::move(map), end);
+	// (the code of the states some of which are given: adjacent pieces joined)
+	auto rangesOf = [&](auto const& wanted) {
+		std::vector<std::pair<uint32_t, uint32_t>> ranges;
+		for (auto const& [begin, stop, s] : states) {
+			if (!wanted(s))
+				continue;
+			if (!ranges.empty() && ranges.back().second == begin)
+				ranges.back().second = stop;
+			else
+				ranges.emplace_back(begin, stop);
+		}
+		return ranges;
+	};
+
+	if (kind == Kind::Cxx) {
+		// FuncInfo (of 32-bit VAs): magic, maxState, the unwind map, the try blocks; their catches: adjectives, the type, the
+		// place of the object, the handler (16 bytes)
+		eh.Kind = ExceptionHandlerKind::Cxx3;
+		Reader r{ read, rvaOf(funcInfo) };
+		r.Get<uint32_t>();
+		r.Get<int32_t>();
+		r.Get<uint32_t>();
+		auto tryCount = r.Get<uint32_t>();
+		auto tryMap = r.Get<uint32_t>();
+		if (!r.Ok || tryCount > MaxEntries) {
+			eh.Error = L"The FuncInfo of the C++ exceptions cannot be read";
+			return eh;
+		}
+		Reader t{ read, rvaOf(tryMap) };
+		for (uint32_t i = 0; i < tryCount; i++) {
+			auto low = t.Get<int32_t>(), high = t.Get<int32_t>();
+			t.Get<int32_t>();
+			auto catches = t.Get<uint32_t>();
+			auto handlers = t.Get<uint32_t>();
+			if (!t.Ok || catches > MaxEntries) {
+				eh.Error = std::format(L"The try block map ends at its entry {}", i);
+				return eh;
+			}
+			ExceptionScope scope;
+			scope.Kind = ExceptionScope::Kinds::Try;
+			scope.Ranges = rangesOf([&](int32_t s) { return s >= low && s <= high; });
+			Reader h{ read, rvaOf(handlers) };
+			for (uint32_t c = 0; c < catches; c++) {
+				ExceptionScope::Catch katch;
+				katch.Adjectives = h.Get<uint32_t>();
+				auto type = h.Get<uint32_t>();
+				h.Get<int32_t>();
+				katch.HandlerRva = rvaOf(h.Get<uint32_t>());
+				if (!h.Ok)
+					break;
+				if (type)
+					katch.Type = TypeName(read, rvaOf(type), 4);
+				scope.Catches.push_back(std::move(katch));
+			}
+			eh.Scopes.push_back(std::move(scope));
+		}
+		return eh;
+	}
+
+	// the scope table (EH4: after the offsets of the cookies): for each try level, the one it is in, the filter (none: a
+	// __finally) and the handler
+	eh.Kind = ExceptionHandlerKind::Seh;
+	if (maxState < 0 || maxState >= (int32_t)MaxEntries)
+		return eh;
+	struct Level {
+		int32_t Enclosing;
+		uint32_t Filter, Handler;
+	};
+	std::vector<Level> levels(maxState + 1);
+	Reader r{ read, rvaOf(pushes[1]) + (kind == Kind::Seh4 ? 16u : 0u) };
+	for (auto& level : levels) {
+		level.Enclosing = r.Get<int32_t>();
+		level.Filter = r.Get<uint32_t>();
+		level.Handler = r.Get<uint32_t>();
+	}
+	if (!r.Ok) {
+		eh.Error = L"The scope table cannot be read";
+		return eh;
+	}
+	// a level is in those it is enclosed by; the inner ones first
+	auto in = [&](int32_t s, int32_t level) {
+		for (int hops = 0; s >= 0 && s < (int32_t)levels.size() && hops <= maxState; hops++, s = levels[s].Enclosing)
+			if (s == level)
+				return true;
+		return false;
+	};
+	auto depth = [&](int32_t level) {
+		int d = 0;
+		for (auto s = levels[level].Enclosing; s >= 0 && s < (int32_t)levels.size() && d <= maxState; s = levels[s].Enclosing)
+			d++;
+		return d;
+	};
+	std::vector<int32_t> order(levels.size());
+	for (int32_t i = 0; i < (int32_t)order.size(); i++)
+		order[i] = i;
+	std::stable_sort(order.begin(), order.end(), [&](int32_t a, int32_t b) { return depth(a) > depth(b); });
+	for (auto level : order) {
+		ExceptionScope scope;
+		auto const& l = levels[level];
+		if (l.Filter == 0) {
+			scope.Kind = ExceptionScope::Kinds::Finally;
+			scope.HandlerRva = rvaOf(l.Handler);
+		}
+		else {
+			scope.Kind = ExceptionScope::Kinds::Except;
+			scope.FilterRva = l.Filter == 1 ? 0 : rvaOf(l.Filter);
+			scope.HandlerRva = rvaOf(l.Handler);
+		}
+		scope.Ranges = rangesOf([&](int32_t s) { return in(s, level); });
+		if (!scope.Ranges.empty())
+			eh.Scopes.push_back(std::move(scope));
+	}
+	return eh;
+}
+
+ExceptionHandling ReadExceptionHandling(PEFile const& pe, uint32_t functionRva, std::function<std::string(uint32_t rva)> const& handlerName,
+	uint32_t functionLength) {
+	ExceptionHandling eh;
+	if (!pe.GetFileInfo()->IsPE64 && pe.GetNTHeader()->NTHdr32.FileHeader.Machine == IMAGE_FILE_MACHINE_I386) {
+		auto fileSize = pe.GetFileSize();
+		ImageReader read = [&](uint32_t rva, void* buffer, size_t size) {
+			auto offset = pe.GetOffsetFromRVA(rva);
+			if (rva == 0 || offset == 0 || offset + size > fileSize)
+				return false;
+			auto span = pe.GetSpan((uint32_t)offset, (uint32_t)size);
+			if (span.size() != size)
+				return false;
+			memcpy(buffer, span.data(), size);
+			return true;
+		};
+		return ReadX86ExceptionHandling(read, (uint32_t)pe.GetImageBase(), functionRva, functionLength, handlerName);
+	}
 	auto entries = pe.GetExceptions();
 	if (!entries)
 		return eh;
 	auto entry = std::ranges::find_if(*entries, [&](auto const& e) { return e.RuntimeFuncEntry.BeginAddress == functionRva; });
 	if (entry == entries->end())
-		return eh;
-	auto unwind = DecodeUnwindInfo(pe, entry->RuntimeFuncEntry.UnwindData);
-	if (!unwind.HasHandler())
 		return eh;
 	auto fileSize = pe.GetFileSize();
 	ImageReader read = [&](uint32_t rva, void* buffer, size_t size) {
@@ -349,6 +611,22 @@ ExceptionHandling ReadExceptionHandling(PEFile const& pe, uint32_t functionRva, 
 		memcpy(buffer, span.data(), size);
 		return true;
 	};
+	// the handler and its data: after the unwind codes of x64's UNWIND_INFO, or after those of ARM64's .xdata
+	struct {
+		uint32_t HandlerRva{}, HandlerDataRva{};
+	} unwind;
+	auto machine = pe.GetFileInfo()->IsPE64 ? pe.GetNTHeader()->NTHdr64.FileHeader.Machine : pe.GetNTHeader()->NTHdr32.FileHeader.Machine;
+	if (machine == IMAGE_FILE_MACHINE_ARM64) {
+		if (!ReadArm64Handler(read, entry->RuntimeFuncEntry.UnwindData, unwind.HandlerRva, unwind.HandlerDataRva))
+			return eh;
+	}
+	else {
+		auto info = DecodeUnwindInfo(pe, entry->RuntimeFuncEntry.UnwindData);
+		if (!info.HasHandler())
+			return eh;
+		unwind.HandlerRva = info.HandlerRva;
+		unwind.HandlerDataRva = info.HandlerDataRva;
+	}
 	auto kind = handlerName ? ExceptionHandlerKindOf(handlerName(unwind.HandlerRva)) : ExceptionHandlerKind::None;
 	auto begin = entry->RuntimeFuncEntry.BeginAddress, end = entry->RuntimeFuncEntry.EndAddress;
 	if (kind == ExceptionHandlerKind::None) {

@@ -253,6 +253,86 @@ TEST_CASE("A catch funclet's own FuncInfo4 has no try blocks of the function", "
 
 // A file of the caller's (TOTALPE_EH_FILE, the RVA of a function in TOTALPE_EH_RVA, the handler's name in TOTALPE_EH_HANDLER):
 // what is read of it
+TEST_CASE("The handler of an ARM64 function is after the unwind codes of its .xdata", "[eh]") {
+	Image image;
+	uint32_t handler = 0, data = 0;
+	SECTION("the counts in the first word, its epilog in it (E)") {
+		// X, E, one epilog, two words of unwind codes
+		std::vector<uint8_t> xdata;
+		Add32(xdata, 0x10 | (1u << 20) | (1u << 21) | (1u << 22) | (2u << 27));
+		Add32(xdata, 0xE4E3E2E1);
+		Add32(xdata, 0xE4E3E2E1);
+		Add32(xdata, 0x1234);	// the handler
+		Add32(xdata, 0x5678);	// its data
+		image.Put(0x3000, xdata);
+		REQUIRE(ReadArm64Handler(image.Reader(), 0x3000, handler, data));
+		CHECK(handler == 0x1234);
+		CHECK(data == 0x3000 + 16);
+	}
+	SECTION("the counts in a second word, the epilogs' scopes before the codes") {
+		std::vector<uint8_t> xdata;
+		Add32(xdata, 0x10 | (1u << 20));
+		Add32(xdata, 2 | (1u << 16));	// two epilogs, one word of codes
+		Add32(xdata, 0);
+		Add32(xdata, 0);
+		Add32(xdata, 0xE4E3E2E1);
+		Add32(xdata, 0x1234);
+		image.Put(0x3000, xdata);
+		REQUIRE(ReadArm64Handler(image.Reader(), 0x3000, handler, data));
+		CHECK(handler == 0x1234);
+		CHECK(data == 0x3000 + 24);
+	}
+	SECTION("none without X") {
+		std::vector<uint8_t> xdata;
+		Add32(xdata, 0x10 | (1u << 22) | (1u << 27));
+		Add32(xdata, 0);
+		image.Put(0x3000, xdata);
+		CHECK_FALSE(ReadArm64Handler(image.Reader(), 0x3000, handler, data));
+	}
+}
+
+TEST_CASE("x86: the regions come from the try levels the code sets", "[eh]") {
+	// push ebp; mov ebp, esp; push -2; push scope table; push __except_handler4; then [ebp-4] = 0, 1, 0, -2 (a nop after each)
+	Image image;
+	constexpr uint32_t Base = 0x400000, Table = 0x5000, Handler = 0x2000;
+	std::vector<uint8_t> code{ 0x55, 0x8B, 0xEC, 0x6A, 0xFE, 0x68 };
+	Add32(code, Base + Table);
+	code.push_back(0x68);
+	Add32(code, Base + Handler);
+	for (int32_t level : { 0, 1, 0, -2 }) {
+		code.insert(code.end(), { 0xC7, 0x45, 0xFC });
+		Add32(code, (uint32_t)level);
+		if (level != -2)
+			code.push_back(0x90);
+	}
+	code.insert(code.end(), { 0x8B, 0xE5, 0x5D, 0xC3, 0xCC, 0xCC });
+	image.Put(0x1000, code);
+	// the scope table: the offsets of the cookies, then level 0 (an __except, in none) and level 1 (a __finally, in level 0)
+	std::vector<uint8_t> table(16, 0);
+	Add32(table, (uint32_t)-2);
+	Add32(table, Base + 0x3000);
+	Add32(table, Base + 0x3100);
+	Add32(table, 0);
+	Add32(table, 0);
+	Add32(table, Base + 0x3200);
+	image.Put(Table, table);
+	auto eh = ReadX86ExceptionHandling(image.Reader(), Base, 0x1000, 0, [](uint32_t rva) {
+		return rva == Handler ? std::string("__except_handler4") : std::string();
+		});
+	CHECK(eh.Kind == ExceptionHandlerKind::Seh);
+	CHECK(eh.HandlerRva == Handler);
+	REQUIRE(eh.Scopes.size() == 2);
+	// the inner one first: the code while the level is 1
+	CHECK(eh.Scopes[0].Kind == ExceptionScope::Kinds::Finally);
+	CHECK(eh.Scopes[0].HandlerRva == 0x3200);
+	CHECK(eh.Scopes[0].Ranges == std::vector<std::pair<uint32_t, uint32_t>>{ { 0x101E, 0x1026 } });
+	// the outer one: while it is 0 or 1
+	CHECK(eh.Scopes[1].Kind == ExceptionScope::Kinds::Except);
+	CHECK(eh.Scopes[1].FilterRva == 0x3000);
+	CHECK(eh.Scopes[1].HandlerRva == 0x3100);
+	CHECK(eh.Scopes[1].Ranges == std::vector<std::pair<uint32_t, uint32_t>>{ { 0x1016, 0x102E } });
+}
+
 TEST_CASE("The exception handling of a function of a file", "[.][eh-file]") {
 	auto variable = [](char const* name) {
 		char value[1024]{};

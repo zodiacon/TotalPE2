@@ -13,6 +13,7 @@
 #include <LIEF/PE/ResourceDirectory.hpp>
 #include <LIEF/PE/exceptions_info/RuntimeFunctionX64.hpp>
 #include <LIEF/PE/exceptions_info/RuntimeFunctionAArch64.hpp>
+#include <LIEF/PE/exceptions_info/AArch64/UnpackedFunction.hpp>
 
 // ── helpers ───────────────────────────────────────────────────────────────
 
@@ -391,8 +392,10 @@ void PEFile::BuildCaches() {
             e.RuntimeFuncEntry.UnwindInfoAddress = x64->unwind_rva();
         }
         else if (auto const* arm64 = exc.as<LIEF::PE::RuntimeFunctionAArch64>()) {
-            // the length is in the packed unwind data, or in the .xdata that it refers to
+            // the length is in the packed unwind data, or in the .xdata that it refers to (its RVA, as the entry has it)
             e.RuntimeFuncEntry.EndAddress = arm64->rva_end();
+            if (auto const* unpacked = exc.as<LIEF::PE::unwind_aarch64::UnpackedFunction>())
+                e.RuntimeFuncEntry.UnwindInfoAddress = unpacked->xdata_rva();
         }
         m_Exceptions.push_back(e);
     }

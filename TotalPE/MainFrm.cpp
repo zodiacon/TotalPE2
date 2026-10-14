@@ -2232,10 +2232,17 @@ namespace {
 	}
 }
 
-// The exception handling of the x64 function at an RVA. Its handler is known by its symbol, or by the import its thunk jumps
-// to (through an incremental linking stub: jmp rel32).
+// The exception handling of the function at an RVA (x64, ARM64, x86). Its handler is known by its symbol, or by the import its
+// thunk jumps to (through an incremental linking stub: jmp rel32). Of x86 code, the length of the function, if the symbols
+// have it, is where its code ends.
 ExceptionHandling CMainFrame::ExceptionHandlingOf(uint32_t rva) const {
 	auto base = m_PE.GetImageBase();
+	uint32_t length = 0;
+	if (m_Symbols) {
+		long displacement = 0;
+		if (auto function = m_Symbols.GetSymbolByRVA(rva, SymbolTag::Function, &displacement); function && displacement == 0)
+			length = (uint32_t)function.Length();
+	}
 	return ReadExceptionHandling(m_PE, rva, [&](uint32_t handler) {
 		auto at = base + handler;
 		for (int hops = 0; hops < 2; hops++) {
@@ -2253,7 +2260,7 @@ ExceptionHandling CMainFrame::ExceptionHandlingOf(uint32_t rva) const {
 			at += 5 + (int64_t)displacement;
 		}
 		return std::string();
-		});
+		}, length);
 }
 
 // Its stack pointer after its prologue ('frameSize' below the one at its entry): the variables of the symbols there, by their
@@ -2262,7 +2269,8 @@ bool CMainFrame::EstablisherFrame(uint64_t va, std::vector<GhidraDecompiler::Loc
 	uint32_t rva, frameRegister;
 	int64_t frameOffset;
 	frameSize = 0;
-	if (!RvaOf(va, rva) || !X64Frame(rva, frameSize, frameRegister, frameOffset)) {
+	// (of x64 code: ARM64's unwind data is of another kind)
+	if (m_PE.GetNTHeader()->NTHdr32.FileHeader.Machine != IMAGE_FILE_MACHINE_AMD64 || !RvaOf(va, rva) || !X64Frame(rva, frameSize, frameRegister, frameOffset)) {
 		frameSize = 0;
 		return false;
 	}
@@ -2309,7 +2317,10 @@ bool CMainFrame::HandlerFrame(uint64_t va, std::vector<GhidraDecompiler::Local>&
 std::vector<GhidraDecompiler::Block> CMainFrame::ExceptionBlocks(uint64_t va) const {
 	std::vector<GhidraDecompiler::Block> blocks;
 	uint32_t rva;
-	if (!m_PE || !RvaOf(va, rva) || m_PE.GetNTHeader()->NTHdr32.FileHeader.Machine != IMAGE_FILE_MACHINE_AMD64)
+	if (!m_PE || !RvaOf(va, rva))
+		return blocks;
+	auto machine = m_PE.GetNTHeader()->NTHdr32.FileHeader.Machine;
+	if (machine != IMAGE_FILE_MACHINE_AMD64 && machine != IMAGE_FILE_MACHINE_ARM64 && machine != IMAGE_FILE_MACHINE_I386)
 		return blocks;
 	auto base = m_PE.GetImageBase();
 	auto eh = ExceptionHandlingOf(rva);

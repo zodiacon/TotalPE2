@@ -735,7 +735,7 @@ TEST_CASE("Blocks of the caller's are placed around the lines of their code", "[
 		tried.Approximate = true;
 		blocks = { tried };
 		auto code = f.Decompile(Code, "Main");
-		CHECK_THAT(code, ContainsSubstring("  try {\n    A();\n  } catch (...) {\n  }\n  B();\n  C();\n"));
+		CHECK_THAT(code, ContainsSubstring("  try {\n    A();\n  } catch (...) {\n  }\n  B();\n  C();  /* in the try */\n"));
 	}
 	SECTION("none of its code shown") {
 		GhidraDecompiler::Block elsewhere{ { { Code + 0x200, Code + 0x210 } }, "__try {", guarded.Close, {} };
@@ -769,7 +769,8 @@ TEST_CASE("A C++ try whose ranges are not whole statements: those that have the 
 	for (auto [at, name] : { std::pair{ a, "A" }, { x, "X" }, { b, "B" }, { c, "C" } })
 		f.Decompiler.AddFunction(at, name);
 	auto code = f.Decompile(Code, "Main");
-	CHECK_THAT(code, ContainsSubstring("  A();\n  X();\n  try {\n    B();\n    C();\n  } catch (...) {\n  }\n"));
+	// (A, a call in its code, is in it: it is said so)
+	CHECK_THAT(code, ContainsSubstring("  A();  /* in the try */\n  X();\n  try {\n    B();\n    C();\n  } catch (...) {\n  }\n"));
 }
 
 TEST_CASE("The code of a block's handler is shown in it", "[decompiler]") {
@@ -813,5 +814,17 @@ TEST_CASE("The code of a block's handler is shown in it", "[decompiler]") {
 		blocks = { guarded };
 		auto code = f.Decompile(Code, "Main");
 		CHECK_THAT(code, ContainsSubstring("    /* the handler */\n    frame->count = 5;\n  }\n"));
+	}
+	SECTION("handlers of the same function: the same structure of its frame") {
+		// mov dword ptr [rdx+30h], 6; ret
+		f.Image.At(Code + 0x180).Bytes({ 0xC7, 0x42, 0x30, 0x06, 0x00, 0x00, 0x00, 0xC3 });
+		std::vector<GhidraDecompiler::Local> frame{ { "count", 1, 0x30 } };
+		GhidraDecompiler::Block tried{ { { Code + 4, Code + 9 } }, "try {",
+			{ "} catch (int) {", "\t/* one */", "} catch (...) {", "\t/* two */", "}" }, {} };
+		tried.Bodies = { { 1, writer, frame }, { 3, Code + 0x180, frame } };
+		blocks = { tried };
+		auto code = f.Decompile(Code, "Main");
+		CHECK_THAT(code, ContainsSubstring("    /* one */\n    frame->count = 5;\n"));
+		CHECK_THAT(code, ContainsSubstring("    /* two */\n    frame->count = 6;\n"));
 	}
 }

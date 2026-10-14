@@ -423,8 +423,9 @@ std::wstring CMainFrame::FunctionDeclaration(uint64_t address) {
 	return text;
 }
 
-// The functions of the exception data (.pdata) whose VAs or RVAs start with the digits: by the names the decompiler has for
-// them (one without a name of its own: func_0x and its address)
+// The functions of the exception data (.pdata), and the targets of calls (once the cross-references are found: those of x86
+// code have no exception data), whose VAs or RVAs start with the digits: by the names the decompiler has for them (one
+// without a name of its own: func_0x and its address)
 std::vector<SearchItem> CMainFrame::FunctionsAt(std::wstring const& digits, size_t limit) {
 	std::vector<SearchItem> items;
 	auto text = digits;
@@ -433,18 +434,22 @@ std::vector<SearchItem> CMainFrame::FunctionsAt(std::wstring const& digits, size
 	std::ranges::transform(text, text.begin(), [](wchar_t c) { return (wchar_t)towlower(c); });
 	if (!m_PE || text.empty() || text.find_first_not_of(L"0123456789abcdef") != std::wstring::npos)
 		return items;
-	auto exceptions = m_PE.GetExceptions();
-	if (!exceptions)
-		return items;
 	auto base = m_PE.GetImageBase();
-	for (auto const& e : *exceptions) {
-		auto rva = e.RuntimeFuncEntry.BeginAddress;
-		auto va = base + rva;
+	std::set<uint64_t> functions;
+	if (auto exceptions = m_PE.GetExceptions())
+		for (auto const& e : *exceptions)
+			functions.insert(base + e.RuntimeFuncEntry.BeginAddress);
+	if (XrefsReady())
+		for (auto va : m_Xrefs.Targets())
+			if (va >= base && m_Xrefs.CallCount(va) > 0)
+				functions.insert(va);
+	for (auto va : functions) {
+		auto rva = (uint32_t)(va - base);
 		if (!std::format(L"{:x}", va).starts_with(text) && !std::format(L"{:x}", rva).starts_with(text))
 			continue;
 		auto name = DecompilerFunctionName(va);
 		items.push_back({ .Kind = SearchKind::Symbol, .Name = name.empty() ? std::format(L"func_0x{:012x}", va) : std::wstring(CA2W(name.c_str())),
-			.Details = L"Function (exception data)", .Location = std::format(L"RVA 0x{:X}", rva), .Value = va, .Code = true,
+			.Details = L"Function", .Location = std::format(L"RVA 0x{:X}", rva), .Value = va, .Code = true,
 			.Image = GetTreeIcon(IDI_FUNCTION) });
 		if (items.size() >= limit)
 			break;

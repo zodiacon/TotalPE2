@@ -55,12 +55,22 @@ ExceptionHandlerKind ExceptionHandlerKindOf(std::string_view name);
 // 'handlerName' names the handler (by its RVA: a symbol, or the import a thunk jumps to); without a name, a FuncInfo
 // of __CxxFrameHandler3 is known by its magic number.
 ExceptionHandling ReadExceptionHandling(PEFile const& pe, uint32_t functionRva,
-	std::function<std::string(uint32_t rva)> const& handlerName);
+	std::function<std::string(uint32_t rva)> const& handlerName, uint32_t functionLength = 0);
 
 // The same, from the data: the handler's data (at 'dataRva'), the function's range, and a reader of the image (by RVA)
 using ImageReader = std::function<bool(uint32_t rva, void* buffer, size_t size)>;
 ExceptionHandling ReadExceptionHandling(ImageReader const& read, ExceptionHandlerKind kind, uint32_t handlerRva,
 	uint32_t dataRva, uint32_t functionBegin, uint32_t functionEnd);
+
+// The exception handler of an ARM64 function and its data, from its .xdata; false if it has none
+bool ReadArm64Handler(ImageReader const& read, uint32_t xdata, uint32_t& handlerRva, uint32_t& handlerDataRva);
+
+// x86: the handler is on the stack, which the prologue registers (it pushes the scope table and __except_handler3 or 4, or a
+// __ehhandler$ stub that passes the FuncInfo to __CxxFrameHandler3), and the code keeps the state (the try level) at
+// [ebp-4], which it sets where a region begins and ends: the regions come from the code, read in order (the compiler lays
+// them out so). 'functionLength': 0 if it is not known (the code is read to the padding after a return).
+ExceptionHandling ReadX86ExceptionHandling(ImageReader const& read, uint32_t imageBase, uint32_t functionRva,
+	uint32_t functionLength, std::function<std::string(uint32_t rva)> const& handlerName);
 
 // A value of the compressed encoding of __CxxFrameHandler4 (the length is in the low bits of the first byte); the bytes it
 // took are added to 'used'. False if the data ends first.

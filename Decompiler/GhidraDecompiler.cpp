@@ -822,7 +822,9 @@ void GhidraDecompiler::Impl::ApplyFrame(Funcdata* fd, std::vector<FrameVariable>
 	for (int n = 2; FrameTypes.count(name) && FrameTypes[name] != signature; n++)
 		name = base + "_" + std::to_string(n);
 	FrameTypes[name] = signature;
-	auto type = Arch->types->getTypeStruct(name);
+	// (one made before is that one: the library does not make it again)
+	auto existing = Arch->types->findByName(name);
+	auto type = existing && existing->getMetatype() == TYPE_STRUCT ? (TypeStruct*)existing : Arch->types->getTypeStruct(name);
 	if (type->isIncomplete())
 		DefineFields(type, "struct", (uint32_t)((end + alignment - 1) / alignment * alignment), alignment, fields);
 	try {
@@ -878,6 +880,64 @@ namespace {
 
 	bool StartsWith(std::string const& text, char const* prefix) {
 		return text.rfind(prefix, 0) == 0;
+	}
+
+	// A line that calls a function: a "(" (not in a string or a comment) after a name, or after a ")" (a call through a
+	// pointer). Not those of C ("if (", "sizeof(") nor the decompiler's operations (CONCAT44, SUB41, ZEXT48...).
+	bool HasCall(std::string const& line) {
+		static char const* const notCalls[] = { "if", "while", "for", "switch", "return", "sizeof" };
+		static char const* const operations[] = { "CONCAT", "SUB", "ZEXT", "SEXT", "CARRY", "SCARRY", "SBORROW", "POPCOUNT", "LZCOUNT",
+			"NAN", "ABS", "SQRT", "ROUND", "TRUNC", "FLOOR", "CEIL" };
+		char quote = 0;
+		for (size_t i = 0; i < line.size(); i++) {
+			auto c = line[i];
+			if (quote) {
+				if (c == '\\')
+					i++;
+				else if (c == quote)
+					quote = 0;
+				continue;
+			}
+			if (c == '"' || c == '\'') {
+				quote = c;
+				continue;
+			}
+			if (c == '/' && i + 1 < line.size() && line[i + 1] == '*')
+				break;
+			if (c != '(')
+				continue;
+			auto end = i;
+			while (end > 0 && line[end - 1] == ' ')
+				end--;
+			// "(*Var1)(5)", "(**(code **)(p + 8))(p)": a call through a pointer; not a cast ("(int *)(p + 4)")
+			if (end > 0 && line[end - 1] == ')') {
+				int depth = 0;
+				size_t open = end - 1;
+				for (; open < line.size(); open--) {
+					if (line[open] == ')')
+						depth++;
+					else if (line[open] == '(' && --depth == 0)
+						break;
+				}
+				if (open < line.size() && line.find_first_not_of(' ', open + 1) != std::string::npos &&
+					line[line.find_first_not_of(' ', open + 1)] == '*')
+					return true;
+				continue;
+			}
+			auto begin = end;
+			while (begin > 0 && (isalnum((unsigned char)line[begin - 1]) || line[begin - 1] == '_' || line[begin - 1] == ':'))
+				begin--;
+			auto word = line.substr(begin, end - begin);
+			if (word.empty() || isdigit((unsigned char)word[0]) ||
+				std::any_of(std::begin(notCalls), std::end(notCalls), [&](char const* k) { return word == k; }))
+				continue;
+			bool operation = std::any_of(std::begin(operations), std::end(operations), [&](char const* op) {
+				return word.rfind(op, 0) == 0 && word.find_first_not_of("0123456789", strlen(op)) == std::string::npos;
+			});
+			if (!operation)
+				return true;
+		}
+		return false;
 	}
 
 	// Ghidra puts a comment of its own line at a column of its own (20): it goes where the statement after it starts
@@ -1120,6 +1180,12 @@ namespace {
 					}
 				}
 				if (best) {
+					// the other lines of its code that call (where the compiler keeps the state exactly: what is called may
+					// throw) are in it, though shown elsewhere
+					auto name = block.Open.substr(0, block.Open.find_last_not_of(" {") + 1);
+					for (size_t i = start; i <= last; i++)
+						if ((i < bestFirst || i > bestLast) && kindOf(i) == 1 && HasCall(lines[i]))
+							lines[i] += "  /* in the " + name + " */";
 					whole = true;
 					first = bestFirst;
 					last = bestLast;
@@ -1930,8 +1996,17 @@ std::vector<std::string> GhidraDecompiler::BodyOf(uint64_t address) {
 	}
 	while (!result.empty() && trimmed(result.back()).empty())
 		result.pop_back();
-	if (!result.empty() && indentOf(result.back()) == base && trimmed(result.back()).rfind("return", 0) == 0)
-		result.pop_back();
+	// (the return may go on to the next lines: those up to the end are one statement, which only the last line ends)
+	for (size_t i = result.size(); i > 0; i--) {
+		auto text = trimmed(result[i - 1]);
+		bool ends = !text.empty() && (text.back() == ';' || text.back() == '{' || text.back() == '}');
+		if (i < result.size() && ends)
+			break;
+		if (indentOf(result[i - 1]) == base && text.rfind("return", 0) == 0) {
+			result.erase(result.begin() + (i - 1), result.end());
+			break;
+		}
+	}
 	while (!result.empty() && trimmed(result.back()).empty())
 		result.pop_back();
 	// the declarations (before the first empty line; one may go on to the next lines) of the variables its statements do not
