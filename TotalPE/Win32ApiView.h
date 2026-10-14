@@ -35,6 +35,8 @@ public:
 	bool Navigate(std::string const& name);
 	void GoBack();
 	void GoForward();
+	// Microsoft's documentation shown (if it was not)
+	void ShowDocumentationPane();
 	// where the counts are shown
 	void SetStatusBar(HWND hStatusBar);
 	int64_t GetNavigationPosition() const override;

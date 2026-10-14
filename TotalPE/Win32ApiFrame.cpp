@@ -43,6 +43,10 @@ bool CWin32ApiFrame::Select(std::string const& name) {
 	return m_View->Navigate(name);
 }
 
+void CWin32ApiFrame::ShowDocumentation() {
+	m_View->ShowDocumentationPane();
+}
+
 void CWin32ApiFrame::Activate() {
 	if (IsIconic())
 		ShowWindow(SW_RESTORE);

@@ -7,7 +7,7 @@
 
 //
 // What the user adds to a file: names and types of its functions and variables (that the decompiler uses), bookmarks and
-// comments. Places are RVAs. It is kept in a JSON file of its own, in the user's folder of the application, named by the
+// comments; and the functions the user opened last. Places are RVAs. It is kept in a JSON file of its own, in the user's folder of the application, named by the
 // SHA-256 of the file's content: the same file has them wherever it is, and a file that changes starts with none.
 //
 class Annotations {
@@ -46,6 +46,7 @@ public:
 	std::map<uint32_t, Variable> Globals;			// by the RVA of the variable
 	std::map<uint32_t, std::wstring> Comments;		// by the RVA of the instruction (or data)
 	std::vector<Bookmark> Bookmarks;				// in the order they were added
+	std::vector<Bookmark> RecentFunctions;			// opened from the Decompile and Disassemble boxes, the last first
 
 private:
 	std::wstring m_Store, m_File;

@@ -56,7 +56,7 @@ std::wstring Annotations::StorePath(std::string const& sha256) {
 }
 
 bool Annotations::Empty() const {
-	return Functions.empty() && Variables.empty() && Globals.empty() && Comments.empty() && Bookmarks.empty();
+	return Functions.empty() && Variables.empty() && Globals.empty() && Comments.empty() && Bookmarks.empty() && RecentFunctions.empty();
 }
 
 bool Annotations::Load(std::wstring const& store, std::wstring const& file) {
@@ -134,6 +134,12 @@ std::string Annotations::ToJson() const {
 			bookmarks.push_back(JsonValue::Object{ { "rva", RvaText(b.Rva) }, { "name", Utf8(b.Name) } });
 		root["bookmarks"] = std::move(bookmarks);
 	}
+	if (!RecentFunctions.empty()) {
+		JsonValue::Array recent;
+		for (auto const& f : RecentFunctions)
+			recent.push_back(JsonValue::Object{ { "rva", RvaText(f.Rva) }, { "name", Utf8(f.Name) } });
+		root["recent"] = std::move(recent);
+	}
 	return JsonValue(std::move(root)).Write();
 }
 
@@ -146,6 +152,7 @@ bool Annotations::FromJson(std::string const& json) {
 	Globals.clear();
 	Comments.clear();
 	Bookmarks.clear();
+	RecentFunctions.clear();
 	uint32_t rva;
 	for (auto const& [key, name] : root["functions"].AsObject())
 		if (ParseRva(key, rva) && name.IsString() && !name.AsString().empty())
@@ -166,5 +173,8 @@ bool Annotations::FromJson(std::string const& json) {
 	for (auto const& b : root["bookmarks"].AsArray())
 		if (ParseRva(b["rva"].AsString(), rva))
 			Bookmarks.push_back({ rva, Wide(b["name"].AsString()) });
+	for (auto const& f : root["recent"].AsArray())
+		if (ParseRva(f["rva"].AsString(), rva))
+			RecentFunctions.push_back({ rva, Wide(f["name"].AsString()) });
 	return true;
 }

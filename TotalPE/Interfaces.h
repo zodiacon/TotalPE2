@@ -229,8 +229,10 @@ struct IMainFrame abstract {
 	virtual bool RemoveBookmark(uint64_t va) = 0;
 	virtual bool ShowBookmarks() = 0;
 	// The Windows API view, at a function or type (by its name); whether the Win32 metadata has one of the name
-	virtual bool ShowWin32Api(std::string const& name) = 0;
+	virtual bool ShowWin32Api(std::string const& name, bool documentation = false) = 0;
 	virtual bool IsWin32Api(std::string const& name) = 0;
+	// a function or type of Windows that Microsoft's documentation has a page for
+	virtual bool IsWin32Documented(std::string const& name) = 0;
 	// the places the file calls a function it imports (by its name), in the main window; false if it does not import it
 	virtual bool ShowImportReferences(std::string const& name) = 0;
 	// A constant of Windows (of an enum): the names of its value, the one shown first; empty if it is not one

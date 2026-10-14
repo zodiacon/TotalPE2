@@ -248,6 +248,12 @@ LRESULT CWin32ApiView::OnDocumentation(WORD, WORD, HWND, BOOL&) {
 	return 0;
 }
 
+void CWin32ApiView::ShowDocumentationPane() {
+	BOOL handled;
+	if (!AppSettings::Get().Win32ApiDocumentation())
+		OnDocumentation(0, ID_WIN32_DOCS, nullptr, handled);
+}
+
 LRESULT CWin32ApiView::OnOpenInBrowser(WORD, WORD, HWND, BOOL&) {
 	if (!m_DocUrl.empty())
 		::ShellExecute(nullptr, L"open", m_DocUrl.c_str(), nullptr, nullptr, SW_SHOWNORMAL);

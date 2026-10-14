@@ -423,18 +423,38 @@ std::wstring CMainFrame::FunctionDeclaration(uint64_t address) {
 	return text;
 }
 
+// Of a PE file: kept with its annotations (from one session to the next); of another, for as long as it is open
 std::vector<SearchItem> CMainFrame::RecentFunctions() {
-	return m_RecentFunctions;
+	if (!m_PE || !m_Annotations.IsOpen())
+		return m_RecentFunctions;
+	std::vector<SearchItem> items;
+	auto base = m_PE.GetImageBase();
+	for (auto const& f : m_Annotations.RecentFunctions)
+		items.push_back({ .Kind = SearchKind::Symbol, .Name = f.Name, .Details = L"Opened recently",
+			.Location = std::format(L"RVA 0x{:X}", f.Rva), .Value = base + f.Rva, .Code = true, .Image = GetTreeIcon(IDI_FUNCTION) });
+	return items;
 }
 
 // A function opened from the Disassemble or Decompile Function dialog: first in its recent ones (once)
 void CMainFrame::RememberFunction(std::wstring const& name, uint64_t address) {
 	constexpr size_t MaxRecent = 20;
-	std::erase_if(m_RecentFunctions, [&](auto const& item) { return item.Value == address; });
 	auto base = m_PE ? m_PE.GetImageBase() : 0;
+	if (m_PE && m_Annotations.IsOpen() && address >= base && address - base <= 0xFFFFFFFFULL) {
+		auto rva = (uint32_t)(address - base);
+		auto& recent = m_Annotations.RecentFunctions;
+		std::erase_if(recent, [&](auto const& f) { return f.Rva == rva; });
+		recent.insert(recent.begin(), { rva, name });
+		if (recent.size() > MaxRecent)
+			recent.resize(MaxRecent);
+		// (not SaveAnnotations: what Go Anywhere finds is the same)
+		if (!m_Annotations.Save())
+			AtlMessageBox(m_hWnd, std::format(L"The names, types and bookmarks of this file could not be saved to {}", m_Annotations.StoreFile()).c_str(),
+				IDR_MAINFRAME, MB_ICONWARNING);
+		return;
+	}
+	std::erase_if(m_RecentFunctions, [&](auto const& item) { return item.Value == address; });
 	SearchItem item{ .Kind = SearchKind::Symbol, .Name = name, .Details = L"Opened recently",
-		.Location = m_PE && address >= base ? std::format(L"RVA 0x{:X}", address - base) : std::format(L"0x{:X}", address),
-		.Value = address, .Code = true, .Image = GetTreeIcon(IDI_FUNCTION) };
+		.Location = std::format(L"0x{:X}", address), .Value = address, .Code = true, .Image = GetTreeIcon(IDI_FUNCTION) };
 	m_RecentFunctions.insert(m_RecentFunctions.begin(), std::move(item));
 	if (m_RecentFunctions.size() > MaxRecent)
 		m_RecentFunctions.resize(MaxRecent);

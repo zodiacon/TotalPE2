@@ -46,6 +46,7 @@ TEST_CASE("Annotations are saved and read back", "[annotations]") {
 	a.Globals[0x5000] = { "g_flags", "DWORD", true };
 	a.Comments[0x1010] = L"the loop \u00e9";
 	a.Bookmarks = { { 0x2000, L"second" }, { 0x1000, L"first" } };
+	a.RecentFunctions = { { 0x3000, L"Last" }, { 0x1000, L"Start" } };
 
 	Annotations b;
 	REQUIRE(b.FromJson(a.ToJson()));
@@ -54,6 +55,7 @@ TEST_CASE("Annotations are saved and read back", "[annotations]") {
 	CHECK(b.Globals == a.Globals);
 	CHECK(b.Comments == a.Comments);
 	CHECK(b.Bookmarks == a.Bookmarks);	// in their order
+	CHECK(b.RecentFunctions == a.RecentFunctions);
 
 	// in a store of their own (written whole, read back; one that has nothing is deleted)
 	auto folder = std::filesystem::temp_directory_path() / std::format(L"TotalPE.Annotations.{}", ::GetCurrentProcessId());

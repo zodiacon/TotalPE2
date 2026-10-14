@@ -722,14 +722,36 @@ LRESULT CScintillaView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
 		sub.InsertMenu(0, MF_BYPOSITION | MF_SEPARATOR);
 		sub.InsertMenu(0, MF_BYPOSITION | MF_STRING, ID_CODE_GOTODEFINITION, L"&Go to Definition\tEnter");
 	}
-	// a function or type of Windows under the mouse: its declaration
+	// a function or type of Windows under the mouse: its declaration, its documentation (of a constant: those of its type)
 	m_ContextApi.clear();
+	m_ContextDocs.clear();
 	if (m_Language == LexLanguage::C && pos >= 0) {
 		auto name = NameAt(pos);
-		if (!name.empty() && Frame()->IsWin32Api(std::string(CW2A(name.c_str())))) {
-			m_ContextApi = name;
+		auto api = std::string(CW2A(name.c_str()));
+		std::wstring shown = name;
+		if (!name.empty() && !Frame()->IsWin32Api(api)) {
+			uint64_t value = 0;
+			std::string type;
+			if (!Frame()->ConstantNames(api, value, type).empty() && !type.empty() && Frame()->IsWin32Api(type)) {
+				shown = std::wstring(CA2W(type.c_str()));
+				api = type;
+			}
+			else
+				api.clear();
+		}
+		if (!name.empty() && !api.empty()) {
+			m_ContextApi = CA2W(api.c_str());
+			// a constant whose type has no page: that of the function of Windows it is passed to (its page has its values)
+			m_ContextDocs = m_ContextApi;
+			std::wstring docs = shown;
+			if (shown != name && !Frame()->IsWin32Documented(api))
+				if (auto callee = CalleeAt(pos); !callee.empty() && Frame()->IsWin32Documented(std::string(CW2A(callee.c_str())))) {
+					m_ContextDocs = callee;
+					docs = callee + L" (" + name + L")";
+				}
 			sub.InsertMenu(0, MF_BYPOSITION | MF_SEPARATOR);
-			sub.InsertMenu(0, MF_BYPOSITION | MF_STRING, ID_CODE_WIN32API, (L"Show " + name + L" in &Windows API").c_str());
+			sub.InsertMenu(0, MF_BYPOSITION | MF_STRING, ID_CODE_WIN32DOCS, (L"D&ocumentation of " + docs).c_str());
+			sub.InsertMenu(0, MF_BYPOSITION | MF_STRING, ID_CODE_WIN32API, (L"Show " + shown + L" in &Windows API").c_str());
 		}
 	}
 	// a constant of Windows whose value has other names: one of them can be shown
@@ -924,8 +946,40 @@ LRESULT CScintillaView::OnDwell(int, LPNMHDR hdr, BOOL&) {
 	return 0;
 }
 
-LRESULT CScintillaView::OnWin32Api(WORD, WORD, HWND, BOOL&) {
-	if (m_ContextApi.empty() || !Frame()->ShowWin32Api(std::string(CW2A(m_ContextApi.c_str()))))
+// The function whose call has the text at a position among its arguments: the name before the "(" that is open there (on
+// its line, or the lines of the statement before it); empty if there is none
+std::wstring CScintillaView::CalleeAt(intptr_t pos) {
+	auto line = m_Sci.LineFromPosition(pos);
+	auto start = m_Sci.PositionFromLine(std::max<intptr_t>(0, line - 8));
+	auto charAt = [&](intptr_t at) { return (char)m_Sci.SendMessage(SCI_GETCHARAT, at); };
+	int depth = 0;
+	for (auto at = pos - 1; at >= start; at--) {
+		auto c = (char)charAt(at);
+		if (c == ';' || c == '{' || c == '}')
+			break;
+		if (c == ')')
+			depth++;
+		else if (c == '(' && depth-- == 0) {
+			auto end = at;
+			while (end > start && charAt(end - 1) == ' ')
+				end--;
+			auto begin = end;
+			while (begin > start && (isalnum((unsigned char)charAt(begin - 1)) || charAt(begin - 1) == '_'))
+				begin--;
+			if (begin == end)
+				return {};
+			std::string name;
+			for (auto i = begin; i < end; i++)
+				name += (char)charAt(i);
+			return std::wstring(CA2W(name.c_str()));
+		}
+	}
+	return {};
+}
+
+LRESULT CScintillaView::OnWin32Api(WORD, WORD id, HWND, BOOL&) {
+	auto const& name = id == ID_CODE_WIN32DOCS ? m_ContextDocs : m_ContextApi;
+	if (name.empty() || !Frame()->ShowWin32Api(std::string(CW2A(name.c_str())), id == ID_CODE_WIN32DOCS))
 		::MessageBeep(MB_ICONWARNING);
 	return 0;
 }

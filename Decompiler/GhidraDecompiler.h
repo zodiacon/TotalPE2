@@ -126,11 +126,13 @@ public:
 		// Code shown in it (a handler's): after the line 'Line' of 'Close', the statements of the function at 'Address'. What
 		// cannot be decompiled is not shown.
 		// The handler's second parameter is the establisher frame of the function the block is in (its stack pointer after
-		// its prologue): 'Frame' has the variables of that function there, by their offsets from it.
+		// its prologue, 'FrameSize' below the one at its entry): 'Frame' has the variables of that function there, by their
+		// offsets from it (and the other variables of the function on the stack, as the decompiler names them, are there too).
 		struct Body {
 			size_t Line;
 			uint64_t Address;
 			std::vector<Local> Frame;
+			uint32_t FrameSize{ 0 };
 		};
 		std::vector<Body> Bodies;
 		// Its ranges may go on after its code (a C++ try: the compiler keeps the state of the code only where it may throw,
@@ -139,6 +141,9 @@ public:
 	};
 	// the blocks of the function at an address (asked each time it is decompiled), inner ones first
 	using BlockSource = std::function<void(uint64_t address, std::vector<Block>& blocks)>;
+	// Of a handler (a funclet) decompiled by itself, the variables of the function it is a handler of, in its establisher
+	// frame (see Block::Body); false if it is not one
+	using FrameSource = std::function<bool(uint64_t address, std::vector<Local>& frame)>;
 
 	// Once per process: the folder of the language definitions (.ldefs, .sla, .pspec, .cspec), in it or in its
 	// subfolders (one per processor)
@@ -173,6 +178,7 @@ public:
 	void SetChangeSource(ChangeSource source);
 	void SetCommentSource(CommentSource source);
 	void SetBlockSource(BlockSource source);
+	void SetFrameSource(FrameSource source);
 	// The user's name of a function (in the place of the one it has, wherever it is shown), and of a global variable (its
 	// key is "global:ADDRESS"), with its type. What cannot be done is said in the code of the next function decompiled.
 	void RenameFunction(uint64_t address, std::string const& name);
@@ -190,7 +196,7 @@ public:
 		LineAddresses* lines = nullptr, Variables* variables = nullptr);
 
 private:
-	std::vector<std::string> BodyOf(uint64_t address, std::vector<Local> const& frame);
+	std::vector<std::string> BodyOf(uint64_t address);
 	struct Impl;
 	std::unique_ptr<Impl> m_Impl;
 };

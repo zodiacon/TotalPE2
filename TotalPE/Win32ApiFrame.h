@@ -19,6 +19,8 @@ public:
 	void SetFile(Win32Api& api, std::unordered_set<std::string> imports, CString const& title);
 	// shows a function or type (Back returns to the one shown before); false if there is none
 	bool Select(std::string const& name);
+	// Microsoft's documentation shown (if it was not)
+	void ShowDocumentation();
 	// to the front (restored, if it was minimized)
 	void Activate();
 

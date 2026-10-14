@@ -109,6 +109,7 @@ public:
 		COMMAND_ID_HANDLER(ID_CODE_SIDEBYSIDE, OnSideBySide)
 		COMMAND_ID_HANDLER(ID_CODE_GOTODEFINITION, OnGoToDefinition)
 		COMMAND_ID_HANDLER(ID_CODE_WIN32API, OnWin32Api)
+		COMMAND_ID_HANDLER(ID_CODE_WIN32DOCS, OnWin32Api)
 		COMMAND_RANGE_HANDLER(ID_CODE_SHOWAS_FIRST, ID_CODE_SHOWAS_LAST, OnShowAs)
 		COMMAND_ID_HANDLER(ID_CODE_RENAME, OnRename)
 		COMMAND_ID_HANDLER(ID_CODE_RETYPE, OnRename)
@@ -164,6 +165,8 @@ private:
 	LRESULT OnShowAs(WORD, WORD, HWND, BOOL&);
 	LRESULT OnDwell(int, LPNMHDR, BOOL&);
 	std::wstring m_ContextApi;	// a function or type of Windows the context menu was opened on
+	std::wstring CalleeAt(intptr_t pos);
+	std::wstring m_ContextDocs;	// the one whose documentation it shows (a constant's function, if its type has none)
 	std::vector<std::string> m_ContextNames;	// the other names of the value of a constant the menu was opened on
 	// renames (or retypes) a variable or function by the name the code shows; false if it is neither
 	bool Rename(std::wstring const& name, bool type);

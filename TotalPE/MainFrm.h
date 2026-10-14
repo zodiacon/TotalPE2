@@ -29,6 +29,7 @@ class CWin32ApiFrame;
 #include <shared_mutex>
 #include <unordered_set>
 #include <thread>
+#include "ExceptionScopes.h"
 
 class CHexView;
 
@@ -304,8 +305,9 @@ private:
 	bool SetBookmark(uint64_t va, std::wstring const& name) override;
 	bool RemoveBookmark(uint64_t va) override;
 	bool ShowBookmarks() override;
-	bool ShowWin32Api(std::string const& name) override;
+	bool ShowWin32Api(std::string const& name, bool documentation = false) override;
 	bool IsWin32Api(std::string const& name) override;
+	bool IsWin32Documented(std::string const& name) override;
 	bool ShowImportReferences(std::string const& name) override;
 	std::vector<std::string> ConstantNames(std::string const& name, uint64_t& value, std::string& type) override;
 	void PreferConstantName(std::string const& name) override;
@@ -431,6 +433,10 @@ private:
 	std::string DecompilerFunctionName(uint64_t va) const;
 	// the __try regions and C++ try blocks of an x64 function (from its unwind information), as blocks of its C code
 	std::vector<GhidraDecompiler::Block> ExceptionBlocks(uint64_t va) const;
+	ExceptionHandling ExceptionHandlingOf(uint32_t rva) const;
+	// the variables of a function in its establisher frame (as its handlers are given it); false if they are not known
+	bool EstablisherFrame(uint64_t va, std::vector<GhidraDecompiler::Local>& frame, uint32_t& frameSize) const;
+	bool HandlerFrame(uint64_t va, std::vector<GhidraDecompiler::Local>& frame) const;
 	// for the decompiler: the user's changes to the variables of a function, a type of the symbols by name, and the user's
 	// names of functions and global variables
 	std::vector<GhidraDecompiler::VariableChange> VariableChanges(uint64_t va) const;

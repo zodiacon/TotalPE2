@@ -2232,14 +2232,11 @@ namespace {
 	}
 }
 
-std::vector<GhidraDecompiler::Block> CMainFrame::ExceptionBlocks(uint64_t va) const {
-	std::vector<GhidraDecompiler::Block> blocks;
-	uint32_t rva;
-	if (!m_PE || !RvaOf(va, rva) || m_PE.GetNTHeader()->NTHdr32.FileHeader.Machine != IMAGE_FILE_MACHINE_AMD64)
-		return blocks;
+// The exception handling of the x64 function at an RVA. Its handler is known by its symbol, or by the import its thunk jumps
+// to (through an incremental linking stub: jmp rel32).
+ExceptionHandling CMainFrame::ExceptionHandlingOf(uint32_t rva) const {
 	auto base = m_PE.GetImageBase();
-	// the handler: by its symbol, or by the import its thunk jumps to (through an incremental linking stub: jmp rel32)
-	auto eh = ReadExceptionHandling(m_PE, rva, [&](uint32_t handler) {
+	return ReadExceptionHandling(m_PE, rva, [&](uint32_t handler) {
 		auto at = base + handler;
 		for (int hops = 0; hops < 2; hops++) {
 			auto name = DecompilerFunctionName(at);
@@ -2257,15 +2254,70 @@ std::vector<GhidraDecompiler::Block> CMainFrame::ExceptionBlocks(uint64_t va) co
 		}
 		return std::string();
 		});
+}
+
+// Its stack pointer after its prologue ('frameSize' below the one at its entry): the variables of the symbols there, by their
+// offsets from it
+bool CMainFrame::EstablisherFrame(uint64_t va, std::vector<GhidraDecompiler::Local>& frame, uint32_t& frameSize) const {
+	uint32_t rva, frameRegister;
+	int64_t frameOffset;
+	frameSize = 0;
+	if (!RvaOf(va, rva) || !X64Frame(rva, frameSize, frameRegister, frameOffset)) {
+		frameSize = 0;
+		return false;
+	}
+	if (FunctionLocals(va, {}, frame, true))
+		for (auto& local : frame)
+			local.Offset += frameSize;
+	return true;
+}
+
+// A handler (a funclet) by its name, which has that of its function ("`F'::`1'::catch$4", "F$fin$0", "F$filt$0"): the
+// variables of the function in its establisher frame, if the function's exception data has the handler
+bool CMainFrame::HandlerFrame(uint64_t va, std::vector<GhidraDecompiler::Local>& frame) const {
+	uint32_t rva, parentRva;
+	if (!m_PE || !m_Symbols || !RvaOf(va, rva) || m_PE.GetNTHeader()->NTHdr32.FileHeader.Machine != IMAGE_FILE_MACHINE_AMD64)
+		return false;
+	auto name = DecompilerFunctionName(va);
+	std::string parent;
+	if (name.starts_with('`')) {
+		auto close = name.find('\'', 1);
+		if (close == std::string::npos)
+			return false;
+		parent = name.substr(1, close - 1);
+	}
+	else if (auto dollar = name.find('$'); dollar != std::string::npos && dollar > 0)
+		parent = name.substr(0, dollar);
+	else
+		return false;
+	uint64_t parentVa;
+	std::wstring error;
+	if (!ResolveFunction(std::wstring(CA2W(parent.c_str())), parentVa, error) || !RvaOf(parentVa, parentRva))
+		return false;
+	auto eh = ExceptionHandlingOf(parentRva);
+	bool handler = false;
+	for (auto const& scope : eh.Scopes) {
+		handler |= scope.HandlerRva == rva || scope.FilterRva == rva;
+		for (auto const& c : scope.Catches)
+			handler |= c.HandlerRva == rva;
+	}
+	uint32_t frameSize;
+	return handler && EstablisherFrame(parentVa, frame, frameSize) && !frame.empty();
+}
+
+std::vector<GhidraDecompiler::Block> CMainFrame::ExceptionBlocks(uint64_t va) const {
+	std::vector<GhidraDecompiler::Block> blocks;
+	uint32_t rva;
+	if (!m_PE || !RvaOf(va, rva) || m_PE.GetNTHeader()->NTHdr32.FileHeader.Machine != IMAGE_FILE_MACHINE_AMD64)
+		return blocks;
+	auto base = m_PE.GetImageBase();
+	auto eh = ExceptionHandlingOf(rva);
 	if (eh.Scopes.empty())
 		return blocks;
 	// the variables of the function in its establisher frame (its stack pointer after its prologue), which its handlers are given
 	std::vector<GhidraDecompiler::Local> frame;
-	uint32_t frameSize, frameRegister;
-	int64_t frameOffset;
-	if (X64Frame(rva, frameSize, frameRegister, frameOffset) && FunctionLocals(va, {}, frame, true))
-		for (auto& local : frame)
-			local.Offset += frameSize;
+	uint32_t frameSize = 0;
+	EstablisherFrame(va, frame, frameSize);
 	auto function = DecompilerFunctionName(va);
 	if (function.empty())
 		function = std::format("func_0x{:012x}", va);	// (as the decompiler names it)
@@ -2299,7 +2351,7 @@ std::vector<GhidraDecompiler::Block> CMainFrame::ExceptionBlocks(uint64_t va) co
 				auto handler = nameOf(scope.HandlerRva, "finally");
 				block.Links.emplace_back(handler, base + scope.HandlerRva);
 				block.Close = { "} __finally {", "\t/* " + handler + ", if an exception leaves it; else the code that follows runs it */", "}" };
-				block.Bodies.push_back({ 1, base + scope.HandlerRva, frame });
+				block.Bodies.push_back({ 1, base + scope.HandlerRva, frame, frameSize });
 				break;
 			}
 			case ExceptionScope::Kinds::Try:
@@ -2311,7 +2363,7 @@ std::vector<GhidraDecompiler::Block> CMainFrame::ExceptionBlocks(uint64_t va) co
 					block.Links.emplace_back(handler, base + c.HandlerRva);
 					block.Close.push_back("} catch (" + CatchText(c) + ") {");
 					block.Close.push_back("\t/* the handler: " + handler + " */");
-					block.Bodies.push_back({ block.Close.size() - 1, base + c.HandlerRva, frame });
+					block.Bodies.push_back({ block.Close.size() - 1, base + c.HandlerRva, frame, frameSize });
 				}
 				block.Close.push_back("}");
 				break;
@@ -2838,6 +2890,11 @@ GhidraDecompiler* CMainFrame::DecompilerSession::Open(std::string& error) {
 		});
 	decompiler->SetBlockSource([this](uint64_t va, std::vector<GhidraDecompiler::Block>& blocks) {
 		Ask([&] { blocks = Frame->ExceptionBlocks(va); });
+		});
+	decompiler->SetFrameSource([this](uint64_t va, std::vector<GhidraDecompiler::Local>& frame) {
+		bool known = false;
+		Ask([&] { known = !Stale && Frame->HandlerFrame(va, frame); });
+		return known;
 		});
 	decompiler->SetCommentSource([this](std::vector<std::pair<uint64_t, std::string>>& comments) {
 		Ask([&] {
@@ -3401,8 +3458,15 @@ bool CMainFrame::IsWin32Api(std::string const& name) {
 	return api && api->Find(name);
 }
 
+bool CMainFrame::IsWin32Documented(std::string const& name) {
+	auto api = Win32ForFile();
+	auto entry = api ? api->Find(name) : nullptr;
+	return entry && !api->DocumentationUrl(*entry).empty();
+}
+
 // In a window of its own (one for each main window), which is opened, or brought to the front
-bool CMainFrame::ShowWin32Api(std::string const& name) {
+// ('documentation': with Microsoft's documentation of it shown)
+bool CMainFrame::ShowWin32Api(std::string const& name, bool documentation) {
 	auto api = Win32ForFile();
 	if (!api)
 		return false;
@@ -3426,6 +3490,8 @@ bool CMainFrame::ShowWin32Api(std::string const& name) {
 		}
 	}
 	m_Win32Frame->Activate();
+	if (documentation)
+		m_Win32Frame->ShowDocumentation();
 	return name.empty() || m_Win32Frame->Select(name);
 }
 
