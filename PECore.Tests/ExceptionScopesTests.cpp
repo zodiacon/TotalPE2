@@ -305,6 +305,10 @@ TEST_CASE("x86: the regions come from the try levels the code sets", "[eh]") {
 		if (level != -2)
 			code.push_back(0x90);
 	}
+	// call the __finally (after its first instruction, of 3 bytes): call rel32
+	uint32_t at = 0x1000 + (uint32_t)code.size();
+	code.push_back(0xE8);
+	Add32(code, 0x3203 - (at + 5));
 	code.insert(code.end(), { 0x8B, 0xE5, 0x5D, 0xC3, 0xCC, 0xCC });
 	image.Put(0x1000, code);
 	// the scope table: the offsets of the cookies, then level 0 (an __except, in none) and level 1 (a __finally, in level 0)
@@ -325,6 +329,7 @@ TEST_CASE("x86: the regions come from the try levels the code sets", "[eh]") {
 	// the inner one first: the code while the level is 1
 	CHECK(eh.Scopes[0].Kind == ExceptionScope::Kinds::Finally);
 	CHECK(eh.Scopes[0].HandlerRva == 0x3200);
+	CHECK(eh.Scopes[0].CallRva == 0x3203);
 	CHECK(eh.Scopes[0].Ranges == std::vector<std::pair<uint32_t, uint32_t>>{ { 0x101E, 0x1026 } });
 	// the outer one: while it is 0 or 1
 	CHECK(eh.Scopes[1].Kind == ExceptionScope::Kinds::Except);

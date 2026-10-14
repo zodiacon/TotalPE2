@@ -441,10 +441,13 @@ ExceptionHandling ReadX86ExceptionHandling(ImageReader const& read, uint32_t ima
 	std::vector<std::pair<uint32_t, int32_t>> map{ { functionRva, state } };
 	int32_t maxState = -1;
 	uint32_t end = functionRva;
+	std::vector<uint32_t> calls;	// (the targets of its calls: a __finally is called)
 	for (size_t i = 0; i < count; i++) {
 		auto const& insn = insns[i];
 		auto const& x = insn.detail->x86;
 		end = (uint32_t)(insn.address + insn.size - imageBase);
+		if (insn.id == X86_INS_CALL && x.op_count == 1 && x.operands[0].type == X86_OP_IMM)
+			calls.push_back((uint32_t)x.operands[0].imm);
 		if (x.op_count != 2 || x.operands[0].type != X86_OP_MEM || x.operands[0].mem.base != X86_REG_EBP ||
 			x.operands[0].mem.disp != -4 || x.operands[0].mem.index != X86_REG_INVALID || x.operands[1].type != X86_OP_IMM)
 			continue;
@@ -564,6 +567,9 @@ ExceptionHandling ReadX86ExceptionHandling(ImageReader const& read, uint32_t ima
 		if (l.Filter == 0) {
 			scope.Kind = ExceptionScope::Kinds::Finally;
 			scope.HandlerRva = rvaOf(l.Handler);
+			for (auto target : calls)
+				if (target >= l.Handler && target < l.Handler + 16 && (!scope.CallRva || rvaOf(target) < scope.CallRva))
+					scope.CallRva = rvaOf(target);
 		}
 		else {
 			scope.Kind = ExceptionScope::Kinds::Except;

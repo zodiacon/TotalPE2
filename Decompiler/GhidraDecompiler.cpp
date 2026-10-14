@@ -227,7 +227,11 @@ struct GhidraDecompiler::Impl {
 	std::string FrameFunction;		// (the name of that function)
 	std::string FrameRegister;		// (where the handler has the frame: its second parameter if none)
 	FrameSource Frames;
-	std::unordered_map<uint64_t, std::pair<std::vector<FrameVariable>, std::string>> HandlerFrames;	// (of handlers by themselves)
+	struct HandlerFrame {
+		std::vector<FrameVariable> Variables;
+		std::string Function, Register;
+	};
+	std::unordered_map<uint64_t, HandlerFrame> HandlerFrames;	// (of handlers by themselves)
 	std::unordered_map<std::string, std::string> FrameTypes;	// the structures of frames, by name: their fields
 	std::vector<FrameVariable> FrameOf(std::vector<Local> const& locals);
 	std::unordered_map<uint64_t, std::string> Applied;	// the changes each function was last decompiled with (as text)
@@ -2135,6 +2139,16 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 		m_Impl->Messages.str({});		// what is said about this function
 		m_Impl->Messages << m_Impl->Pending;
 		m_Impl->Pending.clear();
+		// the caller's blocks (its __try regions, its C++ try blocks), and the names of the functions they refer to (before the
+		// code is read, from the start: a call of one has its name, as x86's of a __finally does)
+		std::vector<Block> blocks;
+		if (m_Impl->Blocks && !m_Impl->Nested)
+			m_Impl->Blocks(address, blocks);
+		for (auto const& block : blocks)
+			for (auto const& [linkName, at] : block.Links)
+				if (!global->queryFunction(Address(arch->getDefaultCodeSpace(), at)))
+					AddFunction(at, linkName);
+
 		m_Impl->ApplyPrototype(fd);
 		if (m_Impl->Nested && m_Impl->Frame && !m_Impl->Frame->empty())
 			m_Impl->ApplyFrame(fd, *m_Impl->Frame, m_Impl->FrameFunction, m_Impl->FrameRegister);
@@ -2143,13 +2157,13 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 			auto it = m_Impl->HandlerFrames.find(address);
 			if (it == m_Impl->HandlerFrames.end()) {
 				std::vector<Local> locals;
-				std::string function;
-				if (!m_Impl->Frames(address, locals, function))
+				std::string function, reg;
+				if (!m_Impl->Frames(address, locals, function, reg))
 					locals.clear();
-				it = m_Impl->HandlerFrames.emplace(address, std::pair(m_Impl->FrameOf(locals), function)).first;
+				it = m_Impl->HandlerFrames.emplace(address, Impl::HandlerFrame{ m_Impl->FrameOf(locals), function, reg }).first;
 			}
-			if (!it->second.first.empty())
-				m_Impl->ApplyFrame(fd, it->second.first, it->second.second);
+			if (!it->second.Variables.empty())
+				m_Impl->ApplyFrame(fd, it->second.Variables, it->second.Function, it->second.Register);
 		}
 		m_Impl->ApplyLocals(fd);
 		if (changed)
@@ -2378,14 +2392,6 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 			}
 		}
 
-		// the caller's blocks (its __try regions, its C++ try blocks), and the names of the functions they refer to
-		std::vector<Block> blocks;
-		if (m_Impl->Blocks && !m_Impl->Nested)
-			m_Impl->Blocks(address, blocks);
-		for (auto const& block : blocks)
-			for (auto const& [linkName, at] : block.Links)
-				if (!global->queryFunction(Address(arch->getDefaultCodeSpace(), at)))
-					AddFunction(at, linkName);
 		// (the blocks are placed by the addresses of the lines)
 		GhidraDecompiler::LineAddresses ownLines;
 		auto lineMap = lines ? lines : blocks.empty() ? nullptr : &ownLines;

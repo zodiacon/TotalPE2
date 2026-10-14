@@ -774,6 +774,22 @@ TEST_CASE("Blocks of the caller's are placed around the lines of their code", "[
 	}
 }
 
+TEST_CASE("The functions a block refers to have their names where they are called", "[decompiler]") {
+	// sub rsp, 28h; call F; add rsp, 28h; ret (x86's code calls its __finally where it leaves the __try)
+	Fixture f;
+	auto finally = Code + 0x100;
+	f.Image.At(Code).Bytes({ 0x48, 0x83, 0xEC, 0x28 }).Call(finally).Bytes({ 0x48, 0x83, 0xC4, 0x28, 0xC3 });
+	f.Image.At(finally).Bytes({ 0xC3 });
+	GhidraDecompiler::Block guarded{ { { Code, Code + 4 } }, "__try {", { "} __finally {", "}" }, { { "Main$finally_0", finally } } };
+	f.Decompiler.SetBlockSource([&](uint64_t address, std::vector<GhidraDecompiler::Block>& out) {
+		if (address == Code)
+			out = { guarded };
+		});
+	f.Open();
+	auto code = f.Decompile(Code, "Main");
+	CHECK_THAT(code, ContainsSubstring("Main$finally_0();"));
+}
+
 TEST_CASE("x86: a handler has the function's frame in EBP, its variables below it", "[decompiler]") {
 	Fixture f(X86);
 	constexpr uint64_t Start = 0x401000, A = 0x401100, Handler = 0x401200;

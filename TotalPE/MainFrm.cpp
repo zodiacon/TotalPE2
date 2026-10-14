@@ -2293,9 +2293,33 @@ bool CMainFrame::EstablisherFrame(uint64_t va, std::vector<GhidraDecompiler::Loc
 
 // A handler (a funclet) by its name, which has that of its function ("`F'::`1'::catch$4", "F$fin$0", "F$filt$0"): the
 // variables of the function in its establisher frame, if the function's exception data has the handler
-bool CMainFrame::HandlerFrame(uint64_t va, std::vector<GhidraDecompiler::Local>& frame, std::string& function) const {
+bool CMainFrame::HandlerFrame(uint64_t va, std::vector<GhidraDecompiler::Local>& frame, std::string& function, std::string& reg) const {
 	uint32_t rva, parentRva;
-	if (!m_PE || !m_Symbols || !RvaOf(va, rva) || m_PE.GetNTHeader()->NTHdr32.FileHeader.Machine != IMAGE_FILE_MACHINE_AMD64)
+	if (!m_PE || !m_Symbols || !RvaOf(va, rva))
+		return false;
+	auto machine = m_PE.GetNTHeader()->NTHdr32.FileHeader.Machine;
+	// (x86's handlers are code of their functions: the function of the symbols they are in)
+	auto isHandler = [&](uint32_t parent) {
+		for (auto const& scope : ExceptionHandlingOf(parent).Scopes) {
+			if (scope.HandlerRva == rva || scope.FilterRva == rva || (scope.CallRva && scope.CallRva == rva))
+				return true;
+			for (auto const& c : scope.Catches)
+				if (c.HandlerRva == rva)
+					return true;
+		}
+		return false;
+	};
+	if (machine == IMAGE_FILE_MACHINE_I386) {
+		long displacement = 0;
+		auto parent = m_Symbols.GetSymbolByRVA(rva, SymbolTag::Function, &displacement);
+		if (!parent || displacement <= 0 || !isHandler(parentRva = parent.RelativeVirtualAddress()))
+			return false;
+		uint32_t frameSize;
+		auto parentVa = m_PE.GetImageBase() + parentRva;
+		function = DecompilerFunctionName(parentVa);
+		return EstablisherFrame(parentVa, frame, frameSize, &reg) && !frame.empty();
+	}
+	if (machine != IMAGE_FILE_MACHINE_AMD64)
 		return false;
 	auto name = DecompilerFunctionName(va);
 	std::string parent;
@@ -2313,16 +2337,9 @@ bool CMainFrame::HandlerFrame(uint64_t va, std::vector<GhidraDecompiler::Local>&
 	std::wstring error;
 	if (!ResolveFunction(std::wstring(CA2W(parent.c_str())), parentVa, error) || !RvaOf(parentVa, parentRva))
 		return false;
-	auto eh = ExceptionHandlingOf(parentRva);
-	bool handler = false;
-	for (auto const& scope : eh.Scopes) {
-		handler |= scope.HandlerRva == rva || scope.FilterRva == rva;
-		for (auto const& c : scope.Catches)
-			handler |= c.HandlerRva == rva;
-	}
 	uint32_t frameSize;
 	function = parent;
-	return handler && EstablisherFrame(parentVa, frame, frameSize) && !frame.empty();
+	return isHandler(parentRva) && EstablisherFrame(parentVa, frame, frameSize) && !frame.empty();
 }
 
 std::vector<GhidraDecompiler::Block> CMainFrame::ExceptionBlocks(uint64_t va) const {
@@ -2372,8 +2389,11 @@ std::vector<GhidraDecompiler::Block> CMainFrame::ExceptionBlocks(uint64_t va) co
 			case ExceptionScope::Kinds::Finally:
 			{
 				block.Open = "__try {";
-				auto handler = nameOf(scope.HandlerRva, "finally");
-				block.Links.emplace_back(handler, base + scope.HandlerRva);
+				// (x86's code calls it after its first instructions: the name is where it calls; its code is from its entry, where
+				// it has what the function keeps in registers from the frame)
+				auto at = scope.CallRva ? scope.CallRva : scope.HandlerRva;
+				auto handler = nameOf(at, "finally");
+				block.Links.emplace_back(handler, base + at);
 				block.Close = { "} __finally {", "\t/* " + handler + ", if an exception leaves it; else the code that follows runs it */", "}" };
 				block.Bodies.push_back({ 1, base + scope.HandlerRva, frame, frameSize, frameRegister });
 				break;
@@ -2927,9 +2947,9 @@ GhidraDecompiler* CMainFrame::DecompilerSession::Open(std::string& error) {
 	decompiler->SetBlockSource([this](uint64_t va, std::vector<GhidraDecompiler::Block>& blocks) {
 		Ask([&] { blocks = Frame->ExceptionBlocks(va); });
 		});
-	decompiler->SetFrameSource([this](uint64_t va, std::vector<GhidraDecompiler::Local>& frame, std::string& function) {
+	decompiler->SetFrameSource([this](uint64_t va, std::vector<GhidraDecompiler::Local>& frame, std::string& function, std::string& reg) {
 		bool known = false;
-		Ask([&] { known = !Stale && Frame->HandlerFrame(va, frame, function); });
+		Ask([&] { known = !Stale && Frame->HandlerFrame(va, frame, function, reg); });
 		return known;
 		});
 	decompiler->SetCommentSource([this](std::vector<std::pair<uint64_t, std::string>>& comments) {

@@ -31,6 +31,9 @@ struct ExceptionScope {
 	uint32_t FilterRva{ 0 };
 	// __except: the code of the handler (in the function); __finally: the termination handler (a function)
 	uint32_t HandlerRva{ 0 };
+	// x86's __finally: where the function's code calls it, on its way out of the region (after the handler's first
+	// instructions, which restore registers when an exception leaves it); 0 if it does not
+	uint32_t CallRva{ 0 };
 
 	// a catch of a C++ try
 	struct Catch {
