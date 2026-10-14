@@ -2162,8 +2162,10 @@ bool CMainFrame::DescribeType(uint32_t id, GhidraDecompiler::Type& type) const {
 			type.Kind = Kind::Function;
 			if (auto ret = sym.Type())
 				type.Target = ret.Id();
-			if (auto self = sym.ObjectPointerType())	// a member function: "this" first
+			if (auto self = sym.ObjectPointerType()) {	// a member function: "this" first
 				type.Parameters.push_back(self.Id());
+				type.Member = true;
+			}
 			for (auto const& arg : sym.FindChildren(nullptr, SymbolTag::FunctionArgType)) {
 				auto at = arg.Type();
 				if (at && at.Tag() == SymbolTag::BaseType && at.Simple() == SimpleType::NoType)

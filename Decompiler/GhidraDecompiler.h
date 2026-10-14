@@ -58,6 +58,8 @@ public:
 		bool Exact{ false };		// an enum whose values are not flags: a value is shown by name only if one has it (an
 									// HRESULT is not the | of others)
 		std::vector<uint32_t> Parameters;	// of a function (an object pointer, "this", first)
+		bool Member{ false };		// a member function: its first parameter is the object pointer (which comes before the
+									// pointer to where a structure it returns goes)
 		bool Variadic{ false };		// a function with "..." after its parameters
 	};
 	// Describes the type of an id; false if there is none

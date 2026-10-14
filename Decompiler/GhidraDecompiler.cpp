@@ -234,6 +234,7 @@ struct GhidraDecompiler::Impl {
 	};
 	std::unordered_map<uint64_t, std::vector<RegisterLocal>> RegisterLocals;
 	std::unordered_set<uint64_t> RegisterTyped;		// the functions whose variables in registers were given their types
+	std::unordered_map<uint64_t, std::unordered_set<Symbol*>> StackLocals;	// the symbols of those on the stack, by function
 	// What the user made of them (by function, by their names in the symbols: "pdb:" and the name is their key, which the
 	// decompiler's variables they are in, and their types, do not change), and the keys of the decompiler's variables that are
 	// theirs in the function decompiled last
@@ -558,6 +559,10 @@ bool GhidraDecompiler::Impl::ApplyPrototype(Funcdata* fd) {
 	try {
 		PrototypePieces pieces;
 		pieces.model = Arch->defaultfp;
+		// (a member function's: "this", then where a structure it returns goes, as x64 and x86 pass them)
+		if (t.Member)
+			if (auto model = Arch->getModel("__thiscall"))
+				pieces.model = model;
 		pieces.name = fd->getName();
 		pieces.outtype = Convert(t.Target);
 		for (size_t i = 0; i < t.Parameters.size(); i++) {
@@ -624,6 +629,7 @@ void GhidraDecompiler::Impl::ApplyLocals(Funcdata* fd) {
 				continue;
 			auto sym = scope->addSymbol(local.Name, type, addr, Address())->getSymbol();
 			scope->setAttribute(sym, Varnode::namelock | Varnode::typelock);
+			StackLocals[address].insert(sym);
 		}
 		catch (LowlevelError const&) {
 			// one the decompiler does not take: the variable gets a name of its own
@@ -1881,6 +1887,7 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 			m_Impl->RegisterLocals.erase(address);
 			m_Impl->RegisterTyped.erase(address);
 			m_Impl->RegisterChanges.erase(address);
+			m_Impl->StackLocals.erase(address);
 			fd = global->addFunction(addr, fname)->getFunction();
 			m_Impl->Applied[address] = applied;
 		}
@@ -2017,9 +2024,10 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 				}
 				catch (LowlevelError const&) {
 				}
-			// the same variable on the stack where the code of the function does not use it (a handler of an exception does): its
-			// name is the register's (and the decompiler's warning that it is not used is not shown)
-			if (!registerNames.empty()) {
+			// The variables of the symbols on the stack that the code of the function does not use (optimized code keeps them in
+			// registers, or a handler of an exception uses them): not shown, nor the decompiler's warning about each (and the name
+			// of one is free for its value in a register)
+			if (auto known = m_Impl->StackLocals.find(address); known != m_Impl->StackLocals.end() && !known->second.empty()) {
 				std::unordered_set<Symbol*> used;
 				for (auto it = fd->beginLoc(); it != fd->endLoc(); ++it) {
 					auto vn = *it;
@@ -2034,21 +2042,18 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 						}
 				}
 				std::unordered_set<std::string> unused;
-				for (auto const& [sym, name] : registerNames) {
-					std::vector<Symbol*> named;
-					scope->findByName(name, named);
-					for (auto other : named)
-						if (auto entry = other->getFirstWholeMap(); other != sym && !used.count(other) && entry &&
-							entry->getAddr().getSpace() == arch->getStackSpace() && other->getCategory() == Symbol::no_category) {
-							scope->removeSymbol(other);
-							unused.insert(name);
-						}
-				}
+				for (auto it = known->second.begin(); it != known->second.end(); )
+					if (!used.count(*it)) {
+						unused.insert("WARNING: Variable defined which should be unmapped: " + (*it)->getName());
+						scope->removeSymbol(*it);
+						it = known->second.erase(it);
+					}
+					else
+						++it;
 				std::vector<Comment*> warnings;
 				for (auto it = arch->commentdb->beginComment(fd->getAddress()); it != arch->commentdb->endComment(fd->getAddress()); ++it)
-					for (auto const& name : unused)
-						if ((*it)->getType() == Comment::warningheader && (*it)->getText() == "WARNING: Variable defined which should be unmapped: " + name)
-							warnings.push_back(*it);
+					if ((*it)->getType() == Comment::warningheader && unused.count((*it)->getText()))
+						warnings.push_back(*it);
 				for (auto comment : warnings)
 					arch->commentdb->deleteComment(comment);
 			}

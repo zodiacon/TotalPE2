@@ -345,6 +345,48 @@ TEST_CASE("A local variable of optimized code, in a register", "[decompiler]") {
 		auto code = f.Decompile(Code, "Add");
 		CHECK_THAT(code, !ContainsSubstring("unused"));
 	}
+	SECTION("one on the stack that the code does not use is not shown") {
+		f.Image.At(Code).Bytes({ 0x8D, 0x04, 0x11, 0xC3 });		// lea eax, [rcx+rdx]; ret
+		given = { { "spare", 1, -0x10 } };
+		f.Open();
+		auto code = f.Decompile(Code, "Add");
+		CHECK_THAT(code, !ContainsSubstring("spare"));
+		CHECK_THAT(code, !ContainsSubstring("WARNING"));
+		// (nor when it is decompiled again)
+		code = f.Decompile(Code, "Add");
+		CHECK_THAT(code, !ContainsSubstring("spare"));
+	}
+}
+
+TEST_CASE("A member function that returns a structure: \"this\" before where it goes", "[decompiler]") {
+	Fixture f;
+	f.Image.At(Code).Bytes({
+		0x48, 0x8B, 0x01,			// mov rax, [rcx]
+		0x48, 0x89, 0x02,			// mov [rdx], rax
+		0x48, 0x8B, 0x41, 0x08,		// mov rax, [rcx+8]
+		0x48, 0x89, 0x42, 0x08,		// mov [rdx+8], rax
+		0x48, 0x8B, 0xC2,			// mov rax, rdx
+		0xC3 });
+	f.Decompiler.SetTypeSource([](uint32_t id, GhidraDecompiler::Type& type) {
+		using Kind = GhidraDecompiler::TypeKind;
+		switch (id) {
+			case 1: type.Kind = Kind::Integer; type.Name = "longlong"; type.Size = 8; return true;
+			case 2: type.Kind = Kind::Struct; type.Name = "PAIR"; type.Size = 16; type.Fields = { { "first", 0, 1 }, { "second", 8, 1 } }; return true;
+			case 3: type.Kind = Kind::Struct; type.Name = "OBJECT"; type.Size = 16; type.Fields = { { "x", 0, 1 }, { "y", 8, 1 } }; return true;
+			case 4: type.Kind = Kind::Pointer; type.Size = 8; type.Target = 3; return true;
+			case 5: type.Kind = Kind::Function; type.Target = 2; type.Parameters = { 4 }; type.Member = true; return true;
+		}
+		return false;
+		});
+	f.Decompiler.SetPrototypeSource([](uint64_t address, uint32_t& type, std::vector<std::string>& names) {
+		type = 5;
+		names = { "this" };
+		return address == Code;
+		});
+	f.Open();
+	auto code = f.Decompile(Code, "OBJECT::Get");
+	CHECK_THAT(code, ContainsSubstring("this->x"));
+	CHECK_THAT(code, ContainsSubstring("this->y"));
 }
 
 TEST_CASE("A global variable", "[decompiler]") {
