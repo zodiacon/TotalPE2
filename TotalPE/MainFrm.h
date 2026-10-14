@@ -8,6 +8,7 @@
 #include <GhidraDecompiler.h>
 #include <Annotations.h>
 #include "Win32Api.h"
+class CWin32ApiFrame;
 #include <TabViewHelper.h>
 #include <CustomSplitterWindow.h>
 #include <TreeViewHelper.h>
@@ -26,6 +27,7 @@
 #include <map>
 #include <atomic>
 #include <shared_mutex>
+#include <unordered_set>
 #include <thread>
 
 class CHexView;
@@ -306,6 +308,13 @@ private:
 	bool IsWin32Api(std::string const& name) override;
 	// the Win32 API of the file's machine; null if there is no metadata (or no PE file)
 	Win32Api* Win32ForFile() const;
+	// the names of the functions the file imports
+	std::unordered_set<std::string> FileImportNames() const;
+	// the views of the file go when another is opened (or it is closed)
+	void CloseFileViews();
+	// the Windows API window (if it is open) shows the machine and imports of the file now open
+	void RefreshWin32View();
+	CString Win32WindowTitle() const;
 	LRESULT OnViewWin32Api(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	// the views show the comments and bookmarks again (and, if the comments changed, the code is decompiled again)
 	void NotifyAnnotationsChanged(bool comments);
@@ -421,6 +430,8 @@ private:
 	// names of functions and global variables
 	std::vector<GhidraDecompiler::VariableChange> VariableChanges(uint64_t va) const;
 	uint32_t TypeIdByName(std::string const& name) const;
+	// the type of the symbols that a type of the Win32 metadata is (a struct, union or enum, of the same size); 0 if none
+	uint32_t SymbolsTypeOf(GhidraDecompiler::Type const& type) const;
 	void UserNames(std::vector<std::pair<uint64_t, std::string>>& functions, std::vector<std::pair<uint64_t, GhidraDecompiler::VariableChange>>& globals) const;
 	// the target of an incremental linking stub ("jmp rel32") at an address; 0 if it is not one
 	uint64_t StubTarget(uint64_t va) const;
@@ -494,6 +505,7 @@ private:
 	std::vector<GuardTable> m_GuardTables;	// of the PE file
 	std::vector<FlatResource> m_FlatResources;
 	CImageList m_TreeImages;
+	CWin32ApiFrame* m_Win32Frame{ nullptr };	// the Windows API, in its window (Tools > Windows API)
 	std::unordered_map<TreeItemType, IView*> m_Views;
 	std::unordered_map<HWND, TreeItemType> m_Views2;
 	HTREEITEM m_hRoot;

@@ -7,7 +7,7 @@
 #include "AboutDlg.h"
 #include "MainFrm.h"
 #include "InputDlg.h"
-#include "Win32ApiView.h"
+#include "Win32ApiFrame.h"
 #include <IconHelper.h>
 #include "SecurityHelper.h"
 #include <ToolbarHelper.h>
@@ -36,6 +36,11 @@ BOOL CMainFrame::PreTranslateMessage(MSG* pMsg) {
 		return TRUE;
 	if (m_SearchDlg.IsWindow() && m_SearchDlg.IsDialogMessageW(pMsg))
 		return TRUE;
+
+	// (the keys of other windows of their own, as the Windows API's, are not for the accelerators of this one)
+	if (pMsg->hwnd && pMsg->message >= WM_KEYFIRST && pMsg->message <= WM_KEYLAST &&
+		::GetAncestor(pMsg->hwnd, GA_ROOTOWNER) != m_hWnd)
+		return FALSE;
 
 	// the docking area's shortcuts (Ctrl+Tab, Ctrl+F4, Ctrl+F6...) before the accelerators
 	if (m_Tabs.PreTranslateMessage(pMsg))
@@ -358,6 +363,9 @@ LRESULT CMainFrame::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*
 	CloseDecompiler();
 	CancelXrefs();
 	m_Tabs.SaveLayout(LayoutPath());	// the docking area still has its windows (they go after the frame's WM_DESTROY)
+
+	if (m_Win32Frame && m_Win32Frame->IsWindow())
+		m_Win32Frame->DestroyWindow();
 
 	if (--s_Frames == 0) {
 		WINDOWPLACEMENT wp{ sizeof(wp) };
@@ -816,9 +824,7 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	StartXrefs();
 	ResetNavigation();
 	StartSymbolLoad(path);	// the window is usable at once; symbols arrive later (WM_SYMBOLS_LOADED)
-	m_Views.clear();
-	m_Views2.clear();
-	m_Tabs.RemoveAllPages();
+	CloseFileViews();
 	m_Archive.Close();
 	m_Object.Close();
 	m_ObjectCodeView = {};
@@ -840,6 +846,7 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	AppSettings::Get().RecentFiles(m_RecentFiles.Files());
 	UpdateRecentFilesMenu();
 
+	RefreshWin32View();
 	ShowView(m_hRoot);
 	UpdateUI();
 	SearchTargetChanged();
@@ -903,13 +910,12 @@ void CMainFrame::BuildArchiveTree(int iconSize) {
 
 // What a PE file leaves behind, when a library or an object file is opened instead
 void CMainFrame::ResetFileState() {
-	m_Tabs.RemoveAllPages();
+	CloseFileViews();
 	CloseDecompiler();
 	m_Annotations = {};
 	CancelXrefs();
-	m_Views.clear();
-	m_Views2.clear();
 	m_PE.Close();
+	RefreshWin32View();
 	m_Archive.Close();
 	m_Object.Close();
 	m_ObjectCodeView = {};
@@ -1358,8 +1364,6 @@ void CMainFrame::BuildTree(int iconSize) {
 	InsertTreeItem(m_Tree, std::format(L"Anomalies ({})", m_Anomalies.size()).c_str(), GetTreeIcon(IDI_EXCEPTION), TreeItemType::Anomalies, root);
 	InsertTreeItem(m_Tree, L"Security Summary", GetTreeIcon(IDI_SECURITY), TreeItemType::SecuritySummary, root);
 	InsertTreeItem(m_Tree, L"Bookmarks", GetTreeIcon(IDI_BOOKMARK), TreeItemType::Bookmarks, root);
-	if (::GetFileAttributesW(Win32Api::MetadataPath().c_str()) != INVALID_FILE_ATTRIBUTES)
-		InsertTreeItem(m_Tree, L"Windows API", GetTreeIcon(IDI_FUNCTION2), TreeItemType::Win32Api, root);
 	m_hOverlay = nullptr;
 	if (!m_Overlay.Empty())
 		m_hOverlay = InsertTreeItem(m_Tree, L"Overlay", GetTreeIcon(IDI_BINARY), TreeItemType::Overlay, root);
@@ -1470,13 +1474,12 @@ LRESULT CMainFrame::OnFileCompare(WORD, WORD, HWND, BOOL&) {
 }
 
 LRESULT CMainFrame::OnFileClose(WORD, WORD, HWND, BOOL&) {
-	m_Tabs.RemoveAllPages();
+	CloseFileViews();
 	CloseDecompiler();
 	m_Annotations = {};
 	CancelXrefs();
-	m_Views.clear();
-	m_Views2.clear();
 	m_PE.Close();
+	RefreshWin32View();
 	m_Archive.Close();
 	m_Object.Close();
 	m_ObjectCodeView = {};
@@ -2575,8 +2578,17 @@ GhidraDecompiler* CMainFrame::DecompilerSession::Open(std::string& error) {
 	decompiler->SetTypeSource([this](uint32_t id, GhidraDecompiler::Type& type) {
 		bool known = false;
 		Ask([&] {
-			if (Win32Api::IsId(id))
+			if (Win32Api::IsId(id)) {
 				known = Win32 && Win32->Describe(id, type);
+				// The type of the symbols, if they have it: one type, not two (a local that the symbols type as
+				// _WIN32_FIND_DATAW is passed to FindFirstFileW without a cast)
+				if (known && Symbols && !Stale)
+					if (auto same = Frame->SymbolsTypeOf(type)) {
+						GhidraDecompiler::Type theirs;
+						if (Frame->DescribeType(same, theirs))
+							type = theirs;
+					}
+			}
 			else
 				known = Symbols && !Stale && Frame->DescribeType(id, type);
 			});
@@ -3007,6 +3019,22 @@ uint32_t CMainFrame::TypeIdByName(std::string const& name) const {
 	return 0;
 }
 
+// By its name, or by its tag's, as C names structs: WIN32_FIND_DATAW is struct _WIN32_FIND_DATAW (or tagPOINT). The size
+// tells that it is the same type (and of the same machine).
+uint32_t CMainFrame::SymbolsTypeOf(GhidraDecompiler::Type const& type) const {
+	using Kind = GhidraDecompiler::TypeKind;
+	if (!m_Symbols || type.Name.empty() || (type.Kind != Kind::Struct && type.Kind != Kind::Union && type.Kind != Kind::Enum))
+		return 0;
+	auto tag = type.Kind == Kind::Enum ? SymbolTag::Enum : SymbolTag::UDT;
+	for (auto const& name : { type.Name, "_" + type.Name, "tag" + type.Name }) {
+		std::wstring wide(CA2W(name.c_str()));
+		for (auto const& sym : m_Symbols.FindChildren(wide.c_str(), tag))
+			if (sym.Length() == type.Size)
+				return sym.Id();
+	}
+	return 0;
+}
+
 void CMainFrame::UserNames(std::vector<std::pair<uint64_t, std::string>>& functions,
 	std::vector<std::pair<uint64_t, GhidraDecompiler::VariableChange>>& globals) const {
 	if (!m_PE)
@@ -3105,6 +3133,55 @@ void CMainFrame::NotifyAnnotationsChanged(bool comments) {
 		RedecompileViews();
 }
 
+std::unordered_set<std::string> CMainFrame::FileImportNames() const {
+	std::unordered_set<std::string> imports;
+	if (!m_PE)
+		return imports;
+	if (auto list = m_PE.GetImport())
+		for (auto const& mod : *list)
+			for (auto const& fn : mod.ImportFunc)
+				if (!fn.FuncName.empty())
+					imports.insert(fn.FuncName);
+	if (auto list = m_PE.GetDelayImport())
+		for (auto const& mod : *list)
+			for (auto const& fn : mod.DelayImpFunc)
+				if (!fn.FuncName.empty())
+					imports.insert(fn.FuncName);
+	return imports;
+}
+
+void CMainFrame::CloseFileViews() {
+	m_Tabs.RemoveAllPages();
+	m_Views.clear();
+	m_Views2.clear();
+}
+
+void CMainFrame::RefreshWin32View() {
+	auto api = Win32ForFile();
+	if (m_Win32Frame && api)
+		m_Win32Frame->SetFile(*api, FileImportNames(), Win32WindowTitle());
+}
+
+// Windows API (x64), and the file whose machine (and imports) it is of
+CString CMainFrame::Win32WindowTitle() const {
+	auto machine = L"x64";
+#ifdef _M_ARM64
+	machine = L"ARM64";
+#endif
+	if (m_PE) {
+		auto value = m_PE.GetNTHeader()->NTHdr32.FileHeader.Machine;
+		machine = value == IMAGE_FILE_MACHINE_I386 ? L"x86" : value == IMAGE_FILE_MACHINE_ARM64 ? L"ARM64" : L"x64";
+	}
+	CString title;
+	if (m_PE) {
+		auto& path = m_PE.GetPath();
+		title.Format(L"Windows API (%s, %s) - Total PE", machine, path.substr(path.rfind(L'\\') + 1).c_str());
+	}
+	else
+		title.Format(L"Windows API (%s) - Total PE", machine);
+	return title;
+}
+
 Win32Api* CMainFrame::Win32ForFile() const {
 	// without a file: of this computer's machine
 	if (!m_PE) {
@@ -3124,24 +3201,32 @@ bool CMainFrame::IsWin32Api(std::string const& name) {
 	return api && api->Find(name);
 }
 
+// In a window of its own (one for each main window), which is opened, or brought to the front
 bool CMainFrame::ShowWin32Api(std::string const& name) {
-	// (it is not of the file: without one, it has no node in the tree)
-	if (!Win32ForFile())
+	auto api = Win32ForFile();
+	if (!api)
 		return false;
-	RecordNavigation();
-	auto hItem = FindTreeItem(TreeItemType::Win32Api);
-	// without a file, the images of the views are not there yet (the tree makes them)
-	if (!hItem && BuildTreeImageList(16)) {
-		m_Tree.SetImageList(m_TreeImages);
-		m_Tabs.SetImageList(m_TreeImages);
+	if (!m_Win32Frame) {
+		// without a file, the images (of the kinds of the entries) are not there yet (the tree makes them)
+		if (BuildTreeImageList(16)) {
+			m_Tree.SetImageList(m_TreeImages);
+			m_Tabs.SetImageList(m_TreeImages);
+		}
+		auto frame = new CWin32ApiFrame(this, m_PE, [this] { m_Win32Frame = nullptr; });
+		m_Win32Frame = frame;
+		CWaitCursor wait;
+		if (!frame->Open(*api, FileImportNames(), Win32WindowTitle())) {
+			if (frame->IsWindow())
+				frame->DestroyWindow();	// (which deletes it, and forgets it)
+			else {
+				m_Win32Frame = nullptr;
+				delete frame;
+			}
+			return false;
+		}
 	}
-	if (!(hItem ? ShowView(hItem) : ShowView(TreeItemType::Win32Api, nullptr, IDI_FUNCTION2)))
-		return false;
-	auto it = m_Views.find(TreeItemType::Win32Api);
-	auto view = it == m_Views.end() ? nullptr : dynamic_cast<CWin32ApiView*>(it->second);
-	bool shown = view && (name.empty() || view->Select(name));
-	RecordNavigation();
-	return shown;
+	m_Win32Frame->Activate();
+	return name.empty() || m_Win32Frame->Select(name);
 }
 
 LRESULT CMainFrame::OnViewWin32Api(WORD, WORD, HWND, BOOL&) {

@@ -12,7 +12,7 @@ namespace {
 }
 
 CWin32ApiView::CWin32ApiView(IMainFrame* frame, PEFile const& pe, Win32Api& api, std::unordered_set<std::string> imports) :
-	CViewBase(frame), m_PE(pe), m_Api(api), m_Imports(std::move(imports)) {
+	CViewBase(frame), m_PE(pe), m_Api(&api), m_Imports(std::move(imports)) {
 }
 
 CString CWin32ApiView::GetTitle() const {
@@ -20,14 +20,18 @@ CString CWin32ApiView::GetTitle() const {
 }
 
 void CWin32ApiView::UpdateUI(bool) {
-	auto text = std::format(L"{} of {} functions and types{}", m_Items.size(), m_Api.Entries().size(),
+	auto text = std::format(L"{} of {} functions and types{}", m_Items.size(), m_Api->Entries().size(),
 		m_ImportsOnly ? L" (the imports of the file)" : L"");
-	Frame()->SetStatusText(1, text.c_str());
+	if (m_hStatusBar)
+		::SetWindowText(m_hStatusBar, text.c_str());
 }
 
 LRESULT CWin32ApiView::OnCreate(UINT, WPARAM, LPARAM, BOOL& handled) {
 	// Imports, then the filter, in bands of their own (the rebar passes their notifications on to this window)
 	ToolBarButtonInfo const buttons[] = {
+		{ ID_NAV_BACK, IDI_BACK },
+		{ ID_NAV_FORWARD, IDI_FORWARD },
+		{ 0 },
 		{ ID_WIN32_IMPORTS, 0, BTNS_CHECK | BTNS_SHOWTEXT | BTNS_AUTOSIZE, L"Imports" },
 	};
 	CreateSimpleReBar(ATL_SIMPLE_REBAR_NOBORDER_STYLE);
@@ -49,6 +53,7 @@ LRESULT CWin32ApiView::OnCreate(UINT, WPARAM, LPARAM, BOOL& handled) {
 	band.cx = rcLast.right + 16;
 	rebar.SetBandInfo(0, &band);
 	UpdateImportsButton();
+	UpdateHistoryButtons();
 
 	m_hWndClient = m_Splitter.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
 	// (the icons are the frame's: shared, not destroyed with the list)
@@ -82,9 +87,8 @@ LRESULT CWin32ApiView::OnCreate(UINT, WPARAM, LPARAM, BOOL& handled) {
 BOOL CWin32ApiView::PreTranslateMessage(MSG* pMsg) {
 	if (pMsg->message == WM_KEYDOWN && m_hWnd && (pMsg->hwnd == m_hWnd || IsChild(pMsg->hwnd))) {
 		bool control = ::GetKeyState(VK_CONTROL) < 0, shift = ::GetKeyState(VK_SHIFT) < 0, alt = ::GetKeyState(VK_MENU) < 0;
-		bool inCode = m_Code && pMsg->hwnd == m_Code->GetCtrl().m_hWnd;
-		// to the filter: Ctrl+Q, or Ctrl+F (in the declaration, Ctrl+F is Find)
-		if (control && !shift && !alt && (pMsg->wParam == 'Q' || (pMsg->wParam == 'F' && !inCode))) {
+		// to the filter: Ctrl+Q, Ctrl+F
+		if (control && !shift && !alt && (pMsg->wParam == 'Q' || pMsg->wParam == 'F')) {
 			m_FilterEdit.SetFocus();
 			m_FilterEdit.SetSelAll();
 			return TRUE;
@@ -96,6 +100,14 @@ BOOL CWin32ApiView::PreTranslateMessage(MSG* pMsg) {
 			m_List.SetFocus();
 			return TRUE;
 		}
+	}
+	if (pMsg->message == WM_SYSKEYDOWN && m_hWnd && (pMsg->hwnd == m_hWnd || IsChild(pMsg->hwnd)) &&
+		(pMsg->wParam == VK_LEFT || pMsg->wParam == VK_RIGHT)) {
+		if (pMsg->wParam == VK_LEFT)
+			GoBack();
+		else
+			GoForward();
+		return TRUE;
 	}
 	return CViewBase::PreTranslateMessage(pMsg);
 }
@@ -110,7 +122,7 @@ LRESULT CWin32ApiView::OnForward(UINT msg, WPARAM wp, LPARAM lp, BOOL&) {
 }
 
 void CWin32ApiView::Fill() {
-	auto const& entries = m_Api.Entries();
+	auto const& entries = m_Api->Entries();
 	m_Items.clear();
 	for (size_t i = 0; i < entries.size(); i++) {
 		auto const& e = entries[i];
@@ -127,7 +139,7 @@ void CWin32ApiView::Fill() {
 }
 
 CString CWin32ApiView::GetColumnText(HWND, int row, int col) const {
-	auto const& e = m_Api.Entries()[m_Items[row]];
+	auto const& e = m_Api->Entries()[m_Items[row]];
 	switch (col) {
 		case 0: return CString(e.Name.c_str());
 		case 1: return Win32Api::KindName(e.Kind);
@@ -140,7 +152,7 @@ CString CWin32ApiView::GetColumnText(HWND, int row, int col) const {
 int CWin32ApiView::GetRowImage(HWND, int row, int) const {
 	using Kinds = Win32Api::Entry::Kinds;
 	UINT icon = IDI_FUNCTION;
-	switch (m_Api.Entries()[m_Items[row]].Kind) {
+	switch (m_Api->Entries()[m_Items[row]].Kind) {
 		case Kinds::Function: icon = IDI_FUNCTION; break;
 		case Kinds::Struct: icon = IDI_TYPE; break;
 		case Kinds::Union: icon = IDI_UNION; break;
@@ -153,7 +165,7 @@ int CWin32ApiView::GetRowImage(HWND, int row, int) const {
 }
 
 void CWin32ApiView::DoSort(SortInfo const* si) {
-	auto const& entries = m_Api.Entries();
+	auto const& entries = m_Api->Entries();
 	if (si == nullptr) {
 		std::ranges::sort(m_Items);	// (the entries are by name)
 		return;
@@ -180,6 +192,7 @@ void CWin32ApiView::Show(int entry) {
 	if (entry == m_Shown)
 		return;
 	m_Shown = entry;
+	m_ShownAt = ::GetTickCount64();
 	auto& ctrl = m_Code->GetCtrl();
 	ctrl.SetReadOnly(false);
 	if (entry < 0) {
@@ -187,7 +200,7 @@ void CWin32ApiView::Show(int entry) {
 		m_Code->SetText("");
 	}
 	else
-		m_Code->SetText(m_Api.Declaration(m_Api.Entries()[entry], &m_LineTypes).c_str());
+		m_Code->SetText(m_Api->Declaration(m_Api->Entries()[entry], &m_LineTypes).c_str());
 	ctrl.SetReadOnly(true);
 	ctrl.EmptyUndoBuffer();
 }
@@ -198,8 +211,13 @@ LRESULT CWin32ApiView::OnItemChanged(int, LPNMHDR hdr, BOOL& handled) {
 		handled = FALSE;
 		return 0;
 	}
-	if ((lv->uChanged & LVIF_STATE) && (lv->uNewState & LVIS_SELECTED))
-		Show(SelectedEntry());
+	if ((lv->uChanged & LVIF_STATE) && (lv->uNewState & LVIS_SELECTED)) {
+		auto entry = SelectedEntry();
+		// the one that was shown, if the user looked at it (a second, at least)
+		if (!m_Navigating && entry != m_Shown && m_Shown >= 0 && ::GetTickCount64() - m_ShownAt >= 1000)
+			Remember(m_Api->Entries()[m_Shown].Name);
+		Show(entry);
+	}
 	return 0;
 }
 
@@ -235,16 +253,34 @@ LRESULT CWin32ApiView::OnImports(WORD, WORD, HWND, BOOL&) {
 	return 0;
 }
 
+void CWin32ApiView::SetFile(Win32Api& api, std::unordered_set<std::string> imports) {
+	// what it showed, by name: the same function or type of the other machine
+	auto shown = m_Shown >= 0 ? m_Api->Entries()[m_Shown].Name : std::string();
+	m_Api = &api;
+	m_Imports = std::move(imports);
+	if (m_Imports.empty() && m_ImportsOnly) {
+		m_ImportsOnly = false;
+		UISetCheck(ID_WIN32_IMPORTS, false);
+	}
+	UpdateImportsButton();
+	m_Shown = -1;
+	m_Navigating = true;
+	Fill();
+	if (shown.empty() || !Select(shown))
+		Show(-1);
+	m_Navigating = false;
+}
+
 void CWin32ApiView::UpdateImportsButton() {
 	// (without a file, there are no imports)
-	m_tb.EnableButton(ID_WIN32_IMPORTS, !m_Imports.empty());
+	UIEnable(ID_WIN32_IMPORTS, !m_Imports.empty());
 }
 
 bool CWin32ApiView::Select(std::string const& name) {
-	auto entry = m_Api.Find(name);
+	auto entry = m_Api->Find(name);
 	if (!entry)
 		return false;
-	auto index = (size_t)(entry - m_Api.Entries().data());
+	auto index = (size_t)(entry - m_Api->Entries().data());
 	auto it = std::ranges::find(m_Items, index);
 	if (it == m_Items.end()) {
 		// hidden by the filter: all are shown again
@@ -268,13 +304,84 @@ bool CWin32ApiView::GoToLine(int line) {
 	if (line < 0 || line >= (int)m_LineTypes.size() || m_LineTypes[line].empty())
 		return false;
 	auto const& name = m_LineTypes[line];
-	if (m_Shown >= 0 && m_Api.Entries()[m_Shown].Name == name)
+	if (m_Shown >= 0 && m_Api->Entries()[m_Shown].Name == name)
 		return false;
-	Frame()->RecordNavigation();
-	if (!Select(name))
+	return Navigate(name);
+}
+
+bool CWin32ApiView::Navigate(std::string const& name) {
+	auto from = m_Shown >= 0 ? m_Api->Entries()[m_Shown].Name : std::string();
+	m_Navigating = true;
+	bool shown = Select(name);
+	m_Navigating = false;
+	if (!shown)
 		return false;
-	Frame()->RecordNavigation();
+	if (from != name)
+		Remember(from);
 	return true;
+}
+
+void CWin32ApiView::Remember(std::string const& name) {
+	if (name.empty() || (!m_Back.empty() && m_Back.back() == name))
+		return;
+	m_Back.push_back(name);
+	m_Forward.clear();
+	UpdateHistoryButtons();
+}
+
+bool CWin32ApiView::ShowFromHistory(std::string const& name) {
+	m_Navigating = true;
+	bool shown = Select(name);
+	m_Navigating = false;
+	return shown;
+}
+
+void CWin32ApiView::GoBack() {
+	while (!m_Back.empty()) {
+		auto name = std::move(m_Back.back());
+		m_Back.pop_back();
+		auto current = m_Shown >= 0 ? m_Api->Entries()[m_Shown].Name : std::string();
+		if (ShowFromHistory(name)) {
+			if (!current.empty())
+				m_Forward.push_back(current);
+			break;
+		}
+	}
+	UpdateHistoryButtons();
+}
+
+void CWin32ApiView::GoForward() {
+	while (!m_Forward.empty()) {
+		auto name = std::move(m_Forward.back());
+		m_Forward.pop_back();
+		auto current = m_Shown >= 0 ? m_Api->Entries()[m_Shown].Name : std::string();
+		if (ShowFromHistory(name)) {
+			if (!current.empty())
+				m_Back.push_back(current);
+			break;
+		}
+	}
+	UpdateHistoryButtons();
+}
+
+void CWin32ApiView::UpdateHistoryButtons() {
+	// (through the UI's state: it is what the toolbar is updated from)
+	UIEnable(ID_NAV_BACK, !m_Back.empty());
+	UIEnable(ID_NAV_FORWARD, !m_Forward.empty());
+}
+
+LRESULT CWin32ApiView::OnBack(WORD, WORD, HWND, BOOL&) {
+	GoBack();
+	return 0;
+}
+
+LRESULT CWin32ApiView::OnForwardCommand(WORD, WORD, HWND, BOOL&) {
+	GoForward();
+	return 0;
+}
+
+void CWin32ApiView::SetStatusBar(HWND hStatusBar) {
+	m_hStatusBar = hStatusBar;
 }
 
 int64_t CWin32ApiView::GetNavigationPosition() const {
@@ -282,6 +389,6 @@ int64_t CWin32ApiView::GetNavigationPosition() const {
 }
 
 void CWin32ApiView::SetNavigationPosition(int64_t position) {
-	if (position >= 0 && position < (int64_t)m_Api.Entries().size())
-		Select(m_Api.Entries()[(size_t)position].Name);
+	if (position >= 0 && position < (int64_t)m_Api->Entries().size())
+		Select(m_Api->Entries()[(size_t)position].Name);
 }

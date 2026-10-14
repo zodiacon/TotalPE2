@@ -63,7 +63,7 @@ The kind of file is recognized by its contents, not its extension. Open files fr
 * Flow graphs of functions, exported as SVG
 * Go To (address, RVA or file offset), Back and Forward
 * Decompiled C (Ghidra's decompiler): rename and retype variables and functions (N, Y), comment instructions (;) and bookmark them (Ctrl+B), kept for the file; the functions of Windows that the code calls have their prototypes, and their constants (flags, `HRESULT`, `NTSTATUS`...) their names, from the Win32 metadata
-* Windows API: the functions and types of Windows from the Win32 metadata (all of them, or the file's imports), with their C declarations: prototypes, enums and their values, structs with the offsets of their fields, callbacks, COM interfaces
+* Windows API: the functions and types of Windows from the Win32 metadata (all of them, or the file's imports), with their C declarations: prototypes, enums and their values, structs with the offsets of their fields, callbacks, COM interfaces; in a window of its own (Tools > Windows API), with Back/Forward through the types followed
 
 ## Hex view
 
