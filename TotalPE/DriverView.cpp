@@ -27,11 +27,15 @@ void CDriverView::Fill() {
 	add(L"DriverEntry", info.DriverEntry);
 	add(L"DriverUnload", info.Unload);
 	add(L"DriverStartIo", info.StartIo);
+	add(L"AddDevice", info.AddDevice);
 	for (int i = 0; i < DriverInfo::MajorCount; i++)
 		add(MajorFunctionName(i), info.Major[i]);
 	// a minifilter's
 	for (auto const& c : info.Callbacks)
 		add(c.What.c_str(), c.Rva);
+	// a framework's driver's: "EvtIoDeviceControl (WdfIoQueueCreate)"
+	for (auto const& c : info.FrameworkCallbacks)
+		add((c.Name + L" (" + c.Function + L")").c_str(), c.Rva);
 	m_IoctlItems = info.Ioctls;
 	for (auto [list, count] : { std::pair{ &m_Routines, m_RoutineItems.size() }, std::pair{ &m_Ioctls, m_IoctlItems.size() } })
 		if (*list) {
@@ -138,7 +142,8 @@ void CDriverView::UpdateUI(bool first) const {
 				break;
 			default:
 				text = std::format(L"Driver: {} routines, {} control codes{}{}", m_RoutineItems.size(), m_IoctlItems.size(),
-					info.Kmdf ? L" (a KMDF driver: the framework dispatches its requests)" : L"",
+					!info.Kmdf ? L"" : info.Wdf.Table ? std::format(L" (a KMDF {}.{} driver: the framework dispatches its requests to the callbacks it is given)",
+						info.Wdf.Major, info.Wdf.Minor) : L" (a KMDF driver: the framework dispatches its requests)",
 					info.Minifilter ? L" (a minifilter: its callbacks are registered with the filter manager, FltRegisterFilter)" : L"");
 				break;
 		}

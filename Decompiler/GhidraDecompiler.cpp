@@ -1,4 +1,5 @@
 #include "GhidraDecompiler.h"
+#include "WdfTables.h"
 
 #include "libdecomp.hh"
 #include "sleigh_arch.hh"
@@ -264,7 +265,12 @@ struct GhidraDecompiler::Impl {
 	// functions whose first parameter is of a type, by address: the type (pointed to) and the parameter's name
 	std::unordered_map<uint64_t, std::pair<Datatype*, std::string>> FirstParameters;
 	// a driver's routines, of their kinds, their prototypes once set; the kernel's structures are there; the notes of constants
-	enum class DriverRoutine { Entry, Unload, Dispatch, StartIo };
+	enum class DriverRoutine { Entry, Unload, Dispatch, StartIo, AddDevice, PreOperation, PostOperation, FilterUnload, InstanceSetup,
+		InstanceQueryTeardown, InstanceTeardown };
+	Datatype* CallbackData{ nullptr };
+	Datatype* RelatedObjects{ nullptr };
+	Datatype* PreStatus{ nullptr };
+	Datatype* PostStatus{ nullptr };
 	std::unordered_map<uint64_t, DriverRoutine> DriverRoutines;
 	std::unordered_set<uint64_t> DriverTyped;
 	Datatype* DriverObject{ nullptr };
@@ -272,8 +278,30 @@ struct GhidraDecompiler::Impl {
 	Datatype* Irp{ nullptr };
 	bool Driver{ false };
 	std::unordered_map<uint64_t, std::string> ConstantNotes;
-	// the text of a driver's code: MajorFunction[IRP_MJ_...], the notes of its constants
+	// the text of a driver's code: MajorFunction[IRP_MJ_...], the notes of its constants, the framework's calls
 	void DriverText(std::string& code) const;
+	// A driver of the framework (KMDF): its table of the framework's functions (the global that points to it), the
+	// framework's types by their C names ("WDFDEVICE", "PWDF_DRIVER_CONFIG"), the callbacks' prototypes by their types
+	// ("PFN_WDF_DRIVER_DEVICE_ADD"), the callbacks of the structures that have them (by the structures' names: their
+	// offsets, names and types), and the driver's callbacks, by address (their types)
+	uint64_t WdfTable{ 0 };
+	uint32_t WdfCount{ 0 };		// (the functions it has)
+	bool WdfArray{ false };		// the table itself is in the image (before 1.15), not a pointer to it
+	std::unordered_map<std::string, Datatype*> WdfTypes;
+	std::unordered_map<std::string, PrototypePieces> WdfPrototypes;
+	struct WdfField {
+		int64_t Offset;
+		std::string Name, Type;
+	};
+	std::unordered_map<std::string, std::vector<WdfField>> WdfCallbackFields;
+	std::unordered_map<uint64_t, std::string> WdfRoutines;
+	// a type of the framework by its C name (one the symbols have is theirs; "X*" a pointer to X)
+	Datatype* WdfType(std::string text);
+	// the prototype of a function of the framework, or of a callback ("NTSTATUS", "WDFDEVICE Device, ULONG Flags")
+	PrototypePieces WdfPrototype(std::string const& result, std::string const& parameters, bool globals, bool fastcall);
+	// the index in the table of the function a call calls (its target: what is read from the table at an offset); -1 if
+	// it is not one
+	int WdfIndex(Varnode* target) const;
 	// the IIDs (AddInterfaceGuid), by address; the functions whose variables were given their interfaces
 	std::unordered_map<uint64_t, std::string> Interfaces;
 	std::unordered_set<uint64_t> InterfaceTyped;
@@ -1950,16 +1978,37 @@ bool GhidraDecompiler::ParameterStores(uint64_t address, int depth, std::vector<
 			return vn;
 		};
 		// the offset from the parameter a pointer is at (an index: the offset of the array)
-		auto offsetOf = [&](Varnode* vn, int64_t& offset, bool& indexed) {
+		// (through: a pointer loaded from the object, once: the offset it is loaded from; the offset is then in what it points to)
+		auto offsetOf = [&](Varnode* vn, int64_t& offset, bool& indexed, int64_t* through = nullptr) {
 			offset = 0;
 			indexed = false;
-			for (int i = 0; i < 16; i++) {
+			int64_t inner = 0;
+			bool loaded = false;
+			if (through)
+				*through = -1;
+			for (int i = 0; i < 24; i++) {
 				vn = strip(vn);
-				if (vn == param)
+				if (vn == param) {
+					if (loaded) {
+						if (indexed)
+							return false;
+						*through = offset;
+						offset = inner;
+					}
 					return true;
+				}
 				if (!vn->isWritten())
 					return false;
 				auto op = vn->getDef();
+				if (op->code() == CPUI_LOAD) {
+					if (!through || loaded || indexed)
+						return false;
+					loaded = true;
+					inner = offset;
+					offset = 0;
+					vn = op->getIn(1);
+					continue;
+				}
 				switch (op->code()) {
 					case CPUI_INT_ADD: case CPUI_PTRSUB:
 						if (op->getIn(1)->isConstant()) {
@@ -2009,11 +2058,11 @@ bool GhidraDecompiler::ParameterStores(uint64_t address, int depth, std::vector<
 			auto op = *it;
 			if (op->isDead())
 				continue;
-			int64_t offset;
+			int64_t offset, through;
 			bool indexed;
 			uint64_t value;
-			if (offsetOf(op->getIn(1), offset, indexed) && constantOf(op->getIn(2), value))
-				stores.push_back({ offset, value, indexed, at });
+			if (offsetOf(op->getIn(1), offset, indexed, &through) && constantOf(op->getIn(2), value))
+				stores.push_back({ offset, value, indexed, at, through });
 		}
 		// the functions it passes the parameter to (first)
 		std::vector<uint64_t> callees;
@@ -2174,15 +2223,45 @@ void GhidraDecompiler::AddDriver(DriverRoutines const& routines) {
 		};
 		auto driverObject = stub("DRIVER_OBJECT"), deviceObject = stub("DEVICE_OBJECT"), irp = stub("IRP"),
 			stackLocation = stub("IO_STACK_LOCATION");
+		auto voidPointer = pointerTo(types->getTypeVoid());
+		pointer = voidPointer;
+		// the operations (of an IRP, of the filter manager: those of its own are negative, as a UCHAR)
+		static char const* const majorNames[28] = {
+			"IRP_MJ_CREATE", "IRP_MJ_CREATE_NAMED_PIPE", "IRP_MJ_CLOSE", "IRP_MJ_READ", "IRP_MJ_WRITE", "IRP_MJ_QUERY_INFORMATION",
+			"IRP_MJ_SET_INFORMATION", "IRP_MJ_QUERY_EA", "IRP_MJ_SET_EA", "IRP_MJ_FLUSH_BUFFERS", "IRP_MJ_QUERY_VOLUME_INFORMATION",
+			"IRP_MJ_SET_VOLUME_INFORMATION", "IRP_MJ_DIRECTORY_CONTROL", "IRP_MJ_FILE_SYSTEM_CONTROL", "IRP_MJ_DEVICE_CONTROL",
+			"IRP_MJ_INTERNAL_DEVICE_CONTROL", "IRP_MJ_SHUTDOWN", "IRP_MJ_LOCK_CONTROL", "IRP_MJ_CLEANUP", "IRP_MJ_CREATE_MAILSLOT",
+			"IRP_MJ_QUERY_SECURITY", "IRP_MJ_SET_SECURITY", "IRP_MJ_POWER", "IRP_MJ_SYSTEM_CONTROL", "IRP_MJ_DEVICE_CHANGE",
+			"IRP_MJ_QUERY_QUOTA", "IRP_MJ_SET_QUOTA", "IRP_MJ_PNP",
+		};
+		std::vector<std::pair<std::string, uint64_t>> majorValues;
+		for (uint64_t i = 0; i < 28; i++)
+			majorValues.emplace_back(majorNames[i], i);
+		for (auto [name, value] : std::initializer_list<std::pair<char const*, uint64_t>>{
+			{ "IRP_MJ_ACQUIRE_FOR_SECTION_SYNCHRONIZATION", 0xFF }, { "IRP_MJ_RELEASE_FOR_SECTION_SYNCHRONIZATION", 0xFE },
+			{ "IRP_MJ_ACQUIRE_FOR_MOD_WRITE", 0xFD }, { "IRP_MJ_RELEASE_FOR_MOD_WRITE", 0xFC }, { "IRP_MJ_ACQUIRE_FOR_CC_FLUSH", 0xFB },
+			{ "IRP_MJ_RELEASE_FOR_CC_FLUSH", 0xFA }, { "IRP_MJ_QUERY_OPEN", 0xF9 }, { "IRP_MJ_FAST_IO_CHECK_IF_POSSIBLE", 0xF3 },
+			{ "IRP_MJ_NETWORK_QUERY_OPEN", 0xF2 }, { "IRP_MJ_MDL_READ", 0xF1 }, { "IRP_MJ_MDL_READ_COMPLETE", 0xF0 },
+			{ "IRP_MJ_PREPARE_MDL_WRITE", 0xEF }, { "IRP_MJ_MDL_WRITE_COMPLETE", 0xEE }, { "IRP_MJ_VOLUME_MOUNT", 0xED },
+			{ "IRP_MJ_VOLUME_DISMOUNT", 0xEC } })
+			majorValues.emplace_back(name, value);
+		auto major = types->findByName("MAJOR_FUNCTION");
+		if (!major)
+			major = m_Impl->DefineEnum("MAJOR_FUNCTION", 1, false, majorValues);
+		if (!major)
+			major = u8;
 		std::string error;
 		auto name = m_Impl->ParseType("UNICODE_STRING", error);
 		if (!name || name->getSize() != 2 * p)
 			name = bytes(2 * p);
 
+		auto extension = make("DRIVER_EXTENSION", false, off(0x28, 0x14), {
+			{ "DriverObject", 0, pointerTo(driverObject) }, { "AddDevice", p, code }, { "Count", 2 * p, u32 },
+			{ "ServiceKeyName", off(0x18, 0xC), name } });
 		make("DRIVER_OBJECT", false, off(0x70, 0x38) + 28 * p, {
 			{ "Type", 0, i16 }, { "Size", 2, i16 }, { "DeviceObject", off(8, 4), pointerTo(deviceObject) }, { "Flags", off(0x10, 8), u32 },
 			{ "DriverStart", off(0x18, 0xC), pointer }, { "DriverSize", off(0x20, 0x10), u32 },
-			{ "DriverSection", off(0x28, 0x14), pointer }, { "DriverExtension", off(0x30, 0x18), pointer },
+			{ "DriverSection", off(0x28, 0x14), pointer }, { "DriverExtension", off(0x30, 0x18), pointerTo(extension) },
 			{ "DriverName", off(0x38, 0x1C), name }, { "HardwareDatabase", off(0x48, 0x24), pointer },
 			{ "FastIoDispatch", off(0x50, 0x28), pointer }, { "DriverInit", off(0x58, 0x2C), code },
 			{ "DriverStartIo", off(0x60, 0x30), code }, { "DriverUnload", off(0x68, 0x34), code },
@@ -2211,7 +2290,7 @@ void GhidraDecompiler::AddDriver(DriverRoutines const& routines) {
 			{ "DeviceIoControl", 0, control }, { "Read", 0, readWrite }, { "Write", 0, readWrite }, { "Create", 0, create },
 			{ "Others", 0, others } });
 		make("IO_STACK_LOCATION", false, off(0x48, 0x24), {
-			{ "MajorFunction", 0, u8 }, { "MinorFunction", 1, u8 }, { "Flags", 2, u8 }, { "Control", 3, u8 },
+			{ "MajorFunction", 0, major }, { "MinorFunction", 1, u8 }, { "Flags", 2, u8 }, { "Control", 3, u8 },
 			{ "Parameters", p, parameters }, { "DeviceObject", off(0x28, 0x14), pointerTo(deviceObject) },
 			{ "FileObject", off(0x30, 0x18), pointer }, { "CompletionRoutine", off(0x38, 0x1C), code }, { "Context", off(0x40, 0x20), pointer } });
 		auto associated = make("IRP_ASSOCIATED_IRP", true, p, {
@@ -2231,13 +2310,67 @@ void GhidraDecompiler::AddDriver(DriverRoutines const& routines) {
 			{ "Overlay", off(0x58, 0x30), bytes(2 * p) }, { "CancelRoutine", off(0x68, 0x38), code },
 			{ "UserBuffer", off(0x70, 0x3C), pointer }, { "Tail", off(0x78, 0x40), tail } });
 
+		// a minifilter's: FLT_CALLBACK_DATA, FLT_IO_PARAMETER_BLOCK and its FLT_PARAMETERS (those it has most), FLT_RELATED_OBJECTS
+		auto i64 = types->getBase(8, TYPE_INT);
+		auto fltCreate = make("FLT_PARAMETERS_CREATE", false, 6 * p, {
+			{ "SecurityContext", 0, pointer }, { "Options", p, u32 }, { "FileAttributes", 2 * p, u16 }, { "ShareAccess", 2 * p + 2, u16 },
+			{ "EaLength", 3 * p, u32 }, { "EaBuffer", 4 * p, pointer } });
+		auto fltRead = make("FLT_PARAMETERS_READ", false, off(0x28, 0x18), {
+			{ "Length", 0, u32 }, { "Key", p, u32 }, { "ByteOffset", 2 * p, i64 }, { "ReadBuffer", off(0x18, 0x10), pointer },
+			{ "MdlAddress", off(0x20, 0x14), pointer } });
+		auto fltWrite = make("FLT_PARAMETERS_WRITE", false, off(0x28, 0x18), {
+			{ "Length", 0, u32 }, { "Key", p, u32 }, { "ByteOffset", 2 * p, i64 }, { "WriteBuffer", off(0x18, 0x10), pointer },
+			{ "MdlAddress", off(0x20, 0x14), pointer } });
+		auto fltQuery = make("FLT_PARAMETERS_QUERY_FILE_INFORMATION", false, 3 * p, {
+			{ "Length", 0, u32 }, { "FileInformationClass", p, u32 }, { "InfoBuffer", 2 * p, pointer } });
+		auto fltSet = make("FLT_PARAMETERS_SET_FILE_INFORMATION", false, 5 * p, {
+			{ "Length", 0, u32 }, { "FileInformationClass", p, u32 }, { "ParentOfTarget", 2 * p, pointer },
+			{ "ReplaceIfExists", 3 * p, u8 }, { "InfoBuffer", 4 * p, pointer } });
+		auto fltControl = make("FLT_PARAMETERS_DEVICE_IO_CONTROL", false, 6 * p, {
+			{ "OutputBufferLength", 0, u32 }, { "InputBufferLength", p, u32 }, { "IoControlCode", 2 * p, u32 },
+			{ "InputBuffer", 3 * p, pointer }, { "OutputBuffer", 4 * p, pointer } });
+		auto fltOthers = make("FLT_PARAMETERS_OTHERS", false, 6 * p, {
+			{ "Argument1", 0, pointer }, { "Argument2", p, pointer }, { "Argument3", 2 * p, pointer }, { "Argument4", 3 * p, pointer },
+			{ "Argument5", 4 * p, pointer }, { "Argument6", 5 * p, i64 } });
+		auto fltParameters = make("FLT_PARAMETERS", true, 6 * p + (wide ? 0 : 4), {
+			{ "Create", 0, fltCreate }, { "Read", 0, fltRead }, { "Write", 0, fltWrite }, { "QueryFileInformation", 0, fltQuery },
+			{ "SetFileInformation", 0, fltSet }, { "DeviceIoControl", 0, fltControl }, { "Others", 0, fltOthers } });
+		auto iopb = make("FLT_IO_PARAMETER_BLOCK", false, off(0x18, 0x10) + 6 * p + (wide ? 0 : 4), {
+			{ "IrpFlags", 0, u32 }, { "MajorFunction", 4, major }, { "MinorFunction", 5, u8 }, { "OperationFlags", 6, u8 },
+			{ "TargetFileObject", 8, pointer }, { "TargetInstance", off(0x10, 0xC), pointer }, { "Parameters", off(0x18, 0x10), fltParameters } });
+		auto callbackData = make("FLT_CALLBACK_DATA", false, off(0x58, 0x2C), {
+			{ "Flags", 0, u32 }, { "Thread", p, pointer }, { "Iopb", 2 * p, pointerTo(iopb) }, { "IoStatus", off(0x18, 0xC), status },
+			{ "TagData", off(0x28, 0x14), pointer }, { "FilterContext", off(0x30, 0x18), types->getTypeArray(4, pointer) },
+			{ "RequestorMode", off(0x50, 0x28), i8 } });
+		auto relatedObjects = make("FLT_RELATED_OBJECTS", false, off(0x30, 0x18), {
+			{ "Size", 0, u16 }, { "TransactionContext", 2, u16 }, { "Filter", p, pointer }, { "Volume", 2 * p, pointer },
+			{ "Instance", 3 * p, pointer }, { "FileObject", 4 * p, pointer }, { "Transaction", 5 * p, pointer } });
+		auto preStatus = types->findByName("FLT_PREOP_CALLBACK_STATUS");
+		if (!preStatus)
+			preStatus = m_Impl->DefineEnum("FLT_PREOP_CALLBACK_STATUS", 4, true, {
+				{ "FLT_PREOP_SUCCESS_WITH_CALLBACK", 0 }, { "FLT_PREOP_SUCCESS_NO_CALLBACK", 1 }, { "FLT_PREOP_PENDING", 2 },
+				{ "FLT_PREOP_DISALLOW_FASTIO", 3 }, { "FLT_PREOP_COMPLETE", 4 }, { "FLT_PREOP_SYNCHRONIZE", 5 },
+				{ "FLT_PREOP_DISALLOW_FSFILTER_IO", 6 } });
+		auto postStatus = types->findByName("FLT_POSTOP_CALLBACK_STATUS");
+		if (!postStatus)
+			postStatus = m_Impl->DefineEnum("FLT_POSTOP_CALLBACK_STATUS", 4, true, {
+				{ "FLT_POSTOP_FINISHED_PROCESSING", 0 }, { "FLT_POSTOP_MORE_PROCESSING_REQUIRED", 1 }, { "FLT_POSTOP_DISALLOW_FSFILTER_IO", 2 } });
+		m_Impl->CallbackData = callbackData;
+		m_Impl->RelatedObjects = relatedObjects;
+		m_Impl->PreStatus = preStatus ? preStatus : i32;
+		m_Impl->PostStatus = postStatus ? postStatus : i32;
+
 		m_Impl->Driver = true;
 		m_Impl->DriverObject = driverObject;
 		m_Impl->DeviceObject = deviceObject;
 		m_Impl->Irp = irp;
 		using Kind = Impl::DriverRoutine;
 		for (auto [list, kind] : { std::pair{ &routines.Entries, Kind::Entry }, std::pair{ &routines.Unload, Kind::Unload },
-			std::pair{ &routines.Dispatch, Kind::Dispatch }, std::pair{ &routines.StartIo, Kind::StartIo } })
+			std::pair{ &routines.Dispatch, Kind::Dispatch }, std::pair{ &routines.StartIo, Kind::StartIo },
+			std::pair{ &routines.AddDevice, Kind::AddDevice }, std::pair{ &routines.PreOperation, Kind::PreOperation },
+			std::pair{ &routines.PostOperation, Kind::PostOperation }, std::pair{ &routines.FilterUnload, Kind::FilterUnload },
+			std::pair{ &routines.InstanceSetup, Kind::InstanceSetup }, std::pair{ &routines.InstanceQueryTeardown, Kind::InstanceQueryTeardown },
+			std::pair{ &routines.InstanceTeardown, Kind::InstanceTeardown } })
 			for (auto address : *list)
 				m_Impl->DriverRoutines.try_emplace(address, kind);
 	}
@@ -2248,6 +2381,455 @@ void GhidraDecompiler::AddDriver(DriverRoutines const& routines) {
 void GhidraDecompiler::AddConstantNote(uint64_t value, std::string const& note) {
 	if (!note.empty())
 		m_Impl->ConstantNotes[value] = note;
+}
+
+namespace {
+	// "WDFDEVICE Device, ULONG Flags": the types and names
+	std::vector<std::pair<std::string, std::string>> WdfParameters(std::string const& text) {
+		std::vector<std::pair<std::string, std::string>> parameters;
+		size_t start = 0;
+		while (start < text.size()) {
+			auto end = text.find(", ", start);
+			auto parameter = text.substr(start, end == std::string::npos ? std::string::npos : end - start);
+			auto space = parameter.rfind(' ');
+			if (parameter == "...")
+				parameters.emplace_back(parameter, std::string());
+			else if (space != std::string::npos)
+				parameters.emplace_back(parameter.substr(0, space), parameter.substr(space + 1));
+			if (end == std::string::npos)
+				break;
+			start = end + 2;
+		}
+		return parameters;
+	}
+}
+
+Datatype* GhidraDecompiler::Impl::WdfType(std::string text) {
+	auto types = Arch->types;
+	auto space = Arch->getDefaultDataSpace();
+	int4 p = space->getAddrSize();
+	auto pointerTo = [&](Datatype* t) { return types->getTypePointer(p, t, space->getWordSize()); };
+	if (StartsWith(text, "CONST "))
+		text = text.substr(6);
+	while (!text.empty() && text.back() == ' ')
+		text.pop_back();
+	if (!text.empty() && text.back() == '*')
+		return pointerTo(WdfType(text.substr(0, text.size() - 1)));
+	if (auto it = WdfTypes.find(text); it != WdfTypes.end())
+		return it->second;
+	// a name for a type (the symbols' type of the name, if they have it)
+	auto alias = [&](Datatype* target) -> Datatype* {
+		if (auto known = types->findByName(text); known && known->getSize() == target->getSize())
+			return known;
+		try {
+			return types->getTypedef(target, text, 0, 0);
+		}
+		catch (LowlevelError const&) {
+			return target;
+		}
+	};
+	static std::unordered_map<std::string, std::pair<int4, type_metatype>> const integers = {
+		{ "BOOLEAN", { 1, TYPE_UINT } }, { "UCHAR", { 1, TYPE_UINT } }, { "BYTE", { 1, TYPE_UINT } }, { "CCHAR", { 1, TYPE_INT } },
+		{ "KPROCESSOR_MODE", { 1, TYPE_INT } }, { "USHORT", { 2, TYPE_UINT } }, { "ULONG", { 4, TYPE_UINT } }, { "LONG", { 4, TYPE_INT } },
+		{ "ACCESS_MASK", { 4, TYPE_UINT } }, { "LCID", { 4, TYPE_UINT } }, { "DEVPROPTYPE", { 4, TYPE_UINT } },
+		{ "DEVICE_TYPE", { 4, TYPE_UINT } }, { "LONGLONG", { 8, TYPE_INT } }, { "ULONGLONG", { 8, TYPE_UINT } },
+		{ "PHYSICAL_ADDRESS", { 8, TYPE_INT } }, { "ULONG_PTR", { 0, TYPE_UINT } }, { "size_t", { 0, TYPE_UINT } },
+		{ "KAFFINITY", { 0, TYPE_UINT } },
+	};
+	auto voidPointer = pointerTo(types->getTypeVoid());
+	Datatype* result = nullptr;
+	std::string error;
+	if (text == "VOID" || text.empty())
+		result = types->getTypeVoid();
+	else if (text == "NTSTATUS") {
+		result = ParseType(text, error);
+		if (!result || result->getSize() != 4)
+			result = alias(types->getBase(4, TYPE_INT));
+	}
+	else if (auto integer = integers.find(text); integer != integers.end())
+		result = alias(types->getBase(integer->second.first ? integer->second.first : p, integer->second.second));
+	else if (text == "PVOID")
+		result = voidPointer;
+	else if (text == "PCWSTR" || text == "PWSTR")
+		result = pointerTo(types->getTypeChar(2));
+	else if (text == "PCCH" || text == "LPCSTR" || text == "PCSTR")
+		result = pointerTo(types->getTypeChar(1));
+	else if (text == "GUID" || text == "UNICODE_STRING") {
+		result = ParseType(text, error);
+		if (!result)
+			result = types->getTypeArray(text == "GUID" ? 16 : 2 * p, types->getBase(1, TYPE_UNKNOWN));
+	}
+	else if (text == "LPCGUID")
+		result = pointerTo(WdfType("GUID"));
+	else if (text == "PUNICODE_STRING" || text == "PCUNICODE_STRING")
+		result = pointerTo(WdfType("UNICODE_STRING"));
+	else if (text == "PDRIVER_OBJECT" && DriverObject)
+		result = pointerTo(DriverObject);
+	else if (text == "PDEVICE_OBJECT" && DeviceObject)
+		result = pointerTo(DeviceObject);
+	else if (text == "PIRP" && Irp)
+		result = pointerTo(Irp);
+	else if (StartsWith(text, "PFN_"))
+		result = pointerTo(types->getTypeCode());	// (one whose prototype is not known)
+	else if (text.size() > 1 && text[0] == 'P') {
+		// a pointer to a type of the framework ("PWDF_DRIVER_CONFIG", "PCWDF_OBJECT_CONTEXT_TYPE_INFO") or to one of those
+		// ("PULONG"); to what is not known here, a name for a pointer
+		for (auto skip : { 2, 1 }) {
+			auto target = text.substr(skip);
+			if (skip == 2 && text[1] != 'C')
+				continue;
+			if (WdfTypes.find(target) != WdfTypes.end() || integers.find(target) != integers.end()) {
+				result = pointerTo(WdfType(target));
+				break;
+			}
+		}
+		if (!result)
+			result = alias(voidPointer);
+	}
+	else if (StartsWith(text, "WDF") && text.find('_') == std::string::npos)
+		result = alias(voidPointer);		// a handle (WDFDEVICE)
+	else if (text.size() > 7 && text.compare(text.size() - 7, 7, "_HANDLE") == 0)
+		result = alias(voidPointer);
+	else
+		result = alias(types->getBase(4, TYPE_INT));	// an enumeration
+	WdfTypes[text] = result;
+	return result;
+}
+
+PrototypePieces GhidraDecompiler::Impl::WdfPrototype(std::string const& result, std::string const& parameters, bool globals, bool fastcall) {
+	PrototypePieces pieces;
+	pieces.model = nullptr;
+	if (Arch->getDefaultDataSpace()->getAddrSize() == 4)
+		pieces.model = Arch->getModel(fastcall ? "__fastcall" : "__stdcall");
+	if (!pieces.model)
+		pieces.model = Arch->defaultfp;
+	pieces.outtype = WdfType(result);
+	pieces.firstVarArgSlot = -1;
+	if (globals) {
+		pieces.intypes.push_back(WdfType("PWDF_DRIVER_GLOBALS"));
+		pieces.innames.push_back("DriverGlobals");
+	}
+	for (auto const& [type, name] : WdfParameters(parameters)) {
+		if (type == "...") {
+			pieces.firstVarArgSlot = (int4)pieces.intypes.size();
+			break;
+		}
+		// (a callback, of a function of the framework: a pointer to code; a function's type that has another's is not read
+		// back as it is written)
+		pieces.intypes.push_back(globals && StartsWith(type, "PFN_") ?
+			Arch->types->getTypePointer(Arch->getDefaultDataSpace()->getAddrSize(), Arch->types->getTypeCode(), Arch->getDefaultDataSpace()->getWordSize()) :
+			WdfType(type));
+		pieces.innames.push_back(name);
+	}
+	return pieces;
+}
+
+int GhidraDecompiler::Impl::WdfIndex(Varnode* target) const {
+	if (!WdfTable)
+		return -1;
+	auto space = Arch->getDefaultDataSpace();
+	int4 p = space->getAddrSize();
+	auto strip = [](Varnode* vn) {
+		for (int i = 0; i < 8 && vn->isWritten() && (vn->getDef()->code() == CPUI_COPY || vn->getDef()->code() == CPUI_CAST); i++)
+			vn = vn->getDef()->getIn(0);
+		return vn;
+	};
+	// an entry of the table: its offset in it, if it is one
+	auto entry = [&](uint64_t address) {
+		auto count = std::min<uint64_t>(WdfCount ? WdfCount : std::size(Wdf::Functions), std::size(Wdf::Functions));
+		if (address < WdfTable || (address - WdfTable) % p || (address - WdfTable) / p >= count)
+			return -1;
+		return (int)((address - WdfTable) / p);
+	};
+	// a constant address (PTRSUB(0, address))
+	auto constant = [](Varnode* vn, uint64_t& value) {
+		if (vn->isConstant()) {
+			value = vn->getOffset();
+			return true;
+		}
+		if (vn->isWritten() && vn->getDef()->code() == CPUI_PTRSUB && vn->getDef()->getIn(0)->isConstant() &&
+			vn->getDef()->getIn(0)->getOffset() == 0 && vn->getDef()->getIn(1)->isConstant()) {
+			value = vn->getDef()->getIn(1)->getOffset();
+			return true;
+		}
+		return false;
+	};
+	target = strip(target);
+	uint64_t value;
+	// an array in the image (before KMDF 1.15): the global entry itself, or what is read at its address
+	if (WdfArray && target->getSpace() == space && target->getSize() == p)
+		return entry(target->getOffset());
+	if (!target->isWritten() || target->getDef()->code() != CPUI_LOAD)
+		return -1;
+	auto address = strip(target->getDef()->getIn(1));
+	uint64_t offset = 0;
+	if (address->isWritten()) {
+		auto def = address->getDef();
+		if ((def->code() == CPUI_PTRSUB || def->code() == CPUI_INT_ADD) && def->getIn(1)->isConstant() &&
+			!(def->code() == CPUI_PTRSUB && def->getIn(0)->isConstant())) {
+			offset = def->getIn(1)->getOffset();
+			address = strip(def->getIn(0));
+		}
+		else if (def->code() == CPUI_PTRADD && def->getIn(1)->isConstant() && def->getIn(2)->isConstant()) {
+			offset = def->getIn(1)->getOffset() * def->getIn(2)->getOffset();
+			address = strip(def->getIn(0));
+		}
+	}
+	if (WdfArray)
+		return constant(address, value) ? entry(value + offset) : -1;
+	// a pointer to it (from 1.15): the global (where it is), or what is read from its address
+	bool table = address->getSpace() == space && address->getOffset() == WdfTable && address->getSize() == p;
+	if (!table && address->isWritten() && address->getDef()->code() == CPUI_LOAD)
+		table = constant(strip(address->getDef()->getIn(1)), value) && value == WdfTable;
+	return table ? entry(WdfTable + offset) : -1;
+}
+
+void GhidraDecompiler::AddFramework(uint64_t table, uint32_t count, uint64_t globals, bool array) {
+	auto arch = m_Impl->Arch.get();
+	if (!arch || !table)
+		return;
+	auto& impl = *m_Impl;
+	try {
+		auto types = arch->types;
+		auto space = arch->getDefaultDataSpace();
+		int4 p = space->getAddrSize();
+		auto pointerTo = [&](Datatype* t) { return types->getTypePointer(p, t, space->getWordSize()); };
+		impl.WdfTable = table;
+		impl.WdfCount = count;
+		impl.WdfArray = array;
+		// (the functions of the table: those of its version)
+		auto functionCount = std::min<size_t>(count ? count : std::size(Wdf::Functions), std::size(Wdf::Functions));
+		// the structures first (what the callbacks' parameters point to), then the callbacks, then the structures' fields
+		auto structure = [&](std::string const& name) {
+			Datatype* t = types->findByName(name);
+			if (!t)
+				t = types->getTypeStruct(name);
+			impl.WdfTypes[name] = t;
+			return t;
+		};
+		for (auto const& s : Wdf::Structures)
+			structure(s.Name);
+		auto driverGlobals = structure("WDF_DRIVER_GLOBALS");
+		// (a function's type without the names of its parameters: the types of the fields of structures are written and read
+		// back, and the names are not)
+		auto unnamed = [](PrototypePieces pieces) {
+			for (auto& name : pieces.innames)
+				name.clear();
+			return pieces;
+		};
+		for (auto const& c : Wdf::Callbacks) {
+			auto pieces = impl.WdfPrototype(c.Return, c.Parameters, false, false);
+			impl.WdfTypes[c.Type] = pointerTo(types->getTypeCode(unnamed(pieces)));
+			impl.WdfPrototypes[c.Type] = std::move(pieces);
+		}
+		// (as the compiler lays them out: each field at its alignment)
+		for (auto const& s : Wdf::Structures) {
+			std::vector<Impl::Member> members;
+			std::vector<Impl::WdfField> callbacks;
+			int4 offset = 0, alignment = 1;
+			for (auto [type, name] : WdfParameters(s.Fields)) {
+				int4 align = 0;
+				if (StartsWith(type, "ALIGN8 "))
+					type = type.substr(7), align = 8;
+				auto t = impl.WdfType(type);
+				if (!align)
+					align = t->getMetatype() == TYPE_STRUCT || t->getMetatype() == TYPE_ARRAY ? std::max(1, t->getAlignment()) :
+						std::max(1, std::min(t->getSize(), 8));
+				offset = (offset + align - 1) / align * align;
+				members.push_back({ name, offset, t });
+				if (StartsWith(type, "PFN_"))
+					callbacks.push_back({ offset, name, type });
+				offset += t->getSize();
+				alignment = std::max(alignment, align);
+			}
+			impl.WdfCallbackFields[s.Name] = std::move(callbacks);
+			if (auto st = impl.WdfTypes[s.Name]; st->isIncomplete())
+				impl.DefineFields(st, "struct", (uint32_t)((offset + alignment - 1) / alignment * alignment), alignment, members);
+		}
+		if (driverGlobals->isIncomplete())
+			impl.DefineFields(driverGlobals, "struct", (uint32_t)(p + 48), p, {
+				{ "Driver", 0, impl.WdfType("WDFDRIVER") }, { "DriverFlags", p, impl.WdfType("ULONG") },
+				{ "DriverTag", p + 4, impl.WdfType("ULONG") }, { "DriverName", p + 8, types->getTypeArray(32, types->getTypeChar(1)) },
+				{ "DisplaceDriverUnload", p + 40, impl.WdfType("BOOLEAN") } });
+		// the table: a structure of the functions (of their prototypes, the globals first)
+		auto functions = types->findByName("WDFFUNCTIONS");
+		if (!functions) {
+			functions = types->getTypeStruct("WDFFUNCTIONS");
+			std::vector<Impl::Member> slots;
+			for (size_t i = 0; i < functionCount; i++) {
+				auto const& f = Wdf::Functions[i];
+				auto code = *f.Return ? types->getTypeCode(unnamed(impl.WdfPrototype(f.Return, f.Parameters, true, f.Fastcall))) :
+					types->getTypeCode();
+				slots.push_back({ f.Name, (int4)(i * p), pointerTo(code) });
+			}
+			impl.DefineFields(functions, "struct", (uint32_t)(functionCount * p), p, slots);
+		}
+		// the globals, in the place of what is there
+		auto place = [&](uint64_t address, std::string const& name, Datatype* type) {
+			Address addr(space, address);
+			auto global = arch->symboltab->getGlobalScope();
+			if (auto entry = global->findAddr(addr, Address()); entry && entry->getAddr() == addr) {
+				if (dynamic_cast<FunctionSymbol*>(entry->getSymbol()))
+					return;
+				global->removeSymbol(entry->getSymbol());
+			}
+			global->setAttribute(global->addSymbol(name, type, addr, Address())->getSymbol(), Varnode::namelock | Varnode::typelock);
+		};
+		// (WdfVersionBind sets them: they may be in a section of constants, whose values are not those of the file)
+		arch->symboltab->clearPropertyRange(Varnode::readonly, Range(space, table, table + (array ? functionCount * p : p) - 1));
+		if (globals)
+			arch->symboltab->clearPropertyRange(Varnode::readonly, Range(space, globals, globals + p - 1));
+		place(table, "WdfFunctions", array ? functions : pointerTo(functions));
+		if (globals)
+			place(globals, "WdfDriverGlobals", pointerTo(driverGlobals));
+	}
+	catch (LowlevelError const& e) {
+		impl.Pending += "The framework's types: " + e.explain + "\n";
+	}
+	catch (DecoderError const& e) {
+		impl.Pending += "The framework's types: " + e.explain + "\n";
+	}
+}
+
+bool GhidraDecompiler::FrameworkCallbacks(uint64_t function, std::vector<FrameworkCallback>& callbacks, std::string& error,
+	uint64_t* globals) {
+	std::string code;
+	if (!Decompile(function, {}, code, error))
+		return false;
+	try {
+		auto arch = m_Impl->Arch.get();
+		auto fd = arch->symboltab->getGlobalScope()->queryFunction(Address(arch->getDefaultCodeSpace(), function));
+		auto stack = arch->getStackSpace();
+		if (!fd || !fd->isProcStarted() || !stack || !m_Impl->WdfTable)
+			return true;
+		int4 p = arch->getDefaultDataSpace()->getAddrSize();
+		auto bits = stack->getAddrSize() * 8;
+		auto signedOffset = [&](uintb offset) {
+			auto value = (int64_t)offset;
+			if (bits < 64 && (value & (1LL << (bits - 1))))
+				value -= 1LL << bits;
+			return value;
+		};
+		// a constant (an address: PTRSUB(0, address)), or an address on the stack (as an offset from 'base')
+		auto valueOf = [&](Varnode* v, int64_t base, uint64_t& value, bool& onStack) {
+			onStack = false;
+			for (int i = 0; i < 8; i++) {
+				if (v->isConstant()) {
+					value = v->getOffset();
+					return true;
+				}
+				if (!v->isWritten())
+					return false;
+				auto d = v->getDef();
+				if (d->code() == CPUI_COPY || d->code() == CPUI_CAST) {
+					v = d->getIn(0);
+					continue;
+				}
+				if (d->numInput() != 2 || !d->getIn(1)->isConstant() || (d->code() != CPUI_PTRSUB && d->code() != CPUI_INT_ADD))
+					return false;
+				if (d->code() == CPUI_PTRSUB && d->getIn(0)->isConstant() && d->getIn(0)->getOffset() == 0) {
+					value = d->getIn(1)->getOffset();
+					return true;
+				}
+				if (d->getIn(0)->isSpacebase()) {
+					value = (uint64_t)(signedOffset(d->getIn(1)->getOffset()) - base);
+					onStack = true;
+					return true;
+				}
+				return false;
+			}
+			return false;
+		};
+		for (int4 c = 0; c < fd->numCalls(); c++) {
+			auto op = fd->getCallSpecs(c)->getOp();
+			if (!op || op->isDead() || op->code() != CPUI_CALLIND)
+				continue;
+			auto index = m_Impl->WdfIndex(op->getIn(0));
+			if (index < 0)
+				continue;
+			auto const& framework = Wdf::Functions[index];
+			// the globals: what is read from a global (its first parameter)
+			if (globals && !*globals && op->numInput() > 1) {
+				auto first = op->getIn(1);
+				for (int i = 0; i < 8 && first->isWritten() && (first->getDef()->code() == CPUI_COPY || first->getDef()->code() == CPUI_CAST); i++)
+					first = first->getDef()->getIn(0);
+				if (first->getSpace() == arch->getDefaultDataSpace() && first->getSize() == p)
+					*globals = first->getOffset();
+				else if (first->isWritten() && first->getDef()->code() == CPUI_LOAD) {
+					uint64_t address;
+					bool there;
+					if (valueOf(first->getDef()->getIn(1), 0, address, there) && !there)
+						*globals = address;
+				}
+			}
+			// its parameters after the globals (the call's inputs from 2)
+			auto parameters = WdfParameters(framework.Parameters);
+			for (size_t i = 0; i < parameters.size() && (int4)i + 2 < op->numInput(); i++) {
+				auto const& [type, name] = parameters[i];
+				uint64_t value;
+				bool onStack;
+				if (!valueOf(op->getIn((int4)i + 2), 0, value, onStack))
+					continue;
+				// a callback
+				if (StartsWith(type, "PFN_")) {
+					if (!onStack && value)
+						callbacks.push_back({ name, type, framework.Name, value });
+					continue;
+				}
+				// a structure with callbacks: those it is given (on the stack: the constants put there; a constant one: what it has)
+				auto fields = m_Impl->WdfCallbackFields.end();
+				for (auto skip : { 2, 1 })
+					if (fields == m_Impl->WdfCallbackFields.end() && type.size() > 2 && type[0] == 'P' && (skip == 1 || type[1] == 'C'))
+						fields = m_Impl->WdfCallbackFields.find(type.substr(skip));
+				if (fields == m_Impl->WdfCallbackFields.end())
+					continue;
+				if (!onStack) {
+					for (auto const& field : fields->second) {
+						uint64_t callback = 0;
+						if (m_Impl->Read && m_Impl->Read(value + field.Offset, (uint8_t*)&callback, p) && callback)
+							callbacks.push_back({ field.Name, field.Type, framework.Name, callback });
+					}
+					continue;
+				}
+				// (the constants each place is given, by offset and size: a pointer may be put there in two halves of 4 bytes)
+				auto base = (int64_t)value;
+				std::map<std::pair<int64_t, int4>, std::set<uint64_t>> constants;
+				for (auto it = fd->beginLoc(stack); it != fd->endLoc(stack); ++it) {
+					auto vn = *it;
+					uint64_t constant;
+					bool there;
+					if (vn->isWritten() && (vn->getSize() == p || vn->getSize() == 4) && valueOf(vn, base, constant, there) && !there && constant)
+						constants[{ signedOffset(vn->getAddr().getOffset()) - base, vn->getSize() }].insert(constant);
+				}
+				for (auto const& field : fields->second) {
+					std::set<uint64_t> found;
+					if (auto whole = constants.find({ field.Offset, p }); whole != constants.end())
+						found = whole->second;
+					auto low = constants.find({ field.Offset, 4 }), high = constants.find({ field.Offset + 4, 4 });
+					if (p == 8 && low != constants.end() && high != constants.end())
+						for (auto l : low->second)
+							for (auto h : high->second)
+								found.insert((h << 32) | (l & 0xFFFFFFFF));
+					for (auto callback : found)
+						callbacks.push_back({ field.Name, field.Type, framework.Name, callback });
+				}
+			}
+		}
+		return true;
+	}
+	catch (LowlevelError const& e) {
+		error = e.explain;
+		return false;
+	}
+}
+
+void GhidraDecompiler::AddFrameworkCallback(uint64_t address, std::string const& type) {
+	if (!type.empty())
+		m_Impl->WdfRoutines[address] = type;
+}
+
+std::string GhidraDecompiler::FrameworkFunction(uint32_t index) {
+	return index < std::size(Wdf::Functions) ? Wdf::Functions[index].Name : std::string();
 }
 
 void GhidraDecompiler::Impl::DriverText(std::string& code) const {
@@ -2298,6 +2880,40 @@ void GhidraDecompiler::Impl::DriverText(std::string& code) const {
 			code.erase(open, 1);
 			changed = true;
 		}
+	}
+	// a call of the framework, as the driver's source has it: "WdfDriverCreate(DriverObject, ...)", not
+	// "(*WdfFunctions->WdfDriverCreate)(WdfDriverGlobals, DriverObject, ...)"
+	if (WdfTable) {
+		static std::unordered_set<std::string> const names = [] {
+			std::unordered_set<std::string> names;
+			for (auto const& f : Wdf::Functions)
+				names.insert(f.Name);
+			return names;
+		}();
+		static std::regex const call(R"(\(\*\w+(?:->|\.)(Wdf\w+)\)(\s*)\()");
+		std::string result;
+		auto last = code.cbegin();
+		for (std::sregex_iterator it(code.cbegin(), code.cend(), call), done; it != done; ++it) {
+			auto name = (*it)[1].str();
+			if (names.find(name) == names.end())
+				continue;
+			// (the globals: a name, and after it the others, or none)
+			auto at = (size_t)(it->position() + it->length());
+			auto end = at;
+			while (end < code.size() && (isalnum((unsigned char)code[end]) || code[end] == '_'))
+				end++;
+			if (end == at || end >= code.size() || (code[end] != ',' && code[end] != ')'))
+				continue;
+			if (code[end] == ',')
+				for (end++; end < code.size() && code[end] == ' '; end++)
+					;
+			// (the line may break before the arguments: it still does)
+			result.append(last, code.cbegin() + it->position());
+			result += name + (*it)[2].str() + "(";
+			last = code.cbegin() + end;
+		}
+		result.append(last, code.cend());
+		code = std::move(result);
 	}
 	if (!Driver && ConstantNotes.empty())
 		return;
@@ -2842,20 +3458,58 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 					if (!status)
 						status = arch->types->getBase(4, TYPE_INT);
 					auto kind = routine->second;
-					pieces.outtype = kind == Kind::Entry || kind == Kind::Dispatch ? status : arch->types->getTypeVoid();
+					auto types = arch->types;
+					auto u32 = types->getBase(4, TYPE_UINT);
+					auto voidPointer = pointerTo(types->getTypeVoid());
 					pieces.firstVarArgSlot = -1;
-					if (kind == Kind::Entry || kind == Kind::Unload) {
-						pieces.intypes = { pointerTo(m_Impl->DriverObject) };
-						pieces.innames = { "DriverObject" };
-						if (auto path = m_Impl->ParseType("UNICODE_STRING", error); path && kind == Kind::Entry) {
-							pieces.intypes.push_back(pointerTo(path));
-							pieces.innames.push_back("RegistryPath");
-						}
+					switch (kind) {
+						case Kind::Entry: case Kind::Unload:
+							pieces.outtype = kind == Kind::Entry ? status : types->getTypeVoid();
+							pieces.intypes = { pointerTo(m_Impl->DriverObject) };
+							pieces.innames = { "DriverObject" };
+							if (auto path = m_Impl->ParseType("UNICODE_STRING", error); path && kind == Kind::Entry) {
+								pieces.intypes.push_back(pointerTo(path));
+								pieces.innames.push_back("RegistryPath");
+							}
+							break;
+						case Kind::Dispatch: case Kind::StartIo:
+							pieces.outtype = kind == Kind::Dispatch ? status : types->getTypeVoid();
+							pieces.intypes = { pointerTo(m_Impl->DeviceObject), pointerTo(m_Impl->Irp) };
+							pieces.innames = { "DeviceObject", "Irp" };
+							break;
+						case Kind::AddDevice:
+							pieces.outtype = status;
+							pieces.intypes = { pointerTo(m_Impl->DriverObject), pointerTo(m_Impl->DeviceObject) };
+							pieces.innames = { "DriverObject", "PhysicalDeviceObject" };
+							break;
+						case Kind::PreOperation: case Kind::PostOperation:
+							pieces.outtype = kind == Kind::PreOperation ? m_Impl->PreStatus : m_Impl->PostStatus;
+							pieces.intypes = { pointerTo(m_Impl->CallbackData), pointerTo(m_Impl->RelatedObjects),
+								kind == Kind::PreOperation ? pointerTo(voidPointer) : voidPointer };
+							pieces.innames = { "Data", "FltObjects", "CompletionContext" };
+							if (kind == Kind::PostOperation) {
+								pieces.intypes.push_back(u32);
+								pieces.innames.push_back("Flags");
+							}
+							break;
+						case Kind::FilterUnload:
+							pieces.outtype = status;
+							pieces.intypes = { u32 };
+							pieces.innames = { "Flags" };
+							break;
+						case Kind::InstanceSetup:
+							pieces.outtype = status;
+							pieces.intypes = { pointerTo(m_Impl->RelatedObjects), u32, u32, u32 };
+							pieces.innames = { "FltObjects", "Flags", "VolumeDeviceType", "VolumeFilesystemType" };
+							break;
+						case Kind::InstanceQueryTeardown: case Kind::InstanceTeardown:
+							pieces.outtype = kind == Kind::InstanceQueryTeardown ? status : types->getTypeVoid();
+							pieces.intypes = { pointerTo(m_Impl->RelatedObjects), u32 };
+							pieces.innames = { "FltObjects", kind == Kind::InstanceQueryTeardown ? "Flags" : "Reason" };
+							break;
 					}
-					else {
-						pieces.intypes = { pointerTo(m_Impl->DeviceObject), pointerTo(m_Impl->Irp) };
-						pieces.innames = { "DeviceObject", "Irp" };
-					}
+					if (!pieces.outtype)
+						pieces.model = nullptr;
 					if (pieces.model) {
 						proto.setPieces(pieces);
 						proto.setInputLock(true);
@@ -2863,6 +3517,25 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 						arch->clearAnalysis(fd);
 						result = run();
 					}
+				}
+				catch (LowlevelError const&) {
+				}
+		}
+
+		// a callback of a driver of the framework: of its prototype
+		if (auto routine = m_Impl->WdfRoutines.find(address); !m_Impl->Nested && routine != m_Impl->WdfRoutines.end() &&
+			m_Impl->DriverTyped.insert(address).second) {
+			auto prototype = m_Impl->WdfPrototypes.find(routine->second);
+			auto& proto = fd->getFuncProto();
+			if (prototype != m_Impl->WdfPrototypes.end() && !proto.isInputLocked())
+				try {
+					auto pieces = prototype->second;
+					pieces.name = fd->getName();
+					proto.setPieces(pieces);
+					proto.setInputLock(true);
+					proto.setOutputLock(true);
+					arch->clearAnalysis(fd);
+					result = run();
 				}
 				catch (LowlevelError const&) {
 				}

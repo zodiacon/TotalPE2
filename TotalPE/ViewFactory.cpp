@@ -31,6 +31,7 @@
 #include "BookmarksView.h"
 #include "ClassesView.h"
 #include "DriverView.h"
+#include "ComView.h"
 #include "BoundImportView.h"
 #include "GlobalPtrView.h"
 #include "DialogView.h"
@@ -432,6 +433,16 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		case TreeItemType::SecuritySummary:
 		{
 			auto view = new CSecuritySummaryView(this, m_PE);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::Com:
+		{
+			auto view = new CComView(this, m_PE);
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};
@@ -871,7 +882,7 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateResourceView(TreeItemType type
 			auto text = DescribeTypeLib(res.Data, error);
 			if (text.empty())
 				break;
-			return showText((PCSTR)CW2A(text.c_str(), CP_UTF8), LexLanguage::Text);
+			return showText((PCSTR)CW2A(text.c_str(), CP_UTF8), LexLanguage::Idl);
 		}
 
 		case ResourceContent::Font:

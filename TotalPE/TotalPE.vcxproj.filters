@@ -249,6 +249,12 @@
     <ClCompile Include="DriverView.cpp">
       <Filter>Views</Filter>
     </ClCompile>
+    <ClCompile Include="ComView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
+    <ClCompile Include="ComServer.cpp">
+      <Filter>Helpers</Filter>
+    </ClCompile>
     <ClCompile Include="Driver.cpp">
       <Filter>Helpers</Filter>
     </ClCompile>
@@ -496,6 +502,12 @@
     </ClInclude>
     <ClInclude Include="DriverView.h">
       <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="ComView.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="ComServer.h">
+      <Filter>Helpers</Filter>
     </ClInclude>
     <ClInclude Include="Driver.h">
       <Filter>Helpers</Filter>

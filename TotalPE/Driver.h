@@ -23,6 +23,7 @@ struct DriverInfo {
 	std::string Error;
 	DWORD DriverEntry{};		// the function that stores them (the entry point, or one it calls)
 	DWORD Unload{}, StartIo{};
+	DWORD AddDevice{};			// of a PnP driver (DriverObject->DriverExtension->AddDevice)
 	DWORD Default{};			// one stored in all of MajorFunction (a loop), before the others
 	std::array<DWORD, MajorCount> Major{};
 	struct Ioctl {
@@ -41,6 +42,22 @@ struct DriverInfo {
 		bool Post{ false };
 	};
 	std::vector<Callback> Callbacks;
+	// a driver of the framework (KMDF): its WDF_BIND_INFO (the version of the framework it was built with, the pointer to the
+	// framework's table of functions that WdfVersionBind sets: WdfFunctions_NNNNN, how many it has; virtual addresses), the
+	// pointer to its WDF_DRIVER_GLOBALS (WdfDriverGlobals), and its callbacks: those it gives the framework (Name: the field
+	// or parameter it is given in, "EvtIoDeviceControl"; Type: "PFN_WDF_IO_QUEUE_IO_DEVICE_CONTROL"; Function: the
+	// framework's function, "WdfIoQueueCreate")
+	struct Framework {
+		uint32_t Major{}, Minor{}, Build{};
+		uint32_t Count{};
+		uint64_t Table{};
+		uint64_t Globals{};
+	} Wdf;
+	struct FrameworkCallback {
+		std::wstring Name, Type, Function;
+		DWORD Rva;
+	};
+	std::vector<FrameworkCallback> FrameworkCallbacks;
 };
 
 // a kernel driver: native, and imports from the kernel (ntoskrnl.exe, hal.dll...)
@@ -76,9 +93,25 @@ bool LooksLikeIoctl(uint32_t value);
 // the control codes in decompiled C: the cases of a switch, the constants compared with (==, !=)
 std::vector<uint32_t> IoctlsIn(std::string const& code);
 
+// The WDF_BIND_INFO of a driver of the framework (KMDF) among the data of an image: its size, a pointer to the name of the
+// framework ("KmdfLibrary"), its version, the functions it has and the pointer to them (Table 0 if there is none)
+DriverInfo::Framework FindFrameworkBinding(PEFile const& pe, DriverImageReader const& read);
+// the table of a version before 1.15 is in the image (WDFFUNC WdfFunctions[]), not a pointer to it
+inline bool FrameworkArray(DriverInfo::Framework const& binding) {
+	return binding.Major == 1 && binding.Minor < 15;
+}
+
+// A driver of the framework: its binding, the functions that call WdfVersionBind (which they give the WDF_DRIVER_GLOBALS
+// pointer), and those that use the framework's table (that call its functions)
+struct FrameworkUse {
+	DriverInfo::Framework Binding;
+	std::vector<uint64_t> Binders, Users;
+};
+
 // Finds what the driver sets up (on the decompiler's thread): 'base' is the image's base, 'entry' its entry point (RVA).
 // A minifilter: 'registers' are the functions that call FltRegisterFilter, 'registrations' the constant FLT_REGISTRATIONs
-// of its data (the decompiler finds what those functions pass; these are taken if it does not).
+// of its data (the decompiler finds what those functions pass; these are taken if it does not). A driver of the framework:
+// the callbacks the users of the framework give it.
 void AnalyzeDriver(GhidraDecompiler& decompiler, uint64_t base, uint64_t imageSize, DWORD entry, bool pe64, DriverInfo& info,
 	std::vector<uint64_t> const& registers = {}, std::vector<uint64_t> const& registrations = {}, DriverImageReader const& read = {},
-	std::vector<uint64_t> const& operations = {});
+	std::vector<uint64_t> const& operations = {}, FrameworkUse const& framework = {});

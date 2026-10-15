@@ -267,6 +267,53 @@ namespace {
 	}
 }
 
+std::vector<TypeLibGuid> TypeLibGuids(std::span<const std::byte> data) {
+	std::vector<TypeLibGuid> guids;
+	WCHAR dir[MAX_PATH], path[MAX_PATH];
+	if (!::GetTempPath(_countof(dir), dir) || !::GetTempFileName(dir, L"tpe", 0, path))
+		return guids;
+	{
+		wil::unique_hfile hFile(::CreateFile(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY, nullptr));
+		DWORD written;
+		if (!hFile || !::WriteFile(hFile.get(), data.data(), (DWORD)data.size(), &written, nullptr)) {
+			::DeleteFile(path);
+			return guids;
+		}
+	}
+	{
+		CComPtr<ITypeLib> lib;
+		if (SUCCEEDED(::LoadTypeLibEx(path, REGKIND_NONE, &lib))) {
+			auto add = [&](TypeLibGuid::Kinds kind, GUID const& guid, BSTR name, BSTR help) {
+				if (guid != GUID_NULL)
+					guids.push_back({ kind, std::string((char const*)&guid, 16), name ? name : L"", help ? help : L"" });
+			};
+			CComBSTR name, help;
+			TLIBATTR* lattr;
+			if (SUCCEEDED(lib->GetLibAttr(&lattr))) {
+				lib->GetDocumentation(MEMBERID_NIL, &name, &help, nullptr, nullptr);
+				add(TypeLibGuid::Kinds::Library, lattr->guid, name, help);
+				lib->ReleaseTLibAttr(lattr);
+			}
+			for (UINT i = 0, count = lib->GetTypeInfoCount(); i < count; i++) {
+				CComPtr<ITypeInfo> info;
+				TYPEATTR* attr;
+				if (FAILED(lib->GetTypeInfo(i, &info)) || FAILED(info->GetTypeAttr(&attr)))
+					continue;
+				auto kind = attr->typekind == TKIND_COCLASS ? TypeLibGuid::Kinds::Class : attr->typekind == TKIND_INTERFACE ?
+					TypeLibGuid::Kinds::Interface : attr->typekind == TKIND_DISPATCH ? TypeLibGuid::Kinds::Dispatch : TypeLibGuid::Kinds::Library;
+				if (kind != TypeLibGuid::Kinds::Library) {
+					CComBSTR typeName, typeHelp;
+					info->GetDocumentation(MEMBERID_NIL, &typeName, &typeHelp, nullptr, nullptr);
+					add(kind, attr->guid, typeName, typeHelp);
+				}
+				info->ReleaseTypeAttr(attr);
+			}
+		}
+	}
+	::DeleteFile(path);
+	return guids;
+}
+
 std::wstring DescribeTypeLib(std::span<const std::byte> data, std::wstring& error) {
 	// OLE loads type libraries from files only
 	WCHAR dir[MAX_PATH], path[MAX_PATH];
@@ -316,4 +363,88 @@ std::wstring DescribeTypeLib(std::span<const std::byte> data, std::wstring& erro
 	}
 	::DeleteFile(path);
 	return out;
+}
+
+namespace {
+	// the methods of an interface in the order of its vtable: its base's first (IUnknown's, IDispatch's), then its own, by their
+	// places in the vtable; a property's accessors as MIDL names them ("get_Name", "put_Name", "putref_Name")
+	void VtableMethods(ITypeInfo* info, std::vector<std::wstring>& methods, int depth = 0) {
+		TYPEATTR* attr;
+		if (depth > 16 || FAILED(info->GetTypeAttr(&attr)))
+			return;
+		if (attr->cImplTypes > 0) {
+			HREFTYPE ref;
+			CComPtr<ITypeInfo> base;
+			if (SUCCEEDED(info->GetRefTypeOfImplType(0, &ref)) && SUCCEEDED(info->GetRefTypeInfo(ref, &base)))
+				VtableMethods(base, methods, depth + 1);
+		}
+		std::vector<std::pair<SHORT, std::wstring>> own;
+		for (UINT i = 0; i < attr->cFuncs; i++) {
+			FUNCDESC* func;
+			if (FAILED(info->GetFuncDesc(i, &func)))
+				continue;
+			CComBSTR name;
+			UINT count = 0;
+			info->GetNames(func->memid, &name, 1, &count);
+			std::wstring text = name ? (BSTR)name : L"";
+			if (func->invkind == INVOKE_PROPERTYGET)
+				text = L"get_" + text;
+			else if (func->invkind == INVOKE_PROPERTYPUT)
+				text = L"put_" + text;
+			else if (func->invkind == INVOKE_PROPERTYPUTREF)
+				text = L"putref_" + text;
+			if (func->funckind != FUNC_DISPATCH)
+				own.emplace_back(func->oVft, std::move(text));
+			info->ReleaseFuncDesc(func);
+		}
+		std::sort(own.begin(), own.end(), [](auto const& a, auto const& b) { return a.first < b.first; });
+		for (auto& [slot, name] : own)
+			methods.push_back(std::move(name));
+		info->ReleaseTypeAttr(attr);
+	}
+}
+
+std::vector<TypeLibInterface> TypeLibInterfaces(std::span<const std::byte> data) {
+	std::vector<TypeLibInterface> interfaces;
+	WCHAR dir[MAX_PATH], path[MAX_PATH];
+	if (!::GetTempPath(_countof(dir), dir) || !::GetTempFileName(dir, L"tpe", 0, path))
+		return interfaces;
+	{
+		wil::unique_hfile hFile(::CreateFile(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY, nullptr));
+		DWORD written;
+		if (!hFile || !::WriteFile(hFile.get(), data.data(), (DWORD)data.size(), &written, nullptr)) {
+			::DeleteFile(path);
+			return interfaces;
+		}
+	}
+	{
+		CComPtr<ITypeLib> lib;
+		if (SUCCEEDED(::LoadTypeLibEx(path, REGKIND_NONE, &lib)))
+			for (UINT i = 0, count = lib->GetTypeInfoCount(); i < count; i++) {
+				CComPtr<ITypeInfo> info;
+				TYPEATTR* attr;
+				if (FAILED(lib->GetTypeInfo(i, &info)) || FAILED(info->GetTypeAttr(&attr)))
+					continue;
+				auto kind = attr->typekind;
+				bool dual = (attr->wTypeFlags & TYPEFLAG_FDUAL) != 0;
+				info->ReleaseTypeAttr(attr);
+				// (a dual dispinterface: its interface part, which has the vtable)
+				CComPtr<ITypeInfo> vtable;
+				HREFTYPE ref;
+				if (kind == TKIND_INTERFACE)
+					vtable = info;
+				else if (kind == TKIND_DISPATCH && dual && SUCCEEDED(info->GetRefTypeOfImplType(-1, &ref)))
+					info->GetRefTypeInfo(ref, &vtable);
+				if (!vtable)
+					continue;
+				CComBSTR name;
+				vtable->GetDocumentation(MEMBERID_NIL, &name, nullptr, nullptr, nullptr);
+				TypeLibInterface item{ name ? (BSTR)name : L"" };
+				VtableMethods(vtable, item.Methods);
+				if (!item.Name.empty() && !item.Methods.empty())
+					interfaces.push_back(std::move(item));
+			}
+	}
+	::DeleteFile(path);
+	return interfaces;
 }

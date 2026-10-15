@@ -25,6 +25,7 @@ enum class LexLanguage {
 	Cpp,
 	CSharp,
 	IL,
+	Idl,	// of a type library
 };
 
 class CScintillaView :
@@ -182,6 +183,7 @@ private:
 	bool HasAnnotations() const;
 	GhidraDecompiler::LineAddresses m_LineAddresses;	// of decompiled code
 	static constexpr int MarkerBookmark = 2;
+	static constexpr int IndicatorGuid = 10;	// IDL's GUIDs (an indicator of the container's: 8 and on)
 	LRESULT OnSciNotify(int, LPNMHDR, BOOL&);
 	Notify m_Notify;
 	LineAction m_LineAction;

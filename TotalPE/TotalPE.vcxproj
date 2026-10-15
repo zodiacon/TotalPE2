@@ -135,6 +135,7 @@
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
+      <AdditionalOptions>/bigobj %(AdditionalOptions)</AdditionalOptions>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
@@ -411,6 +412,8 @@
     <ClCompile Include="Win32ApiFrame.cpp" />
     <ClCompile Include="BookmarksView.cpp" />
     <ClCompile Include="ClassesView.cpp" />
+    <ClCompile Include="ComView.cpp" />
+    <ClCompile Include="ComServer.cpp" />
     <ClCompile Include="Driver.cpp" />
     <ClCompile Include="DriverView.cpp" />
     <ClCompile Include="HexFind.cpp" />
@@ -489,6 +492,8 @@
     <ClInclude Include="Win32ApiFrame.h" />
     <ClInclude Include="BookmarksView.h" />
     <ClInclude Include="ClassesView.h" />
+    <ClInclude Include="ComView.h" />
+    <ClInclude Include="ComServer.h" />
     <ClInclude Include="Driver.h" />
     <ClInclude Include="DriverView.h" />
     <ClInclude Include="HexFind.h" />

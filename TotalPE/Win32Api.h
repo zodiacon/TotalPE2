@@ -35,6 +35,15 @@ public:
 	bool Describe(uint32_t id, GhidraDecompiler::Type& type);
 	// a type by its name (a struct, union, enum, typedef: "HANDLE", "SECURITY_ATTRIBUTES"); 0 if there is none
 	uint32_t TypeByName(std::string const& name);
+	// The methods of an interface by its name ("IPersistFile"), those of its bases first (IUnknown's), in the order of its
+	// vtable: each one's name, the id of its type (a function: the interface pointer first, 0 if it is not known) and the
+	// names of its parameters ("This" first); false if the metadata has no such interface
+	struct Method {
+		std::string Name;
+		uint32_t Type{ 0 };
+		std::vector<std::string> Parameters;
+	};
+	bool InterfaceMethods(std::string const& name, std::vector<Method>& methods);
 
 	// What the metadata has, to look at: the functions (of the machine) and the types (not those nested in others)
 	struct Entry {

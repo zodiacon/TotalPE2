@@ -241,6 +241,48 @@ std::vector<uint64_t> FindFilterOperations(PEFile const& pe, DriverImageReader c
 	return found;
 }
 
+DriverInfo::Framework FindFrameworkBinding(PEFile const& pe, DriverImageReader const& read) {
+	// WDF_BIND_INFO: Size, Component ("KmdfLibrary"), Version (Major, Minor, Build), FuncCount, FuncTable, Module
+	DriverInfo::Framework binding;
+	auto sections = pe.GetSecHeaders();
+	if (!sections || !read)
+		return binding;
+	bool pe64 = pe.GetFileInfo()->IsPE64;
+	auto base = pe.GetImageBase();
+	uint32_t pointer = pe64 ? 8 : 4, size = pe64 ? 0x30 : 0x20;
+	static wchar_t const name[] = L"KmdfLibrary";
+	for (auto const& s : *sections) {
+		auto const& h = s.SecHdr;
+		if ((h.Characteristics & (IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_CNT_CODE)) || !(h.Characteristics & IMAGE_SCN_CNT_INITIALIZED_DATA))
+			continue;
+		auto length = std::min(h.Misc.VirtualSize ? h.Misc.VirtualSize : h.SizeOfRawData, h.SizeOfRawData);
+		for (uint32_t at = 0; at + size <= length; at += pointer) {
+			auto va = base + h.VirtualAddress + at;
+			// (newer versions have more after these: its size is more)
+			std::vector<uint8_t> bytes(size);
+			if (!read(va, bytes.data(), size) || *(uint32_t const*)bytes.data() < size || *(uint32_t const*)bytes.data() > 0x100 ||
+				*(uint32_t const*)bytes.data() % 4)
+				continue;
+			uint64_t component = 0, table = 0;
+			memcpy(&component, bytes.data() + pointer, pointer);
+			wchar_t text[_countof(name)]{};
+			if (component <= base || !read(component, (uint8_t*)text, sizeof(text)) || wmemcmp(text, name, _countof(name)) != 0)
+				continue;
+			auto version = (uint32_t const*)(bytes.data() + 2 * pointer);
+			auto count = version[3];
+			memcpy(&table, bytes.data() + 2 * pointer + 16, pointer);
+			uint8_t probe;
+			if (version[0] != 1 || count == 0 || count > 4096 || table <= base || !read(table, &probe, 1))
+				continue;
+			binding.Major = version[0], binding.Minor = version[1], binding.Build = version[2];
+			binding.Count = count;
+			binding.Table = table;
+			return binding;
+		}
+	}
+	return binding;
+}
+
 std::wstring IoctlDeviceType(uint32_t code) {
 	static std::map<uint32_t, PCWSTR> const types = {
 		{ 0x01, L"FILE_DEVICE_BEEP" }, { 0x02, L"FILE_DEVICE_CD_ROM" }, { 0x07, L"FILE_DEVICE_DISK" },
@@ -292,10 +334,10 @@ std::vector<uint32_t> IoctlsIn(std::string const& code) {
 
 void AnalyzeDriver(GhidraDecompiler& decompiler, uint64_t base, uint64_t imageSize, DWORD entry, bool pe64, DriverInfo& info,
 	std::vector<uint64_t> const& registers, std::vector<uint64_t> const& registrations, DriverImageReader const& read,
-	std::vector<uint64_t> const& operations) {
-	// the DRIVER_OBJECT: DriverStartIo, DriverUnload, then MajorFunction (pointers)
+	std::vector<uint64_t> const& operations, FrameworkUse const& framework) {
+	// the DRIVER_OBJECT: DriverExtension, DriverStartIo, DriverUnload, then MajorFunction (pointers)
 	uint32_t pointer = pe64 ? 8 : 4;
-	int64_t startIo = pe64 ? 0x60 : 0x30, unload = pe64 ? 0x68 : 0x34, majors = pe64 ? 0x70 : 0x38;
+	int64_t startIo = pe64 ? 0x60 : 0x30, unload = pe64 ? 0x68 : 0x34, majors = pe64 ? 0x70 : 0x38, extension = pe64 ? 0x30 : 0x18;
 	std::vector<GhidraDecompiler::ParameterStore> stores;
 	if (!decompiler.ParameterStores(base + entry, 3, stores, info.Error)) {
 		info.State = DriverInfo::States::Failed;
@@ -307,7 +349,14 @@ void AnalyzeDriver(GhidraDecompiler& decompiler, uint64_t base, uint64_t imageSi
 			continue;
 		auto rva = (DWORD)(s.Value - base);
 		bool known = true;
-		if (s.Indexed) {
+		// (through DriverExtension: AddDevice, after the DRIVER_OBJECT it points to)
+		if (s.Through >= 0) {
+			if (s.Through == extension && s.Offset == pointer && !s.Indexed)
+				info.AddDevice = rva;
+			else
+				known = false;
+		}
+		else if (s.Indexed) {
 			if (s.Offset == majors)
 				info.Default = rva;
 			else
@@ -415,10 +464,49 @@ void AnalyzeDriver(GhidraDecompiler& decompiler, uint64_t base, uint64_t imageSi
 			unique.push_back(c);
 	info.Callbacks = std::move(unique);
 
-	// the control codes: in the device control routines, or (if they pass them on) in the functions they call
+	// a driver of the framework: the WDF_DRIVER_GLOBALS pointer WdfVersionBind is given (its fourth parameter), then the
+	// callbacks the users of the framework's functions give it; the one that calls WdfDriverCreate is the driver's
+	// DriverEntry (the entry point, FxDriverEntry, calls it after binding)
+	if (framework.Binding.Table) {
+		info.Wdf = framework.Binding;
+		for (auto function : framework.Binders) {
+			std::vector<GhidraDecompiler::CallArgument> arguments;
+			std::string error;
+			if (decompiler.CallArguments(function, "WdfVersionBind", 4, arguments, error))
+				for (auto const& argument : arguments)
+					if (argument.Constant && inImage(argument.Value) && !info.Wdf.Globals)
+						info.Wdf.Globals = argument.Value;
+		}
+		// (before 1.15 the table is in the image, not a pointer to it)
+		decompiler.AddFramework(info.Wdf.Table, info.Wdf.Count, info.Wdf.Globals, FrameworkArray(info.Wdf));
+		for (auto function : framework.Users) {
+			std::vector<GhidraDecompiler::FrameworkCallback> callbacks;
+			std::string error;
+			// (the globals, if the call of WdfVersionBind did not show them: what the calls are given first)
+			if (!decompiler.FrameworkCallbacks(function, callbacks, error, &info.Wdf.Globals))
+				continue;
+			for (auto const& c : callbacks) {
+				if (!inImage(c.Address))
+					continue;
+				decompiler.AddFrameworkCallback(c.Address, c.Type);
+				DriverInfo::FrameworkCallback callback{ std::wstring(CA2W(c.Name.c_str())), std::wstring(CA2W(c.Type.c_str())),
+					std::wstring(CA2W(c.Function.c_str())), (DWORD)(c.Address - base) };
+				if (std::ranges::none_of(info.FrameworkCallbacks, [&](auto const& f) { return f.Name == callback.Name && f.Rva == callback.Rva; }))
+					info.FrameworkCallbacks.push_back(std::move(callback));
+				if (c.Function == "WdfDriverCreate" && function != base + entry)
+					info.DriverEntry = (DWORD)(function - base);
+			}
+		}
+	}
+
+	// the control codes: in the device control routines (a framework's driver's: those of its queues), or (if they pass them
+	// on) in the functions they call
+	std::vector<DWORD> handlers{ info.Major[14], info.Major[15] };
+	for (auto const& c : info.FrameworkCallbacks)
+		if (c.Type == L"PFN_WDF_IO_QUEUE_IO_DEVICE_CONTROL" || c.Type == L"PFN_WDF_IO_QUEUE_IO_INTERNAL_DEVICE_CONTROL")
+			handlers.push_back(c.Rva);
 	std::set<DWORD> done;
-	for (auto major : { 14, 15 }) {
-		auto handler = info.Major[major];
+	for (auto handler : handlers) {
 		if (!handler || handler == info.Default || !done.insert(handler).second)
 			continue;
 		std::string code, error;

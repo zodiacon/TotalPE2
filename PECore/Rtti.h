@@ -17,6 +17,7 @@ struct RttiClass {
 	bool Struct{ false };		// declared as a struct (".?AU")
 	uint32_t TypeDescriptor{};	// RVA
 	std::vector<std::string> Bases;	// the base classes, all of them, in the order of the hierarchy (direct ones first)
+	std::vector<int32_t> BaseOffsets;	// where each is in the object (-1: a virtual base, whose place is not fixed)
 	// A vtable of the class: its own (offset 0) and those of its bases that are not at its start (multiple inheritance)
 	struct Vtable {
 		uint32_t Rva{};			// of the first function's pointer

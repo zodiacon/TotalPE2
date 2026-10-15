@@ -214,13 +214,36 @@ public:
 	// void (DRIVER_OBJECT *DriverObject), its dispatch routines (of MajorFunction) NTSTATUS (DEVICE_OBJECT *DeviceObject,
 	// IRP *Irp), its DriverStartIo the same but void. An index of MajorFunction is shown by its name
 	// (MajorFunction[IRP_MJ_CREATE]).
+	// (and a minifilter's callbacks, of the filter manager's prototypes)
 	struct DriverRoutines {
-		std::vector<uint64_t> Entries, Unload, Dispatch, StartIo;
+		std::vector<uint64_t> Entries, Unload, Dispatch, StartIo, AddDevice;
+		std::vector<uint64_t> PreOperation, PostOperation, FilterUnload, InstanceSetup, InstanceQueryTeardown, InstanceTeardown;
 	};
 	void AddDriver(DriverRoutines const& routines);
 	// A note of a constant (of a driver's control code: its CTL_CODE): a line that compares with it or has a case of it ends
 	// with it as a comment
 	void AddConstantNote(uint64_t value, std::string const& note);
+	// A driver of the framework (KMDF): the global that WdfVersionBind sets to the framework's table of functions
+	// (WdfFunctions_NNNNN; before KMDF 1.15, an 'array' of them in the image: WdfFunctions), how many it has, and the global
+	// it sets to the driver's WDF_DRIVER_GLOBALS (WdfDriverGlobals; 0 if it is not known).
+	// A call through the table is a call of the framework's function, of its prototype, shown as the driver's source has it
+	// ("WdfDriverCreate(DriverObject, RegistryPath, ...)", without the globals); the structures with callbacks it is given
+	// (WDF_DRIVER_CONFIG, WDF_IO_QUEUE_CONFIG...) are known. (After AddDriver: its types are the kernel's.)
+	void AddFramework(uint64_t table, uint32_t count, uint64_t globals, bool array = false);
+	// The callbacks a function gives the framework (after AddFramework): the functions it puts in the callbacks of those
+	// structures that it passes to the framework, by the names of their fields ("EvtDriverDeviceAdd", "EvtIoDeviceControl"),
+	// and those it passes as callbacks, by the names of the parameters ("EvtIoInCallerContext"); 'Type' is the callback's
+	// type ("PFN_WDF_DRIVER_DEVICE_ADD"), 'Function' the framework's function it is given to ("WdfDriverCreate"). 'globals' (if
+	// given, and 0) gets the global it passes the framework's functions first: WdfDriverGlobals.
+	struct FrameworkCallback {
+		std::string Name, Type, Function;
+		uint64_t Address;
+	};
+	bool FrameworkCallbacks(uint64_t function, std::vector<FrameworkCallback>& callbacks, std::string& error, uint64_t* globals = nullptr);
+	// a callback of the driver, of a type (FrameworkCallback::Type): it gets the callback's prototype
+	void AddFrameworkCallback(uint64_t address, std::string const& type);
+	// the name of the framework's function at an index of its table ("WdfDriverCreate"); empty if there is none
+	static std::string FrameworkFunction(uint32_t index);
 
 	// The function at an address as C; 'name' is used if the function has none yet. 'functions' (if given) gets the
 	// functions the code refers to (the function itself and those it calls), by the names it shows, and their addresses.
@@ -240,6 +263,8 @@ public:
 		uint64_t Value;
 		bool Indexed{ false };
 		uint64_t Function;		// where it is
+		int64_t Through{ -1 };	// a store through a pointer the object has at this offset (DriverObject->DriverExtension):
+								// Offset is in what it points to
 	};
 	bool ParameterStores(uint64_t address, int depth, std::vector<ParameterStore>& stores, std::string& error);
 

@@ -176,12 +176,18 @@ std::vector<RttiClass> ReadRtti(PEFile const& pe) {
 		if (image.Read(hierarchy + 8, count) && image.Read(hierarchy + 12, array) && count < 256) {
 			array = target(array);
 			for (uint32_t i = 1; i < count; i++) {
+				// (a base class descriptor: its type descriptor, the bases it contains, then where it is: mdisp, pdisp (-1 if it
+				// is not a virtual base), vdisp)
 				uint32_t base = 0, baseDescriptor = 0;
+				int32_t mdisp = 0, pdisp = -1;
 				if (!image.Read(array + i * 4, base) || !image.Read(target(base), baseDescriptor))
 					break;
+				image.Read(target(base) + 8, mdisp);
+				image.Read(target(base) + 12, pdisp);
 				if (auto name = typeName(target(baseDescriptor))) {
 					auto text = RttiTypeName(*name);
 					c.Bases.push_back(text.empty() ? *name : text);
+					c.BaseOffsets.push_back(pdisp == -1 ? mdisp : -1);
 				}
 			}
 		}

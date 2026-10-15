@@ -88,6 +88,7 @@ public:
 		COMMAND_ID_HANDLER(ID_PE_FUNCTIONS, OnViewFunctions)
 		COMMAND_ID_HANDLER(ID_PE_CLASSES, OnViewClasses)
 		COMMAND_ID_HANDLER(ID_PE_DRIVER, OnViewDriver)
+		COMMAND_ID_HANDLER(ID_PE_COM, OnViewCom)
 		COMMAND_ID_HANDLER(ID_PE_CLRTYPES, OnViewClrTypes)
 		COMMAND_ID_HANDLER(ID_PE_SECURITYSUMMARY, OnViewSecuritySummary)
 		COMMAND_ID_HANDLER(ID_FILE_SAVE, OnFileSave)
@@ -281,6 +282,9 @@ private:
 	LRESULT OnViewFunctions(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewClasses(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewDriver(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnViewCom(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	// the file imports the functions of COM that make objects (or start COM)
+	bool UsesCom() const;
 	LRESULT OnViewClrTypes(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewSecuritySummary(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnFileSave(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
@@ -390,6 +394,9 @@ private:
 		GhidraDecompiler::DriverRoutines Driver;
 		std::vector<std::pair<uint64_t, std::string>> DriverRoutines;
 		std::vector<std::pair<uint64_t, std::string>> ConstantNotes;	// a driver's control codes (their CTL_CODEs)
+		// a framework's driver: the framework's table and its WDF_DRIVER_GLOBALS; its callbacks (their types)
+		DriverInfo::Framework Framework;
+		std::vector<std::pair<uint64_t, std::string>> FrameworkCallbacks;
 		bool Symbols{ false };		// the types, prototypes and locals of the symbols are asked for
 		std::unique_ptr<GhidraDecompiler> Decompiler;
 		std::string Error;			// why it could not be made
@@ -481,10 +488,16 @@ private:
 	std::map<DWORD, std::wstring> const& LibraryNames() const override { return m_LibraryNames; }
 	std::vector<RttiClass> const& Classes() const override { return m_Classes; }
 	DriverInfo const& Driver() const override { return m_Driver; }
+	std::vector<ComUse> const& ComUses() override;
+	std::vector<ComServerClass> const& ComServerClasses() const override { return m_ComServer; }
+	std::wstring ShortFunctionName(DWORD rva) const override { return FunctionName(ResolveRva(rva)); }
 	// the classes of the program, and names of their vtables and of their virtual functions
 	void FindClasses();
 	// the GUIDs of the Win32 metadata in the file's data; false if there are none (or no metadata)
 	bool FindGuids();
+	// names the virtual functions of the interfaces the classes implement (of the metadata, of the file's type libraries) for
+	// their methods (true if it named any)
+	bool NameInterfaceMethods();
 	// names the functions of static libraries (true if it named any)
 	bool FindLibraryFunctions();
 	LRESULT OnAddSignatures(WORD, WORD, HWND, BOOL&);
@@ -568,9 +581,17 @@ private:
 	std::vector<RttiClass> m_Classes;				// of the run-time type information
 	std::map<DWORD, std::wstring> m_ClassNames;		// their vtables and virtual functions, by RVA
 	std::map<DWORD, std::string> m_VirtualOf;		// the class that declares a virtual function, by its RVA
+	// the methods of interfaces of the metadata the classes implement, by RVA: their prototypes (the id of the type, the
+	// parameters' names)
+	std::map<DWORD, std::pair<uint32_t, std::vector<std::string>>> m_MethodTypes;
 	std::map<DWORD, Win32Api::NamedGuid> m_Guids;	// the GUIDs of Windows in the data (IIDs, CLSIDs...), by RVA
 	std::set<DWORD> m_SymbolGuids;					// those of them the symbols name (they have the symbols' names)
+	std::set<DWORD> m_TypeLibGuids;					// those of the file's type libraries (not of the metadata)
 	DriverInfo m_Driver;							// what a kernel driver sets up
+	std::vector<ComUse> m_ComUses;					// the calls that pass COM's GUIDs (once the cross-references are there)
+	std::vector<ComServerClass> m_ComServer;		// the classes the DLL serves
+	std::map<DWORD, std::wstring> m_ServerGuidNames;	// the names of their CLSIDs that the metadata and the symbols do not name
+	bool m_ComUsesFound{ false };
 	std::map<DWORD, std::wstring> m_DriverNames;	// its routines' names (DriverUnload, DispatchCreate...), by RVA
 	uint32_t m_DriverGeneration{ 0 };
 	std::vector<Anomaly> m_Anomalies;

@@ -511,6 +511,45 @@ uint32_t Win32Api::Vtable(uint32_t row) {
 	return id;
 }
 
+bool Win32Api::InterfaceMethods(std::string const& name, std::vector<Method>& methods) {
+	methods.clear();
+	auto entry = Find(name);
+	if (!entry || entry->Kind != Entry::Kinds::Interface)
+		return false;
+	auto& md = m_Data.Md;
+	// (as the vtable has them: the bases' first; its functions' types are those it made)
+	auto vtable = Vtable(entry->Row);
+	std::vector<uint32_t> rows;
+	std::set<uint32_t> seen;
+	auto collect = [&](auto&& self, uint32_t r) -> void {
+		if (!seen.insert(r).second)
+			return;
+		for (auto token : md.Interfaces(r))
+			if (auto base = RowOf(token))
+				self(self, base);
+		for (auto m : md.MethodsOf(r))
+			rows.push_back(m);
+	};
+	collect(collect, entry->Row);
+	GhidraDecompiler::Type type;
+	if (!Describe(vtable, type) || type.Fields.size() != rows.size())
+		return false;
+	for (size_t i = 0; i < rows.size(); i++) {
+		Method method{ type.Fields[i].Name };
+		if (auto made = m_MadeKeys.find(std::format("f{}Vtbl{}", Name(entry->Row), i)); made != m_MadeKeys.end()) {
+			method.Type = made->second;
+			ClrSigType result;
+			std::vector<ClrSigType> params;
+			method.Parameters.push_back("This");
+			if (md.MethodSigTypes(rows[i], result, params))
+				for (size_t k = 0; k < params.size(); k++)
+					method.Parameters.push_back(Narrow(md.ParamName(rows[i], (uint32_t)k + 1)));
+		}
+		methods.push_back(std::move(method));
+	}
+	return !methods.empty();
+}
+
 std::unordered_map<std::string, Win32Api::NamedGuid> const& Win32Api::Guids() {
 	if (m_GuidsRead)
 		return m_Guids;

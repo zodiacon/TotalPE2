@@ -198,6 +198,10 @@ void CMainFrame::BuildSearchIndex() {
 		for (auto const& [rva, name] : m_LibraryNames)
 			index.Add({ .Kind = SearchKind::Symbol, .Name = name, .Details = L"Function (library)",
 				.Location = std::format(L"RVA 0x{:X}", rva), .Value = base + rva });
+		// the classes of a COM server
+		for (auto const& [rva, name] : m_ServerGuidNames)
+			index.Add({ .Kind = SearchKind::Symbol, .Name = name, .Details = L"Data (CLSID the DLL serves)",
+				.Location = std::format(L"RVA 0x{:X}", rva), .Value = base + rva });
 		// the routines of a driver
 		for (auto const& [rva, name] : m_DriverNames)
 			index.Add({ .Kind = SearchKind::Symbol, .Name = name, .Details = L"Function (driver)",

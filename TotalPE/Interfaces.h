@@ -12,6 +12,7 @@
 #include <map>
 #include "Rtti.h"
 #include "Driver.h"
+#include "ComServer.h"
 
 class Annotations;
 
@@ -31,6 +32,16 @@ static const UINT WM_XREFS_BUILT = WM_APP + 61;
 static const UINT WM_DRIVER_ANALYZED = WM_APP + 62;
 
 constexpr uint32_t ItemShift = 8;
+
+// A call that passes GUIDs of Windows (of COM): the function it is in (RVA), where it is (VA), what it calls ("CoCreateInstance";
+// one through a pointer, QueryInterface: "(through a pointer)"), and the GUIDs it passes (RVAs): of classes, of interfaces,
+// others (FOLDERID_...)
+struct ComUse {
+	DWORD Function;
+	uint64_t Call;
+	std::wstring Callee;
+	std::vector<DWORD> Classes, Interfaces, Others;
+};
 
 enum class TreeItemType : int64_t {
 	None = 0,
@@ -166,6 +177,8 @@ enum class TreeItemType : int64_t {
 	Classes,
 	// what a kernel driver sets up: its routines, its control codes
 	Driver,
+	// the calls that pass the GUIDs of COM: the classes the program creates, the interfaces it asks for
+	Com,
 
 	ItemMask = 255,
 };
@@ -201,6 +214,12 @@ struct IMainFrame abstract {
 	virtual std::vector<RttiClass> const& Classes() const = 0;
 	// what the file sets up, if it is a kernel driver (once the decompiler has found it)
 	virtual DriverInfo const& Driver() const = 0;
+	// the calls that pass the GUIDs of Windows (once the cross-references are there: empty until then)
+	virtual std::vector<ComUse> const& ComUses() = 0;
+	// the COM classes the DLL serves (DllGetClassObject; once the cross-references are there)
+	virtual std::vector<ComServerClass> const& ComServerClasses() const = 0;
+	// the name of the function at an RVA without its parameters and return type ("InvokeOpenDialog", "ui::Widget::Draw")
+	virtual std::wstring ShortFunctionName(DWORD rva) const = 0;
 	virtual std::wstring ResolveVa(ULONGLONG va) const = 0;
 	virtual std::vector<Anomaly> const& GetAnomalies() const = 0;
 	// Shows a place in the file: in the hex view, or as disassembly if the offset is in a code section.

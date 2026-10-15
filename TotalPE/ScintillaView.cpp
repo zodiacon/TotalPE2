@@ -8,6 +8,7 @@
 #include "InputDlg.h"
 #include <Annotations.h>
 #include <unordered_set>
+#include <regex>
 #include <lexilla/Lexilla.h>
 #include <lexilla/SciLexer.h>
 #include "ClrIL.h"
@@ -444,11 +445,19 @@ std::optional<uint64_t> CScintillaView::FlowGraphAddress() {
 }
 
 void CScintillaView::SetText(PCWSTR text) {
-	m_Sci.SetText(CStringA(text));
+	SetText(CStringA(text).GetString());
 }
 
 void CScintillaView::SetText(PCSTR text) {
 	m_Sci.SetText(text);
+	// IDL: a GUID in one color (the lexer of C takes its parts for numbers and names)
+	if (m_Language == LexLanguage::Idl) {
+		static std::regex const guid(R"([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})");
+		m_Sci.SendMessage(SCI_SETINDICATORCURRENT, IndicatorGuid);
+		std::string_view all(text);
+		for (std::cregex_iterator it(all.data(), all.data() + all.size(), guid), end; it != end; ++it)
+			m_Sci.SendMessage(SCI_INDICATORFILLRANGE, it->position(), it->length());
+	}
 }
 
 // The words of ARM64 code for the assembly lexer: the instructions, (no FPU instructions), the registers
@@ -524,6 +533,27 @@ void CScintillaView::SetLanguage(LexLanguage lang) {
 		case LexLanguage::IL:
 			m_Sci.SetLexer(lmIl.Create());
 			break;
+
+		case LexLanguage::Idl:
+		{
+			// the words of IDL (of what a type library describes); the attributes in brackets and the types of OLE as the second set
+			auto lexer = lmCPP.Create();
+			m_Sci.SetLexer(lexer);
+			lexer->WordListSet(0, "library interface dispinterface coclass module typedef enum struct union const import importlib "
+				"properties methods cpp_quote midl_pragma");
+			lexer->WordListSet(1,
+				// attributes
+				"uuid version lcid helpstring helpcontext helpfile helpstringcontext helpstringdll dual oleautomation object "
+				"odl hidden restricted nonextensible noncreatable appobject control licensed aggregatable replaceable "
+				"predeclid public local default defaultvalue defaultbind defaultcollelem displaybind bindable requestedit "
+				"immediatebind source in out retval optional lcid vararg id propget propput propputref readonly "
+				"uidefault usesgetlasterror custom entry call_as "
+				// types
+				"void char short int long hyper float double unsigned signed boolean byte wchar_t BSTR VARIANT VARIANT_BOOL "
+				"HRESULT SCODE DATE CURRENCY CY DECIMAL GUID IUnknown IDispatch SAFEARRAY LPSTR LPWSTR VARTYPE INT_PTR "
+				"UINT_PTR int64 uint64 __int64 BYTE WORD DWORD BOOL LONG ULONG USHORT UINT INT OLE_COLOR");
+			break;
+		}
 
 		case LexLanguage::C:
 		case LexLanguage::Cpp:
@@ -640,6 +670,10 @@ void CScintillaView::UpdateColors() {
 		case LexLanguage::C:
 		case LexLanguage::Cpp:
 		case LexLanguage::CSharp:
+		case LexLanguage::Idl:
+			// (IDL's GUIDs: the color of numbers, over the lexer's)
+			m_Sci.SendMessage(SCI_INDICSETSTYLE, IndicatorGuid, INDIC_TEXTFORE);
+			m_Sci.SendMessage(SCI_INDICSETFORE, IndicatorGuid, dark ? RGB(181, 206, 168) : RGB(9, 134, 88));
 			for (auto style : { SCE_C_COMMENT, SCE_C_COMMENTLINE, SCE_C_COMMENTDOC, SCE_C_COMMENTLINEDOC })
 				m_Sci.StyleSetFore(style, dark ? RGB(87, 166, 74) : RGB(0, 128, 0));
 			m_Sci.StyleSetFore(SCE_C_WORD, dark ? RGB(86, 156, 214) : RGB(0, 0, 255));
