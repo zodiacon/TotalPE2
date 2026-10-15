@@ -899,3 +899,62 @@ TEST_CASE("The code of a block's handler is shown in it", "[decompiler]") {
 		CHECK_THAT(code, ContainsSubstring("    /* two */\n    frame->count = 6;\n"));
 	}
 }
+
+TEST_CASE("What a driver's entry point stores in its DRIVER_OBJECT", "[decompiler]") {
+	Fixture f;
+	constexpr uint64_t driverEntry = Code + 0x40, dispatch = Code + 0x100, fallback = Code + 0x120, unload = Code + 0x140;
+	// GsDriverEntry: sub rsp, 28h; call DriverEntry; add rsp, 28h; ret
+	f.Image.At(Code).Bytes({ 0x48, 0x83, 0xEC, 0x28 }).Call(driverEntry).Bytes({ 0x48, 0x83, 0xC4, 0x28, 0xC3 });
+	f.Image.At(driverEntry)
+		.Bytes({ 0x48, 0x8D, 0x15 }).Rel32(fallback)		// lea rdx, [rip+Default]
+		.Bytes({ 0x45, 0x33, 0xC0 })						// xor r8d, r8d
+		.Bytes({ 0x4A, 0x89, 0x54, 0xC1, 0x70 })			// mov [rcx+r8*8+70h], rdx
+		.Bytes({ 0x49, 0xFF, 0xC0 })						// inc r8
+		.Bytes({ 0x49, 0x83, 0xF8, 0x1C })					// cmp r8, 1Ch
+		.Bytes({ 0x72, 0xF2 })								// jb (the mov)
+		.Bytes({ 0x48, 0x8D, 0x05 }).Rel32(dispatch)		// lea rax, [rip+Dispatch]
+		.Bytes({ 0x48, 0x89, 0x41, 0x70 })					// mov [rcx+70h], rax		(IRP_MJ_CREATE)
+		.Bytes({ 0x48, 0x89, 0x81, 0xE0, 0x00, 0x00, 0x00 })	// mov [rcx+0E0h], rax	(IRP_MJ_DEVICE_CONTROL)
+		.Bytes({ 0x48, 0x8D, 0x05 }).Rel32(unload)			// lea rax, [rip+Unload]
+		.Bytes({ 0x48, 0x89, 0x41, 0x68 })					// mov [rcx+68h], rax		(DriverUnload)
+		.Bytes({ 0x33, 0xC0, 0xC3 });						// xor eax, eax; ret
+	f.Image.At(dispatch).Bytes({ 0x33, 0xC0, 0xC3 });
+	f.Image.At(fallback).Bytes({ 0xB8, 0x10, 0x00, 0x00, 0xC0, 0xC3 });
+	f.Image.At(unload).Bytes({ 0xC3 });
+	f.Open();
+	std::vector<GhidraDecompiler::ParameterStore> stores;
+	std::string error;
+	INFO(error);
+	REQUIRE(f.Decompiler.ParameterStores(Code, 2, stores, error));
+	auto has = [&](int64_t offset, uint64_t value, bool indexed) {
+		return std::ranges::any_of(stores, [&](auto const& s) {
+			return s.Offset == offset && s.Value == value && s.Indexed == indexed && s.Function == driverEntry; });
+	};
+	CHECK(has(0x70, dispatch, false));
+	CHECK(has(0xE0, dispatch, false));
+	CHECK(has(0x68, unload, false));
+	CHECK(has(0x70, fallback, true));
+	// not deeper than asked
+	stores.clear();
+	REQUIRE(f.Decompiler.ParameterStores(Code, 0, stores, error));
+	CHECK(stores.empty());
+}
+
+TEST_CASE("A global variable that has no name, of its section", "[decompiler]") {
+	Fixture f;
+	constexpr uint64_t helper = Code + 0x40;
+	// mov eax, [rip+data]; mov ecx, eax; call Helper; ret
+	f.Image.At(Code)
+		.Bytes({ 0x48, 0x83, 0xEC, 0x28, 0x8B, 0x05 }).Rel32(Data)
+		.Bytes({ 0x89, 0xC1 })
+		.Call(helper)
+		.Bytes({ 0x48, 0x83, 0xC4, 0x28, 0xC3 });
+	f.Image.At(helper).Bytes({ 0x8D, 0x41, 0x01, 0xC3 });
+	f.Image.At(Data).Bytes({ 1, 0, 0, 0 });
+	f.Open();
+	f.Decompiler.AddFunction(helper, "Helper");
+	f.Decompiler.AddSection(Data, 0x1000, ".data");
+	auto code = f.Decompile(Code, "Caller");
+	CHECK_THAT(code, ContainsSubstring("Helper(data_140005000)"));
+	CHECK_THAT(code, !ContainsSubstring("Ram"));
+}

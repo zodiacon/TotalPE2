@@ -132,6 +132,12 @@
     <ClInclude Include="ExceptionScopes.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="LibrarySignatures.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Rtti.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="VirusTotal.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -264,6 +270,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="ExceptionScopes.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="LibrarySignatures.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Rtti.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="VirusTotal.cpp">

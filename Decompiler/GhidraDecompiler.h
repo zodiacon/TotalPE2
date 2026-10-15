@@ -168,6 +168,9 @@ public:
 	// Memory that does not change (constant data, code): what is read there is known, and a pointer into it at a string is
 	// shown as the string
 	void AddReadOnly(uint64_t address, uint64_t size);
+	// A section of the image: a global variable there that has no name is named for it and its address ("data_140005000"
+	// of ".data"; without a section, "Ram0000000140005000", as the decompiler names the memory)
+	void AddSection(uint64_t address, uint64_t size, std::string const& name);
 	// Imports: a call through the pointer at 'slot' (an entry of the import address table) is a call of the function
 	// 'name', which is outside the image. Each such function gets an address in an area that the image does not use,
 	// which is set first. 'module' (the DLL, as it is to be shown) is told of a function that only jumps to the import.
@@ -192,7 +195,23 @@ public:
 	void RenameFunction(uint64_t address, std::string const& name);
 	void ChangeGlobal(uint64_t address, VariableChange const& change);
 	// a global variable: its name and the id of its type
+	// (type 0: bytes of a pointer's size: a name for what is there, a vtable, say)
 	void AddGlobal(uint64_t address, std::string const& name, uint32_t type);
+	// A class the program has (of its run-time type information, without symbols): a structure of its name whose first field
+	// ("vftable") points to a structure of its virtual functions (pointers to code, by the names given)
+	void AddClass(std::string const& name, std::vector<std::string> const& virtualFunctions);
+	// The class (one of AddClass) a function is a virtual function of: its first parameter is "this", a pointer to it; false
+	// if it is none
+	using ClassSource = std::function<bool(uint64_t address, std::string& className)>;
+	void SetClassSource(ClassSource source);
+	// An interface's IID at an address (a global): a variable on the stack whose address is passed to a function right after
+	// it ("CoCreateInstance(&CLSID_X, 0, 1, &IID_IFoo, &p)", "p->QueryInterface(&IID_IFoo, &q)") is a pointer to the
+	// interface (of the type of its name: "IFoo"), named for it ("pFoo"), unless the user changed the variable
+	void AddInterfaceGuid(uint64_t address, std::string const& interfaceType);
+	// A kernel driver: the structure DRIVER_OBJECT (its routines: DriverStartIo, DriverUnload, MajorFunction[IRP_MJ_...],
+	// pointers to code), and the functions that set it up (the entry point, DriverEntry): their first parameter,
+	// "DriverObject", a pointer to it
+	void AddDriverObject(std::vector<uint64_t> const& entries);
 
 	// The function at an address as C; 'name' is used if the function has none yet. 'functions' (if given) gets the
 	// functions the code refers to (the function itself and those it calls), by the names it shows, and their addresses.
@@ -202,6 +221,35 @@ public:
 	using LineAddresses = std::vector<std::vector<uint64_t>>;
 	bool Decompile(uint64_t address, std::string const& name, std::string& code, std::string& error, FunctionRefs* functions = nullptr,
 		LineAddresses* lines = nullptr, Variables* variables = nullptr);
+
+	// What a function stores through its first parameter, at offsets from it: constants (the addresses of functions...),
+	// and those the functions it passes the parameter to store (to a depth). What a driver's entry point sets in its
+	// DRIVER_OBJECT: its dispatch routines (MajorFunction[...]), its unload routine. A store at an index (a loop that sets
+	// every entry of an array) has the offset of the array, and is Indexed.
+	struct ParameterStore {
+		int64_t Offset;
+		uint64_t Value;
+		bool Indexed{ false };
+		uint64_t Function;		// where it is
+	};
+	bool ParameterStores(uint64_t address, int depth, std::vector<ParameterStore>& stores, std::string& error);
+
+	// What a function passes to its calls of a function (by name: "FltRegisterFilter"), as an argument (from 1): a constant
+	// (the address of a structure), or the address of a structure on its stack, whose fields it sets before (the constants
+	// they are given, by their offsets in it, and their sizes; those near it too: what it points to on the stack). A field
+	// given an address on the stack (OnStack) has it as an offset from the structure.
+	struct CallArgument {
+		bool Constant{ false };
+		uint64_t Value{};
+		struct Field {
+			int64_t Offset;
+			uint32_t Size;
+			uint64_t Value;
+			bool OnStack{ false };
+		};
+		std::vector<Field> Fields;
+	};
+	bool CallArguments(uint64_t function, std::string const& callee, int argument, std::vector<CallArgument>& arguments, std::string& error);
 
 private:
 	std::vector<std::string> BodyOf(uint64_t address);

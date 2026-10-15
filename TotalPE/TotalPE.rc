@@ -263,6 +263,8 @@ IDI_BACK                ICON                    "res\\Back.ico"
 
 IDI_FORWARD             ICON                    "res\\Forward.ico"
 
+IDI_SYSTEM              ICON                    "res\\System.ico"
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -330,6 +332,8 @@ BEGIN
         MENUITEM "&Overlay",                    ID_VIEW_OVERLAY
         MENUITEM "S&trings",                    ID_PE_STRINGS
         MENUITEM "F&unctions",                  ID_PE_FUNCTIONS
+        MENUITEM "C&lasses",                    ID_PE_CLASSES
+        MENUITEM "Dri&ver",                     ID_PE_DRIVER
         MENUITEM ".&NET Types",                 ID_PE_CLRTYPES
         MENUITEM "&Debug",                      ID_VIEW_DEBUG
         MENUITEM "Security",                    ID_PE_SECURITY
@@ -347,6 +351,8 @@ BEGIN
     POPUP "&Tools"
     BEGIN
         MENUITEM "&Windows API",                ID_PE_WIN32API
+        MENUITEM SEPARATOR
+        MENUITEM "Add Library &Signatures...",  ID_TOOLS_ADDSIGNATURES
     END
     POPUP "&Options"
     BEGIN
@@ -870,6 +876,9 @@ STRINGTABLE
 BEGIN
     ID_WIN32_DOCS           "Show Microsoft's documentation of the function or type\nDocumentation"
     ID_WIN32_BROWSER        "Open the documentation (or a search of it) in the default browser\nOpen in Browser"
+    ID_TOOLS_ADDSIGNATURES  "Name the functions of static libraries (.lib, .obj) in files that have no symbols\nAdd Library Signatures"
+    ID_PE_CLASSES           "The C++ classes of the program (from its run-time type information): their bases, vtables and virtual functions \nClasses"
+    ID_PE_DRIVER            "What the kernel driver sets up: its dispatch routines (IRP_MJ_...), its unload routine, the control codes it handles\nDriver"
 END
 
 STRINGTABLE

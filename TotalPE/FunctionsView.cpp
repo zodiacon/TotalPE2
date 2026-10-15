@@ -18,7 +18,7 @@ CString CFunctionsView::GetTitle() const {
 }
 
 std::wstring CFunctionsView::SourceText(uint8_t sources) {
-	static PCWSTR const names[] = { L"Symbols", L"Unwind Info", L"Export", L"Entry Point", L"Calls" };
+	static PCWSTR const names[] = { L"Symbols", L"Unwind Info", L"Export", L"Entry Point", L"Calls", L"Library", L"Vtables" };
 	std::wstring text;
 	for (int i = 0; i < _countof(names); i++)
 		if (sources & (1 << i))
@@ -221,6 +221,26 @@ void CFunctionsView::Build() {
 			if (f.Target && f.Name.empty())
 				f.Name = L"j_" + (functions[f.Target].Name.empty() ? std::format(L"sub_{:X}", base + f.Target) : functions[f.Target].Name);
 	}
+
+	// the functions of static libraries (by their code): their names for those that have none
+	for (auto const& [rva, name] : Frame()->LibraryNames()) {
+		auto& f = functions[rva];
+		f.Rva = rva;
+		f.Sources |= FromLibrary;
+		if (f.Name.empty())
+			f.Name = name;
+	}
+
+	// the virtual functions of the classes (their vtables): their names for those that have none
+	for (auto const& c : Frame()->Classes())
+		for (auto const& vtable : c.Vtables)
+			for (auto rva : vtable.Functions) {
+				auto& f = functions[rva];
+				f.Rva = rva;
+				f.Sources |= FromVtables;
+				if (f.Name.empty())
+					f.Name = Frame()->ResolveRva(rva);
+			}
 
 	// the user's names in the place of the others
 	for (auto const& [rva, name] : Frame()->GetAnnotations().Functions)

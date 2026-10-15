@@ -9,6 +9,9 @@
 #include "TypeExporter.h"
 #include <GhidraDecompiler.h>
 #include <optional>
+#include <map>
+#include "Rtti.h"
+#include "Driver.h"
 
 class Annotations;
 
@@ -24,6 +27,8 @@ static const UINT WM_DECOMPILED = WM_APP + 60;
 // posted by the thread that finds the cross-references: wParam is the generation of the request, lParam an XrefMap* (null
 // if there are none) that the receiver deletes
 static const UINT WM_XREFS_BUILT = WM_APP + 61;
+// posted by the decompiler's thread: wParam is the generation of the request, lParam a DriverInfo* that the receiver deletes
+static const UINT WM_DRIVER_ANALYZED = WM_APP + 62;
 
 constexpr uint32_t ItemShift = 8;
 
@@ -157,6 +162,10 @@ enum class TreeItemType : int64_t {
 	Bookmarks,
 	// the functions and types of Windows (from the Win32 metadata)
 	Win32Api,
+	// the C++ classes of the run-time type information
+	Classes,
+	// what a kernel driver sets up: its routines, its control codes
+	Driver,
 
 	ItemMask = 255,
 };
@@ -186,6 +195,12 @@ struct IMainFrame abstract {
 	// Resolves an address to "name" or "name+0x1A" using the PDB (if any), falling back to exports and import slots.
 	// Returns an empty string if nothing is known about the address.
 	virtual std::wstring ResolveRva(DWORD rva) const = 0;
+	// the functions of static libraries in the image (by their code), by RVA
+	virtual std::map<DWORD, std::wstring> const& LibraryNames() const = 0;
+	// the classes of the program (from its run-time type information)
+	virtual std::vector<RttiClass> const& Classes() const = 0;
+	// what the file sets up, if it is a kernel driver (once the decompiler has found it)
+	virtual DriverInfo const& Driver() const = 0;
 	virtual std::wstring ResolveVa(ULONGLONG va) const = 0;
 	virtual std::vector<Anomaly> const& GetAnomalies() const = 0;
 	// Shows a place in the file: in the hex view, or as disassembly if the offset is in a code section.

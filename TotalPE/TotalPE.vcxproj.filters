@@ -243,6 +243,15 @@
     <ClCompile Include="Win32ApiFrame.cpp">
       <Filter>Dialogs</Filter>
     </ClCompile>
+    <ClCompile Include="ClassesView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
+    <ClCompile Include="DriverView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
+    <ClCompile Include="Driver.cpp">
+      <Filter>Helpers</Filter>
+    </ClCompile>
     <ClCompile Include="BookmarksView.cpp">
       <Filter>Dialogs</Filter>
     </ClCompile>
@@ -481,6 +490,15 @@
     </ClInclude>
     <ClInclude Include="Win32ApiFrame.h">
       <Filter>Dialogs</Filter>
+    </ClInclude>
+    <ClInclude Include="ClassesView.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="DriverView.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="Driver.h">
+      <Filter>Helpers</Filter>
     </ClInclude>
     <ClInclude Include="BookmarksView.h">
       <Filter>Dialogs</Filter>
@@ -751,6 +769,9 @@
       <Filter>Resource Files\Icons</Filter>
     </Image>
     <Image Include="res\Forward.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\System.ico">
       <Filter>Resource Files\Icons</Filter>
     </Image>
   </ItemGroup>

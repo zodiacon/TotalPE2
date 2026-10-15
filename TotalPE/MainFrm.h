@@ -86,6 +86,8 @@ public:
 		COMMAND_ID_HANDLER(ID_VIEW_OVERLAY, OnViewOverlay)
 		COMMAND_ID_HANDLER(ID_PE_STRINGS, OnViewStrings)
 		COMMAND_ID_HANDLER(ID_PE_FUNCTIONS, OnViewFunctions)
+		COMMAND_ID_HANDLER(ID_PE_CLASSES, OnViewClasses)
+		COMMAND_ID_HANDLER(ID_PE_DRIVER, OnViewDriver)
 		COMMAND_ID_HANDLER(ID_PE_CLRTYPES, OnViewClrTypes)
 		COMMAND_ID_HANDLER(ID_PE_SECURITYSUMMARY, OnViewSecuritySummary)
 		COMMAND_ID_HANDLER(ID_FILE_SAVE, OnFileSave)
@@ -112,12 +114,14 @@ public:
 		COMMAND_ID_HANDLER(ID_NAV_FORWARD, OnNavForward)
 		COMMAND_ID_HANDLER(ID_NAV_BOOKMARKS, OnViewBookmarks)
 		COMMAND_ID_HANDLER(ID_PE_WIN32API, OnViewWin32Api)
+		COMMAND_ID_HANDLER(ID_TOOLS_ADDSIGNATURES, OnAddSignatures)
 		COMMAND_ID_HANDLER(ID_NAV_COMMENT, OnNotInView)
 		COMMAND_ID_HANDLER(ID_HEX_BOOKMARK_TOGGLE, OnNotInView)
 		MESSAGE_HANDLER(WM_SYMBOLS_LOADED, OnSymbolsLoaded)
 		MESSAGE_HANDLER(WM_DECOMPILER_ASK, OnDecompilerAsk)
 		MESSAGE_HANDLER(WM_DECOMPILED, OnDecompiled)
 		MESSAGE_HANDLER(WM_XREFS_BUILT, OnXrefsBuilt)
+		MESSAGE_HANDLER(WM_DRIVER_ANALYZED, OnDriverAnalyzed)
 		MESSAGE_HANDLER(WM_VT_STATUS, OnVirusTotalStatus)
 		COMMAND_ID_HANDLER(ID_PE_VIRUSTOTAL, OnVirusTotal)
 		COMMAND_ID_HANDLER(ID_PE_VTAPIKEY, OnVirusTotalKey)
@@ -275,6 +279,8 @@ private:
 	LRESULT OnViewOverlay(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewStrings(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewFunctions(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnViewClasses(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnViewDriver(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewClrTypes(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewSecuritySummary(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnFileSave(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
@@ -363,12 +369,26 @@ private:
 		std::unordered_map<uint64_t, size_t> ImportAt;	// the imports by the addresses the decompiler gave them
 		Win32Api* Win32{ nullptr };	// the prototypes of the functions of Windows (if the metadata is there)
 		std::vector<std::pair<uint64_t, uint64_t>> ReadOnly;	// the sections that are not written (address, size)
+		struct Section {
+			uint64_t Address, Size;
+			std::string Name;
+		};
+		std::vector<Section> Sections;	// all of them (the names of their variables)
 		struct Global {
 			uint64_t Address;
 			std::string Name;
 			uint32_t Type;
 		};
 		std::vector<Global> Globals;
+		// without symbols: the classes of the run-time type information (names, the names of their virtual functions), and the
+		// class each virtual function is of (by address)
+		std::vector<std::pair<std::string, std::vector<std::string>>> Classes;
+		std::unordered_map<uint64_t, std::string> VirtualOf;
+		bool Guids{ false };		// the GUIDs of the data are among the globals
+		std::vector<std::pair<uint64_t, std::string>> InterfaceGuids;	// the IIDs among them: the interfaces' names
+		// a kernel driver: the functions that set up its DRIVER_OBJECT; its routines, by their names
+		std::vector<uint64_t> DriverEntries;
+		std::vector<std::pair<uint64_t, std::string>> DriverRoutines;
 		bool Symbols{ false };		// the types, prototypes and locals of the symbols are asked for
 		std::unique_ptr<GhidraDecompiler> Decompiler;
 		std::string Error;			// why it could not be made
@@ -457,6 +477,16 @@ private:
 	bool FunctionAddress(SearchItem const& item, uint64_t& address) override;
 	std::wstring FunctionDeclaration(uint64_t address) override;
 	std::vector<SearchItem> RecentFunctions() override;
+	std::map<DWORD, std::wstring> const& LibraryNames() const override { return m_LibraryNames; }
+	std::vector<RttiClass> const& Classes() const override { return m_Classes; }
+	DriverInfo const& Driver() const override { return m_Driver; }
+	// the classes of the program, and names of their vtables and of their virtual functions
+	void FindClasses();
+	// the GUIDs of the Win32 metadata in the file's data; false if there are none (or no metadata)
+	bool FindGuids();
+	// names the functions of static libraries (true if it named any)
+	bool FindLibraryFunctions();
+	LRESULT OnAddSignatures(WORD, WORD, HWND, BOOL&);
 	std::vector<SearchItem> FunctionsAt(std::wstring const& digits, size_t limit) override;
 	void RememberFunction(std::wstring const& name, uint64_t address);
 	void AddViewsToSearchIndex(HTREEITEM hParent, std::wstring const& parent, int depth);
@@ -533,6 +563,15 @@ private:
 	std::unordered_map<TreeItemType, ContextMenuInfo> m_ContextMenus;
 	mutable std::unordered_map<std::wstring, DiaSession> m_SymbolsForModules;
 	std::vector<std::pair<DWORD, std::wstring>> m_NamedRvas;	// exports, import slots; sorted by RVA
+	std::map<DWORD, std::wstring> m_LibraryNames;	// the functions of static libraries the code has (by signatures), by RVA
+	std::vector<RttiClass> m_Classes;				// of the run-time type information
+	std::map<DWORD, std::wstring> m_ClassNames;		// their vtables and virtual functions, by RVA
+	std::map<DWORD, std::string> m_VirtualOf;		// the class that declares a virtual function, by its RVA
+	std::map<DWORD, Win32Api::NamedGuid> m_Guids;	// the GUIDs of Windows in the data (IIDs, CLSIDs...), by RVA
+	std::set<DWORD> m_SymbolGuids;					// those of them the symbols name (they have the symbols' names)
+	DriverInfo m_Driver;							// what a kernel driver sets up
+	std::map<DWORD, std::wstring> m_DriverNames;	// its routines' names (DriverUnload, DispatchCreate...), by RVA
+	uint32_t m_DriverGeneration{ 0 };
 	std::vector<Anomaly> m_Anomalies;
 	// The cross-references of the PE file, found on a thread of their own when it is opened (a large file takes seconds).
 	// What needs them before they are there is done when they are.
@@ -548,6 +587,11 @@ private:
 	// 'action' now if the cross-references are there, otherwise when they are; true if it was done now
 	bool WithXrefs(std::function<void()> action);
 	LRESULT OnXrefsBuilt(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
+	LRESULT OnDriverAnalyzed(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
+	// a kernel driver's routines, found by the decompiler (on its thread)
+	void AnalyzeDriverAsync();
+	// the slot of the import address table of an imported function (by name), 0 if it is not imported
+	uint64_t ImportSlot(std::string const& name) const;
 	OverlayInfo m_Overlay;
 	HTREEITEM m_hOverlay{ nullptr };
 	HWND m_SaveUIPage{ (HWND)-1 };	// the page Save and Export List were last enabled for

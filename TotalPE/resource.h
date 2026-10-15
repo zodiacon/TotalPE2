@@ -84,12 +84,14 @@
 #define IDD_DISASM_FUNCTION             278
 #define IDI_CLASS                       279
 #define IDD_GOANYWHERE                  280
-#define IDD_INPUT                       285
 #define IDI_PROPERTY                    281
 #define IDI_EVENT                       282
 #define IDI_BACK                        283
 #define IDI_ICON7                       284
 #define IDI_FORWARD                     284
+#define IDD_INPUT                       285
+#define IDI_ICON6                       286
+#define IDI_SYSTEM                      286
 #define IDC_VERSION                     1000
 #define IDC_COPYRIGHT                   1001
 #define IDC_LINK                        1002
@@ -267,18 +269,21 @@
 #define ID_CODE_WIN32API                32920
 #define ID_WIN32_IMPORTS                32921
 #define ID_WIN32_REFERENCES             32922
+#define ID_CODE_SHOWAS_FIRST            32930
+#define ID_CODE_SHOWAS_LAST             32961
 #define ID_WIN32_DOCS                   32962
 #define ID_WIN32_BROWSER                32963
 #define ID_CODE_WIN32DOCS               32964
-#define ID_CODE_SHOWAS_FIRST            32930
-#define ID_CODE_SHOWAS_LAST             32961
+#define ID_TOOLS_ADDSIGNATURES          32965
+#define ID_PE_CLASSES                   32966
+#define ID_PE_DRIVER                    32967
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        286
-#define _APS_NEXT_COMMAND_VALUE         32965
+#define _APS_NEXT_RESOURCE_VALUE        287
+#define _APS_NEXT_COMMAND_VALUE         32968
 #define _APS_NEXT_CONTROL_VALUE         1044
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

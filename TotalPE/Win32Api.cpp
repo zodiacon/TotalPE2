@@ -276,13 +276,8 @@ uint32_t Win32Api::TypeId(ClrSigType const& type) {
 			if (!row) {
 				// of another assembly: a GUID, or bytes of a pointer
 				auto name = m_Data.Md.TypeName(type.Token);
-				if (name.ends_with(L"System.Guid")) {
-					GhidraDecompiler::Type guid{ Kind::Struct, "GUID", 16 };
-					auto bytes = TypeId({ 0x14, 0, 8, { { 0x05 } } });
-					guid.Fields = { { "Data1", 0, Primitive(Kind::Integer, 4, false) }, { "Data2", 4, Primitive(Kind::Integer, 2, false) },
-						{ "Data3", 6, Primitive(Kind::Integer, 2, false) }, { "Data4", 8, bytes } };
-					return Made("GUID", guid);
-				}
+				if (name.ends_with(L"System.Guid"))
+					return GuidType();
 				return Pointer(0);
 			}
 			// an interface (COM) is used through a pointer
@@ -364,7 +359,7 @@ bool Win32Api::DescribeRow(uint32_t row, GhidraDecompiler::Type& type) {
 		// what it is to C: a struct that starts with the pointer to its functions
 		type.Kind = Kind::Struct;
 		type.Size = m_Pointer;
-		type.Fields = { { "lpVtbl", 0, Pointer(0) } };
+		type.Fields = { { "lpVtbl", 0, Pointer(Vtable(row)) } };
 		m_Alignment[IdBit | row] = m_Pointer;
 		return true;
 	}
@@ -462,6 +457,89 @@ bool Win32Api::DescribeRow(uint32_t row, GhidraDecompiler::Type& type) {
 		type.Size = 1;
 	m_Alignment[IdBit | row] = alignment;
 	return true;
+}
+
+uint32_t Win32Api::GuidType() {
+	GhidraDecompiler::Type guid{ Kind::Struct, "GUID", 16 };
+	auto bytes = TypeId({ 0x14, 0, 8, { { 0x05 } } });
+	guid.Fields = { { "Data1", 0, Primitive(Kind::Integer, 4, false) }, { "Data2", 4, Primitive(Kind::Integer, 2, false) },
+		{ "Data3", 6, Primitive(Kind::Integer, 2, false) }, { "Data4", 8, bytes } };
+	auto id = Made("GUID", guid);
+	m_Alignment[id] = 4;
+	return id;
+}
+
+uint32_t Win32Api::Vtable(uint32_t row) {
+	auto& md = m_Data.Md;
+	auto name = Name(row) + "Vtbl";
+	if (auto it = m_MadeKeys.find("vtbl:" + name); it != m_MadeKeys.end())
+		return it->second;
+	std::vector<uint32_t> methods;
+	std::set<uint32_t> seen;
+	auto collect = [&](auto&& self, uint32_t r) -> void {
+		if (!seen.insert(r).second)
+			return;
+		for (auto token : md.Interfaces(r))
+			if (auto base = RowOf(token))
+				self(self, base);
+		for (auto m : md.MethodsOf(r))
+			methods.push_back(m);
+	};
+	collect(collect, row);
+	GhidraDecompiler::Type vtable{ Kind::Struct, name, (uint32_t)methods.size() * m_Pointer };
+	std::set<std::string> names;
+	for (size_t i = 0; i < methods.size(); i++) {
+		auto m = methods[i];
+		uint32_t function = 0;
+		ClrSigType result;
+		std::vector<ClrSigType> params;
+		if (md.MethodSigTypes(m, result, params)) {
+			GhidraDecompiler::Type f{ Kind::Function };
+			f.Target = TypeId(result);
+			f.Parameters.push_back(Pointer(IdBit | row));
+			for (auto& p : params)
+				f.Parameters.push_back(TypeId(p));
+			function = Made(std::format("f{}{}", name, i), f);
+		}
+		auto method = Narrow(md.Methods()[m - 1].Name);
+		if (!names.insert(method).second)
+			method += std::format("_{}", i);	// (overloads)
+		vtable.Fields.push_back({ method, (uint32_t)i * m_Pointer, Pointer(function) });
+	}
+	auto id = Made("vtbl:" + name, vtable);
+	m_Alignment[id] = m_Pointer;
+	return id;
+}
+
+std::unordered_map<std::string, Win32Api::NamedGuid> const& Win32Api::Guids() {
+	if (m_GuidsRead)
+		return m_Guids;
+	m_GuidsRead = true;
+	auto& md = m_Data.Md;
+	// [Guid(uint, ushort, ushort, byte x 8)]: after the prolog, the bytes as they are in memory
+	auto guidOf = [&](uint32_t token, std::string& bytes) {
+		for (auto const& attribute : md.CustomAttributes(token))
+			if (attribute.Value.size() >= 18 && md.TypeName(attribute.AttributeType).ends_with(L"GuidAttribute")) {
+				bytes.assign((char const*)attribute.Value.data() + 2, 16);
+				return bytes != std::string(16, '\0');
+			}
+		return false;
+	};
+	std::string bytes;
+	// the interfaces first (an IID names its interface), then the classes, then the constants
+	for (int pass = 0; pass < 2; pass++)
+		for (uint32_t t = 1; t <= md.Types().size(); t++) {
+			auto kind = md.TypeKind(t);
+			if ((pass == 0) != (kind == L"interface") || (pass == 1 && kind != L"struct"))
+				continue;
+			if (guidOf((ClrTableId::TypeDef << 24) | t, bytes))
+				m_Guids.try_emplace(bytes, NamedGuid{ (pass == 0 ? "IID_" : "CLSID_") + Narrow(md.Types()[t - 1].Name), pass == 0 ? IdBit | t : 0 });
+		}
+	for (auto apis : m_Data.Types["Apis"])
+		for (auto f : md.FieldsOf(apis))
+			if (guidOf((ClrTableId::Field << 24) | f, bytes))
+				m_Guids.try_emplace(bytes, NamedGuid{ Narrow(md.Fields()[f - 1].Name) });
+	return m_Guids;
 }
 
 std::pair<uint32_t, uint32_t> Win32Api::Layout(uint32_t id, int depth) {

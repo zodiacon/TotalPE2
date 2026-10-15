@@ -3489,6 +3489,10 @@ void ProtoStoreInternal::decode(Decoder &decoder,ProtoModel *model)
   for(;;) { // This is only the input params
     uint4 subId = decoder.openElement();		// <retparam> or <param>
     if (subId == 0) break;
+    if (subId == ELEM_RETPARAM) {	// (TotalPE) The output, which encode() writes here, is not an input
+      decoder.closeElementSkipping(subId);
+      continue;
+    }
     string name;
     uint4 flags = 0;
     for(;;) {

@@ -57,7 +57,7 @@ private:
 	};
 	// what tells of a function (any number of these)
 	enum Source : uint8_t {
-		FromSymbols = 1, FromExceptions = 2, FromExports = 4, FromEntryPoint = 8, FromCalls = 16,
+		FromSymbols = 1, FromExceptions = 2, FromExports = 4, FromEntryPoint = 8, FromCalls = 16, FromLibrary = 32, FromVtables = 64,
 	};
 	struct Function {
 		uint32_t Rva;

@@ -194,6 +194,24 @@ void CMainFrame::BuildSearchIndex() {
 			index.Add({ .Kind = SearchKind::Symbol, .Name = text, .Details = L"Comment",
 				.Location = std::format(L"RVA 0x{:X}", rva), .Value = base + rva });
 
+		// the functions of static libraries (by their code)
+		for (auto const& [rva, name] : m_LibraryNames)
+			index.Add({ .Kind = SearchKind::Symbol, .Name = name, .Details = L"Function (library)",
+				.Location = std::format(L"RVA 0x{:X}", rva), .Value = base + rva });
+		// the routines of a driver
+		for (auto const& [rva, name] : m_DriverNames)
+			index.Add({ .Kind = SearchKind::Symbol, .Name = name, .Details = L"Function (driver)",
+				.Location = std::format(L"RVA 0x{:X}", rva), .Value = base + rva });
+		// the GUIDs of Windows in the data
+		for (auto const& [rva, guid] : m_Guids)
+			if (!m_SymbolGuids.contains(rva))
+				index.Add({ .Kind = SearchKind::Symbol, .Name = std::wstring(CA2W(guid.Name.c_str())), .Details = L"Data (GUID)",
+				.Location = std::format(L"RVA 0x{:X}", rva), .Value = base + rva });
+		// the vtables and the virtual functions of the classes (by their run-time type information)
+		for (auto const& [rva, name] : m_ClassNames)
+			index.Add({ .Kind = SearchKind::Symbol, .Name = name, .Details = name.find(L"::vftable") != std::wstring::npos ? L"Data (vtable)" : L"Function (virtual)",
+				.Location = std::format(L"RVA 0x{:X}", rva), .Value = base + rva });
+
 		// the functions and the data of the symbols, then the public symbols that are elsewhere
 		if (m_Symbols) {
 			std::unordered_set<uint64_t> seen;

@@ -63,6 +63,16 @@ public:
 		std::vector<std::string> Names;
 	};
 	std::optional<Constant> ConstantOf(std::string const& name);
+
+	// A GUID the metadata names: an interface's (IID_IUnknown; with the interface, the id of its type), a class's
+	// (CLSID_FileOpenDialog), a constant's (FOLDERID_Desktop); by its 16 bytes as they are in memory
+	struct NamedGuid {
+		std::string Name;
+		uint32_t Interface{ 0 };
+	};
+	std::unordered_map<std::string, NamedGuid> const& Guids();
+	// the type of a GUID (a struct of 16 bytes)
+	uint32_t GuidType();
 	// Of the names of a value, those shown (the user's choices; then some common ones: MB_ICONERROR rather than MB_ICONHAND):
 	// for all machines. The enums described are described again.
 	static void SetPreferredNames(std::vector<std::string> names);
@@ -87,6 +97,8 @@ private:
 	bool DescribeRow(uint32_t row, GhidraDecompiler::Type& type);
 	// the size and alignment of a type
 	std::pair<uint32_t, uint32_t> Layout(uint32_t id, int depth = 0);
+	// the vtable of an interface: a struct of pointers to its methods, those of its bases first ("this" first in each)
+	uint32_t Vtable(uint32_t row);
 	std::string Name(uint32_t row);
 	// the type a line refers to: the first one of the metadata in a type
 	std::string Referred(uint32_t id);
@@ -102,5 +114,7 @@ private:
 	std::unordered_map<uint32_t, uint32_t> m_Alignment;	// of the structs and unions described
 	std::set<uint32_t> m_Laying;	// the structs whose layout is being found (a struct does not hold itself)
 	std::unordered_map<std::string, uint32_t> m_ConstantTypes;	// the enum (its id) each constant is of
+	std::unordered_map<std::string, NamedGuid> m_Guids;
+	bool m_GuidsRead{ false };
 	static constexpr uint32_t MadeBit = 0x40000000;
 };

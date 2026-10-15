@@ -29,6 +29,8 @@
 #include "ClrTypesView.h"
 #include "SecuritySummaryView.h"
 #include "BookmarksView.h"
+#include "ClassesView.h"
+#include "DriverView.h"
 #include "BoundImportView.h"
 #include "GlobalPtrView.h"
 #include "DialogView.h"
@@ -430,6 +432,26 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		case TreeItemType::SecuritySummary:
 		{
 			auto view = new CSecuritySummaryView(this, m_PE);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::Driver:
+		{
+			auto view = new CDriverView(this, m_PE);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::Classes:
+		{
+			auto view = new CClassesView(this, m_PE);
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};

@@ -26,6 +26,10 @@
 #include "CompareView.h"
 #include "ItaniumDemangle.h"
 #include "ExceptionScopes.h"
+#include "LibrarySignatures.h"
+#include <FlowGraph.h>
+#include <filesystem>
+#include <set>
 #include <DbgHelp.h>
 #include <thread>
 #include <WTLHelper.h>
@@ -124,6 +128,8 @@ void CMainFrame::UpdateUI() {
 	m_SaveUIPage = (HWND)-1;	// Save and Export List: from the active view, on the next idle
 	UIEnable(ID_PE_STRINGS, fi != nullptr || m_Elf);
 	UIEnable(ID_PE_FUNCTIONS, fi && ArchOf(m_PE));
+	UIEnable(ID_PE_CLASSES, fi && !m_Classes.empty());
+	UIEnable(ID_PE_DRIVER, fi && IsDriver(m_PE));
 	UIEnable(ID_PE_CLRTYPES, fi && FindTreeItem(TreeItemType::ClrTypes) != nullptr);
 	UIEnable(ID_PE_SECURITYSUMMARY, fi != nullptr);
 	// (of no file: whenever the metadata is there)
@@ -685,6 +691,10 @@ std::wstring CMainFrame::ResolveRva(DWORD rva) const {
 	if (auto it = renamed.find(rva); it != renamed.end())
 		return std::wstring(CA2W(it->second.c_str()));
 
+	// a GUID of Windows (IID_IUnknown, CLSID_FileOpenDialog), but for those the symbols name
+	if (auto guid = m_Guids.find(rva); guid != m_Guids.end() && !m_SymbolGuids.contains(rva))
+		return std::wstring(CA2W(guid->second.Name.c_str()));
+
 	if (m_Symbols) {
 		long disp = 0;
 		auto sym = m_Symbols.GetSymbolByRVA(rva, SymbolTag::Null, &disp);
@@ -702,7 +712,331 @@ std::wstring CMainFrame::ResolveRva(DWORD rva) const {
 	}
 
 	auto it = std::lower_bound(m_NamedRvas.begin(), m_NamedRvas.end(), rva, [](auto& p, DWORD v) { return p.first < v; });
-	return it != m_NamedRvas.end() && it->first == rva ? it->second : std::wstring();
+	if (it != m_NamedRvas.end() && it->first == rva)
+		return it->second;
+	// a function of a static library
+	if (auto library = m_LibraryNames.find(rva); library != m_LibraryNames.end())
+		return library->second;
+	// a vtable, a virtual function (of the run-time type information)
+	if (auto rtti = m_ClassNames.find(rva); rtti != m_ClassNames.end())
+		return rtti->second;
+	// a routine of a driver (DriverUnload, DispatchDeviceControl)
+	auto driver = m_DriverNames.find(rva);
+	return driver != m_DriverNames.end() ? driver->second : std::wstring();
+}
+
+void CMainFrame::AnalyzeDriverAsync() {
+	std::wstring reason;
+	if (!Decompiler(reason)) {
+		m_Driver.State = DriverInfo::States::Failed;
+		m_Driver.Error = std::string(CW2A(reason.c_str()));
+		return;
+	}
+	m_Driver.State = DriverInfo::States::Analyzing;
+	auto const& nt = *m_PE.GetNTHeader();
+	bool pe64 = m_PE.GetFileInfo()->IsPE64;
+	DWORD entry = pe64 ? nt.NTHdr64.OptionalHeader.AddressOfEntryPoint : nt.NTHdr32.OptionalHeader.AddressOfEntryPoint;
+	uint64_t size = pe64 ? nt.NTHdr64.OptionalHeader.SizeOfImage : nt.NTHdr32.OptionalHeader.SizeOfImage;
+	// a minifilter: the functions that call FltRegisterFilter (through the import, or a thunk of it: a jmp to it), and the
+	// constant registrations of the data
+	std::vector<uint64_t> registers, registrations, operations;
+	if (auto slot = ImportSlot("FltRegisterFilter")) {
+		auto add = [&](uint64_t from) {
+			auto start = FindFunctionStart(m_PE, m_Xrefs, from);
+			if (start && std::ranges::find(registers, start) == registers.end() && registers.size() < 8)
+				registers.push_back(start);
+		};
+		for (auto const& ref : m_Xrefs.To(slot)) {
+			uint8_t code[2]{};
+			if (ReadImage(ref.From, code, 2) && code[0] == 0xFF && code[1] == 0x25)
+				for (auto const& call : m_Xrefs.To(ref.From))
+					add(call.From);
+			else
+				add(ref.From);
+		}
+		auto read = [this](uint64_t va, uint8_t* buffer, size_t size) { return ReadImage(va, buffer, size); };
+		registrations = FindFilterRegistrations(m_PE, read);
+		operations = FindFilterOperations(m_PE, read);
+	}
+	DecompilerThread::Get().Post([session = m_Decompiler, hWnd = m_hWnd, generation = m_DriverGeneration, base = m_PE.GetImageBase(),
+		size, entry, pe64, registers, registrations, operations] {
+		auto info = std::make_unique<DriverInfo>();
+		std::string error;
+		auto read = [session](uint64_t va, uint8_t* buffer, size_t size) {
+			std::shared_lock lock(session->Image);
+			return !session->Closed && session->Frame->ReadImage(va, buffer, size);
+		};
+		if (auto decompiler = session->Open(error))
+			AnalyzeDriver(*decompiler, base, size, entry, pe64, *info, registers, registrations, read, operations);
+		else {
+			info->State = DriverInfo::States::Failed;
+			info->Error = error;
+		}
+		if (!session->Closed && ::PostMessage(hWnd, WM_DRIVER_ANALYZED, generation, (LPARAM)info.get()))
+			info.release();
+		});
+}
+
+LRESULT CMainFrame::OnDriverAnalyzed(UINT, WPARAM wParam, LPARAM lParam, BOOL&) {
+	std::unique_ptr<DriverInfo> info(reinterpret_cast<DriverInfo*>(lParam));
+	if ((uint32_t)wParam != m_DriverGeneration)
+		return 0;	// of a file that was closed
+	m_Driver = std::move(*info);
+	// a driver of the framework (KMDF): its requests go through the framework's routines
+	if (auto imports = m_PE.GetImport())
+		for (auto const& mod : *imports)
+			for (auto const& fn : mod.ImportFunc)
+				m_Driver.Kmdf |= fn.FuncName == "WdfVersionBind", m_Driver.Minifilter |= fn.FuncName == "FltRegisterFilter";
+	// the names of its routines (those of the symbols are theirs)
+	m_DriverNames.clear();
+	auto const& nt = *m_PE.GetNTHeader();
+	DWORD entry = m_PE.GetFileInfo()->IsPE64 ? nt.NTHdr64.OptionalHeader.AddressOfEntryPoint : nt.NTHdr32.OptionalHeader.AddressOfEntryPoint;
+	if (m_Driver.DriverEntry && m_Driver.DriverEntry != entry)
+		m_DriverNames[m_Driver.DriverEntry] = L"DriverEntry";
+	if (m_Driver.Unload)
+		m_DriverNames[m_Driver.Unload] = L"DriverUnload";
+	if (m_Driver.StartIo)
+		m_DriverNames[m_Driver.StartIo] = L"DriverStartIo";
+	if (m_Driver.Default)
+		m_DriverNames[m_Driver.Default] = L"DispatchDefault";
+	std::map<DWORD, std::vector<int>> dispatch;
+	for (int i = 0; i < DriverInfo::MajorCount; i++)
+		if (m_Driver.Major[i] && m_Driver.Major[i] != m_Driver.Default)
+			dispatch[m_Driver.Major[i]].push_back(i);
+	for (auto const& [rva, majors] : dispatch)
+		m_DriverNames.try_emplace(rva, DispatchName(majors));
+	// a minifilter's callbacks: "InstanceSetup", "PreCreate" (one of several operations: "PreOperation")
+	std::map<DWORD, std::vector<DriverInfo::Callback const*>> callbacks;
+	for (auto const& c : m_Driver.Callbacks)
+		callbacks[c.Rva].push_back(&c);
+	for (auto const& [rva, list] : callbacks) {
+		std::wstring name;
+		if (list.size() == 1)
+			name = list[0]->Operation < 0 ? std::wstring(list[0]->What).substr(0, list[0]->What.size() - 8) :	// (without "Callback")
+				FilterCallbackName(list[0]->Operation, list[0]->Post);
+		else if (std::ranges::all_of(list, [&](auto c) { return c->Operation >= 0 && c->Post == list[0]->Post; }))
+			name = list[0]->Post ? L"PostOperation" : L"PreOperation";
+		else
+			name = L"FilterCallback";
+		m_DriverNames.try_emplace(rva, name);
+	}
+	if (!m_DriverNames.empty()) {
+		SearchTargetChanged();
+		// (the decompiler named the functions it decompiled to find them: it is made again, with these names)
+		CloseDecompiler(false);
+	}
+	for (auto const& [type, view] : m_Views)
+		view->AnnotationsChanged();
+	return 0;
+}
+
+// The GUIDs in the data (aligned to 4 bytes: a GUID's alignment) that the metadata names
+bool CMainFrame::FindGuids() {
+	m_Guids.clear();
+	m_SymbolGuids.clear();
+	auto api = m_PE ? Win32ForFile() : nullptr;
+	if (!api)
+		return false;
+	auto const& guids = api->Guids();
+	for (auto const& s : *m_PE.GetSecHeaders()) {
+		auto const& h = s.SecHdr;
+		if ((h.Characteristics & (IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_CNT_CODE)) || !(h.Characteristics & IMAGE_SCN_CNT_INITIALIZED_DATA))
+			continue;
+		auto size = std::min(h.Misc.VirtualSize ? h.Misc.VirtualSize : h.SizeOfRawData, h.SizeOfRawData);
+		auto offset = m_PE.GetOffsetFromRVA(h.VirtualAddress);
+		if (!offset || offset + size > m_PE.GetFileSize())
+			continue;
+		auto data = m_PE.GetSpan((uint32_t)offset, size);
+		auto bytes = (char const*)data.data();
+		for (size_t at = 0; at + 16 <= data.size(); at += 4) {
+			if (*(uint32_t const*)(bytes + at) == 0)
+				continue;
+			auto it = guids.find(std::string(bytes + at, 16));
+			if (it == guids.end())
+				continue;
+			// (one the symbols name has their name, but for a name the compiler made up: "_GUID_d57c7288_d4ad_...")
+			auto rva = h.VirtualAddress + (DWORD)at;
+			long disp = 0;
+			if (m_Symbols)
+				if (auto sym = m_Symbols.GetSymbolByRVA(rva, SymbolTag::Null, &disp); sym && disp == 0 && !sym.Name().empty() &&
+					!sym.Name().starts_with(L"_GUID_"))
+					m_SymbolGuids.insert(rva);
+			m_Guids.emplace(rva, it->second);
+		}
+	}
+	return !m_Guids.empty();
+}
+
+// A vtable is "Class::vftable" (one of a base, not at the start of the object: "Class::vftable_N", N its offset); a virtual
+// function, of the class with the fewest bases whose vtable has it (that declares it), "Class::vfunc_N" (N its slot; of a
+// vtable not at the start, "Class::vfunc_N_M", M its offset)
+void CMainFrame::FindClasses() {
+	m_Classes = ReadRtti(m_PE);
+	m_ClassNames.clear();
+	m_VirtualOf.clear();
+	struct Slot {
+		size_t Bases;
+		std::string Name;
+	};
+	std::map<uint32_t, Slot> functions;
+	for (auto const& c : m_Classes)
+		for (auto const& vtable : c.Vtables) {
+			m_ClassNames[vtable.Rva] = std::wstring(CA2W((c.Name + (vtable.Offset ? std::format("::vftable_{:X}", vtable.Offset) : "::vftable")).c_str()));
+			for (size_t i = 0; i < vtable.Functions.size(); i++) {
+				auto [it, added] = functions.try_emplace(vtable.Functions[i], Slot{ c.Bases.size(), {} });
+				if (added || c.Bases.size() < it->second.Bases) {
+					it->second = { c.Bases.size(), vtable.Offset ? std::format("{}::vfunc_{}_{:X}", c.Name, i, vtable.Offset) :
+						std::format("{}::vfunc_{}", c.Name, i) };
+					m_VirtualOf[vtable.Functions[i]] = c.Name;
+				}
+			}
+		}
+	for (auto const& [rva, slot] : functions)
+		m_ClassNames.try_emplace(rva, std::wstring(CA2W(slot.Name.c_str())));
+}
+
+namespace {
+	// where the user's signatures are
+	std::wstring UserSignaturesFolder() {
+		WCHAR user[MAX_PATH];
+		::ExpandEnvironmentStrings(L"%LOCALAPPDATA%\\TotalPE\\Signatures", user, _countof(user));
+		return user;
+	}
+
+	// The signatures of library functions: TotalPE's (in "Signatures" next to it) and the user's (in the user's folder of
+	// TotalPE), read once (again when the user adds some)
+	LibrarySignatures const& KnownSignatures(bool reload = false) {
+		static std::unique_ptr<LibrarySignatures> signatures;
+		if (!signatures || reload) {
+			signatures = std::make_unique<LibrarySignatures>();
+			auto& all = *signatures;
+			WCHAR exe[MAX_PATH];
+			::GetModuleFileName(nullptr, exe, _countof(exe));
+			for (auto folder : { std::filesystem::path(exe).parent_path() / L"Signatures", std::filesystem::path(UserSignaturesFolder()) }) {
+				std::error_code ec;
+				for (auto const& file : std::filesystem::directory_iterator(folder, ec))
+					if (file.path().extension() == L".sig")
+						all.Load(file.path().wstring());
+			}
+			all.Finish();
+		}
+		return *signatures;
+	}
+}
+
+// Signatures of the functions of static libraries the user has (.lib, .obj): in the user's folder of signatures, in a file
+// named after the first; then the functions of the file are found again
+LRESULT CMainFrame::OnAddSignatures(WORD, WORD, HWND, BOOL&) {
+	COMDLG_FILTERSPEC filters[] = { { L"Static libraries and objects", L"*.lib;*.obj" }, { L"All files", L"*.*" } };
+	SuspendResumeHook sr;
+	CShellFileOpenDialog dlg(nullptr, FOS_ALLOWMULTISELECT | FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST, nullptr, filters, _countof(filters));
+	if (dlg.DoModal(m_hWnd) != IDOK)
+		return 0;
+	CComPtr<IShellItemArray> items;
+	if (FAILED(dlg.GetPtr()->GetResults(&items)) || !items)
+		return 0;
+	DWORD count = 0;
+	items->GetCount(&count);
+	LibrarySignatures signatures;
+	std::wstring first, failed;
+	size_t added = 0;
+	{
+		CWaitCursor wait;
+		for (DWORD i = 0; i < count; i++) {
+			CComPtr<IShellItem> item;
+			wil::unique_cotaskmem_string path;
+			if (FAILED(items->GetItemAt(i, &item)) || FAILED(item->GetDisplayName(SIGDN_FILESYSPATH, &path)))
+				continue;
+			if (first.empty())
+				first = path.get();
+			LibArchive lib;
+			CoffObject object;
+			if (lib.Open(path.get()))
+				added += signatures.AddLibrary(lib);
+			else if (object.Open(path.get()))
+				added += signatures.AddObject(object);
+			else
+				failed += std::wstring(L"\n") + path.get();
+		}
+		signatures.Finish();
+	}
+	if (!added) {
+		AtlMessageBox(m_hWnd, (L"No functions were found in these files." + failed).c_str(), IDR_MAINFRAME, MB_ICONWARNING);
+		return 0;
+	}
+	auto folder = std::filesystem::path(UserSignaturesFolder());
+	std::error_code ec;
+	std::filesystem::create_directories(folder, ec);
+	auto file = (folder / std::filesystem::path(first).stem()).wstring() + L".sig";
+	if (!signatures.Save(file)) {
+		AtlMessageBox(m_hWnd, std::format(L"The signatures could not be saved to {}", file).c_str(), IDR_MAINFRAME, MB_ICONERROR);
+		return 0;
+	}
+	KnownSignatures(true);
+	size_t named = 0;
+	if (m_PE) {
+		auto before = m_LibraryNames.size();
+		FindLibraryFunctions();
+		named = m_LibraryNames.size() - before;
+		SearchTargetChanged();
+		for (auto const& [type, view] : m_Views)
+			view->AnnotationsChanged();
+	}
+	AtlMessageBox(m_hWnd, std::format(L"{} functions were added to {}.{}{}", signatures.Size(), file,
+		m_PE ? std::format(L"\n{} more functions of this file are named.", named) : std::wstring(),
+		failed.empty() ? std::wstring() : L"\n\nNot static libraries or objects:" + failed).c_str(), IDR_MAINFRAME, MB_ICONINFORMATION);
+	return 0;
+}
+
+// The functions of static libraries (the C runtime, the STL...) by their code, where functions start: those of the exception
+// data, the exports and the entry point, and the targets of calls (once the cross-references are there: x86 code has no
+// exception data, a leaf function has none); what one of them calls is named too
+bool CMainFrame::FindLibraryFunctions() {
+	if (!m_PE)
+		return false;
+	auto const& signatures = KnownSignatures();
+	if (!signatures.Size())
+		return false;
+	auto base = m_PE.GetImageBase();
+	auto machine = m_PE.GetNTHeader()->NTHdr32.FileHeader.Machine;
+	std::set<uint32_t> starts;
+	if (auto exceptions = m_PE.GetExceptions())
+		for (auto const& e : *exceptions)
+			starts.insert(e.RuntimeFuncEntry.BeginAddress);
+	if (auto exp = m_PE.GetExport())
+		for (auto const& f : exp->Funcs)
+			if (f.FuncRVA && f.ForwarderName.empty())
+				starts.insert(f.FuncRVA);
+	auto entry = m_PE.GetFileInfo()->IsPE64 ? m_PE.GetNTHeader()->NTHdr64.OptionalHeader.AddressOfEntryPoint : m_PE.GetNTHeader()->NTHdr32.OptionalHeader.AddressOfEntryPoint;
+	if (entry)
+		starts.insert(entry);
+	if (m_XrefsReady)
+		for (auto va : m_Xrefs.Targets())
+			if (va >= base && va - base <= 0xFFFFFFFFULL && m_Xrefs.CallCount(va))
+				starts.insert((uint32_t)(va - base));
+	auto name = [](std::string const& decorated) {
+		auto undecorated = PEStrings::UndecorateName(decorated.c_str());
+		return std::wstring(CA2W((undecorated.empty() ? decorated : undecorated).c_str()));
+	};
+	auto fileSize = m_PE.GetFileSize();
+	size_t before = m_LibraryNames.size();
+	for (auto rva : starts) {
+		if (m_LibraryNames.contains(rva))
+			continue;
+		auto offset = m_PE.GetOffsetFromRVA(rva);
+		if (!offset || offset >= fileSize)
+			continue;
+		auto span = m_PE.GetSpan((uint32_t)offset, (uint32_t)std::min<uint64_t>(0x10000, fileSize - offset));
+		std::span<const uint8_t> code((uint8_t const*)span.data(), span.size());
+		auto found = signatures.Find(machine, code);
+		if (!found)
+			continue;
+		m_LibraryNames[rva] = name(found->Name);
+		for (auto const& [target, called] : LibrarySignatures::CallsOf(*found, code, base + rva))
+			if (target >= base && target - base <= 0xFFFFFFFFULL && !called.starts_with("__imp_"))
+				m_LibraryNames.try_emplace((DWORD)(target - base), name(called));
+	}
+	return m_LibraryNames.size() > before;
 }
 
 std::wstring CMainFrame::ResolveVa(ULONGLONG va) const {
@@ -818,6 +1152,15 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	m_Symbols.Close();
 	LoadAnnotations(path);
 	BuildNamedRvas();
+	m_LibraryNames.clear();
+	FindLibraryFunctions();
+	FindClasses();
+	// (those of the file before: its GUIDs, what its driver sets up, and its analysis under way, whose result is dropped)
+	m_Guids.clear();
+	m_SymbolGuids.clear();
+	m_Driver = {};
+	m_DriverNames.clear();
+	++m_DriverGeneration;
 	m_Anomalies = FindAnomalies(m_PE);
 	CancelVirusTotal();
 	m_Overlay = FindOverlay(m_PE);
@@ -935,6 +1278,13 @@ void CMainFrame::ResetFileState() {
 	m_hResVersion = m_hResManifest = nullptr;
 	m_FlatResources.clear();
 	m_NamedRvas.clear();
+	m_LibraryNames.clear();
+	m_Classes.clear();
+	m_ClassNames.clear();
+	m_Guids.clear();
+	m_Driver = {};
+	m_DriverNames.clear();
+	++m_DriverGeneration;
 	m_GuardTables.clear();
 	m_Xrefs.Clear();
 	ResetNavigation();
@@ -1372,6 +1722,10 @@ void CMainFrame::BuildTree(int iconSize) {
 	InsertTreeItem(m_Tree, L"Strings", GetTreeIcon(IDI_TEXT), TreeItemType::Strings, root);
 	if (ArchOf(m_PE))
 		InsertTreeItem(m_Tree, L"Functions", GetTreeIcon(IDI_FUNCTION), TreeItemType::Functions, root);
+	if (!m_Classes.empty())
+		InsertTreeItem(m_Tree, std::format(L"Classes ({})", m_Classes.size()).c_str(), GetTreeIcon(IDI_CLASS), TreeItemType::Classes, root);
+	if (IsDriver(m_PE))
+		InsertTreeItem(m_Tree, L"Driver", GetTreeIcon(IDI_SYSTEM), TreeItemType::Driver, root);
 
 	if (m_PE.GetFileInfo()->HasResource) {
 		auto resources = InsertTreeItem(m_Tree, L"Resources", GetTreeIcon(IDI_RESOURCE), TreeItemType::Resources, root);
@@ -1703,12 +2057,12 @@ bool CMainFrame::BuildTreeImageList(int iconSize) {
 		IDI_THREAD, IDI_RICH_HEADER, IDI_MSDOS, IDI_FILE_HEADER, IDI_COMPONENT,
 		IDI_FUNCTION, IDI_FUNC_FORWARD, IDI_INTERFACE, IDI_DLL_IMPORT, IDI_FUNCTION2, IDI_SYMBOLS,
 		IDI_TYPE, IDI_ENUM, IDI_BITFIELD, IDI_FIELD, IDI_ARRAY, IDI_UNION, IDI_BINARY,
-		IDI_DATA, IDI_FLOW, IDI_LOOK, IDI_CLASS, IDI_PROPERTY, IDI_EVENT, IDI_BOOKMARK,
+		IDI_DATA, IDI_FLOW, IDI_LOOK, IDI_CLASS, IDI_PROPERTY, IDI_EVENT, IDI_BOOKMARK, IDI_SYSTEM,
 	};
 
 	bool insert = s_ImageIndices.empty();
 	for (auto icon : icons) {
-		int image = m_TreeImages.AddIcon(AtlLoadIconImage(icon, 0, iconSize, iconSize));
+		int image = m_TreeImages.AddIcon(IconHelper::LoadCached(icon, iconSize));
 		if (insert)
 			s_ImageIndices.insert({ icon, image });
 	}
@@ -1828,6 +2182,18 @@ LRESULT CMainFrame::OnViewStrings(WORD, WORD, HWND, BOOL&) {
 
 LRESULT CMainFrame::OnViewFunctions(WORD, WORD, HWND, BOOL&) {
 	if (auto hItem = FindTreeItem(TreeItemType::Functions))
+		ShowView(hItem);
+	return 0;
+}
+
+LRESULT CMainFrame::OnViewDriver(WORD, WORD, HWND, BOOL&) {
+	if (auto hItem = FindTreeItem(TreeItemType::Driver))
+		ShowView(hItem);
+	return 0;
+}
+
+LRESULT CMainFrame::OnViewClasses(WORD, WORD, HWND, BOOL&) {
+	if (auto hItem = FindTreeItem(TreeItemType::Classes))
 		ShowView(hItem);
 	return 0;
 }
@@ -2801,6 +3167,9 @@ std::shared_ptr<CMainFrame::DecompilerSession> CMainFrame::Decompiler(std::wstri
 		uint64_t iat = dirs[IMAGE_DIRECTORY_ENTRY_IAT].VirtualAddress, iatEnd = iat + dirs[IMAGE_DIRECTORY_ENTRY_IAT].Size;
 		for (auto const& sec : *m_PE.GetSecHeaders()) {
 			auto const& h = sec.SecHdr;
+			char name[IMAGE_SIZEOF_SHORT_NAME + 1]{};
+			memcpy(name, h.Name, IMAGE_SIZEOF_SHORT_NAME);
+			session->Sections.push_back({ base + h.VirtualAddress, std::max(h.Misc.VirtualSize, h.SizeOfRawData), name });
 			if (h.Characteristics & IMAGE_SCN_MEM_WRITE)
 				continue;
 			uint64_t start = h.VirtualAddress, end = start + std::max(h.Misc.VirtualSize, h.SizeOfRawData);
@@ -2826,6 +3195,46 @@ std::shared_ptr<CMainFrame::DecompilerSession> CMainFrame::Decompiler(std::wstri
 			auto rva = sym.RelativeVirtualAddress();
 			if (type && rva)
 				session->Globals.push_back({ base + rva, Narrow(sym.Name()), type.Id() });
+		}
+	}
+	// without them, the classes of the run-time type information: their vtables (the symbols have them as public symbols),
+	// the structures of them and of their virtual functions (by their names: "vfunc_3", "Draw" of a library's), the class
+	// a virtual function is of
+	else {
+		for (auto const& c : m_Classes) {
+			for (auto const& vtable : c.Vtables)
+				session->Globals.push_back({ base + vtable.Rva, Narrow(m_ClassNames[vtable.Rva]), 0 });
+			std::vector<std::string> functions;
+			for (size_t i = 0; i < c.Vtables[0].Functions.size(); i++) {
+				auto name = Narrow(ResolveRva(c.Vtables[0].Functions[i]));
+				auto last = name.rfind("::");
+				name = last == std::string::npos ? name : name.substr(last + 2);
+				functions.push_back(name.starts_with("vfunc_") ? std::format("vfunc_{}", i) : name);
+			}
+			if (c.Vtables[0].Offset == 0)
+				session->Classes.emplace_back(c.Name, std::move(functions));
+		}
+		for (auto const& [rva, name] : m_VirtualOf)
+			session->VirtualOf[base + rva] = name;
+	}
+	// a kernel driver: what sets up its DRIVER_OBJECT, its routines
+	if (m_Driver.State == DriverInfo::States::Done) {
+		auto const& nt = *m_PE.GetNTHeader();
+		DWORD entry = m_PE.GetFileInfo()->IsPE64 ? nt.NTHdr64.OptionalHeader.AddressOfEntryPoint : nt.NTHdr32.OptionalHeader.AddressOfEntryPoint;
+		session->DriverEntries.push_back(base + entry);
+		if (m_Driver.DriverEntry && m_Driver.DriverEntry != entry)
+			session->DriverEntries.push_back(base + m_Driver.DriverEntry);
+		for (auto const& [rva, name] : m_DriverNames)
+			session->DriverRoutines.emplace_back(base + rva, Narrow(ResolveRva(rva)));
+	}
+	// the GUIDs of Windows in the data, as GUIDs
+	if (session->Win32 && !m_Guids.empty()) {
+		session->Guids = true;
+		auto guid = session->Win32->GuidType();
+		for (auto const& [rva, g] : m_Guids) {
+			session->Globals.push_back({ base + rva, m_SymbolGuids.contains(rva) ? Narrow(ResolveRva(rva)) : g.Name, guid });
+			if (g.Interface && g.Name.starts_with("IID_"))
+				session->InterfaceGuids.emplace_back(base + rva, g.Name.substr(4));
 		}
 	}
 	m_Decompiler = std::move(session);
@@ -2862,6 +3271,8 @@ GhidraDecompiler* CMainFrame::DecompilerSession::Open(std::string& error) {
 		decompiler->AddFunction(va, name);
 	for (auto const& [va, size] : ReadOnly)
 		decompiler->AddReadOnly(va, size);
+	for (auto const& s : Sections)
+		decompiler->AddSection(s.Address, s.Size, s.Name);
 	if (ExternalArea) {
 		decompiler->SetExternalArea(ExternalArea);
 		for (size_t i = 0; i < Imports.size(); i++)
@@ -2917,10 +3328,20 @@ GhidraDecompiler* CMainFrame::DecompilerSession::Open(std::string& error) {
 		Ask([&] { known = !Stale && Frame->FunctionLocals(va, instructions, locals); });
 		return known;
 		});
-	if (Symbols) {
-		for (auto const& g : Globals)
-			decompiler->AddGlobal(g.Address, g.Name, g.Type);
-	}
+	for (auto const& g : Globals)
+		decompiler->AddGlobal(g.Address, g.Name, g.Type);
+	for (auto const& [name, functions] : Classes)
+		decompiler->AddClass(name, functions);
+	for (auto const& [address, type] : InterfaceGuids)
+		decompiler->AddInterfaceGuid(address, type);
+	if (!VirtualOf.empty())
+		decompiler->SetClassSource([this](uint64_t va, std::string& name) {
+			auto it = VirtualOf.find(va);
+			if (it == VirtualOf.end())
+				return false;
+			name = it->second;
+			return true;
+			});
 	// a type the user names: of the symbols, or of Windows
 	decompiler->SetTypeNameSource([this](std::string const& name) {
 		uint32_t id = 0;
@@ -2959,6 +3380,10 @@ GhidraDecompiler* CMainFrame::DecompilerSession::Open(std::string& error) {
 				comments.emplace_back(base + rva, std::string(CW2A(text.c_str(), CP_UTF8)));
 			});
 		});
+	// (after the source of the types' names: UNICODE_STRING)
+	decompiler->AddDriverObject(DriverEntries);
+	for (auto const& [address, name] : DriverRoutines)
+		decompiler->AddFunction(address, name);
 	Decompiler = std::move(decompiler);
 	return Decompiler.get();
 }
@@ -3582,9 +4007,9 @@ void CMainFrame::PreferConstantName(std::string const& name) {
 }
 
 // By the entry of its import address table (or of the delay loaded one's), which the calls go through
-bool CMainFrame::ShowImportReferences(std::string const& name) {
+uint64_t CMainFrame::ImportSlot(std::string const& name) const {
 	if (!m_PE || name.empty())
-		return false;
+		return 0;
 	auto base = m_PE.GetImageBase();
 	uint64_t size = m_PE.GetFileInfo()->IsPE64 ? 8 : 4, slot = 0;
 	if (auto list = m_PE.GetImport())
@@ -3602,6 +4027,11 @@ bool CMainFrame::ShowImportReferences(std::string const& name) {
 				if (mod.DelayImpFunc[i].FuncName == name)
 					slot = base + desc.rvaIAT - rebase + i * size;
 		}
+	return slot;
+}
+
+bool CMainFrame::ShowImportReferences(std::string const& name) {
+	auto slot = ImportSlot(name);
 	if (!slot)
 		return false;
 	// (asked from the window of the Windows API: they are shown in this one)
@@ -4432,6 +4862,16 @@ LRESULT CMainFrame::OnXrefsBuilt(UINT, WPARAM wParam, LPARAM lParam, BOOL&) {
 		m_Xrefs = std::move(*map);
 	m_XrefsReady = true;
 	SetStatusText(XrefsPane, m_Xrefs.Built() ? std::format(L"{} cross-references", m_Xrefs.Count()).c_str() : L"");
+	// (the targets of calls: functions of libraries there too); the GUIDs of Windows in the data (the metadata is read now,
+	// not when the file is opened); a decompiler made before them is made again, with them
+	bool guids = FindGuids();
+	if (FindLibraryFunctions() || guids)
+		SearchTargetChanged();
+	if (guids && m_Decompiler && !m_Decompiler->Guids)
+		CloseDecompiler(false);
+	// a driver's routines: by the decompiler (after the names above)
+	if (m_Driver.State == DriverInfo::States::None && IsDriver(m_PE))
+		AnalyzeDriverAsync();
 	for (auto const& [type, view] : m_Views)
 		view->XrefsChanged();
 	auto actions = std::move(m_AfterXrefs);

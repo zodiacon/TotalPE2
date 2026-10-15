@@ -252,6 +252,21 @@ struct GhidraDecompiler::Impl {
 	};
 	std::unordered_map<uint64_t, std::vector<RegisterLocal>> RegisterLocals;
 	std::unordered_set<uint64_t> RegisterTyped;		// the functions whose variables in registers were given their types
+	// the classes (AddClass), by name; the functions whose "this" was given its class
+	std::unordered_map<std::string, Datatype*> Classes;
+	ClassSource ClassOf;
+	std::unordered_set<uint64_t> ThisTyped;
+	// the sections, by their ends: their starts and the names of their variables ("data")
+	std::map<uint64_t, std::pair<uint64_t, std::string>> Sections;
+	// "data_140005000" of "Ram0000000140005000" (empty if it is in no section)
+	std::string SectionName(std::string const& ram) const;
+	// functions whose first parameter is of a type, by address: the type (pointed to) and the parameter's name
+	std::unordered_map<uint64_t, std::pair<Datatype*, std::string>> FirstParameters;
+	// the IIDs (AddInterfaceGuid), by address; the functions whose variables were given their interfaces
+	std::unordered_map<uint64_t, std::string> Interfaces;
+	std::unordered_set<uint64_t> InterfaceTyped;
+	// the variables on the stack an interface is put in (by their keys, "stack:N"): the interfaces' types
+	std::map<std::string, std::string> InterfaceVariables(Funcdata* fd);
 	std::unordered_map<uint64_t, std::unordered_set<Symbol*>> StackLocals;	// the symbols of those on the stack, by function
 	std::unordered_map<uint64_t, std::vector<std::string>> SmallLocals;		// the names of those that are small (Local::Small)
 	// What the user made of them (by function, by their names in the symbols: "pdb:" and the name is their key, which the
@@ -886,6 +901,9 @@ void GhidraDecompiler::Impl::ApplyFrame(Funcdata* fd, std::vector<FrameVariable>
 // stack pointer, a prologue that is called...): true if it was not replaced before
 bool GhidraDecompiler::Impl::ApplyFixup(Funcdata* fd) {
 	auto it = Fixups.find(fd->getName());
+	// (a thunk of one, of the linker's: "_guard_dispatch_icall$thunk$10345483385596137414")
+	if (auto thunk = fd->getName().find("$thunk$"); it == Fixups.end() && thunk != std::string::npos)
+		it = Fixups.find(fd->getName().substr(0, thunk));
 	if (it == Fixups.end() || fd->getFuncProto().isInline())
 		return false;
 	auto id = Arch->pcodeinjectlib->getPayloadId(InjectPayload::CALLFIXUP_TYPE, it->second);
@@ -1756,6 +1774,30 @@ void GhidraDecompiler::AddFunction(uint64_t address, std::string const& name) {
 	}
 }
 
+void GhidraDecompiler::AddSection(uint64_t address, uint64_t size, std::string const& name) {
+	// a C identifier of its name: ".data" -> data, ".CRT$XCU" -> CRT_XCU
+	std::string id;
+	for (auto c : name)
+		if (c != '.' || !id.empty())
+			id += isalnum((unsigned char)c) || c == '_' ? c : '_';
+	if (id.empty() || isdigit((unsigned char)id[0]))
+		id = "section" + id;
+	if (size)
+		m_Impl->Sections[address + size] = { address, id };
+}
+
+std::string GhidraDecompiler::Impl::SectionName(std::string const& ram) const {
+	if (ram.size() <= 3 || ram.compare(0, 3, "Ram") != 0)
+		return {};
+	auto address = std::stoull(ram.substr(3), nullptr, 16);
+	auto it = Sections.upper_bound(address);
+	if (it == Sections.end() || address < it->second.first)
+		return {};
+	std::ostringstream text;
+	text << it->second.second << '_' << std::hex << std::uppercase << address;
+	return text.str();
+}
+
 void GhidraDecompiler::AddReadOnly(uint64_t address, uint64_t size) {
 	auto arch = m_Impl->Arch.get();
 	if (!arch || size == 0)
@@ -1816,6 +1858,375 @@ void GhidraDecompiler::SetChangeSource(ChangeSource source) {
 
 void GhidraDecompiler::SetCommentSource(CommentSource source) {
 	m_Impl->Comments = std::move(source);
+}
+
+void GhidraDecompiler::AddClass(std::string const& name, std::vector<std::string> const& virtualFunctions) {
+	auto arch = m_Impl->Arch.get();
+	if (!arch || name.empty() || m_Impl->Classes.count(name))
+		return;
+	try {
+		auto types = arch->types;
+		auto space = arch->getDefaultDataSpace();
+		int4 pointer = space->getAddrSize();
+		if (auto existing = types->findByName(name); existing) {
+			m_Impl->Classes[name] = existing;	// (one of the symbols' types)
+			return;
+		}
+		// the vtable: a pointer to code for each virtual function (names of their own: a C identifier each, once)
+		auto code = types->getTypePointer(pointer, types->getTypeCode(), space->getWordSize());
+		std::vector<Impl::Member> slots;
+		std::unordered_set<std::string> names;
+		for (size_t i = 0; i < virtualFunctions.size(); i++) {
+			auto field = virtualFunctions[i];
+			for (auto& c : field)
+				if (!isalnum((unsigned char)c) && c != '_')
+					c = '_';
+			if (field.empty() || isdigit((unsigned char)field[0]) || !names.insert(field).second)
+				field = "vfunc_" + std::to_string(i);
+			names.insert(field);
+			slots.push_back({ field, (int4)(i * pointer), code });
+		}
+		auto vtable = types->getTypeStruct(name + "_vtbl");
+		if (vtable->isIncomplete() && !slots.empty())
+			m_Impl->DefineFields(vtable, "struct", (uint32_t)(slots.size() * pointer), pointer, slots);
+		// the object: its vtable, then what is not known (its fields: field_0x10...)
+		constexpr uint32_t Size = 0x400;
+		auto object = types->getTypeStruct(name);
+		if (object->isIncomplete())
+			m_Impl->DefineFields(object, "struct", Size, pointer, { { "vftable", 0, types->getTypePointer(pointer, vtable, space->getWordSize()) } });
+		m_Impl->Classes[name] = object;
+	}
+	catch (LowlevelError const&) {
+	}
+}
+
+bool GhidraDecompiler::ParameterStores(uint64_t address, int depth, std::vector<ParameterStore>& stores, std::string& error) {
+	std::set<uint64_t> seen;
+	auto one = [&](auto&& self, uint64_t at, int level) -> bool {
+		if (!seen.insert(at).second)
+			return true;
+		// (a function it calls that is not decompiled, an import, is passed over)
+		std::string code, failed;
+		if (!Decompile(at, {}, code, failed)) {
+			if (at == address)
+				error = failed;
+			return at != address;
+		}
+		auto arch = m_Impl->Arch.get();
+		auto fd = arch->symboltab->getGlobalScope()->queryFunction(Address(arch->getDefaultCodeSpace(), at));
+		if (!fd || !fd->isProcStarted())
+			return true;
+		// (a function of no parameters that calls others, a stub, passes its own on: GsDriverEntry calls DriverEntry, with the
+		// registers it was called with)
+		auto& proto = fd->getFuncProto();
+		auto first = proto.numParams() > 0 ? proto.getParam(0) : nullptr;
+		auto param = first ? fd->findVarnodeInput(first->getSize(), first->getAddress()) : nullptr;
+		if (!param) {
+			if (level > 0 && proto.numParams() == 0)
+				for (int4 c = 0; c < fd->numCalls(); c++) {
+					auto fc = fd->getCallSpecs(c);
+					if (fc->getOp() && !fc->getOp()->isDead() && fc->getOp()->code() == CPUI_CALL && !fc->getEntryAddress().isInvalid())
+						if (!self(self, fc->getEntryAddress().getOffset(), level - 1))
+							return false;
+				}
+			return true;
+		}
+		// through copies and casts
+		auto strip = [](Varnode* vn) {
+			for (int i = 0; i < 8 && vn->isWritten() && (vn->getDef()->code() == CPUI_COPY || vn->getDef()->code() == CPUI_CAST); i++)
+				vn = vn->getDef()->getIn(0);
+			return vn;
+		};
+		// the offset from the parameter a pointer is at (an index: the offset of the array)
+		auto offsetOf = [&](Varnode* vn, int64_t& offset, bool& indexed) {
+			offset = 0;
+			indexed = false;
+			for (int i = 0; i < 16; i++) {
+				vn = strip(vn);
+				if (vn == param)
+					return true;
+				if (!vn->isWritten())
+					return false;
+				auto op = vn->getDef();
+				switch (op->code()) {
+					case CPUI_INT_ADD: case CPUI_PTRSUB:
+						if (op->getIn(1)->isConstant()) {
+							offset += (int64_t)op->getIn(1)->getOffset();
+							vn = op->getIn(0);
+							continue;
+						}
+						if (op->code() == CPUI_INT_ADD && op->getIn(0)->isConstant()) {
+							offset += (int64_t)op->getIn(0)->getOffset();
+							vn = op->getIn(1);
+							continue;
+						}
+						if (op->code() == CPUI_INT_ADD) {	// base + index * size
+							indexed = true;
+							vn = op->getIn(0);
+							continue;
+						}
+						return false;
+					case CPUI_PTRADD:
+						if (op->getIn(1)->isConstant())
+							offset += (int64_t)(op->getIn(1)->getOffset() * op->getIn(2)->getOffset());
+						else
+							indexed = true;
+						vn = op->getIn(0);
+						continue;
+					default:
+						return false;
+				}
+			}
+			return false;
+		};
+		// a constant (an address: PTRSUB(0, address))
+		auto constantOf = [&](Varnode* vn, uint64_t& value) {
+			vn = strip(vn);
+			if (vn->isConstant()) {
+				value = vn->getOffset();
+				return true;
+			}
+			if (vn->isWritten() && vn->getDef()->code() == CPUI_PTRSUB && vn->getDef()->getIn(0)->isConstant() &&
+				vn->getDef()->getIn(0)->getOffset() == 0 && vn->getDef()->getIn(1)->isConstant()) {
+				value = vn->getDef()->getIn(1)->getOffset();
+				return true;
+			}
+			return false;
+		};
+		for (auto it = fd->beginOp(CPUI_STORE); it != fd->endOp(CPUI_STORE); ++it) {
+			auto op = *it;
+			if (op->isDead())
+				continue;
+			int64_t offset;
+			bool indexed;
+			uint64_t value;
+			if (offsetOf(op->getIn(1), offset, indexed) && constantOf(op->getIn(2), value))
+				stores.push_back({ offset, value, indexed, at });
+		}
+		// the functions it passes the parameter to (first)
+		std::vector<uint64_t> callees;
+		for (int4 c = 0; c < fd->numCalls(); c++) {
+			auto fc = fd->getCallSpecs(c);
+			auto op = fc->getOp();
+			if (!op || op->isDead() || op->code() != CPUI_CALL || op->numInput() < 2)
+				continue;
+			int64_t offset;
+			bool indexed;
+			if (offsetOf(op->getIn(1), offset, indexed) && offset == 0 && !indexed)
+				callees.push_back(fc->getEntryAddress().getOffset());
+		}
+		if (level > 0)
+			for (auto callee : callees)
+				if (!self(self, callee, level - 1))
+					return false;
+		return true;
+	};
+	try {
+		return one(one, address, depth);
+	}
+	catch (LowlevelError const& e) {
+		error = e.explain;
+		return false;
+	}
+}
+
+bool GhidraDecompiler::CallArguments(uint64_t function, std::string const& callee, int argument, std::vector<CallArgument>& arguments,
+	std::string& error) {
+	std::string code;
+	if (!Decompile(function, {}, code, error))
+		return false;
+	try {
+		auto arch = m_Impl->Arch.get();
+		auto fd = arch->symboltab->getGlobalScope()->queryFunction(Address(arch->getDefaultCodeSpace(), function));
+		auto stack = arch->getStackSpace();
+		if (!fd || !fd->isProcStarted() || !stack)
+			return true;
+		auto strip = [](Varnode* vn) {
+			for (int i = 0; i < 8 && vn->isWritten() && (vn->getDef()->code() == CPUI_COPY || vn->getDef()->code() == CPUI_CAST); i++)
+				vn = vn->getDef()->getIn(0);
+			return vn;
+		};
+		auto bits = stack->getAddrSize() * 8;
+		auto signedOffset = [&](uintb offset) {
+			auto value = (int64_t)offset;
+			if (bits < 64 && (value & (1LL << (bits - 1))))
+				value -= 1LL << bits;
+			return value;
+		};
+		// (a name with its scope: "FLTMGR::FltRegisterFilter")
+		auto named = [&](std::string const& name) {
+			auto last = name.rfind("::");
+			return (last == std::string::npos ? name : name.substr(last + 2)) == callee;
+		};
+		for (int4 c = 0; c < fd->numCalls(); c++) {
+			auto fc = fd->getCallSpecs(c);
+			auto op = fc->getOp();
+			if (!op || op->isDead() || op->numInput() <= argument)
+				continue;
+			auto target = fc->getFuncdata();
+			if (!named(fc->getName()) && !(target && named(target->getName())))
+				continue;
+			// what a value is: a constant (an address: PTRSUB(0, address)), or an address on the stack (of the base of the
+			// stack, as an offset from 'base')
+			auto valueOf = [&](Varnode* v, int64_t base, uint64_t& value, bool& onStack) {
+				onStack = false;
+				for (int i = 0; i < 8; i++) {
+					if (v->isConstant()) {
+						value = v->getOffset();
+						return true;
+					}
+					if (!v->isWritten())
+						return false;
+					auto d = v->getDef();
+					if (d->code() == CPUI_COPY || d->code() == CPUI_CAST) {
+						v = d->getIn(0);
+						continue;
+					}
+					if (d->numInput() != 2 || !d->getIn(1)->isConstant() || (d->code() != CPUI_PTRSUB && d->code() != CPUI_INT_ADD))
+						return false;
+					if (d->code() == CPUI_PTRSUB && d->getIn(0)->isConstant() && d->getIn(0)->getOffset() == 0) {
+						value = d->getIn(1)->getOffset();
+						return true;
+					}
+					if (d->getIn(0)->isSpacebase()) {
+						value = (uint64_t)(signedOffset(d->getIn(1)->getOffset()) - base);
+						onStack = true;
+						return true;
+					}
+					return false;
+				}
+				return false;
+			};
+			CallArgument result;
+			uint64_t value;
+			bool onStack;
+			if (!valueOf(op->getIn(argument), 0, value, onStack))
+				continue;
+			if (!onStack) {
+				result.Constant = true;
+				result.Value = value;
+			}
+			else {
+				// on the stack: the variables near it given values (the structure, and what it points to there)
+				auto base = (int64_t)value;
+				for (auto it = fd->beginLoc(stack); it != fd->endLoc(stack); ++it) {
+					auto field = *it;
+					if (!field->isWritten())
+						continue;
+					auto offset = signedOffset(field->getAddr().getOffset()) - base;
+					if (offset >= -0x1000 && offset < 0x1000 && valueOf(field, base, value, onStack))
+						result.Fields.push_back({ offset, (uint32_t)field->getSize(), value, onStack });
+				}
+			}
+			arguments.push_back(std::move(result));
+		}
+		return true;
+	}
+	catch (LowlevelError const& e) {
+		error = e.explain;
+		return false;
+	}
+}
+
+void GhidraDecompiler::AddDriverObject(std::vector<uint64_t> const& entries) {
+	auto arch = m_Impl->Arch.get();
+	if (!arch || entries.empty())
+		return;
+	try {
+		auto types = arch->types;
+		auto space = arch->getDefaultDataSpace();
+		int4 p = space->getAddrSize();
+		bool wide = p == 8;
+		auto object = types->findByName("DRIVER_OBJECT");
+		if (!object) {
+			auto pointer = types->getTypePointer(p, types->getBase(1, TYPE_UNKNOWN), space->getWordSize());
+			auto code = types->getTypePointer(p, types->getTypeCode(), space->getWordSize());
+			auto u16 = types->getBase(2, TYPE_INT), u32 = types->getBase(4, TYPE_UINT);
+			std::string error;
+			auto name = m_Impl->ParseType("UNICODE_STRING", error);
+			if (!name || name->getSize() != 2 * p)
+				name = types->getTypeArray(2 * p, types->getBase(1, TYPE_UNKNOWN));
+			auto off = [&](int4 x64, int4 x86) { return wide ? x64 : x86; };
+			std::vector<Impl::Member> fields = {
+				{ "Type", 0, u16 }, { "Size", 2, u16 }, { "DeviceObject", off(8, 4), pointer }, { "Flags", off(0x10, 8), u32 },
+				{ "DriverStart", off(0x18, 0xC), pointer }, { "DriverSize", off(0x20, 0x10), u32 },
+				{ "DriverSection", off(0x28, 0x14), pointer }, { "DriverExtension", off(0x30, 0x18), pointer },
+				{ "DriverName", off(0x38, 0x1C), name }, { "HardwareDatabase", off(0x48, 0x24), pointer },
+				{ "FastIoDispatch", off(0x50, 0x28), pointer }, { "DriverInit", off(0x58, 0x2C), code },
+				{ "DriverStartIo", off(0x60, 0x30), code }, { "DriverUnload", off(0x68, 0x34), code },
+				{ "MajorFunction", off(0x70, 0x38), types->getTypeArray(28, code) },
+			};
+			auto st = types->getTypeStruct("DRIVER_OBJECT");
+			if (st->isIncomplete())
+				m_Impl->DefineFields(st, "struct", (uint32_t)(off(0x70, 0x38) + 28 * p), p, fields);
+			object = st;
+		}
+		for (auto entry : entries)
+			m_Impl->FirstParameters[entry] = { object, "DriverObject" };
+	}
+	catch (LowlevelError const&) {
+	}
+}
+
+void GhidraDecompiler::AddInterfaceGuid(uint64_t address, std::string const& interfaceType) {
+	if (!interfaceType.empty())
+		m_Impl->Interfaces[address] = interfaceType;
+}
+
+std::map<std::string, std::string> GhidraDecompiler::Impl::InterfaceVariables(Funcdata* fd) {
+	std::map<std::string, std::string> found;
+	auto stack = Arch->getStackSpace();
+	if (!stack)
+		return found;
+	// what a value is, through copies and casts: the operation that makes it
+	auto source = [](Varnode* vn) -> PcodeOp* {
+		for (int depth = 0; vn && vn->isWritten() && depth < 4; depth++) {
+			auto op = vn->getDef();
+			if (op->code() != CPUI_COPY && op->code() != CPUI_CAST)
+				return op;
+			vn = op->getIn(0);
+		}
+		return nullptr;
+	};
+	// the address of a global (a constant, or PTRSUB(0, address)); 0 if it is not one
+	auto global = [&](Varnode* vn) -> uint64_t {
+		if (vn->isConstant())
+			return vn->getOffset();
+		if (auto op = source(vn); op && op->code() == CPUI_PTRSUB && op->getIn(0)->isConstant() && op->getIn(0)->getOffset() == 0 &&
+			op->getIn(1)->isConstant())
+			return op->getIn(1)->getOffset();
+		if (vn->isWritten() && vn->getDef()->code() == CPUI_COPY && vn->getDef()->getIn(0)->isConstant())
+			return vn->getDef()->getIn(0)->getOffset();
+		return 0;
+	};
+	// the offset on the stack a value is the address of (PTRSUB or INT_ADD of the stack's base)
+	auto onStack = [&](Varnode* vn, int64_t& offset) {
+		auto op = source(vn);
+		if (!op || (op->code() != CPUI_PTRSUB && op->code() != CPUI_INT_ADD) || !op->getIn(0)->isSpacebase() || !op->getIn(1)->isConstant())
+			return false;
+		auto bits = stack->getAddrSize() * 8;
+		offset = (int64_t)op->getIn(1)->getOffset();
+		if (bits < 64 && (offset & (1LL << (bits - 1))))
+			offset -= 1LL << bits;
+		return true;
+	};
+	// (the calls: those of the call specifications; the bank of operations has no list of them)
+	for (int4 c = 0; c < fd->numCalls(); c++) {
+		auto op = fd->getCallSpecs(c)->getOp();
+		if (!op || op->isDead())
+			continue;
+		for (int4 i = 1; i + 1 < op->numInput(); i++) {
+			auto iid = Interfaces.find(global(op->getIn(i)));
+			int64_t offset;
+			if (iid != Interfaces.end() && onStack(op->getIn(i + 1), offset))
+				found.try_emplace("stack:" + std::to_string(offset), iid->second);
+		}
+	}
+	return found;
+}
+
+void GhidraDecompiler::SetClassSource(ClassSource source) {
+	m_Impl->ClassOf = std::move(source);
 }
 
 void GhidraDecompiler::SetFrameSource(FrameSource source) {
@@ -1902,7 +2313,7 @@ void GhidraDecompiler::AddGlobal(uint64_t address, std::string const& name, uint
 		Address addr(arch->getDefaultDataSpace(), address);
 		if (arch->symboltab->getGlobalScope()->queryFunction(addr))
 			return;		// code, not a variable
-		auto ct = m_Impl->Convert(type);
+		auto ct = type ? m_Impl->Convert(type) : m_Impl->Unknown((uint32_t)arch->getDefaultDataSpace()->getAddrSize());
 		if (ct->getSize() <= 0)
 			return;
 		std::string basename;
@@ -2128,6 +2539,8 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 			m_Impl->Localized.erase(address);
 			m_Impl->RegisterLocals.erase(address);
 			m_Impl->RegisterTyped.erase(address);
+			m_Impl->ThisTyped.erase(address);
+			m_Impl->InterfaceTyped.erase(address);
 			m_Impl->RegisterChanges.erase(address);
 			m_Impl->StackLocals.erase(address);
 			m_Impl->SmallLocals.erase(address);
@@ -2228,6 +2641,74 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 		if (more) {
 			arch->clearAnalysis(fd);
 			result = run();
+		}
+
+		// A virtual function of a class (without a prototype): its first parameter, "this", a pointer to it; the others as the
+		// decompiler found them (once: they are kept)
+		// (so is a function whose first parameter is known otherwise: a driver's DriverEntry, of its DRIVER_OBJECT)
+		if (!m_Impl->Nested && (m_Impl->ClassOf || !m_Impl->FirstParameters.empty()) && m_Impl->ThisTyped.insert(address).second) {
+			std::string className;
+			auto& proto = fd->getFuncProto();
+			Datatype* firstType = nullptr;
+			std::string firstName = "this";
+			ProtoModel* model = proto.hasModel() ? arch->getModel(proto.getModelName()) : arch->defaultfp;
+			if (auto known = m_Impl->ClassOf && m_Impl->ClassOf(address, className) ? m_Impl->Classes.find(className) : m_Impl->Classes.end();
+				known != m_Impl->Classes.end()) {
+				firstType = known->second;
+				if (auto thiscall = arch->getModel("__thiscall"))
+					model = thiscall;
+			}
+			else if (auto first = m_Impl->FirstParameters.find(address); first != m_Impl->FirstParameters.end())
+				std::tie(firstType, firstName) = first->second;
+			if (firstType && model && !proto.isInputLocked() && proto.numParams() > 0)
+				try {
+					auto space = arch->getDefaultDataSpace();
+					PrototypePieces pieces;
+					pieces.model = model;
+					pieces.name = fd->getName();
+					pieces.outtype = proto.getOutputType();
+					pieces.firstVarArgSlot = -1;
+					for (int4 i = 0; i < proto.numParams(); i++) {
+						pieces.intypes.push_back(i == 0 ? arch->types->getTypePointer(space->getAddrSize(), firstType, space->getWordSize()) :
+							proto.getParam(i)->getType());
+						// (the names the user gave them stay)
+						auto name = proto.getParam(i)->getName();
+						if (name.empty() || StartsWith(name, "param_"))
+							name = i == 0 ? firstName : "param_" + std::to_string(i + 1);
+						pieces.innames.push_back(name);
+					}
+					proto.setPieces(pieces);
+					proto.setInputLock(true);
+					proto.setOutputLock(false);
+					arch->clearAnalysis(fd);
+					result = run();
+				}
+				catch (LowlevelError const&) {
+				}
+		}
+
+		// The variables on the stack that interfaces are put in (by the IIDs passed with their addresses), as pointers to the
+		// interfaces: once, then again (those the user changed are the user's)
+		if (!m_Impl->Nested && !m_Impl->Interfaces.empty() && m_Impl->InterfaceTyped.insert(address).second) {
+			std::vector<VariableChange> typed;
+			std::set<std::string> names;
+			for (auto const& [key, type] : m_Impl->InterfaceVariables(fd)) {
+				if (std::any_of(changes.begin(), changes.end(), [&](auto const& c) { return c.Key == key; }))
+					continue;
+				// "pFileOpenDialog" of IFileOpenDialog ("p", "p2"... for the same one)
+				auto name = "p" + (type.size() > 1 && type[0] == 'I' && isupper((unsigned char)type[1]) ? type.substr(1) : type);
+				for (int n = 2; !names.insert(name).second; n++)
+					name = "p" + type.substr(type[0] == 'I' ? 1 : 0) + std::to_string(n);
+				typed.push_back({ key, name, type + " *", true });
+			}
+			if (!typed.empty()) {
+				auto messages = m_Impl->Messages.str();
+				m_Impl->ApplyChanges(fd, typed);
+				m_Impl->Messages.str(messages);		// (those that do not fit are not the user's to know of)
+				m_Impl->Messages.seekp(0, std::ios::end);
+				arch->clearAnalysis(fd);
+				result = run();
+			}
 		}
 
 		// The variables of the symbols in registers, of their types: once, a symbol (of the value, as the decompiler finds it
@@ -2336,6 +2817,9 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 					sym->getScope()->isGlobal() ? std::string() : StackName(sym->getName());
 				if (name.empty())
 					name = Untyped(sym->getName());
+				// (a global one, of its section: "data_140005000")
+				if (auto section = m_Impl->SectionName(name); !section.empty())
+					name = section;
 				if (name.empty())
 					return;
 				// (unique: a variable of the symbols may have the name already)
@@ -2390,6 +2874,16 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 					}
 				}
 			}
+		}
+
+		// (a call through Control Flow Guard's dispatch is the call it makes: that it was made so is not worth a warning)
+		{
+			std::vector<Comment*> warnings;
+			for (auto it = arch->commentdb->beginComment(fd->getAddress()); it != arch->commentdb->endComment(fd->getAddress()); ++it)
+				if ((*it)->getType() == Comment::warningheader && (*it)->getText().find("replaced with injection: guard_dispatch_icall") != std::string::npos)
+					warnings.push_back(*it);
+			for (auto comment : warnings)
+				arch->commentdb->deleteComment(comment);
 		}
 
 		// (the blocks are placed by the addresses of the lines)

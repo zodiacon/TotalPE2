@@ -410,6 +410,9 @@
     <ClCompile Include="DocPane.cpp" />
     <ClCompile Include="Win32ApiFrame.cpp" />
     <ClCompile Include="BookmarksView.cpp" />
+    <ClCompile Include="ClassesView.cpp" />
+    <ClCompile Include="Driver.cpp" />
+    <ClCompile Include="DriverView.cpp" />
     <ClCompile Include="HexFind.cpp" />
     <ClCompile Include="HexInspector.cpp" />
     <ClCompile Include="BoundImportView.cpp" />
@@ -485,6 +488,9 @@
     <ClInclude Include="DocPane.h" />
     <ClInclude Include="Win32ApiFrame.h" />
     <ClInclude Include="BookmarksView.h" />
+    <ClInclude Include="ClassesView.h" />
+    <ClInclude Include="Driver.h" />
+    <ClInclude Include="DriverView.h" />
     <ClInclude Include="HexFind.h" />
     <ClInclude Include="HexInspector.h" />
     <ClInclude Include="BoundImportView.h" />
@@ -602,6 +608,7 @@
     <Image Include="res\sections.ico" />
     <Image Include="res\shield.ico" />
     <Image Include="res\symbols.ico" />
+    <Image Include="res\System.ico" />
     <Image Include="res\text.ico" />
     <Image Include="res\thread.ico" />
     <Image Include="res\time-import.ico" />
@@ -657,6 +664,12 @@
     <Copy SourceFiles="@(DecompilerLanguages)" DestinationFiles="@(DecompilerLanguages->'$(OutDir)Decompiler\languages\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
   <!-- the Win32 metadata (if GetWin32Metadata.ps1 got it) next to the executable, with its license -->
+  <Target Name="CopyLibrarySignatures" AfterTargets="Build">
+    <ItemGroup>
+      <LibrarySignatures Include="$(ProjectDir)Signatures\*.sig" />
+    </ItemGroup>
+    <Copy SourceFiles="@(LibrarySignatures)" DestinationFolder="$(OutDir)Signatures" SkipUnchangedFiles="true" />
+  </Target>
   <Target Name="CopyWin32Metadata" AfterTargets="Build" Condition="Exists('$(SolutionDir)Win32Metadata\Windows.Win32.winmd')">
     <Copy SourceFiles="$(SolutionDir)Win32Metadata\Windows.Win32.winmd" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
     <Copy SourceFiles="$(SolutionDir)Win32Metadata\sdk_license.txt" DestinationFiles="$(OutDir)Win32Metadata_license.txt" SkipUnchangedFiles="true" />
