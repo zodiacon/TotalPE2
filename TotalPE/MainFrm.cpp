@@ -3221,11 +3221,21 @@ std::shared_ptr<CMainFrame::DecompilerSession> CMainFrame::Decompiler(std::wstri
 	if (m_Driver.State == DriverInfo::States::Done) {
 		auto const& nt = *m_PE.GetNTHeader();
 		DWORD entry = m_PE.GetFileInfo()->IsPE64 ? nt.NTHdr64.OptionalHeader.AddressOfEntryPoint : nt.NTHdr32.OptionalHeader.AddressOfEntryPoint;
-		session->DriverEntries.push_back(base + entry);
+		session->Driver.Entries.push_back(base + entry);
 		if (m_Driver.DriverEntry && m_Driver.DriverEntry != entry)
-			session->DriverEntries.push_back(base + m_Driver.DriverEntry);
+			session->Driver.Entries.push_back(base + m_Driver.DriverEntry);
+		if (m_Driver.Unload)
+			session->Driver.Unload.push_back(base + m_Driver.Unload);
+		if (m_Driver.StartIo)
+			session->Driver.StartIo.push_back(base + m_Driver.StartIo);
+		std::set<DWORD> dispatch(m_Driver.Major.begin(), m_Driver.Major.end());
+		dispatch.erase(0);
+		for (auto rva : dispatch)
+			session->Driver.Dispatch.push_back(base + rva);
 		for (auto const& [rva, name] : m_DriverNames)
 			session->DriverRoutines.emplace_back(base + rva, Narrow(ResolveRva(rva)));
+		for (auto const& ioctl : m_Driver.Ioctls)
+			session->ConstantNotes.emplace_back(ioctl.Code, Narrow(IoctlText(ioctl.Code)));
 	}
 	// the GUIDs of Windows in the data, as GUIDs
 	if (session->Win32 && !m_Guids.empty()) {
@@ -3381,7 +3391,9 @@ GhidraDecompiler* CMainFrame::DecompilerSession::Open(std::string& error) {
 			});
 		});
 	// (after the source of the types' names: UNICODE_STRING)
-	decompiler->AddDriverObject(DriverEntries);
+	decompiler->AddDriver(Driver);
+	for (auto const& [value, note] : ConstantNotes)
+		decompiler->AddConstantNote(value, note);
 	for (auto const& [address, name] : DriverRoutines)
 		decompiler->AddFunction(address, name);
 	Decompiler = std::move(decompiler);

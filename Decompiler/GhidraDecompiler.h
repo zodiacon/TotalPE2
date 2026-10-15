@@ -208,10 +208,19 @@ public:
 	// it ("CoCreateInstance(&CLSID_X, 0, 1, &IID_IFoo, &p)", "p->QueryInterface(&IID_IFoo, &q)") is a pointer to the
 	// interface (of the type of its name: "IFoo"), named for it ("pFoo"), unless the user changed the variable
 	void AddInterfaceGuid(uint64_t address, std::string const& interfaceType);
-	// A kernel driver: the structure DRIVER_OBJECT (its routines: DriverStartIo, DriverUnload, MajorFunction[IRP_MJ_...],
-	// pointers to code), and the functions that set it up (the entry point, DriverEntry): their first parameter,
-	// "DriverObject", a pointer to it
-	void AddDriverObject(std::vector<uint64_t> const& entries);
+	// A kernel driver: the structures of the kernel it uses (DRIVER_OBJECT, DEVICE_OBJECT, IRP, IO_STACK_LOCATION,
+	// IO_STATUS_BLOCK, as far as drivers use them) and its routines: those that set up its DRIVER_OBJECT (the entry point,
+	// DriverEntry) are NTSTATUS (DRIVER_OBJECT *DriverObject, UNICODE_STRING *RegistryPath), its unload routine
+	// void (DRIVER_OBJECT *DriverObject), its dispatch routines (of MajorFunction) NTSTATUS (DEVICE_OBJECT *DeviceObject,
+	// IRP *Irp), its DriverStartIo the same but void. An index of MajorFunction is shown by its name
+	// (MajorFunction[IRP_MJ_CREATE]).
+	struct DriverRoutines {
+		std::vector<uint64_t> Entries, Unload, Dispatch, StartIo;
+	};
+	void AddDriver(DriverRoutines const& routines);
+	// A note of a constant (of a driver's control code: its CTL_CODE): a line that compares with it or has a case of it ends
+	// with it as a comment
+	void AddConstantNote(uint64_t value, std::string const& note);
 
 	// The function at an address as C; 'name' is used if the function has none yet. 'functions' (if given) gets the
 	// functions the code refers to (the function itself and those it calls), by the names it shows, and their addresses.

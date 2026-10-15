@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <map>
+#include <regex>
 #include <set>
 #include <sstream>
 #include <unordered_map>
@@ -262,6 +263,17 @@ struct GhidraDecompiler::Impl {
 	std::string SectionName(std::string const& ram) const;
 	// functions whose first parameter is of a type, by address: the type (pointed to) and the parameter's name
 	std::unordered_map<uint64_t, std::pair<Datatype*, std::string>> FirstParameters;
+	// a driver's routines, of their kinds, their prototypes once set; the kernel's structures are there; the notes of constants
+	enum class DriverRoutine { Entry, Unload, Dispatch, StartIo };
+	std::unordered_map<uint64_t, DriverRoutine> DriverRoutines;
+	std::unordered_set<uint64_t> DriverTyped;
+	Datatype* DriverObject{ nullptr };
+	Datatype* DeviceObject{ nullptr };
+	Datatype* Irp{ nullptr };
+	bool Driver{ false };
+	std::unordered_map<uint64_t, std::string> ConstantNotes;
+	// the text of a driver's code: MajorFunction[IRP_MJ_...], the notes of its constants
+	void DriverText(std::string& code) const;
 	// the IIDs (AddInterfaceGuid), by address; the functions whose variables were given their interfaces
 	std::unordered_map<uint64_t, std::string> Interfaces;
 	std::unordered_set<uint64_t> InterfaceTyped;
@@ -2128,44 +2140,212 @@ bool GhidraDecompiler::CallArguments(uint64_t function, std::string const& calle
 	}
 }
 
-void GhidraDecompiler::AddDriverObject(std::vector<uint64_t> const& entries) {
+void GhidraDecompiler::AddDriver(DriverRoutines const& routines) {
 	auto arch = m_Impl->Arch.get();
-	if (!arch || entries.empty())
+	if (!arch || routines.Entries.empty())
 		return;
 	try {
 		auto types = arch->types;
 		auto space = arch->getDefaultDataSpace();
 		int4 p = space->getAddrSize();
 		bool wide = p == 8;
-		auto object = types->findByName("DRIVER_OBJECT");
-		if (!object) {
-			auto pointer = types->getTypePointer(p, types->getBase(1, TYPE_UNKNOWN), space->getWordSize());
-			auto code = types->getTypePointer(p, types->getTypeCode(), space->getWordSize());
-			auto u16 = types->getBase(2, TYPE_INT), u32 = types->getBase(4, TYPE_UINT);
-			std::string error;
-			auto name = m_Impl->ParseType("UNICODE_STRING", error);
-			if (!name || name->getSize() != 2 * p)
-				name = types->getTypeArray(2 * p, types->getBase(1, TYPE_UNKNOWN));
-			auto off = [&](int4 x64, int4 x86) { return wide ? x64 : x86; };
-			std::vector<Impl::Member> fields = {
-				{ "Type", 0, u16 }, { "Size", 2, u16 }, { "DeviceObject", off(8, 4), pointer }, { "Flags", off(0x10, 8), u32 },
-				{ "DriverStart", off(0x18, 0xC), pointer }, { "DriverSize", off(0x20, 0x10), u32 },
-				{ "DriverSection", off(0x28, 0x14), pointer }, { "DriverExtension", off(0x30, 0x18), pointer },
-				{ "DriverName", off(0x38, 0x1C), name }, { "HardwareDatabase", off(0x48, 0x24), pointer },
-				{ "FastIoDispatch", off(0x50, 0x28), pointer }, { "DriverInit", off(0x58, 0x2C), code },
-				{ "DriverStartIo", off(0x60, 0x30), code }, { "DriverUnload", off(0x68, 0x34), code },
-				{ "MajorFunction", off(0x70, 0x38), types->getTypeArray(28, code) },
-			};
-			auto st = types->getTypeStruct("DRIVER_OBJECT");
-			if (st->isIncomplete())
-				m_Impl->DefineFields(st, "struct", (uint32_t)(off(0x70, 0x38) + 28 * p), p, fields);
-			object = st;
-		}
-		for (auto entry : entries)
-			m_Impl->FirstParameters[entry] = { object, "DriverObject" };
+		auto off = [&](int4 x64, int4 x86) { return wide ? x64 : x86; };
+		auto pointerTo = [&](Datatype* t) { return types->getTypePointer(p, t, space->getWordSize()); };
+		auto pointer = pointerTo(types->getBase(1, TYPE_UNKNOWN));
+		auto code = pointerTo(types->getTypeCode());
+		auto i8 = types->getBase(1, TYPE_INT), u8 = types->getBase(1, TYPE_UINT), i16 = types->getBase(2, TYPE_INT),
+			u16 = types->getBase(2, TYPE_UINT), i32 = types->getBase(4, TYPE_INT), u32 = types->getBase(4, TYPE_UINT);
+		auto ptrInt = types->getBase(p, TYPE_UINT);
+		auto bytes = [&](int4 n) { return types->getTypeArray(n, types->getBase(1, TYPE_UNKNOWN)); };
+		// (the structures are made first, then their fields: they point to each other)
+		std::vector<std::pair<Datatype*, std::function<void()>>> pending;
+		auto make = [&](std::string const& name, bool isUnion, int4 size, std::vector<Impl::Member> const& fields) {
+			Datatype* t = types->findByName(name);
+			if (!t)
+				t = isUnion ? (Datatype*)types->getTypeUnion(name) : (Datatype*)types->getTypeStruct(name);
+			if (t->isIncomplete())
+				m_Impl->DefineFields(t, isUnion ? "union" : "struct", (uint32_t)size, p, fields);
+			return t;
+		};
+		auto stub = [&](std::string const& name) -> Datatype* {
+			if (auto t = types->findByName(name))
+				return t;
+			return types->getTypeStruct(name);
+		};
+		auto driverObject = stub("DRIVER_OBJECT"), deviceObject = stub("DEVICE_OBJECT"), irp = stub("IRP"),
+			stackLocation = stub("IO_STACK_LOCATION");
+		std::string error;
+		auto name = m_Impl->ParseType("UNICODE_STRING", error);
+		if (!name || name->getSize() != 2 * p)
+			name = bytes(2 * p);
+
+		make("DRIVER_OBJECT", false, off(0x70, 0x38) + 28 * p, {
+			{ "Type", 0, i16 }, { "Size", 2, i16 }, { "DeviceObject", off(8, 4), pointerTo(deviceObject) }, { "Flags", off(0x10, 8), u32 },
+			{ "DriverStart", off(0x18, 0xC), pointer }, { "DriverSize", off(0x20, 0x10), u32 },
+			{ "DriverSection", off(0x28, 0x14), pointer }, { "DriverExtension", off(0x30, 0x18), pointer },
+			{ "DriverName", off(0x38, 0x1C), name }, { "HardwareDatabase", off(0x48, 0x24), pointer },
+			{ "FastIoDispatch", off(0x50, 0x28), pointer }, { "DriverInit", off(0x58, 0x2C), code },
+			{ "DriverStartIo", off(0x60, 0x30), code }, { "DriverUnload", off(0x68, 0x34), code },
+			{ "MajorFunction", off(0x70, 0x38), types->getTypeArray(28, code) } });
+		make("DEVICE_OBJECT", false, off(0x150, 0xB8), {
+			{ "Type", 0, i16 }, { "Size", 2, u16 }, { "ReferenceCount", 4, i32 }, { "DriverObject", 8, pointerTo(driverObject) },
+			{ "NextDevice", off(0x10, 0xC), pointerTo(deviceObject) }, { "AttachedDevice", off(0x18, 0x10), pointerTo(deviceObject) },
+			{ "CurrentIrp", off(0x20, 0x14), pointerTo(irp) }, { "Timer", off(0x28, 0x18), pointer }, { "Flags", off(0x30, 0x1C), u32 },
+			{ "Characteristics", off(0x34, 0x20), u32 }, { "Vpb", off(0x38, 0x24), pointer },
+			{ "DeviceExtension", off(0x40, 0x28), pointer }, { "DeviceType", off(0x48, 0x2C), u32 }, { "StackSize", off(0x4C, 0x30), i8 } });
+		auto ntstatus = m_Impl->ParseType("NTSTATUS", error);
+		if (!ntstatus || ntstatus->getSize() != 4)
+			ntstatus = i32;
+		auto status = make("IO_STATUS_BLOCK", false, 2 * p, { { "Status", 0, ntstatus }, { "Information", p, ptrInt } });
+		auto control = make("IO_STACK_LOCATION_DEVICE_IO_CONTROL", false, 4 * p, {
+			{ "OutputBufferLength", 0, u32 }, { "InputBufferLength", p, u32 }, { "IoControlCode", 2 * p, u32 },
+			{ "Type3InputBuffer", 3 * p, pointer } });
+		auto readWrite = make("IO_STACK_LOCATION_READ_WRITE", false, off(0x18, 0x10), {
+			{ "Length", 0, u32 }, { "Key", p, u32 }, { "ByteOffset", off(0x10, 8), types->getBase(8, TYPE_INT) } });
+		auto create = make("IO_STACK_LOCATION_CREATE", false, 4 * p, {
+			{ "SecurityContext", 0, pointer }, { "Options", p, u32 }, { "FileAttributes", 2 * p, u16 }, { "ShareAccess", 2 * p + 2, u16 },
+			{ "EaLength", 3 * p, u32 } });
+		auto others = make("IO_STACK_LOCATION_OTHERS", false, 4 * p, {
+			{ "Argument1", 0, pointer }, { "Argument2", p, pointer }, { "Argument3", 2 * p, pointer }, { "Argument4", 3 * p, pointer } });
+		auto parameters = make("IO_STACK_LOCATION_PARAMETERS", true, 4 * p, {
+			{ "DeviceIoControl", 0, control }, { "Read", 0, readWrite }, { "Write", 0, readWrite }, { "Create", 0, create },
+			{ "Others", 0, others } });
+		make("IO_STACK_LOCATION", false, off(0x48, 0x24), {
+			{ "MajorFunction", 0, u8 }, { "MinorFunction", 1, u8 }, { "Flags", 2, u8 }, { "Control", 3, u8 },
+			{ "Parameters", p, parameters }, { "DeviceObject", off(0x28, 0x14), pointerTo(deviceObject) },
+			{ "FileObject", off(0x30, 0x18), pointer }, { "CompletionRoutine", off(0x38, 0x1C), code }, { "Context", off(0x40, 0x20), pointer } });
+		auto associated = make("IRP_ASSOCIATED_IRP", true, p, {
+			{ "SystemBuffer", 0, pointer }, { "MasterIrp", 0, pointerTo(irp) }, { "IrpCount", 0, i32 } });
+		auto overlay = make("IRP_TAIL_OVERLAY", false, off(0x58, 0x2C), {
+			{ "DriverContext", 0, types->getTypeArray(4, pointer) }, { "Thread", 4 * p, pointer }, { "AuxiliaryBuffer", 5 * p, pointer },
+			{ "ListEntry", 6 * p, bytes(2 * p) }, { "CurrentStackLocation", 8 * p, pointerTo(stackLocation) },
+			{ "OriginalFileObject", 9 * p, pointer } });
+		auto tail = make("IRP_TAIL", true, off(0x58, 0x30), { { "Overlay", 0, overlay } });
+		make("IRP", false, off(0xD0, 0x70), {
+			{ "Type", 0, i16 }, { "Size", 2, u16 }, { "MdlAddress", p, pointer }, { "Flags", 2 * p, u32 },
+			{ "AssociatedIrp", off(0x18, 0xC), associated }, { "ThreadListEntry", off(0x20, 0x10), bytes(2 * p) },
+			{ "IoStatus", off(0x30, 0x18), status }, { "RequestorMode", off(0x40, 0x20), i8 }, { "PendingReturned", off(0x41, 0x21), u8 },
+			{ "StackCount", off(0x42, 0x22), i8 }, { "CurrentLocation", off(0x43, 0x23), i8 }, { "Cancel", off(0x44, 0x24), u8 },
+			{ "CancelIrql", off(0x45, 0x25), u8 }, { "ApcEnvironment", off(0x46, 0x26), i8 }, { "AllocationFlags", off(0x47, 0x27), u8 },
+			{ "UserIosb", off(0x48, 0x28), pointerTo(status) }, { "UserEvent", off(0x50, 0x2C), pointer },
+			{ "Overlay", off(0x58, 0x30), bytes(2 * p) }, { "CancelRoutine", off(0x68, 0x38), code },
+			{ "UserBuffer", off(0x70, 0x3C), pointer }, { "Tail", off(0x78, 0x40), tail } });
+
+		m_Impl->Driver = true;
+		m_Impl->DriverObject = driverObject;
+		m_Impl->DeviceObject = deviceObject;
+		m_Impl->Irp = irp;
+		using Kind = Impl::DriverRoutine;
+		for (auto [list, kind] : { std::pair{ &routines.Entries, Kind::Entry }, std::pair{ &routines.Unload, Kind::Unload },
+			std::pair{ &routines.Dispatch, Kind::Dispatch }, std::pair{ &routines.StartIo, Kind::StartIo } })
+			for (auto address : *list)
+				m_Impl->DriverRoutines.try_emplace(address, kind);
 	}
 	catch (LowlevelError const&) {
 	}
+}
+
+void GhidraDecompiler::AddConstantNote(uint64_t value, std::string const& note) {
+	if (!note.empty())
+		m_Impl->ConstantNotes[value] = note;
+}
+
+void GhidraDecompiler::Impl::DriverText(std::string& code) const {
+	// "(Irp->IoStatus).Status": the parentheses of a chain of members (names, -> and .) that a member is taken of are not
+	// needed; but for those of a call ("f(a->b).c", "(*p)(a->b).c") or an index. After a cast ("(int *)(a->b).c") they are
+	// not: a member is taken before the cast.
+	auto word = [](char c) { return isalnum((unsigned char)c) || c == '_'; };
+	for (bool changed = true; changed; ) {
+		changed = false;
+		for (size_t open = code.find('('); open != std::string::npos; open = code.find('(', open + 1)) {
+			// the chain
+			size_t at = open + 1;
+			bool arrow = false;
+			int steps = 0;
+			while (at < code.size()) {
+				if (!word(code[at]) || isdigit((unsigned char)code[at]))
+					break;
+				while (at < code.size() && word(code[at]))
+					at++;
+				if (code.compare(at, 2, "->") == 0)
+					arrow = true, at += 2, steps++;
+				else if (at < code.size() && code[at] == '.')
+					at++, steps++;
+				else
+					break;
+			}
+			if (!arrow || at >= code.size() || code[at] != ')' || (code.compare(at + 1, 2, "->") != 0 && code.compare(at + 1, 1, ".") != 0) ||
+				!word(code[at - 1]))
+				continue;
+			// what is before it
+			if (open > 0) {
+				auto before = code[open - 1];
+				if (word(before) || before == ']')
+					continue;
+				if (before == ')') {
+					// (a cast: "(int *)", "(longlong)"; not a call through a pointer: "(*pcVar1)")
+					auto start = code.rfind('(', open - 1);
+					if (start == std::string::npos)
+						continue;
+					auto type = code.substr(start + 1, open - 2 - start);
+					bool cast = !type.empty() && type[0] != '*' && word(type[0]) &&
+						std::all_of(type.begin(), type.end(), [&](char c) { return word(c) || c == ' ' || c == '*'; });
+					if (!cast)
+						continue;
+				}
+			}
+			code.erase(at, 1);
+			code.erase(open, 1);
+			changed = true;
+		}
+	}
+	if (!Driver && ConstantNotes.empty())
+		return;
+	static char const* const majors[28] = {
+		"IRP_MJ_CREATE", "IRP_MJ_CREATE_NAMED_PIPE", "IRP_MJ_CLOSE", "IRP_MJ_READ", "IRP_MJ_WRITE", "IRP_MJ_QUERY_INFORMATION",
+		"IRP_MJ_SET_INFORMATION", "IRP_MJ_QUERY_EA", "IRP_MJ_SET_EA", "IRP_MJ_FLUSH_BUFFERS", "IRP_MJ_QUERY_VOLUME_INFORMATION",
+		"IRP_MJ_SET_VOLUME_INFORMATION", "IRP_MJ_DIRECTORY_CONTROL", "IRP_MJ_FILE_SYSTEM_CONTROL", "IRP_MJ_DEVICE_CONTROL",
+		"IRP_MJ_INTERNAL_DEVICE_CONTROL", "IRP_MJ_SHUTDOWN", "IRP_MJ_LOCK_CONTROL", "IRP_MJ_CLEANUP", "IRP_MJ_CREATE_MAILSLOT",
+		"IRP_MJ_QUERY_SECURITY", "IRP_MJ_SET_SECURITY", "IRP_MJ_POWER", "IRP_MJ_SYSTEM_CONTROL", "IRP_MJ_DEVICE_CHANGE",
+		"IRP_MJ_QUERY_QUOTA", "IRP_MJ_SET_QUOTA", "IRP_MJ_PNP",
+	};
+	static std::regex const index(R"(MajorFunction\[(0x[0-9a-fA-F]+|[0-9]+)\])");
+	static std::regex const constant(R"((?:case\s+|[=!]=\s*)(0x[0-9a-fA-F]+)\b)");
+	std::string result;
+	result.reserve(code.size());
+	size_t start = 0;
+	while (start < code.size()) {
+		auto end = code.find('\n', start);
+		auto line = code.substr(start, end == std::string::npos ? std::string::npos : end - start);
+		if (Driver && line.find("MajorFunction[") != std::string::npos) {
+			std::string named;
+			auto last = line.cbegin();
+			for (std::sregex_iterator it(line.begin(), line.end(), index), done; it != done; ++it) {
+				auto value = std::stoull((*it)[1].str(), nullptr, 0);
+				named.append(last, line.cbegin() + it->position());
+				named += value < 28 ? std::string("MajorFunction[") + majors[value] + "]" : it->str();
+				last = line.cbegin() + it->position() + it->length();
+			}
+			named.append(last, line.cend());
+			line = named;
+		}
+		// (not in a comment of the line)
+		if (!ConstantNotes.empty() && line.find("//") == std::string::npos) {
+			std::vector<std::string> notes;
+			for (std::sregex_iterator it(line.begin(), line.end(), constant), done; it != done; ++it)
+				if (auto note = ConstantNotes.find(std::stoull((*it)[1].str(), nullptr, 16)); note != ConstantNotes.end() &&
+					std::find(notes.begin(), notes.end(), note->second) == notes.end())
+					notes.push_back(note->second);
+			for (size_t i = 0; i < notes.size(); i++)
+				line += (i ? ", " : "  // ") + notes[i];
+		}
+		result += line;
+		if (end == std::string::npos)
+			break;
+		result += '\n';
+		start = end + 1;
+	}
+	code = std::move(result);
 }
 
 void GhidraDecompiler::AddInterfaceGuid(uint64_t address, std::string const& interfaceType) {
@@ -2645,6 +2825,49 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 
 		// A virtual function of a class (without a prototype): its first parameter, "this", a pointer to it; the others as the
 		// decompiler found them (once: they are kept)
+		// A driver's routine: DriverEntry, DriverUnload, a dispatch routine, DriverStartIo; once
+		if (auto routine = m_Impl->DriverRoutines.find(address); !m_Impl->Nested && routine != m_Impl->DriverRoutines.end() &&
+			m_Impl->DriverObject && m_Impl->DeviceObject && m_Impl->Irp && m_Impl->DriverTyped.insert(address).second) {
+			auto& proto = fd->getFuncProto();
+			if (!proto.isInputLocked())
+				try {
+					using Kind = Impl::DriverRoutine;
+					auto space = arch->getDefaultDataSpace();
+					auto pointerTo = [&](Datatype* t) { return arch->types->getTypePointer(space->getAddrSize(), t, space->getWordSize()); };
+					PrototypePieces pieces;
+					pieces.model = proto.hasModel() ? arch->getModel(proto.getModelName()) : arch->defaultfp;
+					pieces.name = fd->getName();
+					std::string error;
+					auto status = m_Impl->ParseType("NTSTATUS", error);
+					if (!status)
+						status = arch->types->getBase(4, TYPE_INT);
+					auto kind = routine->second;
+					pieces.outtype = kind == Kind::Entry || kind == Kind::Dispatch ? status : arch->types->getTypeVoid();
+					pieces.firstVarArgSlot = -1;
+					if (kind == Kind::Entry || kind == Kind::Unload) {
+						pieces.intypes = { pointerTo(m_Impl->DriverObject) };
+						pieces.innames = { "DriverObject" };
+						if (auto path = m_Impl->ParseType("UNICODE_STRING", error); path && kind == Kind::Entry) {
+							pieces.intypes.push_back(pointerTo(path));
+							pieces.innames.push_back("RegistryPath");
+						}
+					}
+					else {
+						pieces.intypes = { pointerTo(m_Impl->DeviceObject), pointerTo(m_Impl->Irp) };
+						pieces.innames = { "DeviceObject", "Irp" };
+					}
+					if (pieces.model) {
+						proto.setPieces(pieces);
+						proto.setInputLock(true);
+						proto.setOutputLock(true);
+						arch->clearAnalysis(fd);
+						result = run();
+					}
+				}
+				catch (LowlevelError const&) {
+				}
+		}
+
 		// (so is a function whose first parameter is known otherwise: a driver's DriverEntry, of its DRIVER_OBJECT)
 		if (!m_Impl->Nested && (m_Impl->ClassOf || !m_Impl->FirstParameters.empty()) && m_Impl->ThisTyped.insert(address).second) {
 			std::string className;
@@ -2989,6 +3212,7 @@ bool GhidraDecompiler::Decompile(uint64_t address, std::string const& name, std:
 		}
 		if (lineMap && !blocks.empty())
 			ShowBlocks(code, *lineMap, blocks);
+		m_Impl->DriverText(code);
 		if (variables)
 			m_Impl->CollectVariables(fd, *variables);
 		if (functions) {

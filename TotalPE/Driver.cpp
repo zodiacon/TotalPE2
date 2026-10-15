@@ -247,6 +247,7 @@ std::wstring IoctlDeviceType(uint32_t code) {
 		{ 0x09, L"FILE_DEVICE_FILE_SYSTEM" }, { 0x0B, L"FILE_DEVICE_KEYBOARD" }, { 0x0F, L"FILE_DEVICE_MOUSE" },
 		{ 0x12, L"FILE_DEVICE_NETWORK" }, { 0x15, L"FILE_DEVICE_NULL" }, { 0x1B, L"FILE_DEVICE_SERIAL_PORT" },
 		{ 0x22, L"FILE_DEVICE_UNKNOWN" }, { 0x23, L"FILE_DEVICE_VIDEO" }, { 0x2D, L"FILE_DEVICE_MASS_STORAGE" },
+		{ 0x4D, L"MOUNTDEVCONTROLTYPE" }, { 0x6D, L"MOUNTMGRCONTROLTYPE" },
 	};
 	auto type = code >> 16;
 	auto it = types.find(type);

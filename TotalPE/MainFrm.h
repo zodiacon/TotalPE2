@@ -387,8 +387,9 @@ private:
 		bool Guids{ false };		// the GUIDs of the data are among the globals
 		std::vector<std::pair<uint64_t, std::string>> InterfaceGuids;	// the IIDs among them: the interfaces' names
 		// a kernel driver: the functions that set up its DRIVER_OBJECT; its routines, by their names
-		std::vector<uint64_t> DriverEntries;
+		GhidraDecompiler::DriverRoutines Driver;
 		std::vector<std::pair<uint64_t, std::string>> DriverRoutines;
+		std::vector<std::pair<uint64_t, std::string>> ConstantNotes;	// a driver's control codes (their CTL_CODEs)
 		bool Symbols{ false };		// the types, prototypes and locals of the symbols are asked for
 		std::unique_ptr<GhidraDecompiler> Decompiler;
 		std::string Error;			// why it could not be made
