@@ -1,0 +1,54 @@
+//{{NO_DEPENDENCIES}}
+// Win32ApiExplorer.rc
+
+#define IDR_MAINFRAME				128
+#define IDR_TABMENU					129
+
+#define IDI_FUNCTION				201
+#define IDI_FUNCTION2				202
+#define IDI_TYPE					203
+#define IDI_UNION					204
+#define IDI_ENUM					205
+#define IDI_DATA					206
+#define IDI_INTERFACE				207
+#define IDI_FIELD					208
+#define IDI_FOLDER					209
+#define IDI_FOLDER_CLOSED			210
+#define IDI_BACK					211
+#define IDI_FORWARD					212
+#define IDI_GLOBE					213
+#define IDI_COPY					214
+#define IDI_FIND					215
+#define IDI_NAMESPACE				216
+
+#define ID_GO_BACK					32800
+#define ID_GO_FORWARD				32801
+#define ID_GO_DEFINITION			32802
+#define ID_GO_DEFINITION_NEWTAB		32803
+#define ID_GO_REVEAL				32804
+#define ID_VIEW_DOCUMENTATION		32810
+#define ID_VIEW_DARKMODE			32811
+#define ID_VIEW_SEARCH				32812
+#define ID_VIEW_NAMESPACES			32813
+#define ID_DOC_BROWSER				32814
+#define ID_MACHINE_X86				32820
+#define ID_MACHINE_X64				32821
+#define ID_MACHINE_ARM64			32822
+#define ID_TAB_CLOSE				32830
+#define ID_TAB_CLOSEOTHERS			32831
+#define ID_TAB_CLOSEALL				32832
+#define ID_TAB_NEXT					32833
+#define ID_TAB_PREV					32834
+#define ID_TAB_KEEPOPEN				32835
+#define ID_EDIT_COPYNAME			32840
+
+#define IDC_MACHINE					1001
+
+#ifdef APSTUDIO_INVOKED
+#ifndef APSTUDIO_READONLY_SYMBOLS
+#define _APS_NEXT_RESOURCE_VALUE	300
+#define _APS_NEXT_COMMAND_VALUE		32850
+#define _APS_NEXT_CONTROL_VALUE		1002
+#define _APS_NEXT_SYMED_VALUE		101
+#endif
+#endif

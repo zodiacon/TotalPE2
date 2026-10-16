@@ -105,3 +105,17 @@ TEST_CASE("Win32 API: the tree of namespaces", "[win32api]") {
 	REQUIRE(system);
 	CHECK(std::ranges::is_sorted(system->Children, [](auto const& a, auto const& b) { return _stricmp(a.Name.c_str(), b.Name.c_str()) < 0; }));
 }
+
+TEST_CASE("Win32 API: the layout of a struct is of its machine", "[win32api]") {
+	auto x64 = Win32Api::Get(Win32Api::Machine::X64);
+	auto x86 = Win32Api::Get(Win32Api::Machine::X86);
+	if (!x64 || !x86)
+		SKIP("no Windows.Win32.winmd next to the executable");
+	auto text64 = x64->Declaration(*x64->Find("SECURITY_ATTRIBUTES"));
+	auto text86 = x86->Declaration(*x86->Find("SECURITY_ATTRIBUTES"));
+	INFO(text64);
+	INFO(text86);
+	CHECK(text64.find("0x18 bytes") != std::string::npos);
+	CHECK(text86.find("0xC bytes") != std::string::npos);
+	CHECK(text86.find("/* 0x004 */ void *lpSecurityDescriptor;") != std::string::npos);
+}

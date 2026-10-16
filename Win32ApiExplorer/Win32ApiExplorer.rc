@@ -1,0 +1,159 @@
+#include "resource.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+#include "atlres.h"
+#include "winres.h"
+#undef APSTUDIO_READONLY_SYMBOLS
+
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+
+IDR_MAINFRAME           ICON                    "res\\symbols.ico"
+IDI_FUNCTION            ICON                    "res\\function.ico"
+IDI_FUNCTION2           ICON                    "res\\function-export2.ico"
+IDI_TYPE                ICON                    "res\\type.ico"
+IDI_UNION               ICON                    "res\\union.ico"
+IDI_ENUM                ICON                    "res\\enum.ico"
+IDI_DATA                ICON                    "res\\Data.ico"
+IDI_INTERFACE           ICON                    "res\\interface.ico"
+IDI_FIELD               ICON                    "res\\field.ico"
+IDI_FOLDER              ICON                    "res\\folder.ico"
+IDI_FOLDER_CLOSED       ICON                    "res\\folder_closed.ico"
+IDI_BACK                ICON                    "res\\Back.ico"
+IDI_FORWARD             ICON                    "res\\Forward.ico"
+IDI_GLOBE               ICON                    "res\\globe.ico"
+IDI_COPY                ICON                    "res\\copy.ico"
+IDI_FIND                ICON                    "res\\find.ico"
+IDI_NAMESPACE           ICON                    "res\\System.ico"
+
+IDR_MAINFRAME MENU
+BEGIN
+    POPUP "&File"
+    BEGIN
+        MENUITEM "E&xit",                       ID_APP_EXIT
+    END
+    POPUP "&Edit"
+    BEGIN
+        MENUITEM "&Copy\tCtrl+C",               ID_EDIT_COPY
+        MENUITEM "Select &All\tCtrl+A",         ID_EDIT_SELECT_ALL
+        MENUITEM "Copy &Name\tCtrl+Shift+C",    ID_EDIT_COPYNAME
+        MENUITEM SEPARATOR
+        MENUITEM "&Find...\tCtrl+F",            ID_EDIT_FIND
+    END
+    POPUP "&View"
+    BEGIN
+        MENUITEM "&Search\tCtrl+1",             ID_VIEW_SEARCH
+        MENUITEM "&Namespaces\tCtrl+2",         ID_VIEW_NAMESPACES
+        MENUITEM SEPARATOR
+        MENUITEM "&Documentation\tCtrl+D",      ID_VIEW_DOCUMENTATION
+        MENUITEM "Dar&k Mode",                  ID_VIEW_DARKMODE
+    END
+    POPUP "&Go"
+    BEGIN
+        MENUITEM "&Back\tAlt+Left",             ID_GO_BACK
+        MENUITEM "&Forward\tAlt+Right",         ID_GO_FORWARD
+        MENUITEM SEPARATOR
+        MENUITEM "Go to &Definition\tF12",      ID_GO_DEFINITION
+        MENUITEM "Open Definition in New &Tab\tCtrl+F12", ID_GO_DEFINITION_NEWTAB
+        MENUITEM SEPARATOR
+        MENUITEM "&Reveal in Namespaces\tCtrl+Shift+E", ID_GO_REVEAL
+        MENUITEM "Open Documentation in &Browser\tCtrl+Shift+B", ID_DOC_BROWSER
+    END
+    POPUP "&Machine"
+    BEGIN
+        MENUITEM "x&86",                        ID_MACHINE_X86
+        MENUITEM "x&64",                        ID_MACHINE_X64
+        MENUITEM "&ARM64",                      ID_MACHINE_ARM64
+    END
+    POPUP "&Window"
+    BEGIN
+        MENUITEM "&Keep Tab Open\tCtrl+K",      ID_TAB_KEEPOPEN
+        MENUITEM SEPARATOR
+        MENUITEM "&Close Tab\tCtrl+W",          ID_TAB_CLOSE
+        MENUITEM "Close &Other Tabs",           ID_TAB_CLOSEOTHERS
+        MENUITEM "Close &All Tabs",             ID_TAB_CLOSEALL
+        MENUITEM SEPARATOR
+        MENUITEM "&Next Tab\tCtrl+Tab",         ID_TAB_NEXT
+        MENUITEM "&Previous Tab\tCtrl+Shift+Tab", ID_TAB_PREV
+    END
+    POPUP "&Help"
+    BEGIN
+        MENUITEM "&About Win32 API Explorer...", ID_APP_ABOUT
+    END
+END
+
+IDR_TABMENU MENU
+BEGIN
+    POPUP "Tab"
+    BEGIN
+        MENUITEM "&Keep Open",                  ID_TAB_KEEPOPEN
+        MENUITEM SEPARATOR
+        MENUITEM "&Close",                      ID_TAB_CLOSE
+        MENUITEM "Close &Others",               ID_TAB_CLOSEOTHERS
+        MENUITEM "Close &All",                  ID_TAB_CLOSEALL
+        MENUITEM SEPARATOR
+        MENUITEM "Copy &Name",                  ID_EDIT_COPYNAME
+        MENUITEM "&Reveal in Namespaces",       ID_GO_REVEAL
+        MENUITEM "Open Documentation in &Browser", ID_DOC_BROWSER
+    END
+END
+
+IDR_MAINFRAME ACCELERATORS
+BEGIN
+    "C",            ID_EDIT_COPY,           VIRTKEY, CONTROL, NOINVERT
+    "A",            ID_EDIT_SELECT_ALL,     VIRTKEY, CONTROL, NOINVERT
+    "C",            ID_EDIT_COPYNAME,       VIRTKEY, SHIFT, CONTROL, NOINVERT
+    "F",            ID_EDIT_FIND,           VIRTKEY, CONTROL, NOINVERT
+    "Q",            ID_EDIT_FIND,           VIRTKEY, CONTROL, NOINVERT
+    "1",            ID_VIEW_SEARCH,         VIRTKEY, CONTROL, NOINVERT
+    "2",            ID_VIEW_NAMESPACES,     VIRTKEY, CONTROL, NOINVERT
+    "D",            ID_VIEW_DOCUMENTATION,  VIRTKEY, CONTROL, NOINVERT
+    VK_LEFT,        ID_GO_BACK,             VIRTKEY, ALT, NOINVERT
+    VK_RIGHT,       ID_GO_FORWARD,          VIRTKEY, ALT, NOINVERT
+    VK_F12,         ID_GO_DEFINITION,       VIRTKEY, NOINVERT
+    VK_F12,         ID_GO_DEFINITION_NEWTAB, VIRTKEY, CONTROL, NOINVERT
+    "E",            ID_GO_REVEAL,           VIRTKEY, SHIFT, CONTROL, NOINVERT
+    "B",            ID_DOC_BROWSER,         VIRTKEY, SHIFT, CONTROL, NOINVERT
+    "K",            ID_TAB_KEEPOPEN,        VIRTKEY, CONTROL, NOINVERT
+    "W",            ID_TAB_CLOSE,           VIRTKEY, CONTROL, NOINVERT
+    VK_F4,          ID_TAB_CLOSE,           VIRTKEY, CONTROL, NOINVERT
+    VK_TAB,         ID_TAB_NEXT,            VIRTKEY, CONTROL, NOINVERT
+    VK_TAB,         ID_TAB_PREV,            VIRTKEY, SHIFT, CONTROL, NOINVERT
+END
+
+STRINGTABLE
+BEGIN
+    IDR_MAINFRAME           "Win32 API Explorer"
+END
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 0,1,0,0
+ PRODUCTVERSION 0,1,0,0
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS 0x1L
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS 0x40004L
+ FILETYPE 0x1L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName", "Scorpio Software"
+            VALUE "FileDescription", "Win32 API Explorer"
+            VALUE "FileVersion", "0.1.0.0"
+            VALUE "InternalName", "Win32ApiExplorer"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Pavel Yosifovich"
+            VALUE "OriginalFilename", "Win32ApiExplorer.exe"
+            VALUE "ProductName", "Win32 API Explorer"
+            VALUE "ProductVersion", "0.1.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
