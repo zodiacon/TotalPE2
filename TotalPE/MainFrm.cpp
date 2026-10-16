@@ -20,6 +20,7 @@
 #include "VtKeyDlg.h"
 #include "SaveData.h"
 #include "ScintillaView.h"
+#include "ComView.h"
 #include "SideBySideView.h"
 #include "DecompilerThread.h"
 #include "HexView.h"
@@ -132,6 +133,7 @@ void CMainFrame::UpdateUI() {
 	UIEnable(ID_PE_CLASSES, fi && !m_Classes.empty());
 	UIEnable(ID_PE_DRIVER, fi && IsDriver(m_PE));
 	UIEnable(ID_PE_COM, fi && UsesCom());
+	UIEnable(ID_PE_RPC, fi && !m_Rpc.empty());
 	UIEnable(ID_PE_CLRTYPES, fi && FindTreeItem(TreeItemType::ClrTypes) != nullptr);
 	UIEnable(ID_PE_SECURITYSUMMARY, fi != nullptr);
 	// (of no file: whenever the metadata is there)
@@ -770,8 +772,11 @@ std::wstring CMainFrame::ResolveRva(DWORD rva) const {
 	if (auto rtti = m_ClassNames.find(rva); rtti != m_ClassNames.end())
 		return rtti->second;
 	// a routine of a driver (DriverUnload, DispatchDeviceControl)
-	auto driver = m_DriverNames.find(rva);
-	return driver != m_DriverNames.end() ? driver->second : std::wstring();
+	if (auto driver = m_DriverNames.find(rva); driver != m_DriverNames.end())
+		return driver->second;
+	// a server routine of an RPC interface ("srvsvc_Opnum12")
+	auto rpc = m_RpcNames.find(rva);
+	return rpc != m_RpcNames.end() ? rpc->second : std::wstring();
 }
 
 void CMainFrame::AnalyzeDriverAsync() {
@@ -923,10 +928,12 @@ bool CMainFrame::FindGuids() {
 	static std::unordered_map<std::string, Win32Api::NamedGuid> const none;
 	auto const& guids = api ? api->Guids() : none;
 	std::unordered_map<std::string, Win32Api::NamedGuid> own;
-	for (auto const& res : m_PE.GetFlatResources())
-		if (res.TypeStr == L"TYPELIB")
+	m_TypeLibNames.clear();
+	for (size_t index = 0; index < m_FlatResources.size(); index++)
+		if (auto const& res = m_FlatResources[index]; res.TypeStr == L"TYPELIB")
 			for (auto const& g : TypeLibGuids(res.Data)) {
 				using Kinds = TypeLibGuid::Kinds;
+				m_TypeLibNames.try_emplace(g.Bytes, TypeLibName{ g.Kind, g.Name, (int)index });
 				auto prefix = g.Kind == Kinds::Class ? "CLSID_" : g.Kind == Kinds::Interface ? "IID_" : g.Kind == Kinds::Dispatch ? "DIID_" : "LIBID_";
 				own.try_emplace(g.Bytes, Win32Api::NamedGuid{ prefix + std::string(CW2A(g.Name.c_str())) });
 			}
@@ -1326,6 +1333,7 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	m_LibraryNames.clear();
 	FindLibraryFunctions();
 	FindClasses();
+	FindRpcInterfaces();
 	// (those of the file before: its GUIDs, what its driver sets up, and its analysis under way, whose result is dropped)
 	m_Guids.clear();
 	m_SymbolGuids.clear();
@@ -1461,6 +1469,9 @@ void CMainFrame::ResetFileState() {
 	m_Driver = {};
 	m_DriverNames.clear();
 	++m_DriverGeneration;
+	m_Rpc.clear();
+	m_RpcNames.clear();
+	m_RpcDeclarations.clear();
 	m_GuardTables.clear();
 	m_Xrefs.Clear();
 	ResetNavigation();
@@ -1904,6 +1915,8 @@ void CMainFrame::BuildTree(int iconSize) {
 		InsertTreeItem(m_Tree, L"Driver", GetTreeIcon(IDI_SYSTEM), TreeItemType::Driver, root);
 	if (UsesCom())
 		InsertTreeItem(m_Tree, L"COM", GetTreeIcon(IDI_INTERFACE), TreeItemType::Com, root);
+	if (!m_Rpc.empty())
+		InsertTreeItem(m_Tree, std::format(L"RPC ({})", m_Rpc.size()).c_str(), GetTreeIcon(IDI_GLOBE), TreeItemType::Rpc, root);
 
 	if (m_PE.GetFileInfo()->HasResource) {
 		auto resources = InsertTreeItem(m_Tree, L"Resources", GetTreeIcon(IDI_RESOURCE), TreeItemType::Resources, root);
@@ -2364,19 +2377,115 @@ LRESULT CMainFrame::OnViewFunctions(WORD, WORD, HWND, BOOL&) {
 	return 0;
 }
 
+std::wstring CMainFrame::TypeLibDeclaration(DWORD guid) const {
+	char bytes[16];
+	if (!ReadImage(m_PE.GetImageBase() + guid, (uint8_t*)bytes, 16))
+		return {};
+	auto it = m_TypeLibNames.find(std::string(bytes, 16));
+	if (it == m_TypeLibNames.end())
+		return {};
+	using Kinds = TypeLibGuid::Kinds;
+	auto kind = it->second.Kind;
+	return (kind == Kinds::Class ? L"coclass " : kind == Kinds::Library ? L"library " : L"interface ") + it->second.Name;
+}
+
+// The view of the type library, at the declaration of a GUID's class, interface or library (a dual interface may be written
+// as a dispinterface)
+bool CMainFrame::ShowTypeLibDeclaration(DWORD guid) {
+	char bytes[16];
+	if (!ReadImage(m_PE.GetImageBase() + guid, (uint8_t*)bytes, 16))
+		return false;
+	auto it = m_TypeLibNames.find(std::string(bytes, 16));
+	if (it == m_TypeLibNames.end())
+		return false;
+	auto type = TreeItemWithIndex(TreeItemType::Resource, (int64_t)(it->second.Resource + 1) << ItemShift);
+	auto hItem = FindTreeItem(type);
+	RecordNavigation();
+	if (!hItem || !ShowView(hItem))
+		return false;
+	auto view = m_Views.find(type);
+	auto text = view == m_Views.end() ? nullptr : dynamic_cast<CScintillaView*>(view->second);
+	if (!text)
+		return false;
+	using Kinds = TypeLibGuid::Kinds;
+	auto kind = it->second.Kind;
+	std::vector<std::string> keywords = kind == Kinds::Class ? std::vector<std::string>{ "coclass" } : kind == Kinds::Library ?
+		std::vector<std::string>{ "library" } : std::vector<std::string>{ "interface", "dispinterface" };
+	if (kind == Kinds::Dispatch)
+		std::swap(keywords[0], keywords[1]);
+	bool shown = text->ShowDeclaration(keywords, std::string(CW2A(it->second.Name.c_str())));
+	RecordNavigation();
+	return shown;
+}
+
+bool CMainFrame::ShowInComView(std::string const& guid) {
+	auto hItem = FindTreeItem(TreeItemType::Com);
+	RecordNavigation();
+	if (!hItem || !ShowView(hItem))
+		return false;
+	auto view = m_Views.find(TreeItemType::Com);
+	auto com = view == m_Views.end() ? nullptr : dynamic_cast<CComView*>(view->second);
+	bool shown = com && com->SelectGuid(guid);
+	RecordNavigation();
+	return shown;
+}
+
 LRESULT CMainFrame::OnViewCom(WORD, WORD, HWND, BOOL&) {
 	if (auto hItem = FindTreeItem(TreeItemType::Com))
 		ShowView(hItem);
 	return 0;
 }
 
+LRESULT CMainFrame::OnViewRpc(WORD, WORD, HWND, BOOL&) {
+	if (auto hItem = FindTreeItem(TreeItemType::Rpc))
+		ShowView(hItem);
+	return 0;
+}
+
+std::wstring CMainFrame::RpcInterfaceName(RpcInterface const& rpc) const {
+	// of the symbols: MIDL's "srvsvc___RpcServerInterface" (srvsvc___RpcClientInterface)
+	auto symbol = ResolveRva(rpc.Rva);
+	for (std::wstring_view suffix : { L"___RpcServerInterface", L"___RpcClientInterface" })
+		if (symbol.size() > suffix.size() && symbol.ends_with(suffix))
+			return symbol.substr(0, symbol.size() - suffix.size());
+	if (auto known = KnownRpcInterface(rpc.Uuid); !known.empty())
+		return std::wstring(known.begin(), known.end());
+	return std::format(L"Rpc_{:02X}{:02X}{:02X}{:02X}", rpc.Uuid[3], rpc.Uuid[2], rpc.Uuid[1], rpc.Uuid[0]);
+}
+
+// The RPC interfaces of the file; their server routines are named by their interfaces and operation numbers (one that
+// serves several, "srvsvc_Opnum0_5"), and those of 64-bit code have declarations of the parameters their procedures' formats
+// describe, which the decompiler takes when the symbols have no prototype
+void CMainFrame::FindRpcInterfaces() {
+	m_Rpc = ::FindRpcInterfaces(m_PE);
+	m_RpcNames.clear();
+	m_RpcDeclarations.clear();
+	std::map<DWORD, std::vector<uint32_t>> opnums;
+	for (auto const& rpc : m_Rpc)
+		for (auto const& p : rpc.Procedures)
+			if (p.Routine)
+				opnums[p.Routine].push_back(p.Opnum);
+	bool pe64 = m_PE.GetFileInfo()->IsPE64;
+	for (auto const& rpc : m_Rpc) {
+		auto name = RpcInterfaceName(rpc);
+		for (auto const& p : rpc.Procedures) {
+			auto const& of = opnums[p.Routine];
+			if (!p.Routine || m_RpcNames.contains(p.Routine))
+				continue;
+			auto routine = of.size() == 1 ? std::format(L"{}_Opnum{}", name, p.Opnum) : std::format(L"{}_Opnum{}_{}", name, of.front(), of.back());
+			m_RpcNames[p.Routine] = routine;
+			if (pe64 && of.size() == 1)
+				if (auto declaration = RpcRoutineDeclaration(p, std::string(CW2A(routine.c_str()))); !declaration.empty())
+					m_RpcDeclarations[p.Routine] = declaration;
+		}
+	}
+}
+
 bool CMainFrame::UsesCom() const {
 	if (!m_PE)
 		return false;
-	if (auto exp = m_PE.GetExport())
-		for (auto const& f : exp->Funcs)
-			if (f.FuncName == "DllGetClassObject")
-				return true;
+	if (IsComServer(m_PE))
+		return true;
 	for (auto name : { "CoCreateInstance", "CoCreateInstanceEx", "CoCreateInstanceFromApp", "CoGetClassObject", "CoGetObject",
 		"CoInitialize", "CoInitializeEx", "OleInitialize", "RoGetActivationFactory", "RoActivateInstance" })
 		if (ImportSlot(name))
@@ -2579,6 +2688,15 @@ bool CMainFrame::ResolveFunction(std::wstring const& text, uint64_t& address, st
 			}
 		}
 	}
+
+	// the names TotalPE gives functions: of static libraries (by their signatures), a driver's routines, virtual functions,
+	// the server routines of RPC interfaces (by their full names, or as they are shown: "memset" of a C++ declaration)
+	for (auto names : { &m_LibraryNames, &m_DriverNames, &m_ClassNames, &m_RpcNames })
+		for (auto const& [rva, name] : *names)
+			if (name == text || FunctionName(name) == text) {
+				address = base + rva;
+				return true;
+			}
 
 	if (!ParseHexNumber(text, address)) {
 		error = std::format(L"No function named \"{}\" was found in the exports{}.", text,
@@ -3624,6 +3742,22 @@ GhidraDecompiler* CMainFrame::DecompilerSession::Open(std::string& error) {
 			}
 			});
 		return known;
+		});
+	// a function of a static library (by its signature), when the symbols and the metadata have no prototype: its declaration
+	// (a C++ function's, from its decorated name), or the name of a C function, whose prototype the decompiler has
+	decompiler->SetDeclarationSource([this](uint64_t va) {
+		std::string declaration;
+		Ask([&] {
+			auto base = Frame->m_PE.GetImageBase();
+			if (Stale || va < base || va - base > 0xFFFFFFFFULL)
+				return;
+			if (auto library = Frame->m_LibraryNames.find((DWORD)(va - base)); library != Frame->m_LibraryNames.end())
+				declaration = Narrow(library->second);
+			// (a server routine of an RPC interface: of its procedure's format)
+			else if (auto rpc = Frame->m_RpcDeclarations.find((DWORD)(va - base)); rpc != Frame->m_RpcDeclarations.end())
+				declaration = rpc->second;
+			});
+		return declaration;
 		});
 	// (without the symbols too: the state of x86 code that has a handler)
 	decompiler->SetLocalSource([this](uint64_t va, std::vector<uint64_t> const& instructions, std::vector<GhidraDecompiler::Local>& locals) {

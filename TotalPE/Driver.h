@@ -2,6 +2,7 @@
 
 #include <GhidraDecompiler.h>
 #include <PEFile.h>
+#include <FrameworkBinding.h>
 #include <array>
 #include <functional>
 #include <string>
@@ -42,17 +43,11 @@ struct DriverInfo {
 		bool Post{ false };
 	};
 	std::vector<Callback> Callbacks;
-	// a driver of the framework (KMDF): its WDF_BIND_INFO (the version of the framework it was built with, the pointer to the
-	// framework's table of functions that WdfVersionBind sets: WdfFunctions_NNNNN, how many it has; virtual addresses), the
-	// pointer to its WDF_DRIVER_GLOBALS (WdfDriverGlobals), and its callbacks: those it gives the framework (Name: the field
-	// or parameter it is given in, "EvtIoDeviceControl"; Type: "PFN_WDF_IO_QUEUE_IO_DEVICE_CONTROL"; Function: the
-	// framework's function, "WdfIoQueueCreate")
-	struct Framework {
-		uint32_t Major{}, Minor{}, Build{};
-		uint32_t Count{};
-		uint64_t Table{};
-		uint64_t Globals{};
-	} Wdf;
+	// a driver of the framework (KMDF): its binding (FrameworkBinding.h), and its callbacks: those it gives the framework
+	// (Name: the field or parameter it is given in, "EvtIoDeviceControl"; Type: "PFN_WDF_IO_QUEUE_IO_DEVICE_CONTROL";
+	// Function: the framework's function, "WdfIoQueueCreate")
+	using Framework = FrameworkBinding;
+	Framework Wdf;
 	struct FrameworkCallback {
 		std::wstring Name, Type, Function;
 		DWORD Rva;
@@ -72,7 +67,7 @@ std::wstring FilterOperationName(int operation);
 std::wstring FilterCallbackName(int operation, bool post);
 
 // reads the image (the virtual addresses of its sections); false outside of it
-using DriverImageReader = std::function<bool(uint64_t va, uint8_t* buffer, size_t size)>;
+using DriverImageReader = FrameworkImageReader;
 // a minifilter's FLT_REGISTRATION at an address: its callbacks, and those of its operations (false if it is not one)
 bool ReadFilterRegistration(DriverImageReader const& read, uint64_t base, uint64_t va, bool pe64, DriverInfo& info);
 // the FLT_REGISTRATIONs among the data of an image (a constant one: the size and version it starts with, its operations)
@@ -92,14 +87,6 @@ std::wstring IoctlText(uint32_t code);
 bool LooksLikeIoctl(uint32_t value);
 // the control codes in decompiled C: the cases of a switch, the constants compared with (==, !=)
 std::vector<uint32_t> IoctlsIn(std::string const& code);
-
-// The WDF_BIND_INFO of a driver of the framework (KMDF) among the data of an image: its size, a pointer to the name of the
-// framework ("KmdfLibrary"), its version, the functions it has and the pointer to them (Table 0 if there is none)
-DriverInfo::Framework FindFrameworkBinding(PEFile const& pe, DriverImageReader const& read);
-// the table of a version before 1.15 is in the image (WDFFUNC WdfFunctions[]), not a pointer to it
-inline bool FrameworkArray(DriverInfo::Framework const& binding) {
-	return binding.Major == 1 && binding.Minor < 15;
-}
 
 // A driver of the framework: its binding, the functions that call WdfVersionBind (which they give the WDF_DRIVER_GLOBALS
 // pointer), and those that use the framework's table (that call its functions)

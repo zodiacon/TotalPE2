@@ -128,8 +128,10 @@
     <ClCompile Include="ExceptionScopesTests.cpp" />
     <ClCompile Include="LibrarySignaturesTests.cpp" />
     <ClCompile Include="RttiTests.cpp" />
+    <ClCompile Include="RpcTests.cpp" />
     <ClCompile Include="ResourceContentTests.cpp" />
     <ClCompile Include="CoffObjectTests.cpp" />
+    <ClCompile Include="ComServerTests.cpp" />
     <ClCompile Include="CodeViewTests.cpp" />
     <ClCompile Include="SearchIndexTests.cpp" />
     <ClCompile Include="SecuritySummaryTests.cpp" />

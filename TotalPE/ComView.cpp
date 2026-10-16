@@ -168,12 +168,72 @@ bool CComView::OnDoubleClickList(HWND h, int row, int, CPoint const&) const {
 	return row >= 0 && row < (int)m_Items.size() && Frame()->GoToVa(m_Items[row].Call);
 }
 
-bool CComView::OnRightClickList(HWND, int row, int, POINT const& pt) const {
+bool CComView::OnRightClickList(HWND h, int row, int, POINT const& pt) const {
 	if (row < 0)
 		return false;
 	CMenu menu;
 	menu.LoadMenu(IDR_CONTEXT);
-	return Frame()->ShowContextMenu(menu.GetSubMenu(3), 0, pt.x, pt.y);
+	CMenuHandle sub = menu.GetSubMenu(3);
+	// (what the type library declares of the row: its declaration can be shown)
+	m_ContextGuid = TypeLibGuid(h, row);
+	if (m_ContextGuid) {
+		sub.InsertMenu(0, MF_BYPOSITION | MF_SEPARATOR);
+		sub.InsertMenu(0, MF_BYPOSITION | MF_STRING, ID_COM_GOTOTYPELIB,
+			(L"Go to &Type Library Declaration (" + Frame()->TypeLibDeclaration(m_ContextGuid) + L")").c_str());
+	}
+	return Frame()->ShowContextMenu(sub, 0, pt.x, pt.y);
+}
+
+DWORD CComView::TypeLibGuid(HWND list, int row) const {
+	if (row < 0)
+		return 0;
+	auto declared = [&](DWORD rva) { return rva && !Frame()->TypeLibDeclaration(rva).empty(); };
+	if (list == m_Classes)
+		return row < (int)m_ClassItems.size() && declared(m_ClassItems[row].Guid) ? m_ClassItems[row].Guid : 0;
+	if (row >= (int)m_Items.size())
+		return 0;
+	for (auto const* guids : { &m_Items[row].Interfaces, &m_Items[row].Classes })
+		for (auto rva : *guids)
+			if (declared(rva))
+				return rva;
+	return 0;
+}
+
+LRESULT CComView::OnGoToTypeLib(WORD, WORD, HWND, BOOL&) const {
+	// (of the context menu's row, else of the selected one)
+	auto guid = m_ContextGuid;
+	m_ContextGuid = 0;
+	if (!guid)
+		guid = ::GetFocus() == m_List ? TypeLibGuid(m_List, m_List.GetSelectedIndex()) : TypeLibGuid(m_Classes, m_Classes.GetSelectedIndex());
+	if (guid)
+		Frame()->ShowTypeLibDeclaration(guid);
+	return 0;
+}
+
+std::string CComView::GuidBytes(DWORD rva) const {
+	auto offset = m_PE.GetOffsetFromRVA(rva);
+	if (!offset || offset + 16 > m_PE.GetFileSize())
+		return {};
+	auto span = m_PE.GetSpan((uint32_t)offset, 16);
+	return std::string((char const*)span.data(), span.size());
+}
+
+bool CComView::SelectGuid(std::string const& guid) {
+	auto select = [&](CListViewCtrl& list, int row) {
+		list.SelectItem(row);
+		list.EnsureVisible(row, FALSE);
+		list.SetFocus();
+		return true;
+	};
+	for (int i = 0; i < (int)m_ClassItems.size(); i++)
+		if (GuidBytes(m_ClassItems[i].Guid) == guid)
+			return select(m_Classes, i);
+	for (int i = 0; i < (int)m_Items.size(); i++)
+		for (auto const* guids : { &m_Items[i].Classes, &m_Items[i].Interfaces, &m_Items[i].Others })
+			for (auto rva : *guids)
+				if (GuidBytes(rva) == guid)
+					return select(m_List, i);
+	return false;
 }
 
 LRESULT CComView::OnFunctionCommand(WORD, WORD id, HWND, BOOL&) const {

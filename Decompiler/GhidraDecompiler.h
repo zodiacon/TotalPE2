@@ -69,6 +69,11 @@ public:
 	using PrototypeSource = std::function<bool(uint64_t address, uint32_t& type, std::vector<std::string>& parameterNames)>;
 	// The name of the function at an address (a C identifier, or a qualified C++ name); empty if it has none
 	using NameSource = std::function<std::string(uint64_t address)>;
+	// The declaration of a library function at an address, as C or C++ declares it ("void * __cdecl memset(void * Dst, int
+	// Val, size_t Size)", what a decorated C++ name is undecorated to), or the name of a C function of the libraries whose
+	// prototypes the decompiler has (LibraryPrototypes.h: "memset", "_memset" of x86); empty if it is neither. It is used
+	// when the source of prototypes has none.
+	using DeclarationSource = std::function<std::string(uint64_t address)>;
 	// A local variable of a function: its name, the id of its type and where it is. On the stack: its offset from the stack
 	// pointer as it is when the function is entered (on x86 and x64 the return address is at 0, the parameters on the stack
 	// after it). In a register (optimized code): the register (as the decompiler names it: "RBX", "EDI") and the ranges of
@@ -183,6 +188,7 @@ public:
 	// ahead.
 	void SetTypeSource(TypeSource source);
 	void SetPrototypeSource(PrototypeSource source);
+	void SetDeclarationSource(DeclarationSource source);
 	void SetNameSource(NameSource source);
 	void SetLocalSource(LocalSource source);
 	void SetTypeNameSource(TypeNameSource source);
@@ -244,6 +250,9 @@ public:
 	void AddFrameworkCallback(uint64_t address, std::string const& type);
 	// the name of the framework's function at an index of its table ("WdfDriverCreate"); empty if there is none
 	static std::string FrameworkFunction(uint32_t index);
+	// The prototype a declaration (as DeclarationSource gives it) makes, as C writes it ("void * __cdecl memset(void * Dst,
+	// int Val, size_t Size)"); empty, with the reason, if it makes none
+	std::string DeclaredPrototype(std::string const& declaration, std::string& error);
 
 	// The function at an address as C; 'name' is used if the function has none yet. 'functions' (if given) gets the
 	// functions the code refers to (the function itself and those it calls), by the names it shows, and their addresses.

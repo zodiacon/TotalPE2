@@ -168,8 +168,13 @@ TEST_CASE("Name the functions of an image", "[.][sigmatch]") {
 		if (!named.contains(rva))
 			more++;
 	WARN("functions " << total << ", named " << named.size() << ", and by calls " << more);
+	// (TOTALPE_SIG_ALL: all of them, and those named by calls)
+	bool all = ::GetEnvironmentVariableA("TOTALPE_SIG_ALL", nullptr, 0) != 0;
+	if (all)
+		for (auto const& [rva, name] : called)
+			named.try_emplace(rva, name);
 	int shown = 0;
 	for (auto const& [rva, name] : named)
-		if (shown++ < 15)
+		if (all || shown++ < 15)
 			WARN(std::format("{:X} {}", rva, name));
 }

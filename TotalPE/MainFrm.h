@@ -20,6 +20,7 @@ class CWin32ApiFrame;
 #include "ElfFile.h"
 #include "ElfDebugInfo.h"
 #include "Interfaces.h"
+#include "TypeLibText.h"
 #include "GoToDlg.h"
 #include "SearchDlg.h"
 #include "RecentFilesManager.h"
@@ -89,6 +90,7 @@ public:
 		COMMAND_ID_HANDLER(ID_PE_CLASSES, OnViewClasses)
 		COMMAND_ID_HANDLER(ID_PE_DRIVER, OnViewDriver)
 		COMMAND_ID_HANDLER(ID_PE_COM, OnViewCom)
+		COMMAND_ID_HANDLER(ID_PE_RPC, OnViewRpc)
 		COMMAND_ID_HANDLER(ID_PE_CLRTYPES, OnViewClrTypes)
 		COMMAND_ID_HANDLER(ID_PE_SECURITYSUMMARY, OnViewSecuritySummary)
 		COMMAND_ID_HANDLER(ID_FILE_SAVE, OnFileSave)
@@ -283,6 +285,7 @@ private:
 	LRESULT OnViewClasses(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewDriver(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewCom(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnViewRpc(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	// the file imports the functions of COM that make objects (or start COM)
 	bool UsesCom() const;
 	LRESULT OnViewClrTypes(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
@@ -488,8 +491,15 @@ private:
 	std::map<DWORD, std::wstring> const& LibraryNames() const override { return m_LibraryNames; }
 	std::vector<RttiClass> const& Classes() const override { return m_Classes; }
 	DriverInfo const& Driver() const override { return m_Driver; }
+	std::vector<RpcInterface> const& RpcInterfaces() const override { return m_Rpc; }
+	std::wstring RpcInterfaceName(RpcInterface const& rpc) const override;
+	// the RPC interfaces of the file, and the names and (of 64-bit code) the declarations of their server routines
+	void FindRpcInterfaces();
 	std::vector<ComUse> const& ComUses() override;
 	std::vector<ComServerClass> const& ComServerClasses() const override { return m_ComServer; }
+	std::wstring TypeLibDeclaration(DWORD guid) const override;
+	bool ShowTypeLibDeclaration(DWORD guid) override;
+	bool ShowInComView(std::string const& guid) override;
 	std::wstring ShortFunctionName(DWORD rva) const override { return FunctionName(ResolveRva(rva)); }
 	// the classes of the program, and names of their vtables and of their virtual functions
 	void FindClasses();
@@ -587,12 +597,22 @@ private:
 	std::map<DWORD, Win32Api::NamedGuid> m_Guids;	// the GUIDs of Windows in the data (IIDs, CLSIDs...), by RVA
 	std::set<DWORD> m_SymbolGuids;					// those of them the symbols name (they have the symbols' names)
 	std::set<DWORD> m_TypeLibGuids;					// those of the file's type libraries (not of the metadata)
+	// what the type libraries declare, by the GUIDs' bytes: the kind, the name, the resource (its index)
+	struct TypeLibName {
+		TypeLibGuid::Kinds Kind;
+		std::wstring Name;
+		int Resource;
+	};
+	std::unordered_map<std::string, TypeLibName> m_TypeLibNames;
 	DriverInfo m_Driver;							// what a kernel driver sets up
 	std::vector<ComUse> m_ComUses;					// the calls that pass COM's GUIDs (once the cross-references are there)
 	std::vector<ComServerClass> m_ComServer;		// the classes the DLL serves
 	std::map<DWORD, std::wstring> m_ServerGuidNames;	// the names of their CLSIDs that the metadata and the symbols do not name
 	bool m_ComUsesFound{ false };
 	std::map<DWORD, std::wstring> m_DriverNames;	// its routines' names (DriverUnload, DispatchCreate...), by RVA
+	std::vector<RpcInterface> m_Rpc;				// the RPC interfaces it serves and calls
+	std::map<DWORD, std::wstring> m_RpcNames;		// the names of the servers' routines ("srvsvc_Opnum12"), by RVA
+	std::unordered_map<DWORD, std::string> m_RpcDeclarations;	// their declarations, for the decompiler (64-bit code)
 	uint32_t m_DriverGeneration{ 0 };
 	std::vector<Anomaly> m_Anomalies;
 	// The cross-references of the PE file, found on a thread of their own when it is opened (a large file takes seconds).

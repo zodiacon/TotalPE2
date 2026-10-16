@@ -31,6 +31,7 @@
 #include "BookmarksView.h"
 #include "ClassesView.h"
 #include "DriverView.h"
+#include "RpcView.h"
 #include "ComView.h"
 #include "BoundImportView.h"
 #include "GlobalPtrView.h"
@@ -453,6 +454,15 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		case TreeItemType::Driver:
 		{
 			auto view = new CDriverView(this, m_PE);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+		case TreeItemType::Rpc:
+		{
+			auto view = new CRpcView(this, m_PE);
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};

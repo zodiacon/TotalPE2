@@ -74,6 +74,9 @@ public:
 	// line, or Go to Definition in its context menu, calls it; false if the line leads nowhere
 	using LineAction = std::function<bool(int line)>;
 	void SetLineAction(LineAction action);
+	// IDL: shows (selects) the declaration of a name ("coclass Molecule": one of the keywords, then the name); false if the
+	// text has none
+	bool ShowDeclaration(std::vector<std::string> const& keywords, std::string const& name);
 
 	int64_t GetNavigationPosition() const override;
 	void SetNavigationPosition(int64_t va) override;
@@ -103,6 +106,7 @@ public:
 		COMMAND_ID_HANDLER(ID_ASSEMBLY_DISASSEMBLEATTHEEND, OnDisassembleAtEnd)
 		COMMAND_ID_HANDLER(ID_ASSEMBLY_DISASSEMBLEINANEWTAB, OnDisassembleNewTab)
 		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnEditCopy)
+		COMMAND_ID_HANDLER(ID_IDL_SHOWINCOM, OnShowInCom)
 		COMMAND_ID_HANDLER(ID_CODE_DECOMPILE, OnCodeLink)
 		COMMAND_ID_HANDLER(ID_CODE_DISASSEMBLE, OnCodeLink)
 		COMMAND_ID_HANDLER(ID_CODE_DECOMPILE_HERE, OnCodeLink)
@@ -154,6 +158,9 @@ private:
 	LRESULT OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnUpdateTheme(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnContextMenu(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
+	LRESULT OnShowInCom(WORD, WORD, HWND, BOOL&);
+	// IDL: the GUID of the declaration a line is in (its uuid attribute: on the line, or before it); empty if none
+	std::string GuidOfLine(int line) const;
 	LRESULT OnGoToAddress(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnDisassembleNewTab(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnDisassembleAtEnd(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
@@ -174,6 +181,7 @@ private:
 	GhidraDecompiler::Variable const* VariableNamed(std::wstring const& name) const;
 	GhidraDecompiler::Variables m_Variables;
 	std::wstring m_ContextName;		// the name the context menu was opened on
+	std::string m_ContextGuid;		// IDL: the GUID of the declaration the context menu was opened on (its bytes)
 	// bookmarks and comments: of the caret's line (of the line of the context menu: ID_CODE_BOOKMARK, ID_CODE_COMMENT)
 	LRESULT OnAnnotate(WORD, WORD id, HWND, BOOL&);
 	LRESULT OnNextBookmark(WORD, WORD id, HWND, BOOL&);
@@ -213,5 +221,6 @@ private:
 	std::vector<Line> m_Lines;						// by line of the text: what each line of the disassembly is
 	std::unordered_map<uint64_t, int> m_LineOfVa;	// the line of each instruction
 	int m_ContextLine{ -1 };						// the line the context menu was opened on
+	intptr_t m_ContextPos{ -1 };					// and its position (-1: the caret's)
 	static constexpr int MarkerRelated = 1;
 };

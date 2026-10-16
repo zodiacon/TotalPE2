@@ -100,6 +100,7 @@
   <ItemGroup>
     <ClInclude Include="GhidraDecompiler.h" />
     <ClInclude Include="WdfTables.h" />
+    <ClInclude Include="LibraryPrototypes.h" />
     <ClInclude Include="ghidra\cpp\action.hh" />
     <ClInclude Include="ghidra\cpp\address.hh" />
     <ClInclude Include="ghidra\cpp\analyzesigs.hh" />

@@ -413,9 +413,9 @@
     <ClCompile Include="BookmarksView.cpp" />
     <ClCompile Include="ClassesView.cpp" />
     <ClCompile Include="ComView.cpp" />
-    <ClCompile Include="ComServer.cpp" />
     <ClCompile Include="Driver.cpp" />
     <ClCompile Include="DriverView.cpp" />
+    <ClCompile Include="RpcView.cpp" />
     <ClCompile Include="HexFind.cpp" />
     <ClCompile Include="HexInspector.cpp" />
     <ClCompile Include="BoundImportView.cpp" />
@@ -493,9 +493,9 @@
     <ClInclude Include="BookmarksView.h" />
     <ClInclude Include="ClassesView.h" />
     <ClInclude Include="ComView.h" />
-    <ClInclude Include="ComServer.h" />
     <ClInclude Include="Driver.h" />
     <ClInclude Include="DriverView.h" />
+    <ClInclude Include="RpcView.h" />
     <ClInclude Include="HexFind.h" />
     <ClInclude Include="HexInspector.h" />
     <ClInclude Include="BoundImportView.h" />

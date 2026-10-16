@@ -138,6 +138,15 @@
     <ClInclude Include="Rtti.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="RpcInterfaces.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ComServer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FrameworkBinding.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="VirusTotal.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -276,6 +285,15 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Rtti.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="RpcInterfaces.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ComServer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="FrameworkBinding.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="VirusTotal.cpp">

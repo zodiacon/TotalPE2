@@ -1,5 +1,6 @@
 #include "GhidraDecompiler.h"
 #include "WdfTables.h"
+#include "LibraryPrototypes.h"
 
 #include "libdecomp.hh"
 #include "sleigh_arch.hh"
@@ -210,6 +211,7 @@ struct GhidraDecompiler::Impl {
 
 	TypeSource Types;
 	PrototypeSource Prototypes;
+	DeclarationSource Declarations;
 	NameSource Names;
 	LocalSource Locals;
 	TypeNameSource TypeNames;
@@ -335,6 +337,12 @@ struct GhidraDecompiler::Impl {
 	// real type (structs and unions end their own recursion, by name)
 	static constexpr int MaxDepth = 1000;
 	bool ApplyPrototype(Funcdata* fd);
+	// The prototype of a library function from its declaration (DeclarationSource), when there is no other: its pieces (of
+	// the declaration's calling convention, on x86), and the types of its words ("unsigned __int64", "wchar_t const *",
+	// "class std::exception const &"); false (null) if they are not all known
+	bool ApplyDeclaration(Funcdata* fd);
+	bool DeclarationPieces(std::string const& declaration, PrototypePieces& pieces, std::string& error);
+	Datatype* DeclaredType(std::string const& text, bool result);
 	void ApplyLocals(Funcdata* fd);
 	std::vector<std::pair<Varnode*, RegisterLocal const*>> RegisterValues(Funcdata* fd) const;
 	bool ApplyFixup(Funcdata* fd);
@@ -624,13 +632,15 @@ Datatype* GhidraDecompiler::Impl::Convert(uint32_t id, int depth) {
 // that the decompiler keeps them. False if there is none (or it was set already).
 bool GhidraDecompiler::Impl::ApplyPrototype(Funcdata* fd) {
 	auto address = fd->getAddress().getOffset();
-	if (!Prototypes || !Types || !Prototyped.insert(address).second)
+	if ((!Prototypes || !Types) && !Declarations)
+		return false;
+	if (!Prototyped.insert(address).second)
 		return false;
 	uint32_t typeId = 0;
 	std::vector<std::string> names;
 	Type t;
-	if (!Prototypes(address, typeId, names) || !Types(typeId, t) || t.Kind != TypeKind::Function)
-		return false;
+	if (!Prototypes || !Types || !Prototypes(address, typeId, names) || !Types(typeId, t) || t.Kind != TypeKind::Function)
+		return ApplyDeclaration(fd);	// (a function of a library: of its declaration)
 	try {
 		PrototypePieces pieces;
 		pieces.model = Arch->defaultfp;
@@ -1880,6 +1890,10 @@ void GhidraDecompiler::SetPrototypeSource(PrototypeSource source) {
 	m_Impl->Prototypes = std::move(source);
 }
 
+void GhidraDecompiler::SetDeclarationSource(DeclarationSource source) {
+	m_Impl->Declarations = std::move(source);
+}
+
 void GhidraDecompiler::SetNameSource(NameSource source) {
 	m_Impl->Names = std::move(source);
 }
@@ -2442,8 +2456,9 @@ Datatype* GhidraDecompiler::Impl::WdfType(std::string text) {
 	if (text == "VOID" || text.empty())
 		result = types->getTypeVoid();
 	else if (text == "NTSTATUS") {
+		// (of the symbols, or of Windows; otherwise a name for an int, which a synonym of ParseType's is not)
 		result = ParseType(text, error);
-		if (!result || result->getSize() != 4)
+		if (!result || result->getSize() != 4 || result->getName() != text)
 			result = alias(types->getBase(4, TYPE_INT));
 	}
 	else if (auto integer = integers.find(text); integer != integers.end())
@@ -2523,6 +2538,421 @@ PrototypePieces GhidraDecompiler::Impl::WdfPrototype(std::string const& result, 
 	}
 	return pieces;
 }
+
+namespace {
+	bool IsWordChar(char c) {
+		return isalnum((unsigned char)c) || c == '_' || c == '$' || c == '`' || c == '\'';
+	}
+
+	// the declarations of LibraryPrototypes.h, by the names of their functions
+	std::unordered_map<std::string, char const*> const& LibraryDeclarations() {
+		static auto const declarations = [] {
+			std::unordered_map<std::string, char const*> map;
+			for (auto declaration : LibraryPrototypes::Declarations) {
+				std::string_view text(declaration);
+				auto end = text.find('(');
+				while (end > 0 && text[end - 1] == ' ')
+					end--;
+				auto start = end;
+				while (start > 0 && IsWordChar(text[start - 1]))
+					start--;
+				map.emplace(std::string(text.substr(start, end - start)), declaration);
+			}
+			return map;
+		}();
+		return declarations;
+	}
+
+	// The declaration of a C function of the libraries by its name, as x86 decorates it too ("_memset"; "_RtlFoo@8" of
+	// __stdcall, "@__security_check_cookie@4" of __fastcall: its convention is then the decoration's)
+	char const* LibraryDeclaration(std::string name, bool x86, std::string& convention) {
+		auto const& declarations = LibraryDeclarations();
+		if (x86) {
+			auto at = name.rfind('@');
+			bool sized = at != std::string::npos && at > 0 && at + 1 < name.size() &&
+				name.find_first_not_of("0123456789", at + 1) == std::string::npos;
+			if (!name.empty() && name[0] == '@' && sized) {
+				convention = "__fastcall";
+				name = name.substr(1, at - 1);
+			}
+			else if (sized) {
+				convention = "__stdcall";
+				name = name.substr(0, at);
+				if (!name.empty() && name[0] == '_')
+					name = name.substr(1);
+			}
+			else if (name.size() > 1 && name[0] == '_')
+				if (auto it = declarations.find(name.substr(1)); it != declarations.end())
+					return it->second;
+		}
+		auto it = declarations.find(name);
+		return it == declarations.end() ? nullptr : it->second;
+	}
+
+	// a parameter list's parameters: at its commas (not those of templates or of the parameters of pointers to functions)
+	std::vector<std::string> SplitParameters(std::string const& text) {
+		std::vector<std::string> parameters;
+		int depth = 0;
+		size_t start = 0;
+		for (size_t i = 0; i <= text.size(); i++) {
+			auto c = i < text.size() ? text[i] : ',';
+			if (c == '<' || c == '(' || c == '[')
+				depth++;
+			else if (c == '>' || c == ')' || c == ']')
+				depth--;
+			else if (c == ',' && depth == 0) {
+				parameters.push_back(Trim(text.substr(start, i - start)));
+				start = i + 1;
+			}
+		}
+		return parameters;
+	}
+
+	bool IsTypeKeyword(std::string const& word) {
+		static std::unordered_set<std::string> const keywords = { "const", "volatile", "void", "bool", "char", "wchar_t", "char8_t",
+			"char16_t", "char32_t", "short", "int", "long", "float", "double", "signed", "unsigned", "__int8", "__int16", "__int32",
+			"__int64", "__ptr64", "__ptr32", "__unaligned", "__restrict", "__w64", "class", "struct", "union", "enum" };
+		return keywords.count(word) != 0;
+	}
+
+	// A parameter's name ("Size" of "size_t Size", "CompareFunction" of "int (__cdecl * CompareFunction)(...)"), taken out of
+	// its text; empty if it has none (an undecorated name's parameters have none)
+	std::string ParameterName(std::string& parameter) {
+		auto open = parameter.find('(');
+		if (open != std::string::npos) {
+			// (a pointer to a function: its name is in its first parentheses)
+			auto close = parameter.find(')', open);
+			if (close == std::string::npos)
+				return {};
+			auto end = close;
+			while (end > open && parameter[end - 1] == ' ')
+				end--;
+			auto start = end;
+			while (start > open && IsWordChar(parameter[start - 1]))
+				start--;
+			auto name = parameter.substr(start, end - start);
+			if (name.empty() || IsTypeKeyword(name) || StartsWith(name, "__"))
+				return {};
+			parameter.erase(start, end - start);
+			return name;
+		}
+		auto end = parameter.size();
+		auto start = end;
+		while (start > 0 && IsWordChar(parameter[start - 1]))
+			start--;
+		if (start == end || start == 0)
+			return {};
+		auto before = parameter[start - 1];
+		auto name = parameter.substr(start);
+		if ((before != ' ' && before != '*' && before != '&') || IsTypeKeyword(name) || isdigit((unsigned char)name[0]))
+			return {};
+		auto rest = Trim(parameter.substr(0, start));
+		// ("struct X", "unsigned X" are types)
+		auto space = rest.find_last_of(' ');
+		auto last = space == std::string::npos ? rest : rest.substr(space + 1);
+		if (last == "class" || last == "struct" || last == "union" || last == "enum" || last == "signed" || last == "unsigned")
+			return {};
+		parameter = rest;
+		return name;
+	}
+}
+
+Datatype* GhidraDecompiler::Impl::DeclaredType(std::string const& text, bool result) {
+	auto types = Arch->types;
+	auto space = Arch->getDefaultDataSpace();
+	int4 p = space->getAddrSize();
+	auto pointerTo = [&](Datatype* t) { return types->getTypePointer(p, t, space->getWordSize()); };
+	auto codePointer = [&] { return pointerTo(types->getTypeCode()); };
+	// its words (a qualified name with its template's arguments is one), and its pointers and references
+	std::vector<std::string> words;
+	int pointers = 0;
+	for (size_t i = 0; i < text.size(); ) {
+		auto c = text[i];
+		if (c == ' ' || c == '\t') {
+			i++;
+			continue;
+		}
+		if (c == '*' || c == '&') {
+			pointers++;
+			i += c == '&' && i + 1 < text.size() && text[i + 1] == '&' ? 2 : 1;
+			continue;
+		}
+		if (c == '(') {
+			// a pointer to a function ("void (__cdecl *)(int)"), or a reference to an array ("char const (&)[4]")
+			auto close = text.find(')', i);
+			if (close == std::string::npos)
+				return nullptr;
+			auto after = text.find_first_not_of(' ', close + 1);
+			return after != std::string::npos && text[after] == '(' ? codePointer() : pointerTo(types->getTypeVoid());
+		}
+		if (!IsWordChar(c) && c != ':')
+			return nullptr;
+		std::string word;
+		int depth = 0;
+		while (i < text.size() && (IsWordChar(text[i]) || text[i] == ':' || text[i] == '<' || depth > 0)) {
+			if (text[i] == '<')
+				depth++;
+			else if (text[i] == '>')
+				depth--;
+			word += text[i++];
+		}
+		if (word == "const" || word == "volatile" || word == "__ptr64" || word == "__ptr32" || word == "__unaligned" ||
+			word == "__restrict" || word == "__w64")
+			continue;
+		if (pointers)
+			return nullptr;		// (a word after a pointer that is not a qualifier)
+		words.push_back(word);
+	}
+	if (words.empty())
+		return nullptr;
+	// a name for a type (the symbols' type of the name, if they have it)
+	auto alias = [&](Datatype* target, std::string const& name) -> Datatype* {
+		if (auto known = types->findByName(name); known && known->getSize() == target->getSize())
+			return known;
+		try {
+			return types->getTypedef(target, name, 0, 0);
+		}
+		catch (LowlevelError const&) {
+			return target;
+		}
+	};
+	Datatype* base = nullptr;
+	std::string joined;
+	for (auto const& word : words)
+		joined += (joined.empty() ? "" : " ") + word;
+	auto const& first = words[0];
+	if (first == "class" || first == "struct" || first == "union") {
+		// (a class the symbols or the run-time type information have; one by value whose size is not known is not one)
+		auto name = words.size() == 2 ? words[1] : std::string();
+		if (!name.empty() && name.find_first_of("<`") == std::string::npos)
+			base = NamedType(name);
+		if (base && base->getSize() <= 0)
+			base = nullptr;
+		if (!base) {
+			if (!pointers)
+				return nullptr;
+			base = types->getTypeVoid();
+		}
+	}
+	else if (first == "enum")
+		base = types->getBase(4, TYPE_INT);
+	else {
+		struct Alias {
+			char const* Name;
+			int4 Size;		// 0: of a pointer
+			type_metatype Meta;
+		};
+		static Alias const aliases[] = { { "size_t", 0, TYPE_UINT }, { "rsize_t", 0, TYPE_UINT }, { "uintptr_t", 0, TYPE_UINT },
+			{ "intptr_t", 0, TYPE_INT }, { "ptrdiff_t", 0, TYPE_INT }, { "errno_t", 4, TYPE_INT }, { "wint_t", 2, TYPE_UINT },
+			{ "wctype_t", 2, TYPE_UINT }, { "__time64_t", 8, TYPE_INT }, { "time_t", 8, TYPE_INT },
+			{ "EXCEPTION_DISPOSITION", 4, TYPE_INT } };
+		for (auto const& a : aliases)
+			if (joined == a.Name)
+				base = alias(types->getBase(a.Size ? a.Size : p, a.Meta), a.Name);
+		if (base)
+			;
+		else if (joined == "void") {
+			if (!pointers && !result)
+				return nullptr;
+			base = types->getTypeVoid();
+		}
+		else if (joined == "va_list")
+			base = alias(pointerTo(types->getTypeChar(1)), joined);
+		else if (joined == "_locale_t")
+			base = alias(pointerTo(types->getTypeVoid()), joined);
+		else if (joined == "_PVFV" || joined == "_PIFV" || joined == "_onexit_t")
+			base = alias(codePointer(), joined);
+		else if (joined == "FILE") {
+			if (!pointers)
+				return nullptr;
+			base = types->getTypeVoid();
+		}
+		else if (joined == "bool")
+			base = types->getBase(1, TYPE_BOOL);
+		else if (joined == "char" || joined == "char8_t")
+			base = types->getTypeChar(1);
+		else if (joined == "wchar_t" || joined == "char16_t")
+			base = types->getTypeChar(2);
+		else if (joined == "char32_t")
+			base = types->getTypeChar(4);
+		else if (joined == "int" || joined == "signed int")
+			base = types->getBase(4, TYPE_INT);
+		else if (joined == "float")
+			base = types->getBase(4, TYPE_FLOAT);
+		else if (joined == "double" || joined == "long double")
+			base = types->getBase(8, TYPE_FLOAT);
+		else if (words.size() == 1 && isupper((unsigned char)first[0]) && first.find_first_of(":<") == std::string::npos)
+			base = WdfType(first);		// a type of Windows ("NTSTATUS", "PDRIVER_OBJECT", "ULONG")
+		else if (auto named = NamedType(joined); named && (named->getSize() > 0 || pointers))
+			base = named;
+		else if (pointers)
+			base = types->getTypeVoid();	// (a pointer to what is not known)
+		else
+			return nullptr;
+	}
+	for (int i = 0; i < pointers; i++)
+		base = pointerTo(base);
+	if (!result && base->getSize() <= 0)
+		return nullptr;
+	return base;
+}
+
+bool GhidraDecompiler::Impl::DeclarationPieces(std::string const& declaration, PrototypePieces& pieces, std::string& error) {
+	bool x86 = Arch->getDefaultDataSpace()->getAddrSize() == 4;
+	auto text = Trim(declaration);
+	std::string decorated;		// (the convention of an x86 decorated name)
+	if (text.find('(') == std::string::npos) {
+		auto known = LibraryDeclaration(text, x86, decorated);
+		if (!known) {
+			error = "the prototype of '" + text + "' is not known";
+			return false;
+		}
+		text = known;
+	}
+	auto notOne = [&] {
+		error = "'" + declaration + "' is not a function's declaration";
+		return false;
+	};
+	// what a member function has before its declaration: its access ("public: virtual"); a static one is as others are
+	bool member = false;
+	for (auto access : { "public: ", "protected: ", "private: " })
+		if (StartsWith(text, access)) {
+			member = true;
+			text = text.substr(strlen(access));
+		}
+	if (StartsWith(text, "static ")) {
+		member = false;
+		text = text.substr(7);
+	}
+	if (StartsWith(text, "virtual "))
+		text = text.substr(8);
+	if (StartsWith(text, "[") || StartsWith(text, "extern "))
+		return notOne();
+	// the parameters: in the parentheses that end it (a member function has "const", "__ptr64" after them)
+	auto close = text.rfind(')');
+	size_t open = std::string::npos;
+	if (close != std::string::npos)
+		for (size_t i = close + 1, depth = 0; i-- > 0; ) {
+			if (text[i] == ')')
+				depth++;
+			else if (text[i] == '(' && --depth == 0) {
+				open = i;
+				break;
+			}
+		}
+	if (open == std::string::npos)
+		return notOne();
+	auto head = Trim(text.substr(0, open));
+	// the calling convention: the last one (what returns a pointer to a function has another before it)
+	size_t at = std::string::npos;
+	std::string convention;
+	for (auto c : { "__cdecl", "__stdcall", "__fastcall", "__thiscall", "__vectorcall", "__clrcall" })
+		for (auto found = head.find(c); found != std::string::npos; found = head.find(c, found + 1))
+			if (at == std::string::npos || found > at) {
+				at = found;
+				convention = c;
+			}
+	if (at == std::string::npos) {
+		error = "'" + declaration + "' has no calling convention";
+		return false;
+	}
+	auto name = Trim(head.substr(at + convention.size()));
+	if (head.find('(') != std::string::npos) {
+		error = "'" + declaration + "' returns a pointer to a function";
+		return false;
+	}
+	if (!decorated.empty())
+		convention = decorated;
+	// (x64 and ARM64 have one convention; a member function's is __thiscall, unless it is variadic, __cdecl, or __stdcall)
+	pieces.model = nullptr;
+	if (member && (!x86 || convention == "__thiscall"))
+		pieces.model = Arch->getModel("__thiscall");
+	if (!pieces.model && x86)
+		pieces.model = Arch->getModel(convention);
+	if (!pieces.model)
+		pieces.model = Arch->defaultfp;
+	// the result: a constructor's is "this" (it has none in its declaration), a destructor's none
+	auto space = Arch->getDefaultDataSpace();
+	auto result = Trim(head.substr(0, at));
+	if (result.empty())
+		pieces.outtype = member && name.find('~') == std::string::npos ?
+			(Datatype*)Arch->types->getTypePointer(space->getAddrSize(), Arch->types->getTypeVoid(), space->getWordSize()) : Arch->types->getTypeVoid();
+	else if (!(pieces.outtype = DeclaredType(result, true))) {
+		error = "the type '" + result + "' is not known (or it is returned by value)";
+		return false;
+	}
+	pieces.intypes.clear();
+	pieces.innames.clear();
+	pieces.firstVarArgSlot = -1;
+	if (member) {
+		// "this": a pointer to its class (one the decompiler has; or to what is not known)
+		auto scope = name.rfind("::");
+		Datatype* type = scope == std::string::npos ? nullptr : DeclaredType("class " + name.substr(0, scope) + " *", false);
+		pieces.intypes.push_back(type ? type : DeclaredType("void *", false));
+		pieces.innames.push_back("this");
+	}
+	auto list = Trim(text.substr(open + 1, close - open - 1));
+	if (list != "void" && !list.empty())
+		for (auto parameter : SplitParameters(list)) {
+			if (parameter == "...") {
+				pieces.firstVarArgSlot = (int4)pieces.intypes.size();
+				break;
+			}
+			auto parameterName = ParameterName(parameter);
+			auto type = DeclaredType(parameter, false);
+			if (!type) {
+				error = "the type '" + parameter + "' is not known (or it is passed by value)";
+				return false;
+			}
+			pieces.intypes.push_back(type);
+			pieces.innames.push_back(parameterName);
+		}
+	return true;
+}
+
+bool GhidraDecompiler::Impl::ApplyDeclaration(Funcdata* fd) {
+	if (!Declarations)
+		return false;
+	auto declaration = Declarations(fd->getAddress().getOffset());
+	if (declaration.empty())
+		return false;
+	try {
+		PrototypePieces pieces;
+		std::string error;
+		if (!DeclarationPieces(declaration, pieces, error))
+			return false;
+		pieces.name = fd->getName();
+		auto& proto = fd->getFuncProto();
+		proto.setPieces(pieces);
+		proto.setInputLock(true);
+		proto.setOutputLock(true);
+		return true;
+	}
+	catch (LowlevelError const&) {
+		return false;
+	}
+}
+
+std::string GhidraDecompiler::DeclaredPrototype(std::string const& declaration, std::string& error) {
+	if (!Open(error))
+		return {};
+	try {
+		PrototypePieces pieces;
+		if (!m_Impl->DeclarationPieces(declaration, pieces, error))
+			return {};
+		std::string text = Impl::TypeText(pieces.outtype) + " " + pieces.model->getName() + "(";
+		for (size_t i = 0; i < pieces.intypes.size(); i++)
+			text += (i ? ", " : "") + Impl::TypeText(pieces.intypes[i]) + (pieces.innames[i].empty() ? "" : " " + pieces.innames[i]);
+		if (pieces.firstVarArgSlot >= 0)
+			text += pieces.intypes.empty() ? "..." : ", ...";
+		return text + ")";
+	}
+	catch (LowlevelError const& e) {
+		error = e.explain;
+		return {};
+	}
+}
+
 
 int GhidraDecompiler::Impl::WdfIndex(Varnode* target) const {
 	if (!WdfTable)

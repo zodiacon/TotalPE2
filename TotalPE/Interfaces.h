@@ -6,6 +6,7 @@
 #include "CodeAnalysis.h"
 #include "Overlay.h"
 #include "VirusTotal.h"
+#include <RpcInterfaces.h>
 #include "TypeExporter.h"
 #include <GhidraDecompiler.h>
 #include <optional>
@@ -179,6 +180,8 @@ enum class TreeItemType : int64_t {
 	Driver,
 	// the calls that pass the GUIDs of COM: the classes the program creates, the interfaces it asks for
 	Com,
+	// the RPC interfaces the program serves (their procedures) and those it calls
+	Rpc,
 
 	ItemMask = 255,
 };
@@ -214,10 +217,20 @@ struct IMainFrame abstract {
 	virtual std::vector<RttiClass> const& Classes() const = 0;
 	// what the file sets up, if it is a kernel driver (once the decompiler has found it)
 	virtual DriverInfo const& Driver() const = 0;
+	// the RPC interfaces of the image (its RPC_SERVER_INTERFACEs and RPC_CLIENT_INTERFACEs), and the name of one: of the
+	// symbols ("srvsvc" of srvsvc___RpcServerInterface), of Windows' protocols, or of its UUID ("Rpc_4B324FC8")
+	virtual std::vector<RpcInterface> const& RpcInterfaces() const = 0;
+	virtual std::wstring RpcInterfaceName(RpcInterface const& rpc) const = 0;
 	// the calls that pass the GUIDs of Windows (once the cross-references are there: empty until then)
 	virtual std::vector<ComUse> const& ComUses() = 0;
 	// the COM classes the DLL serves (DllGetClassObject; once the cross-references are there)
 	virtual std::vector<ComServerClass> const& ComServerClasses() const = 0;
+	// What the file's type library declares of a GUID (at an RVA): "coclass Molecule", "interface IMolecule"; empty if none
+	virtual std::wstring TypeLibDeclaration(DWORD guid) const = 0;
+	// shows that declaration in the view of the type library
+	virtual bool ShowTypeLibDeclaration(DWORD guid) = 0;
+	// shows a GUID (its 16 bytes) in the COM view: the class of that CLSID the file serves, or the first call that passes it
+	virtual bool ShowInComView(std::string const& guid) = 0;
 	// the name of the function at an RVA without its parameters and return type ("InvokeOpenDialog", "ui::Widget::Draw")
 	virtual std::wstring ShortFunctionName(DWORD rva) const = 0;
 	virtual std::wstring ResolveVa(ULONGLONG va) const = 0;

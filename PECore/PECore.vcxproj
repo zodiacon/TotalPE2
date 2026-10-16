@@ -277,6 +277,9 @@
     <ClInclude Include="ExceptionScopes.h" />
     <ClInclude Include="LibrarySignatures.h" />
     <ClInclude Include="Rtti.h" />
+    <ClInclude Include="RpcInterfaces.h" />
+    <ClInclude Include="ComServer.h" />
+    <ClInclude Include="FrameworkBinding.h" />
     <ClInclude Include="VirusTotal.h" />
     <ClInclude Include="PEStrings.h" />
     <ClInclude Include="PEDiff.h" />
@@ -332,6 +335,9 @@
     <ClCompile Include="ExceptionScopes.cpp" />
     <ClCompile Include="LibrarySignatures.cpp" />
     <ClCompile Include="Rtti.cpp" />
+    <ClCompile Include="RpcInterfaces.cpp" />
+    <ClCompile Include="ComServer.cpp" />
+    <ClCompile Include="FrameworkBinding.cpp" />
     <ClCompile Include="VirusTotal.cpp" />
     <ClCompile Include="PEStrings.cpp" />
     <ClCompile Include="PEDiff.cpp" />

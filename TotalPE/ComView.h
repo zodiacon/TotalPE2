@@ -26,6 +26,8 @@ public:
 	bool OnRightClickList(HWND, int row, int col, POINT const& pt) const;
 	void OnStateChanged(HWND, int from, int to, UINT oldState, UINT newState) const;
 	void UpdateUI(bool first = false) const;
+	// selects the class of a CLSID (its bytes), or else the first call that passes the GUID; false if there is none
+	bool SelectGuid(std::string const& guid);
 
 	BEGIN_MSG_MAP(CComView)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
@@ -38,12 +40,18 @@ public:
 		COMMAND_ID_HANDLER(ID_EXPORT_XREFS, OnFunctionCommand)
 		COMMAND_ID_HANDLER(ID_EXPORT_FLOWGRAPH, OnFunctionCommand)
 		COMMAND_ID_HANDLER(ID_EXPORT_CALLGRAPH, OnFunctionCommand)
+		COMMAND_ID_HANDLER(ID_COM_GOTOTYPELIB, OnGoToTypeLib)
 		CHAIN_MSG_MAP_ALT(CViewBase<CComView>, 1)
 	END_MSG_MAP()
 
 private:
 	LRESULT OnCreate(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnFunctionCommand(WORD, WORD id, HWND, BOOL&) const;
+	LRESULT OnGoToTypeLib(WORD, WORD, HWND, BOOL&) const;
+	// the GUID of a row that the file's type library declares (a class's CLSID; a call's interface, else its class), 0 if none
+	DWORD TypeLibGuid(HWND list, int row) const;
+	// the 16 bytes of a GUID of the image
+	std::string GuidBytes(DWORD rva) const;
 	void Fill();
 	std::wstring Names(std::vector<DWORD> const& guids) const;
 	// the function of the row selected (of the list with the focus), 0 if none
@@ -55,4 +63,5 @@ private:
 	CListViewCtrl m_List;
 	PEFile const& m_PE;
 	std::vector<ComUse> m_Items;
+	mutable DWORD m_ContextGuid{ 0 };	// the GUID of the row the context menu was opened on
 };

@@ -335,6 +335,7 @@ BEGIN
         MENUITEM "C&lasses",                    ID_PE_CLASSES
         MENUITEM "Dri&ver",                     ID_PE_DRIVER
         MENUITEM "C&OM",                        ID_PE_COM
+        MENUITEM "RP&C",                        ID_PE_RPC
         MENUITEM ".&NET Types",                 ID_PE_CLRTYPES
         MENUITEM "&Debug",                      ID_VIEW_DEBUG
         MENUITEM "Security",                    ID_PE_SECURITY
@@ -878,6 +879,7 @@ BEGIN
     ID_WIN32_DOCS           "Show Microsoft's documentation of the function or type\nDocumentation"
     ID_WIN32_BROWSER        "Open the documentation (or a search of it) in the default browser\nOpen in Browser"
     ID_PE_COM               "The COM classes the program creates and the interfaces it asks for: the calls that pass their GUIDs\nCOM"
+    ID_PE_RPC               "The RPC interfaces the program serves (their procedures, the routines that serve them) and those it calls\nRPC"
     ID_TOOLS_ADDSIGNATURES  "Name the functions of static libraries (.lib, .obj) in files that have no symbols\nAdd Library Signatures"
     ID_PE_CLASSES           "The C++ classes of the program (from its run-time type information): their bases, vtables and virtual functions \nClasses"
     ID_PE_DRIVER            "What the kernel driver sets up: its dispatch routines (IRP_MJ_...), its unload routine, the control codes it handles\nDriver"

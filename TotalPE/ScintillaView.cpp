@@ -369,6 +369,15 @@ BOOL CScintillaView::PreTranslateMessage(MSG* pMsg) {
 			::MessageBeep(MB_ICONWARNING);
 		return TRUE;
 	}
+	// G shows the flow graph of the function at the caret, or of the view's
+	if (pMsg->message == WM_KEYDOWN && m_Language == LexLanguage::C && m_Function && m_Sci.m_hWnd && pMsg->hwnd == m_Sci.m_hWnd &&
+		pMsg->wParam == 'G' && m_Sci.SendMessage(SCI_GETREADONLY) &&
+		::GetKeyState(VK_CONTROL) >= 0 && ::GetKeyState(VK_MENU) >= 0 && ::GetKeyState(VK_SHIFT) >= 0) {
+		m_ContextPos = -1;
+		if (auto va = FlowGraphAddress(); !va || !Frame()->ShowFlowGraph(*va))
+			::MessageBeep(MB_ICONWARNING);
+		return TRUE;
+	}
 	if (pMsg->message == WM_KEYDOWN && m_Language == LexLanguage::Asm && m_Sci.m_hWnd && pMsg->hwnd == m_Sci.m_hWnd &&
 		(pMsg->wParam == VK_RETURN || pMsg->wParam == 'X' || pMsg->wParam == 'G') &&
 		::GetKeyState(VK_CONTROL) >= 0 && ::GetKeyState(VK_MENU) >= 0 && ::GetKeyState(VK_SHIFT) >= 0) {
@@ -431,10 +440,21 @@ LRESULT CScintillaView::OnFlowGraph(WORD, WORD id, HWND, BOOL&) {
 // What the flow graph is of: an address that is selected (in the image), the instruction of the line (or the one that a label
 // is above), and otherwise (an empty line, below the code) the function that the view shows. Flow graphs are of PE files.
 std::optional<uint64_t> CScintillaView::FlowGraphAddress() {
-	if (!m_PE || m_Language != LexLanguage::Asm)
+	if (!m_PE)
 		return std::nullopt;
 	uint64_t va;
 	auto base = m_PE.GetImageBase();
+	// decompiled code: the function (of the image) whose name is under the mouse, or that of the view
+	if (m_Language == LexLanguage::C && m_Function) {
+		auto inImage = [&](uint64_t address) {
+			return address >= base && address - base <= 0xFFFFFFFFULL && m_PE.GetOffsetFromRVA((uint32_t)(address - base)) != 0;
+		};
+		if (auto function = FunctionOf(NameAt(m_ContextPos >= 0 ? m_ContextPos : m_Sci.GetCurrentPos())); function && inImage(function))
+			return function;
+		return m_Function;
+	}
+	if (m_Language != LexLanguage::Asm)
+		return std::nullopt;
 	if (ParseHexAddress(m_Sci.GetSelText(), va) && va >= base && va - base <= 0xFFFFFFFFULL && m_PE.GetOffsetFromRVA((uint32_t)(va - base)) != 0)
 		return va;
 	if (auto line = GetLine(InstructionLine(m_ContextLine >= 0 ? m_ContextLine : CurrentLine())); line && line->Va)
@@ -730,6 +750,7 @@ LRESULT CScintillaView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
 	}
 	if ((m_Language == LexLanguage::Asm || m_Language == LexLanguage::C || m_LineAction) && pos >= 0)
 		m_ContextLine = (int)m_Sci.LineFromPosition(pos);
+	m_ContextPos = pos;
 	UpdateUI();
 	CMenu menu;
 	menu.LoadMenuW(IDR_CONTEXT);
@@ -788,6 +809,13 @@ LRESULT CScintillaView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
 			sub.InsertMenu(0, MF_BYPOSITION | MF_STRING, ID_CODE_WIN32API, (L"Show " + shown + L" in &Windows API").c_str());
 		}
 	}
+	// IDL: the declaration under the mouse (by its GUID) can be shown in the COM view
+	m_ContextGuid.clear();
+	if (m_Language == LexLanguage::Idl && pos >= 0)
+		if (m_ContextGuid = GuidOfLine((int)m_Sci.LineFromPosition(pos)); !m_ContextGuid.empty()) {
+			sub.InsertMenu(0, MF_BYPOSITION | MF_SEPARATOR);
+			sub.InsertMenu(0, MF_BYPOSITION | MF_STRING, ID_IDL_SHOWINCOM, L"Show in &COM View");
+		}
 	// a constant of Windows whose value has other names: one of them can be shown
 	m_ContextNames.clear();
 	if (m_Language == LexLanguage::C && pos >= 0) {
@@ -831,6 +859,22 @@ LRESULT CScintillaView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
 		sub.AppendMenu(MF_STRING, ID_CODE_BOOKMARK, Frame()->IsBookmarked(AddressOfLine(m_ContextLine)) ? L"Remove &Bookmark\tCtrl+B" : L"Add &Bookmark...\tCtrl+B");
 		sub.AppendMenu(MF_STRING, ID_CODE_COMMENT, L"Co&mment...\t;");
 	}
+	// decompiled code: the flow graph and the call graph of the function under the mouse, or of the view's
+	if (m_Language == LexLanguage::C && m_Function) {
+		if (auto va = FlowGraphAddress()) {
+			std::wstring of;
+			if (*va != m_Function) {
+				auto name = NameAt(pos);
+				of = L" of " + (name.size() > 60 ? name.substr(0, 57) + L"..." : name);
+				for (auto& ch : of)
+					if (ch == L'&')
+						ch = L'+';
+			}
+			sub.AppendMenu(MF_SEPARATOR);
+			sub.AppendMenu(MF_STRING, ID_ASSEMBLY_FLOWGRAPH, (L"Function Flow &Graph" + of + L"\tG").c_str());
+			sub.AppendMenu(MF_STRING, ID_ASSEMBLY_CALLGRAPH, (L"Function C&all Graph" + of).c_str());
+		}
+	}
 	// the function of the view: its disassembly and C side by side
 	if (m_Function && !m_Notify && (m_Language == LexLanguage::Asm || m_Language == LexLanguage::C)) {
 		sub.AppendMenu(MF_SEPARATOR);
@@ -838,6 +882,61 @@ LRESULT CScintillaView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
 	}
 	auto result = Frame()->ShowContextMenu(sub, 0, x, y);
 	return result;
+}
+
+std::string CScintillaView::GuidOfLine(int line) const {
+	// (the attributes are before the declaration: from the line up, to the one that ends the previous declaration)
+	static std::regex const guid(R"(uuid\(([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})\))");
+	auto& sci = const_cast<CScintillaCtrl&>(m_Sci);
+	for (int l = line; l >= 0 && l > line - 40; l--) {
+		auto start = sci.PositionFromLine(l), end = (intptr_t)sci.SendMessage(SCI_GETLINEENDPOSITION, l);
+		std::string text(end - start, '\0');
+		Sci_TextRangeFull range{ { start, end }, text.data() };
+		if (end > start)
+			sci.SendMessage(SCI_GETTEXTRANGEFULL, 0, (LPARAM)&range);
+		text.resize(strlen(text.c_str()));
+		std::smatch m;
+		if (std::regex_search(text, m, guid)) {
+			GUID value;
+			if (FAILED(::CLSIDFromString(CA2W(("{" + m[1].str() + "}").c_str()), &value)))
+				return {};
+			return std::string((char const*)&value, 16);
+		}
+		if (l < line && text.find('}') != std::string::npos)
+			break;
+	}
+	return {};
+}
+
+LRESULT CScintillaView::OnShowInCom(WORD, WORD, HWND, BOOL&) {
+	// (of the context menu's line, else of the caret's)
+	auto guid = m_ContextGuid;
+	m_ContextGuid.clear();
+	if (guid.empty() && m_Language == LexLanguage::Idl)
+		guid = GuidOfLine((int)m_Sci.LineFromPosition(m_Sci.GetCurrentPos()));
+	if (!guid.empty() && !Frame()->ShowInComView(guid))
+		AtlMessageBox(m_hWnd, L"The COM view has nothing of this GUID: the code neither serves nor passes it.", IDR_MAINFRAME, MB_ICONINFORMATION);
+	return 0;
+}
+
+bool CScintillaView::ShowDeclaration(std::vector<std::string> const& keywords, std::string const& name) {
+	auto length = m_Sci.GetTextLength();
+	std::string text(length + 1, '\0');
+	m_Sci.GetText(length + 1, text.data());
+	text.resize(length);
+	for (auto const& keyword : keywords) {
+		std::regex declaration("(^|\n)[ \t]*" + keyword + "[ \t]+(" + name + R"()\b)");
+		std::smatch m;
+		if (std::regex_search(text, m, declaration)) {
+			auto at = (intptr_t)m.position(2);
+			auto line = m_Sci.LineFromPosition(at);
+			m_Sci.SendMessage(SCI_SETFIRSTVISIBLELINE, std::max<intptr_t>(0, line - 8));
+			m_Sci.SendMessage(SCI_SETSEL, at, at + (intptr_t)name.size());
+			m_Sci.SetFocus();
+			return true;
+		}
+	}
+	return false;
 }
 
 void CScintillaView::SetFunctionLinks(std::unordered_map<std::wstring, uint64_t> links) {

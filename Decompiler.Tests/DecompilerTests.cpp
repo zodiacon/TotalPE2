@@ -958,3 +958,133 @@ TEST_CASE("A global variable that has no name, of its section", "[decompiler]") 
 	CHECK_THAT(code, ContainsSubstring("Helper(data_140005000)"));
 	CHECK_THAT(code, !ContainsSubstring("Ram"));
 }
+
+TEST_CASE("The prototypes of library functions, of their declarations", "[decompiler]") {
+	std::string error;
+	SECTION("x64: a C function of the libraries by its name, C++ functions of their undecorated names") {
+		Fixture f;
+		f.Open();
+		auto memset = f.Decompiler.DeclaredPrototype("memset", error);
+		INFO(error);
+		CHECK_THAT(memset, ContainsSubstring("(void * Dst, int Val, size_t Size)"));
+		CHECK_THAT(memset, ContainsSubstring("void *"));
+		CHECK_THAT(f.Decompiler.DeclaredPrototype("sprintf_s", error), ContainsSubstring("char * Format, ...)"));
+		CHECK_THAT(f.Decompiler.DeclaredPrototype("qsort", error), ContainsSubstring("code * CompareFunction)"));
+		CHECK_THAT(f.Decompiler.DeclaredPrototype("void __cdecl std::_Xlength_error(char const * __ptr64)", error),
+			ContainsSubstring("(char *)"));
+		CHECK_THAT(f.Decompiler.DeclaredPrototype("void * __ptr64 __cdecl operator new(unsigned __int64)", error),
+			ContainsSubstring("void * __fastcall(ulonglong)") || ContainsSubstring("(uint8)") || ContainsSubstring("(unsigned __int64)") ||
+			ContainsSubstring("(ulonglong)"));
+		// a member function: "this" first; a constructor returns it
+		auto constructor = f.Decompiler.DeclaredPrototype("public: __cdecl std::exception::exception(char const * __ptr64 const & __ptr64) __ptr64", error);
+		CHECK_THAT(constructor, ContainsSubstring("(void * this, char **)"));
+		CHECK_THAT(constructor, ContainsSubstring("void *"));
+		// what is not known is not guessed: a class by value, a C function the libraries do not have
+		CHECK(f.Decompiler.DeclaredPrototype("class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> > __cdecl f(void)", error).empty());
+		CHECK_THAT(error, ContainsSubstring("by value"));
+		CHECK(f.Decompiler.DeclaredPrototype("NotALibraryFunction", error).empty());
+		CHECK(f.Decompiler.DeclaredPrototype("void __cdecl f(class std::exception)", error).empty());
+	}
+	SECTION("x86: of the conventions of the declarations, and of decorated names") {
+		Fixture f(X86);
+		f.Open();
+		CHECK_THAT(f.Decompiler.DeclaredPrototype("_memset", error), ContainsSubstring("__cdecl(void * Dst, int Val, size_t Size)"));
+		CHECK_THAT(f.Decompiler.DeclaredPrototype("@__security_check_cookie@4", error), ContainsSubstring("__fastcall(uintptr_t StackCookie)"));
+		CHECK_THAT(f.Decompiler.DeclaredPrototype("_RtlStringCchCopyW@12", error), ContainsSubstring("__stdcall("));
+		CHECK_THAT(f.Decompiler.DeclaredPrototype("__wcsicmp", error), ContainsSubstring("(wchar_t * String1, wchar_t * String2)"));
+		CHECK_THAT(f.Decompiler.DeclaredPrototype("public: virtual long __stdcall CFoo::QueryInterface(struct _GUID const &,void * *)", error),
+			ContainsSubstring("__stdcall(void * this, "));
+		CHECK_THAT(f.Decompiler.DeclaredPrototype("public: void __thiscall CFoo::Bar(int)", error), ContainsSubstring("__thiscall(void * this, int)"));
+	}
+}
+
+TEST_CASE("A library function a call calls has the prototype of its declaration", "[decompiler]") {
+	Fixture f;
+	constexpr uint64_t helper = Code + 0x40;
+	// memset(&local, 0, 0x10); return local
+	f.Image.At(Code)
+		.Bytes({ 0x48, 0x83, 0xEC, 0x48 })		// sub rsp, 48h
+		.Bytes({ 0x48, 0x8D, 0x4C, 0x24, 0x20 })	// lea rcx, [rsp+20h]
+		.Bytes({ 0x33, 0xD2 })					// xor edx, edx
+		.Bytes({ 0x41, 0xB8, 0x10, 0x00, 0x00, 0x00 })	// mov r8d, 10h
+		.Call(helper)
+		.Bytes({ 0x8B, 0x44, 0x24, 0x20 })		// mov eax, [rsp+20h]
+		.Bytes({ 0x48, 0x83, 0xC4, 0x48, 0xC3 });	// add rsp, 48h; ret
+	f.Image.At(helper).Bytes({ 0x48, 0x89, 0xC8, 0xC3 });	// mov rax, rcx; ret
+	f.Decompiler.SetNameSource([=](uint64_t address) { return address == helper ? std::string("memset") : std::string(); });
+	f.Decompiler.SetDeclarationSource([=](uint64_t address) { return address == helper ? std::string("memset") : std::string(); });
+	f.Open();
+	auto code = f.Decompile(Code, "Caller");
+	CHECK_THAT(code, ContainsSubstring("memset(local_"));
+	CHECK_THAT(code, ContainsSubstring(",0,0x10)"));
+}
+
+namespace {
+	// the index of a function of the framework's table
+	uint32_t FrameworkIndex(std::string const& name) {
+		for (uint32_t i = 0; i < 1000; i++)
+			if (GhidraDecompiler::FrameworkFunction(i) == name)
+				return i;
+		FAIL("no " << name << " in the framework's table");
+		return 0;
+	}
+}
+
+TEST_CASE("A call of a function of the framework (KMDF), through its table", "[decompiler][kmdf]") {
+	Fixture f;
+	constexpr uint64_t globals = Data + 8;
+	auto offset = FrameworkIndex("WdfDriverCreate") * 8;
+	SECTION("1.15 and later: through the pointer to the table (WdfFunctions_NNNNN)") {
+		constexpr uint64_t pointer = Data;
+		// rax = WdfFunctions; rcx = WdfDriverGlobals; WdfDriverCreate(DriverObject, RegistryPath, NULL, NULL, NULL)
+		f.Image.At(Code)
+			.Bytes({ 0x48, 0x83, 0xEC, 0x38 })				// sub rsp, 38h
+			.Bytes({ 0x48, 0x89, 0xCA })					// mov rdx, rcx
+			.Bytes({ 0x48, 0x8B, 0x05 }).Rel32(pointer)		// mov rax, [WdfFunctions]
+			.Bytes({ 0x48, 0x8B, 0x0D }).Rel32(globals)		// mov rcx, [WdfDriverGlobals]
+			.Bytes({ 0x4D, 0x31, 0xC0 })					// xor r8, r8
+			.Bytes({ 0x4D, 0x31, 0xC9 })					// xor r9, r9
+			.Bytes({ 0x48, 0xC7, 0x44, 0x24, 0x20, 0, 0, 0, 0 })	// mov qword [rsp+20h], 0
+			.Bytes({ 0xFF, 0x90 }).U32(offset)				// call [rax+offset]
+			.Bytes({ 0x48, 0x83, 0xC4, 0x38, 0xC3 });		// add rsp, 38h; ret
+		f.Image.At(Data).U64(0x7FF000100000).U64(0x7FF000200000);
+		f.Open();
+		f.Decompiler.AddFramework(pointer, 0, globals);
+	}
+	SECTION("before 1.15: through the table in the image (WdfFunctions[])") {
+		constexpr uint64_t table = Data + 0x100;
+		f.Image.At(Code)
+			.Bytes({ 0x48, 0x83, 0xEC, 0x38 })
+			.Bytes({ 0x48, 0x89, 0xCA })
+			.Bytes({ 0x48, 0x8B, 0x0D }).Rel32(globals)
+			.Bytes({ 0x4D, 0x31, 0xC0 })
+			.Bytes({ 0x4D, 0x31, 0xC9 })
+			.Bytes({ 0x48, 0xC7, 0x44, 0x24, 0x20, 0, 0, 0, 0 })
+			.Bytes({ 0xFF, 0x15 }).Rel32(table + offset)	// call [WdfFunctions + offset]
+			.Bytes({ 0x48, 0x83, 0xC4, 0x38, 0xC3 });
+		f.Image.At(Data).U64(0).U64(0x7FF000200000);
+		f.Image.At(table + offset).U64(0x7FF000300000);
+		f.Open();
+		f.Decompiler.AddFramework(table, 0, globals, true);
+	}
+	auto code = f.Decompile(Code, "DriverEntry");
+	// (as the driver's source has it: without the globals, which the framework's macros pass)
+	// (the call's arguments may be on the next line)
+	CHECK_THAT(code, ContainsSubstring("WdfDriverCreate"));
+	CHECK_THAT(code, ContainsSubstring("(param_1,"));
+	CHECK_THAT(code, !ContainsSubstring("->"));
+	CHECK_THAT(code, !ContainsSubstring("0x7ff"));
+	// (the driver's object, of WdfDriverCreate's first parameter)
+	CHECK_THAT(code, ContainsSubstring("DriverEntry(PDRIVER_OBJECT param_1)"));
+}
+
+TEST_CASE("A callback of a driver of the framework has the prototype of its type", "[decompiler][kmdf]") {
+	Fixture f;
+	f.Image.At(Code).Bytes({ 0x33, 0xC0, 0xC3 });		// xor eax, eax; ret
+	f.Image.At(Data).U64(0);
+	f.Open();
+	f.Decompiler.AddFramework(Data, 0, 0);
+	f.Decompiler.AddFrameworkCallback(Code, "PFN_WDF_DRIVER_DEVICE_ADD");
+	auto code = f.Decompile(Code, "EvtDeviceAdd");
+	CHECK_THAT(code, ContainsSubstring("NTSTATUS EvtDeviceAdd(WDFDRIVER Driver,PWDFDEVICE_INIT DeviceInit)"));
+}
