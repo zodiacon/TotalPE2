@@ -39,6 +39,13 @@ namespace {
 	uint32_t AlignUp(uint32_t value, uint32_t alignment) {
 		return alignment > 1 ? (value + alignment - 1) / alignment * alignment : value;
 	}
+
+	// a namespace as the entries show it: "System.Threading" (of "Windows.Win32.System.Threading")
+	std::string ShortNamespace(std::string ns) {
+		if (ns.starts_with("Windows.Win32."))
+			ns = ns.substr(14);
+		return ns;
+	}
 }
 
 std::wstring Win32Api::MetadataPath() {
@@ -659,7 +666,7 @@ uint32_t Win32Api::TypeByName(std::string const& name) {
 //
 
 PCWSTR Win32Api::KindName(Entry::Kinds kind) {
-	static PCWSTR const names[] = { L"Function", L"Enum", L"Struct", L"Union", L"Typedef", L"Callback", L"Interface" };
+	static PCWSTR const names[] = { L"Function", L"Enum", L"Struct", L"Union", L"Typedef", L"Callback", L"Interface", L"Constant" };
 	return names[(int)kind];
 }
 
@@ -673,11 +680,13 @@ std::vector<Win32Api::Entry> const& Win32Api::Entries() {
 				continue;
 			auto native = md.PInvoke(m);
 			auto module = native ? Narrow(native->Module) : std::string();
+			auto owner = md.Methods()[m - 1].Type;
+			auto ns = owner ? Narrow(md.Types()[owner - 1].Namespace) : std::string();
 			// one that is exported by its ordinal only ("#660"): by the metadata's name, with the ordinal
 			if (name.starts_with("#"))
-				m_Entries.push_back({ Narrow(md.Methods()[m - 1].Name), Entry::Kinds::Function, module + " " + name, m });
+				m_Entries.push_back({ Narrow(md.Methods()[m - 1].Name), Entry::Kinds::Function, module + " " + name, ns, m });
 			else
-				m_Entries.push_back({ name, Entry::Kinds::Function, module, m });
+				m_Entries.push_back({ name, Entry::Kinds::Function, module, ns, m });
 		}
 	for (uint32_t row = 1; row <= md.Types().size(); row++) {
 		auto const& t = md.Types()[row - 1];
@@ -701,11 +710,19 @@ std::vector<Win32Api::Entry> const& Win32Api::Entries() {
 			continue;	// the classes of the functions and constants, attributes
 		if (ForMachine(row) != row)
 			continue;	// (a type defined for another machine)
-		auto where = Narrow(t.Namespace);
-		if (where.starts_with("Windows.Win32."))
-			where = where.substr(14);
-		m_Entries.push_back({ Narrow(t.Name), entry, where, row });
+		auto ns = Narrow(t.Namespace);
+		m_Entries.push_back({ Narrow(t.Name), entry, ShortNamespace(ns), ns, row });
 	}
+	// the constants: the static fields of the classes of the functions and constants (after the functions and types: of
+	// those of a name, Find has the function or type)
+	if (auto apis = m_Data.Types.find("Apis"); apis != m_Data.Types.end())
+		for (auto row : apis->second) {
+			auto ns = Narrow(md.Types()[row - 1].Namespace);
+			auto where = ShortNamespace(ns);
+			for (auto f : md.FieldsOf(row))
+				if ((md.Fields()[f - 1].Flags & 0x10) && OfMachine((ClrTableId::Field << 24) | f))
+					m_Entries.push_back({ Narrow(md.Fields()[f - 1].Name), Entry::Kinds::Constant, where, ns, f });
+		}
 	std::stable_sort(m_Entries.begin(), m_Entries.end(), [](auto const& a, auto const& b) { return _stricmp(a.Name.c_str(), b.Name.c_str()) < 0; });
 	for (size_t i = 0; i < m_Entries.size(); i++)
 		m_EntryIndex.try_emplace(m_Entries[i].Name, i);
@@ -716,6 +733,38 @@ Win32Api::Entry const* Win32Api::Find(std::string const& name) {
 	Entries();
 	auto it = m_EntryIndex.find(name);
 	return it == m_EntryIndex.end() ? nullptr : &m_Entries[it->second];
+}
+
+Win32Api::Namespace const& Win32Api::Namespaces() {
+	if (m_NamespacesBuilt)
+		return m_Namespaces;
+	m_NamespacesBuilt = true;
+	auto const& entries = Entries();
+	// (the entries are by name: so is each namespace's)
+	for (size_t i = 0; i < entries.size(); i++) {
+		auto node = &m_Namespaces;
+		std::string_view rest = entries[i].Namespace;
+		while (!rest.empty()) {
+			auto dot = rest.find('.');
+			auto part = rest.substr(0, dot);
+			auto child = std::ranges::find(node->Children, part, &Namespace::Name);
+			if (child == node->Children.end()) {
+				auto full = node->FullName.empty() ? std::string(part) : node->FullName + "." + std::string(part);
+				node->Children.push_back({ std::string(part), std::move(full) });
+				child = node->Children.end() - 1;
+			}
+			node = &*child;
+			rest = dot == std::string_view::npos ? std::string_view() : rest.substr(dot + 1);
+		}
+		node->Entries.push_back(i);
+	}
+	auto sort = [](auto&& self, Namespace& ns) -> void {
+		std::ranges::sort(ns.Children, [](auto const& a, auto const& b) { return _stricmp(a.Name.c_str(), b.Name.c_str()) < 0; });
+		for (auto& child : ns.Children)
+			self(self, child);
+	};
+	sort(sort, m_Namespaces);
+	return m_Namespaces;
 }
 
 std::string Win32Api::TypeText(uint32_t id) {
@@ -777,7 +826,8 @@ std::string Win32Api::Referred(uint32_t id) {
 
 std::wstring Win32Api::DocumentationUrl(Entry const& entry) {
 	auto& md = m_Data.Md;
-	auto token = ((entry.Kind == Entry::Kinds::Function ? ClrTableId::MethodDef : ClrTableId::TypeDef) << 24) | entry.Row;
+	auto table = entry.Kind == Entry::Kinds::Function ? ClrTableId::MethodDef : entry.Kind == Entry::Kinds::Constant ? ClrTableId::Field : ClrTableId::TypeDef;
+	auto token = (table << 24) | entry.Row;
 	for (auto const& attribute : md.CustomAttributes(token)) {
 		if (!md.TypeName(attribute.AttributeType).ends_with(L"DocumentationAttribute"))
 			continue;
@@ -791,7 +841,74 @@ std::wstring Win32Api::DocumentationUrl(Entry const& entry) {
 	return {};
 }
 
+std::string Win32Api::ConstantDeclaration(Entry const& entry, std::vector<std::string>* lines) {
+	auto& md = m_Data.Md;
+	auto token = (ClrTableId::Field << 24) | entry.Row;
+	std::string text;
+	auto line = [&](std::string const& s, std::string const& type = {}) {
+		text += s + "\r\n";
+		if (lines)
+			lines->push_back(type);
+	};
+	line("// " + entry.Namespace);
+	ClrSigType sig;
+	auto id = md.FieldSigType(entry.Row, sig) ? TypeId(sig) : 0;
+	auto typeText = sig.Element == 0x0E ? std::string("wchar_t const *") : TypeText(id);
+	auto referred = Referred(id);
+	// a number: as wide as its type (-1 of a DWORD: 0xFFFFFFFF), in hex, with its value in decimal if it is not small
+	if (auto value = md.ConstantInteger(token)) {
+		auto size = Layout(id).first;
+		auto bits = (uint64_t)*value;
+		if (size > 0 && size < 8)
+			bits &= (1ULL << (size * 8)) - 1;
+		GhidraDecompiler::Type type;
+		bool isSigned = Describe(id, type) && type.Signed;
+		auto decimal = isSigned ? std::format("{}", *value) : std::format("{}", bits);
+		if (bits < 10)
+			line(std::format("#define {} {}\t// {}", entry.Name, bits, typeText), referred);
+		else
+			line(std::format("#define {} 0x{:X}\t// {} ({})", entry.Name, bits, typeText, decimal), referred);
+		return text;
+	}
+	// a string, a floating point number: as C# has it
+	if (auto value = Narrow(md.ConstantCSharp(token)); !value.empty()) {
+		line(std::format("#define {} {}{}\t// {}", entry.Name, value.starts_with("\"") ? "L" : "", value, typeText), referred);
+		return text;
+	}
+	// a GUID ([Guid]) or a struct's value as the metadata has it ([Constant("{...}, 2")]: a PROPERTYKEY)
+	for (auto const& attribute : md.CustomAttributes(token)) {
+		auto name = md.TypeName(attribute.AttributeType);
+		if (name.ends_with(L"GuidAttribute") && attribute.Value.size() >= 18) {
+			auto b = attribute.Value.data() + 2;
+			auto data1 = *(uint32_t const*)b;
+			auto data2 = *(uint16_t const*)(b + 4);
+			auto data3 = *(uint16_t const*)(b + 6);
+			line(std::format("// {{{:08X}-{:04X}-{:04X}-{:02X}{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}}}", data1, data2, data3,
+				b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]));
+			line(std::format("DEFINE_GUID({}, 0x{:08X}, 0x{:04X}, 0x{:04X}, 0x{:02X}, 0x{:02X}, 0x{:02X}, 0x{:02X}, 0x{:02X}, 0x{:02X}, 0x{:02X}, 0x{:02X});",
+				entry.Name, data1, data2, data3, b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]), referred);
+			return text;
+		}
+		if (name.ends_with(L"ConstantAttribute")) {
+			auto value = Narrow(md.AttributeCSharp(attribute));
+			auto open = value.find('"');
+			auto close = value.rfind('"');
+			if (open != std::string::npos && close > open) {
+				line(std::format("const {} {} = {{ {} }};", typeText, entry.Name, value.substr(open + 1, close - open - 1)), referred);
+				return text;
+			}
+		}
+	}
+	line(std::format("extern const {} {};", typeText, entry.Name), referred);
+	return text;
+}
+
 std::string Win32Api::Declaration(Entry const& entry, std::vector<std::string>* lines) {
+	if (entry.Kind == Entry::Kinds::Constant) {
+		if (lines)
+			lines->clear();
+		return ConstantDeclaration(entry, lines);
+	}
 	auto& md = m_Data.Md;
 	std::string text;
 	// "HANDLE hFile", "SECURITY_ATTRIBUTES *lpAttributes"

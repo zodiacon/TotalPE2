@@ -21,7 +21,7 @@ CString CWin32ApiView::GetTitle() const {
 }
 
 void CWin32ApiView::UpdateUI(bool) {
-	auto text = std::format(L"{} of {} functions and types{}", m_Items.size(), m_Api->Entries().size(),
+	auto text = std::format(L"{} of {} functions, types and constants{}", m_Items.size(), m_Api->Entries().size(),
 		m_ImportsOnly ? L" (the imports of the file)" : L"");
 	if (m_hStatusBar)
 		::SetWindowText(m_hStatusBar, text.c_str());
@@ -46,7 +46,7 @@ LRESULT CWin32ApiView::OnCreate(UINT, WPARAM, LPARAM, BOOL& handled) {
 	CRect rc(0, 0, 300, 20);
 	m_FilterEdit.Create(m_hWnd, rc, nullptr, WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL);
 	m_FilterEdit.SetFont(AtlGetDefaultGuiFont());
-	m_FilterEdit.SetWatermark(L"Filter functions and types (Esc to clear)");
+	m_FilterEdit.SetWatermark(L"Filter functions, types and constants (Esc to clear)");
 	AddSimpleReBarBand(m_FilterEdit, nullptr, FALSE, 300);
 	CRect rcLast;
 	m_tb.GetItemRect(m_tb.GetButtonCount() - 1, &rcLast);
@@ -81,6 +81,7 @@ LRESULT CWin32ApiView::OnCreate(UINT, WPARAM, LPARAM, BOOL& handled) {
 	m_Code->GetCtrl().SendMessage(SCI_SETTABWIDTH, 4);
 	m_Code->SetLineAction([this](int line) { return GoToLine(line); });
 
+	m_Doc.SetDarkMode(AppSettings::Get().DarkMode());
 	m_Doc.Create(m_Right, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
 	m_Right.SetSplitterPanes(*m_Code, m_Doc);
 	m_Right.SetSplitterPosPct(40);
@@ -182,6 +183,7 @@ int CWin32ApiView::GetRowImage(HWND, int row, int) const {
 		case Kinds::Typedef: icon = IDI_DATA; break;
 		case Kinds::Callback: icon = IDI_FUNCTION2; break;
 		case Kinds::Interface: icon = IDI_INTERFACE; break;
+		case Kinds::Constant: icon = IDI_FIELD; break;
 	}
 	return Frame()->GetIconIndex(icon);
 }
@@ -229,6 +231,13 @@ void CWin32ApiView::Show(int entry) {
 	m_DocUrl = entry < 0 ? std::wstring() : m_Api->DocumentationUrl(m_Api->Entries()[entry]);
 	UIEnable(ID_WIN32_BROWSER, entry >= 0);
 	ShowDocumentation();
+}
+
+// (the documentation's colors: the other windows have theirs from the theme)
+LRESULT CWin32ApiView::OnUpdateDarkMode(UINT, WPARAM, LPARAM, BOOL& handled) {
+	m_Doc.SetDarkMode(AppSettings::Get().DarkMode());
+	handled = FALSE;
+	return 0;
 }
 
 void CWin32ApiView::ShowDocumentation() {

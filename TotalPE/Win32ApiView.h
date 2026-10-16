@@ -4,13 +4,13 @@
 #include "resource.h"
 #include "ScintillaView.h"
 #include "Win32Api.h"
-#include "DocPane.h"
+#include <DocPane.h>
 #include <QuickFindEdit.h>
 #include <VirtualListView.h>
 #include <unordered_set>
 
 //
-// The functions and types of Windows, from the Win32 metadata: a list (the filter shows those whose names contain its text;
+// The functions, types and constants of Windows, from the Win32 metadata: a list (the filter shows those whose names contain its text;
 // Imports: the functions the file imports), and the C declaration of the one selected: a function's prototype, an enum's
 // values, a struct's fields and their offsets, an interface's methods. Enter (or a double-click) on a line of the
 // declaration shows the type the line refers to (Back, or Alt+Left, returns). Ctrl+Q or Ctrl+F goes to the filter; Down or
@@ -51,6 +51,7 @@ public:
 	BEGIN_MSG_MAP(CWin32ApiView)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
 		MESSAGE_HANDLER(WM_SETFOCUS, OnSetFocus)
+		MESSAGE_HANDLER(WM_UPDATE_DARKMODE, OnUpdateDarkMode)
 		MESSAGE_HANDLER(CFindReplaceDialog::GetFindReplaceMsg(), OnForward)
 		NOTIFY_CODE_HANDLER(LVN_ITEMCHANGED, OnItemChanged)
 		COMMAND_CODE_HANDLER(EN_DELAYCHANGE, OnFilterChanged)
@@ -73,6 +74,7 @@ public:
 private:
 	LRESULT OnCreate(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnSetFocus(UINT, WPARAM, LPARAM, BOOL&);
+	LRESULT OnUpdateDarkMode(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnForward(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnItemChanged(int, LPNMHDR, BOOL&);
 	LRESULT OnFilterChanged(WORD, WORD, HWND, BOOL&);

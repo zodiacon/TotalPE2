@@ -45,18 +45,29 @@ public:
 	};
 	bool InterfaceMethods(std::string const& name, std::vector<Method>& methods);
 
-	// What the metadata has, to look at: the functions (of the machine) and the types (not those nested in others)
+	// What the metadata has, to look at: the functions (of the machine), the types (not those nested in others) and the
+	// constants (the fields of the classes of the functions and constants: MAX_PATH, E_FAIL, FOLDERID_Desktop)
 	struct Entry {
-		enum class Kinds : uint8_t { Function, Enum, Struct, Union, Typedef, Callback, Interface };
+		enum class Kinds : uint8_t { Function, Enum, Struct, Union, Typedef, Callback, Interface, Constant };
 		std::string Name;
 		Kinds Kind;
-		std::string Where;	// a function's DLL, a type's namespace (without "Windows.Win32.")
-		uint32_t Row;		// MethodDef or TypeDef
+		std::string Where;		// a function's DLL, a type's or constant's namespace (without "Windows.Win32.")
+		std::string Namespace;	// all of it ("Windows.Win32.System.Threading"); a function's is that of its class
+		uint32_t Row;			// MethodDef, TypeDef or Field
 	};
 	std::vector<Entry> const& Entries();
 	static PCWSTR KindName(Entry::Kinds kind);
-	// a function or type by its name (null if there is none)
+	// a function, type or constant by its name (null if there is none; a function or type before a constant of the name)
 	Entry const* Find(std::string const& name);
+	// The namespaces as a tree: the root (no name) > "Windows" > "Win32" > "System" > "Threading"; each with the entries
+	// in it (indices into Entries(), by name) and the namespaces in it (by name)
+	struct Namespace {
+		std::string Name;		// the last part ("Threading")
+		std::string FullName;	// "Windows.Win32.System.Threading"
+		std::vector<Namespace> Children;
+		std::vector<size_t> Entries;
+	};
+	Namespace const& Namespaces();
 	// The C declaration of an entry; 'lines' gets, for each line, the type it refers to (empty for none)
 	std::string Declaration(Entry const& entry, std::vector<std::string>* lines = nullptr);
 	// the page of Microsoft's documentation of an entry (from its [Documentation] attribute); empty if it has none
@@ -111,8 +122,12 @@ private:
 	std::string Name(uint32_t row);
 	// the type a line refers to: the first one of the metadata in a type
 	std::string Referred(uint32_t id);
+	// the declaration of a constant (a field of a class of the functions and constants)
+	std::string ConstantDeclaration(Entry const& entry, std::vector<std::string>* lines);
 	std::vector<Entry> m_Entries;
 	std::unordered_map<std::string, size_t> m_EntryIndex;
+	Namespace m_Namespaces;
+	bool m_NamespacesBuilt{ false };
 
 	Data& m_Data;
 	Machine m_Machine;
