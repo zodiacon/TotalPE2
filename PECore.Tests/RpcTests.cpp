@@ -2,6 +2,7 @@
 #include <RpcInterfaces.h>
 #include <algorithm>
 #include <format>
+#include <iostream>
 
 // The RPC interfaces of a file (TOTALPE_RPC_FILE)
 TEST_CASE("The RPC interfaces of a file", "[.][rpc-file]") {
@@ -9,6 +10,13 @@ TEST_CASE("The RPC interfaces of a file", "[.][rpc-file]") {
 	::GetEnvironmentVariableA("TOTALPE_RPC_FILE", file, sizeof(file));
 	PEFile pe;
 	REQUIRE(pe.Open(std::wstring(file, file + strlen(file))));
+	// (TOTALPE_RPC_CSV: every procedure, "UUID,interface,opnum,routine RVA", for resolving the routines by the symbols)
+	if (::GetEnvironmentVariableA("TOTALPE_RPC_CSV", nullptr, 0)) {
+		for (auto const& rpc : FindRpcInterfaces(pe))
+			for (auto const& p : rpc.Procedures)
+				std::cout << std::format("{},{},{},{:X}\n", RpcUuidText(rpc.Uuid), KnownRpcInterface(rpc.Uuid), p.Opnum, p.Routine);
+		return;
+	}
 	for (auto const& rpc : FindRpcInterfaces(pe)) {
 		WARN(std::format("{:X} {} {} v{}.{} {} procedures {} {}{}", rpc.Rva, rpc.Server ? "server" : "client", RpcUuidText(rpc.Uuid),
 			rpc.Major, rpc.Minor, KnownRpcInterface(rpc.Uuid), rpc.DispatchCount, rpc.Ndr64 ? "NDR64 " : "",
@@ -40,6 +48,40 @@ TEST_CASE("The texts of RPC's UUIDs, base types and parameters", "[rpc]") {
 	RpcParameter inOut{ .Attributes = RpcParameter::IsIn | RpcParameter::IsOut, .Type = "struct *" };
 	CHECK(RpcParameterText(in) == "[in] long");
 	CHECK(RpcParameterText(inOut) == "[in, out] struct *");
+}
+
+TEST_CASE("The names of the procedures of Windows' protocols, by their operation numbers", "[rpc]") {
+	// (as a GUID is in memory: its first three fields little-endian)
+	auto uuid = [](char const* text) {
+		unsigned long data1;
+		unsigned data2, data3, rest[8];
+		REQUIRE(sscanf_s(text, "%8lx-%4x-%4x-%2x%2x-%2x%2x%2x%2x%2x%2x", &data1, &data2, &data3, &rest[0], &rest[1], &rest[2], &rest[3],
+			&rest[4], &rest[5], &rest[6], &rest[7]) == 11);
+		std::vector<uint8_t> bytes(16);
+		memcpy(bytes.data(), &data1, 4);
+		memcpy(bytes.data() + 4, &data2, 2);
+		memcpy(bytes.data() + 6, &data3, 2);
+		for (int i = 0; i < 8; i++)
+			bytes[8 + i] = (uint8_t)rest[i];
+		return bytes;
+	};
+	auto svcctl = uuid("367ABB81-9844-35F1-AD32-98F038001003");
+	CHECK(KnownRpcProcedure(svcctl.data(), 0) == "RCloseServiceHandle");
+	CHECK(KnownRpcProcedure(svcctl.data(), 15) == "ROpenSCManagerW");
+	CHECK(KnownRpcProcedure(svcctl.data(), 1000).empty());
+	// (the protocol's names: not those of the routines that serve them, which Windows' symbols have)
+	auto eventlog = uuid("82273FDC-E32A-18C3-3F78-827929DC23EA");
+	CHECK(KnownRpcProcedure(eventlog.data(), 0) == "ElfrClearELFW");
+	auto srvsvc = uuid("4B324FC8-1670-01D3-1278-5A47BF6EE188");
+	CHECK(KnownRpcProcedure(srvsvc.data(), 0) == "NetrCharDevEnum");
+	CHECK(KnownRpcProcedure(srvsvc.data(), 15) == "NetrShareEnum");
+	CHECK(KnownRpcProcedure(uuid("E3514235-4B06-11D1-AB04-00C04FC2DCD2").data(), 12) == "IDL_DRSCrackNames");
+	// one that is not known, of a known interface; an interface that is not known
+	auto wkssvc = uuid("6BFFD098-A112-3610-9833-46C3F87E345A");
+	CHECK(KnownRpcProcedure(wkssvc.data(), 14).empty());
+	CHECK(KnownRpcProcedure(wkssvc.data(), 0) == "NetrWkstaGetInfo");
+	uint8_t const unknown[16]{};
+	CHECK(KnownRpcProcedure(unknown, 0).empty());
 }
 
 TEST_CASE("The declaration of an RPC server routine, of its procedure's format", "[rpc]") {

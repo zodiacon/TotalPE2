@@ -134,6 +134,7 @@ void CMainFrame::UpdateUI() {
 	UIEnable(ID_PE_DRIVER, fi && IsDriver(m_PE));
 	UIEnable(ID_PE_COM, fi && UsesCom());
 	UIEnable(ID_PE_RPC, fi && !m_Rpc.empty());
+	UIEnable(ID_PE_WINRT, fi && !m_WinRt.empty());
 	UIEnable(ID_PE_CLRTYPES, fi && FindTreeItem(TreeItemType::ClrTypes) != nullptr);
 	UIEnable(ID_PE_SECURITYSUMMARY, fi != nullptr);
 	// (of no file: whenever the metadata is there)
@@ -775,8 +776,11 @@ std::wstring CMainFrame::ResolveRva(DWORD rva) const {
 	if (auto driver = m_DriverNames.find(rva); driver != m_DriverNames.end())
 		return driver->second;
 	// a server routine of an RPC interface ("srvsvc_Opnum12")
-	auto rpc = m_RpcNames.find(rva);
-	return rpc != m_RpcNames.end() ? rpc->second : std::wstring();
+	if (auto rpc = m_RpcNames.find(rva); rpc != m_RpcNames.end())
+		return rpc->second;
+	// a function of WRL's of a runtime class ("Calendar_CreateFactory")
+	auto winrt = m_WinRtNames.find(rva);
+	return winrt != m_WinRtNames.end() ? winrt->second : std::wstring();
 }
 
 void CMainFrame::AnalyzeDriverAsync() {
@@ -1334,6 +1338,7 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	FindLibraryFunctions();
 	FindClasses();
 	FindRpcInterfaces();
+	FindWinRtClasses(path);
 	// (those of the file before: its GUIDs, what its driver sets up, and its analysis under way, whose result is dropped)
 	m_Guids.clear();
 	m_SymbolGuids.clear();
@@ -1472,6 +1477,9 @@ void CMainFrame::ResetFileState() {
 	m_Rpc.clear();
 	m_RpcNames.clear();
 	m_RpcDeclarations.clear();
+	m_WinRt.clear();
+	m_WinRtNames.clear();
+	m_WinRtDeclarations.clear();
 	m_GuardTables.clear();
 	m_Xrefs.Clear();
 	ResetNavigation();
@@ -1917,6 +1925,8 @@ void CMainFrame::BuildTree(int iconSize) {
 		InsertTreeItem(m_Tree, L"COM", GetTreeIcon(IDI_INTERFACE), TreeItemType::Com, root);
 	if (!m_Rpc.empty())
 		InsertTreeItem(m_Tree, std::format(L"RPC ({})", m_Rpc.size()).c_str(), GetTreeIcon(IDI_GLOBE), TreeItemType::Rpc, root);
+	if (!m_WinRt.empty())
+		InsertTreeItem(m_Tree, std::format(L"WinRT ({})", m_WinRt.size()).c_str(), GetTreeIcon(IDI_CLASS), TreeItemType::WinRt, root);
 
 	if (m_PE.GetFileInfo()->HasResource) {
 		auto resources = InsertTreeItem(m_Tree, L"Resources", GetTreeIcon(IDI_RESOURCE), TreeItemType::Resources, root);
@@ -2249,6 +2259,7 @@ bool CMainFrame::BuildTreeImageList(int iconSize) {
 		IDI_FUNCTION, IDI_FUNC_FORWARD, IDI_INTERFACE, IDI_DLL_IMPORT, IDI_FUNCTION2, IDI_SYMBOLS,
 		IDI_TYPE, IDI_ENUM, IDI_BITFIELD, IDI_FIELD, IDI_ARRAY, IDI_UNION, IDI_BINARY,
 		IDI_DATA, IDI_FLOW, IDI_LOOK, IDI_CLASS, IDI_PROPERTY, IDI_EVENT, IDI_BOOKMARK, IDI_SYSTEM,
+		IDI_GLOBE,
 	};
 
 	bool insert = s_ImageIndices.empty();
@@ -2453,8 +2464,8 @@ std::wstring CMainFrame::RpcInterfaceName(RpcInterface const& rpc) const {
 	return std::format(L"Rpc_{:02X}{:02X}{:02X}{:02X}", rpc.Uuid[3], rpc.Uuid[2], rpc.Uuid[1], rpc.Uuid[0]);
 }
 
-// The RPC interfaces of the file; their server routines are named by their interfaces and operation numbers (one that
-// serves several, "srvsvc_Opnum0_5"), and those of 64-bit code have declarations of the parameters their procedures' formats
+// The RPC interfaces of the file; their server routines are named by their procedures (of Windows' protocols) or by their
+// interfaces and operation numbers (one that serves several, "srvsvc_Opnum0_5"), and those of 64-bit code have declarations of the parameters their procedures' formats
 // describe, which the decompiler takes when the symbols have no prototype
 void CMainFrame::FindRpcInterfaces() {
 	m_Rpc = ::FindRpcInterfaces(m_PE);
@@ -2472,11 +2483,66 @@ void CMainFrame::FindRpcInterfaces() {
 			auto const& of = opnums[p.Routine];
 			if (!p.Routine || m_RpcNames.contains(p.Routine))
 				continue;
-			auto routine = of.size() == 1 ? std::format(L"{}_Opnum{}", name, p.Opnum) : std::format(L"{}_Opnum{}_{}", name, of.front(), of.back());
+			// (of an interface of Windows' protocols: the procedure's name, "ROpenSCManagerW")
+			auto known = of.size() == 1 ? KnownRpcProcedure(rpc.Uuid, p.Opnum) : std::string();
+			auto routine = !known.empty() ? std::wstring(known.begin(), known.end()) : of.size() == 1 ? std::format(L"{}_Opnum{}", name, p.Opnum) :
+				std::format(L"{}_Opnum{}_{}", name, of.front(), of.back());
 			m_RpcNames[p.Routine] = routine;
 			if (pe64 && of.size() == 1)
 				if (auto declaration = RpcRoutineDeclaration(p, std::string(CW2A(routine.c_str()))); !declaration.empty())
 					m_RpcDeclarations[p.Routine] = declaration;
+		}
+	}
+}
+
+LRESULT CMainFrame::OnViewWinRt(WORD, WORD, HWND, BOOL&) {
+	if (auto hItem = FindTreeItem(TreeItemType::WinRt))
+		ShowView(hItem);
+	return 0;
+}
+
+// The runtime classes the file serves; WRL's functions of them are named by their classes ("Calendar_CreateFactory",
+// "Calendar_GetRuntimeClassName"; one that several classes share, as the trust level's mostly is, is not named) and,
+// those of 64-bit code, have their declarations, which the decompiler takes when the symbols have no prototype
+void CMainFrame::FindWinRtClasses(PCWSTR path) {
+	m_WinRt.clear();
+	m_WinRtNames.clear();
+	m_WinRtDeclarations.clear();
+	if (!IsWinRtServer(m_PE))
+		return;
+	WCHAR full[MAX_PATH * 2];
+	if (!::GetFullPathNameW(path, _countof(full), full, nullptr))
+		wcscpy_s(full, path);
+	m_WinRt = ::FindWinRtClasses(m_PE, full);
+
+	// (by its name, or of its namespace too if another class has its name)
+	std::map<std::wstring, int> names;
+	auto shortName = [](std::wstring const& name) { return name.substr(name.rfind(L'.') + 1); };
+	for (auto const& c : m_WinRt)
+		names[shortName(c.Name)]++;
+	std::map<DWORD, int> uses;
+	for (auto const& c : m_WinRt)
+		for (auto rva : { c.Creator, c.NameFunction, c.TrustFunction })
+			if (rva)
+				uses[rva]++;
+	bool pe64 = m_PE.GetFileInfo()->IsPE64;
+	for (auto const& c : m_WinRt) {
+		auto name = names[shortName(c.Name)] > 1 ? c.Name : shortName(c.Name);
+		std::ranges::replace(name, L'.', L'_');
+		auto narrow = std::string(CW2A(name.c_str()));
+		// WRL: HRESULT (*factoryCreator)(unsigned int* flags, const CreatorMap* entry, REFIID riid, IUnknown** factory);
+		// const wchar_t* (*getRuntimeName)(); TrustLevel (*getTrustLevel)()
+		std::tuple<DWORD, PCWSTR, char const*> const functions[] = {
+			{ c.Creator, L"_CreateFactory", "long __cdecl {}_CreateFactory(unsigned int * Flags, void * Entry, void * Riid, void ** Factory)" },
+			{ c.NameFunction, L"_GetRuntimeClassName", "wchar_t const * __cdecl {}_GetRuntimeClassName(void)" },
+			{ c.TrustFunction, L"_GetTrustLevel", "int __cdecl {}_GetTrustLevel(void)" },
+		};
+		for (auto const& [rva, suffix, declaration] : functions) {
+			if (!rva || uses[rva] > 1 || m_WinRtNames.contains(rva))
+				continue;
+			m_WinRtNames[rva] = name + suffix;
+			if (pe64)
+				m_WinRtDeclarations[rva] = std::vformat(declaration, std::make_format_args(narrow));
 		}
 	}
 }
@@ -2690,8 +2756,8 @@ bool CMainFrame::ResolveFunction(std::wstring const& text, uint64_t& address, st
 	}
 
 	// the names TotalPE gives functions: of static libraries (by their signatures), a driver's routines, virtual functions,
-	// the server routines of RPC interfaces (by their full names, or as they are shown: "memset" of a C++ declaration)
-	for (auto names : { &m_LibraryNames, &m_DriverNames, &m_ClassNames, &m_RpcNames })
+	// the server routines of RPC interfaces, WRL's functions of runtime classes (by their full names, or as they are shown: "memset" of a C++ declaration)
+	for (auto names : { &m_LibraryNames, &m_DriverNames, &m_ClassNames, &m_RpcNames, &m_WinRtNames })
 		for (auto const& [rva, name] : *names)
 			if (name == text || FunctionName(name) == text) {
 				address = base + rva;
@@ -3756,6 +3822,9 @@ GhidraDecompiler* CMainFrame::DecompilerSession::Open(std::string& error) {
 			// (a server routine of an RPC interface: of its procedure's format)
 			else if (auto rpc = Frame->m_RpcDeclarations.find((DWORD)(va - base)); rpc != Frame->m_RpcDeclarations.end())
 				declaration = rpc->second;
+			// (a function of WRL's of a runtime class)
+			else if (auto winrt = Frame->m_WinRtDeclarations.find((DWORD)(va - base)); winrt != Frame->m_WinRtDeclarations.end())
+				declaration = winrt->second;
 			});
 		return declaration;
 		});

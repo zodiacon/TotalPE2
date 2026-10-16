@@ -416,6 +416,7 @@
     <ClCompile Include="Driver.cpp" />
     <ClCompile Include="DriverView.cpp" />
     <ClCompile Include="RpcView.cpp" />
+    <ClCompile Include="WinRtView.cpp" />
     <ClCompile Include="HexFind.cpp" />
     <ClCompile Include="HexInspector.cpp" />
     <ClCompile Include="BoundImportView.cpp" />
@@ -496,6 +497,7 @@
     <ClInclude Include="Driver.h" />
     <ClInclude Include="DriverView.h" />
     <ClInclude Include="RpcView.h" />
+    <ClInclude Include="WinRtView.h" />
     <ClInclude Include="HexFind.h" />
     <ClInclude Include="HexInspector.h" />
     <ClInclude Include="BoundImportView.h" />

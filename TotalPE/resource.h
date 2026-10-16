@@ -281,13 +281,14 @@
 #define ID_COM_GOTOTYPELIB              32969
 #define ID_IDL_SHOWINCOM                32970
 #define ID_PE_RPC                       32971
+#define ID_PE_WINRT                     32972
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        287
-#define _APS_NEXT_COMMAND_VALUE         32972
+#define _APS_NEXT_COMMAND_VALUE         32973
 #define _APS_NEXT_CONTROL_VALUE         1044
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

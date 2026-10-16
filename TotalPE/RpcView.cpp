@@ -57,11 +57,12 @@ CString CRpcView::GetColumnText(HWND h, int row, int col) const {
 	auto const& p = *m_ProcedureItems[row];
 	switch (col) {
 		case 0: return std::to_wstring(p.Opnum).c_str();
-		case 1: return p.Routine ? Frame()->ResolveRva(p.Routine).c_str() : L"";
-		case 2: return ParametersText(p).c_str();
-		case 3: return p.HasResult ? Wide(p.Result.Type).c_str() : L"";
-		case 4: return p.Routine ? std::format(L"0x{:X}", base + p.Routine).c_str() : L"";
-		case 5: return p.Routine ? std::format(L"0x{:X}", p.Routine).c_str() : L"";
+		case 1: return m_Selected ? Wide(KnownRpcProcedure(m_Selected->Uuid, p.Opnum)).c_str() : L"";
+		case 2: return p.Routine ? Frame()->ResolveRva(p.Routine).c_str() : L"";
+		case 3: return ParametersText(p).c_str();
+		case 4: return p.HasResult ? Wide(p.Result.Type).c_str() : L"";
+		case 5: return p.Routine ? std::format(L"0x{:X}", base + p.Routine).c_str() : L"";
+		case 6: return p.Routine ? std::format(L"0x{:X}", p.Routine).c_str() : L"";
 	}
 	return CString();
 }
@@ -91,10 +92,11 @@ void CRpcView::DoSort(SortInfo const* si) {
 	auto compare = [&](RpcProcedure const* a, RpcProcedure const* b) {
 		switch (si->SortColumn) {
 			case 0: return SortHelper::Sort(a->Opnum, b->Opnum, asc);
-			case 1: return SortHelper::Sort(Frame()->ResolveRva(a->Routine), Frame()->ResolveRva(b->Routine), asc);
-			case 2: return SortHelper::Sort(ParametersText(*a), ParametersText(*b), asc);
-			case 3: return SortHelper::Sort(a->Result.Type, b->Result.Type, asc);
-			case 4: case 5: return SortHelper::Sort(a->Routine, b->Routine, asc);
+			case 1: return m_Selected && SortHelper::Sort(KnownRpcProcedure(m_Selected->Uuid, a->Opnum), KnownRpcProcedure(m_Selected->Uuid, b->Opnum), asc);
+			case 2: return SortHelper::Sort(Frame()->ResolveRva(a->Routine), Frame()->ResolveRva(b->Routine), asc);
+			case 3: return SortHelper::Sort(ParametersText(*a), ParametersText(*b), asc);
+			case 4: return SortHelper::Sort(a->Result.Type, b->Result.Type, asc);
+			case 5: case 6: return SortHelper::Sort(a->Routine, b->Routine, asc);
 		}
 		return false;
 	};
@@ -201,6 +203,7 @@ LRESULT CRpcView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 
 	cm = GetColumnManager(m_Procedures);
 	cm->AddColumn(L"Opnum", LVCFMT_RIGHT, 60);
+	cm->AddColumn(L"Procedure", LVCFMT_LEFT, 240);
 	cm->AddColumn(L"Routine", LVCFMT_LEFT, 280);
 	cm->AddColumn(L"Parameters", LVCFMT_LEFT, 560);
 	cm->AddColumn(L"Returns", LVCFMT_LEFT, 110);

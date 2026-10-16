@@ -375,6 +375,260 @@ std::string KnownRpcInterface(uint8_t const* uuid) {
 	return {};
 }
 
+std::string KnownRpcProcedure(uint8_t const* uuid, uint32_t opnum) {
+	// the names of the procedures of each interface, by their operation numbers ("-": one that is not known: not used on the
+	// wire, or of a routine that serves several, whose name is not its own); those of the protocols' documents, and of Windows'
+	// public symbols of those that Windows has and the documents do not
+	static std::pair<char const*, char const*> const procedures[] = {
+		{ "atsvc",
+			"NetrJobAdd NetrJobDel NetrJobEnum NetrJobGetInfo" },
+		{ "DnsServer",
+			"R_DnssrvOperation R_DnssrvQuery R_DnssrvComplexOperation R_DnssrvEnumRecords R_DnssrvUpdateRecord "
+			"R_DnssrvOperation2 R_DnssrvQuery2 R_DnssrvComplexOperation2 R_DnssrvEnumRecords2 R_DnssrvUpdateRecord2" },
+		{ "drsuapi",
+			"IDL_DRSBind IDL_DRSUnbind IDL_DRSReplicaSync IDL_DRSGetNCChanges IDL_DRSUpdateRefs IDL_DRSReplicaAdd "
+			"IDL_DRSReplicaDel IDL_DRSReplicaModify IDL_DRSVerifyNames IDL_DRSGetMemberships IDL_DRSInterDomainMove "
+			"IDL_DRSGetNT4ChangeLog IDL_DRSCrackNames IDL_DRSWriteSPN IDL_DRSRemoveDsServer IDL_DRSRemoveDsDomain "
+			"IDL_DRSDomainControllerInfo IDL_DRSAddEntry IDL_DRSExecuteKCC IDL_DRSGetReplInfo IDL_DRSAddSidHistory "
+			"IDL_DRSGetMemberships2 IDL_DRSReplicaVerifyObjects IDL_DRSGetObjectExistence IDL_DRSQuerySitesByCost "
+			"IDL_DRSInitDemotion IDL_DRSReplicaDemotion IDL_DRSFinishDemotion IDL_DRSAddCloneDC IDL_DRSWriteNgcKey "
+			"IDL_DRSReadNgcKey" },
+		{ "dssetup",
+			"DsRolerGetPrimaryDomainInformation" },
+		{ "efsrpc",
+			"EfsRpcOpenFileRaw EfsRpcReadFileRaw EfsRpcWriteFileRaw EfsRpcCloseRaw EfsRpcEncryptFileSrv "
+			"EfsRpcDecryptFileSrv EfsRpcQueryUsersOnFile EfsRpcQueryRecoveryAgents EfsRpcRemoveUsersFromFile "
+			"EfsRpcAddUsersToFile - - EfsRpcFileKeyInfo EfsRpcDuplicateEncryptionInfoFile - EfsRpcAddUsersToFileEx "
+			"EfsRpcFileKeyInfoEx - EfsRpcGetEncryptedFileMetadata EfsRpcSetEncryptedFileMetadata EfsRpcFlushEfsCache" },
+		{ "epmapper",
+			"ept_insert ept_delete ept_lookup ept_map ept_lookup_handle_free ept_inq_object ept_mgmt_delete" },
+		{ "eventlog",
+			"ElfrClearELFW ElfrBackupELFW ElfrCloseEL ElfrDeregisterEventSource ElfrNumberOfRecords ElfrOldestRecord "
+			"ElfrChangeNotify ElfrOpenELW ElfrRegisterEventSourceW ElfrOpenBELW ElfrReadELW ElfrReportEventW ElfrClearELFA "
+			"ElfrBackupELFA ElfrOpenELA ElfrRegisterEventSourceA ElfrOpenBELA ElfrReadELA ElfrReportEventA "
+			"ElfrRegisterClusterSvc ElfrDeregisterClusterSvc ElfrWriteClusterEvents ElfrGetLogInformation ElfrFlushEL "
+			"ElfrReportEventAndSourceW ElfrReportEventExW ElfrReportEventExA" },
+		{ "IEventService",
+			"EvtRpcRegisterRemoteSubscription EvtRpcRemoteSubscriptionNextAsync EvtRpcRemoteSubscriptionNext "
+			"EvtRpcRemoteSubscriptionWaitAsync EvtRpcRegisterControllableOperation EvtRpcRegisterLogQuery EvtRpcClearLog "
+			"EvtRpcExportLog EvtRpcLocalizeExportLog EvtRpcMessageRender EvtRpcMessageRenderDefault EvtRpcQueryNext "
+			"EvtRpcQuerySeek EvtRpcClose EvtRpcCancel EvtRpcAssertConfig EvtRpcRetractConfig EvtRpcOpenLogHandle "
+			"EvtRpcGetLogFileInfo EvtRpcGetChannelList EvtRpcGetChannelConfig EvtRpcPutChannelConfig "
+			"EvtRpcGetPublisherList EvtRpcGetPublisherListForChannel EvtRpcGetPublisherMetadata "
+			"EvtRpcGetPublisherResourceMetadata EvtRpcGetEventMetadataEnum EvtRpcGetNextEventMetadata "
+			"EvtRpcGetClassicLogDisplayName" },
+		{ "IObjectExporter",
+			"ResolveOxid SimplePing ComplexPing ServerAlive ResolveOxid2 ServerAlive2" },
+		{ "IRemoteSCMActivator",
+			"Opnum0NotUsedOnWire Opnum1NotUsedOnWire Opnum2NotUsedOnWire RemoteGetClassObject RemoteCreateInstance" },
+		{ "IRemoteWinspool",
+			"RpcAsyncOpenPrinter RpcAsyncAddPrinter RpcAsyncSetJob RpcAsyncGetJob RpcAsyncEnumJobs RpcAsyncAddJob "
+			"RpcAsyncScheduleJob RpcAsyncDeletePrinter RpcAsyncSetPrinter RpcAsyncGetPrinter RpcAsyncStartDocPrinter "
+			"RpcAsyncStartPagePrinter RpcAsyncWritePrinter RpcAsyncEndPagePrinter RpcAsyncEndDocPrinter "
+			"RpcAsyncAbortPrinter RpcAsyncGetPrinterData RpcAsyncGetPrinterDataEx RpcAsyncSetPrinterData "
+			"RpcAsyncSetPrinterDataEx RpcAsyncClosePrinter RpcAsyncAddForm RpcAsyncDeleteForm RpcAsyncGetForm "
+			"RpcAsyncSetForm RpcAsyncEnumForms RpcAsyncGetPrinterDriver RpcAsyncEnumPrinterData RpcAsyncEnumPrinterDataEx "
+			"RpcAsyncEnumPrinterKey RpcAsyncDeletePrinterData RpcAsyncDeletePrinterDataEx RpcAsyncDeletePrinterKey "
+			"RpcAsyncXcvData RpcAsyncSendRecvBidiData RpcAsyncCreatePrinterIC RpcAsyncPlayGdiScriptOnPrinterIC "
+			"RpcAsyncDeletePrinterIC RpcAsyncEnumPrinters RpcAsyncAddPrinterDriver RpcAsyncEnumPrinterDrivers "
+			"RpcAsyncGetPrinterDriverDirectory RpcAsyncDeletePrinterDriver RpcAsyncDeletePrinterDriverEx "
+			"RpcAsyncAddPrintProcessor RpcAsyncEnumPrintProcessors RpcAsyncGetPrintProcessorDirectory RpcAsyncEnumPorts "
+			"RpcAsyncEnumMonitors RpcAsyncAddPort RpcAsyncSetPort RpcAsyncAddMonitor RpcAsyncDeleteMonitor "
+			"RpcAsyncDeletePrintProcessor RpcAsyncEnumPrintProcessorDatatypes RpcAsyncAddPerMachineConnection "
+			"RpcAsyncDeletePerMachineConnection RpcAsyncEnumPerMachineConnections RpcSyncRegisterForRemoteNotifications "
+			"RpcSyncUnRegisterForRemoteNotifications RpcSyncRefreshRemoteNotifications RpcAsyncGetRemoteNotifications "
+			"RpcAsyncInstallPrinterDriverFromPackage RpcAsyncUploadPrinterDriverPackage RpcAsyncGetCorePrinterDrivers "
+			"RpcAsyncCorePrinterDriverInstalled RpcAsyncGetPrinterDriverPackagePath RpcAsyncDeletePrinterDriverPackage "
+			"RpcAsyncReadPrinter RpcAsyncResetPrinter RpcAsyncGetJobNamedPropertyValue RpcAsyncSetJobNamedProperty "
+			"RpcAsyncDeleteJobNamedProperty RpcAsyncEnumJobNamedProperties RpcAsyncLogJobInfoForBranchOffice "
+			"RpcAsyncIppCreateJobOnPrinter RpcAsyncIppGetJobAttributes RpcAsyncIppSetJobAttributes "
+			"RpcAsyncIppGetPrinterAttributes RpcAsyncIppSetPrinterAttributes RpcAsyncRegeneratePrintDeviceCapabilities" },
+		{ "ITaskSchedulerService",
+			"SchRpcHighestVersion SchRpcRegisterTask SchRpcRetrieveTask SchRpcCreateFolder SchRpcSetSecurity "
+			"SchRpcGetSecurity SchRpcEnumFolders SchRpcEnumTasks SchRpcEnumInstances SchRpcGetInstanceInfo "
+			"SchRpcStopInstance SchRpcStop SchRpcRun SchRpcDelete SchRpcRename SchRpcScheduledRuntimes "
+			"SchRpcGetLastRunInfo SchRpcGetTaskInfo SchRpcGetNumberOfMissedRuns SchRpcEnableTask" },
+		{ "lsarpc",
+			"LsarClose LsarDelete LsarEnumeratePrivileges LsarQuerySecurityObject LsarSetSecurityObject LsarChangePassword "
+			"LsarOpenPolicyRPC LsarQueryInformationPolicy LsarSetInformationPolicy - LsarCreateAccount "
+			"LsarEnumerateAccounts LsarCreateTrustedDomain LsarEnumerateTrustedDomains LsarLookupNames LsarLookupSids "
+			"LsarCreateSecret LsarOpenAccount LsarEnumeratePrivilegesAccount LsarAddPrivilegesToAccount "
+			"LsarRemovePrivilegesFromAccount LsarGetQuotasForAccount LsarSetQuotasForAccount LsarGetSystemAccessAccount "
+			"LsarSetSystemAccessAccount LsarOpenTrustedDomain LsarQueryInfoTrustedDomain LsarSetInformationTrustedDomain "
+			"LsarOpenSecret LsarSetSecret LsarQuerySecret LsarLookupPrivilegeValue LsarLookupPrivilegeName "
+			"LsarLookupPrivilegeDisplayName LsarDeleteObject LsarEnumerateAccountsWithUserRight LsarEnumerateAccountRights "
+			"LsarAddAccountRights LsarRemoveAccountRights LsarQueryTrustedDomainInfo LsarSetTrustedDomainInfo "
+			"LsarDeleteTrustedDomain LsarStorePrivateData LsarRetrievePrivateData LsarOpenPolicy2 LsarGetUserName "
+			"LsarQueryInformationPolicy2 LsarSetInformationPolicy2 LsarQueryTrustedDomainInfoByName "
+			"LsarSetTrustedDomainInfoByName LsarEnumerateTrustedDomainsEx LsarCreateTrustedDomainEx - "
+			"LsarQueryDomainInformationPolicy LsarSetDomainInformationPolicy LsarOpenTrustedDomainByName - LsarLookupSids2 "
+			"LsarLookupNames2 LsarCreateTrustedDomainEx2 CredrWrite CredrRead CredrEnumerate CredrWriteDomainCredentials "
+			"CredrReadDomainCredentials CredrDelete CredrGetTargetInfo CredrProfileLoaded LsarLookupNames3 "
+			"CredrGetSessionTypes LsarRegisterAuditEvent LsarGenAuditEvent LsarUnregisterAuditEvent "
+			"LsarQueryForestTrustInformation LsarSetForestTrustInformation - LsarLookupSids3 LsarLookupNames4 "
+			"LsarOpenPolicySce LsarAdtRegisterSecurityEventSource LsarAdtUnregisterSecurityEventSource "
+			"LsarAdtReportSecurityEvent CredrFindBestCredential LsarSetAuditPolicy LsarQueryAuditPolicy "
+			"LsarEnumerateAuditPolicy LsarEnumerateAuditCategories LsarEnumerateAuditSubCategories "
+			"LsarLookupAuditCategoryName LsarLookupAuditSubCategoryName LsarSetAuditSecurity LsarQueryAuditSecurity "
+			"CredrReadByTokenHandle CredrRestoreCredentials CredrBackupCredentials LsarManageSidNameMapping "
+			"CredrProfileUnloaded - - - - - LsarEfsGetSmartcardCredentials LsarAuditSetGlobalSacl LsarAuditQueryGlobalSacl "
+			"CredrProfileLoadedEx LsarInteractiveSessionIsLoggedOff LsarConfigureAutoLogonCredentials "
+			"LsarGetDeviceRegistrationInfo - LsarProfileDeleted - - LsarValidateProcUniqueLuid LsarIsArsoAllowedByPolicy "
+			"LsarIsArsoAllowedByConsent LsarEnableArsoConsent LsarDisableArsoConsent LsarIsUserArsoAllowed "
+			"LsarIsUserArsoEnabled LsarEnableUserArso LsarDisableUserArso LsarConfigureUserArso LsarGetInprocDispatchTable "
+			"LsarSetSharedUserSession LsarClearSharedUserSession - - LsarUpdateUserTokenSessionId "
+			"LsarCreateTrustedDomainEx3 LsarOpenPolicy3 LsarInvokeTrustScanner LsarQueryForestTrustInformation2 "
+			"LsarSetForestTrustInformation2 LsarIsCredentialGuardRunning LsarOpenPolicyWithCreds LsarOpenSecret2 "
+			"LsarCreateSecret2 LsarSetSecret2 LsarQuerySecret2 LsarStorePrivateData2 LsarRetrievePrivateData2 "
+			"LsarSetLocalSystemAccess LsarQueryLocalSystemAccess LsarQueryLocalSystemAccessAll "
+			"LsarPurgeLocalSystemAccessTable LsarCreateAgentAccount LsarRetrieveAgentLogonCredential "
+			"LsarRetrieveCloudAgentLogonCredential LsarEnumerateAgentAccounts LsarDeleteAgentAccount LsarGetAgentOwner "
+			"LsarUpdateEnvironmentBlock LsarRetrieveCloudAgentTokenBindingKeys" },
+		{ "mgmt",
+			"rpc_mgmt_inq_if_ids rpc_mgmt_inq_stats rpc_mgmt_is_server_listening rpc_mgmt_stop_server_listening "
+			"rpc_mgmt_inq_princ_name" },
+		{ "netlogon",
+			"NetrLogonUasLogon NetrLogonUasLogoff NetrLogonSamLogon NetrLogonSamLogoff NetrServerReqChallenge "
+			"NetrServerAuthenticate NetrServerPasswordSet NetrDatabaseDeltas NetrDatabaseSync NetrAccountDeltas "
+			"NetrAccountSync NetrGetDCName NetrLogonControl NetrGetAnyDCName NetrLogonControl2 NetrServerAuthenticate2 "
+			"NetrDatabaseSync2 NetrDatabaseRedo NetrLogonControl2Ex NetrEnumerateTrustedDomains DsrGetDcName "
+			"NetrLogonGetCapabilities NetrLogonSetServiceBits NetrLogonGetTrustRid NetrLogonComputeServerDigest "
+			"NetrLogonComputeClientDigest NetrServerAuthenticate3 DsrGetDcNameEx DsrGetSiteName NetrLogonGetDomainInfo "
+			"NetrServerPasswordSet2 NetrServerPasswordGet NetrLogonSendToSam DsrAddressToSiteNamesW DsrGetDcNameEx2 "
+			"NetrLogonGetTimeServiceParentDomain NetrEnumerateTrustedDomainsEx DsrAddressToSiteNamesExW "
+			"DsrGetDcSiteCoverageW NetrLogonSamLogonEx DsrEnumerateDomainTrusts DsrDeregisterDnsHostRecords "
+			"NetrServerTrustPasswordsGet DsrGetForestTrustInformation NetrGetForestTrustInformation "
+			"NetrLogonSamLogonWithFlags NetrServerGetTrustInfo NetrCollectPerfData DsrUpdateReadOnlyServerDnsRecords "
+			"NetrChainSetClientAttributes NetrAddServiceAccount NetrRemoveServiceAccount NetrEnumerateServiceAccounts "
+			"NetrQueryServiceAccount NetrChainSetClientAttributes2 NetrLogonComputeClientSignature "
+			"NetrLogonComputeServerSignature NetrExtendMachinePasswordExpirationTimeout NetrQuerySecureChannelDCInfo "
+			"NetrServerAuthenticateKerberos NetrServerRequestLocatorNameMappingsUpdate NetrServerQueryLocatorNameMappings" },
+		{ "samr",
+			"SamrConnect SamrCloseHandle SamrSetSecurityObject SamrQuerySecurityObject SamrShutdownSamServer "
+			"SamrLookupDomainInSamServer SamrEnumerateDomainsInSamServer SamrOpenDomain SamrQueryInformationDomain "
+			"SamrSetInformationDomain SamrCreateGroupInDomain SamrEnumerateGroupsInDomain SamrCreateUserInDomain "
+			"SamrEnumerateUsersInDomain SamrCreateAliasInDomain SamrEnumerateAliasesInDomain SamrGetAliasMembership "
+			"SamrLookupNamesInDomain SamrLookupIdsInDomain SamrOpenGroup SamrQueryInformationGroup SamrSetInformationGroup "
+			"SamrAddMemberToGroup SamrDeleteGroup SamrRemoveMemberFromGroup SamrGetMembersInGroup "
+			"SamrSetMemberAttributesOfGroup SamrOpenAlias SamrQueryInformationAlias SamrSetInformationAlias "
+			"SamrDeleteAlias SamrAddMemberToAlias SamrRemoveMemberFromAlias SamrGetMembersInAlias SamrOpenUser "
+			"SamrDeleteUser SamrQueryInformationUser SamrSetInformationUser SamrChangePasswordUser SamrGetGroupsForUser "
+			"SamrQueryDisplayInformation SamrGetDisplayEnumerationIndex SamrTestPrivateFunctionsDomain "
+			"SamrTestPrivateFunctionsUser SamrGetUserDomainPasswordInformation SamrRemoveMemberFromForeignDomain "
+			"SamrQueryInformationDomain2 SamrQueryInformationUser2 SamrQueryDisplayInformation2 "
+			"SamrGetDisplayEnumerationIndex2 SamrCreateUser2InDomain SamrQueryDisplayInformation3 "
+			"SamrAddMultipleMembersToAlias SamrRemoveMultipleMembersFromAlias SamrOemChangePasswordUser2 "
+			"SamrUnicodeChangePasswordUser2 SamrGetDomainPasswordInformation SamrConnect2 SamrSetInformationUser2 "
+			"SamrSetBootKeyInformation SamrGetBootKeyInformation SamrConnect3 SamrConnect4 SamrUnicodeChangePasswordUser3 "
+			"SamrConnect5 SamrRidToSid SamrSetDSRMPassword SamrValidatePassword SamrQueryLocalizableAccountsInDomain "
+			"SamrPerformGenericOperation SamrSyncDSRMPasswordFromAccount SamrLookupNamesInDomain2 "
+			"SamrEnumerateUsersInDomain2 SamrUnicodeChangePasswordUser4 SamrValidateComputerAccountReuseAttempt "
+			"SamrQueryLapsManagedAccount SamrLapsSysprepCleanup SamrAccountIsDelegatedManagedServiceAccount "
+			"SamrFindOrCreateShadowAdminAccount SamrIsShadowAdminAccount SamrQueryInformationUserCloud "
+			"SamrQueryDisplayInformationCloud" },
+		{ "spoolss",
+			"RpcEnumPrinters RpcOpenPrinter RpcSetJob RpcGetJob RpcEnumJobs RpcAddPrinter RpcDeletePrinter RpcSetPrinter "
+			"RpcGetPrinter RpcAddPrinterDriver RpcEnumPrinterDrivers RpcGetPrinterDriver RpcGetPrinterDriverDirectory "
+			"RpcDeletePrinterDriver RpcAddPrintProcessor RpcEnumPrintProcessors RpcGetPrintProcessorDirectory "
+			"RpcStartDocPrinter RpcStartPagePrinter RpcWritePrinter RpcEndPagePrinter RpcAbortPrinter RpcReadPrinter "
+			"RpcEndDocPrinter RpcAddJob RpcScheduleJob RpcGetPrinterData RpcSetPrinterData RpcWaitForPrinterChange "
+			"RpcClosePrinter RpcAddForm RpcDeleteForm RpcGetForm RpcSetForm RpcEnumForms RpcEnumPorts RpcEnumMonitors "
+			"RpcAddPort RpcConfigurePort RpcDeletePort RpcCreatePrinterIC RpcPlayGdiScriptOnPrinterIC RpcDeletePrinterIC "
+			"RpcAddPrinterConnection RpcDeletePrinterConnection RpcPrinterMessageBox RpcAddMonitor RpcDeleteMonitor "
+			"RpcDeletePrintProcessor RpcAddPrintProvidor RpcDeletePrintProvidor RpcEnumPrintProcessorDatatypes "
+			"RpcResetPrinter RpcGetPrinterDriver2 RpcClientFindFirstPrinterChangeNotification "
+			"RpcFindNextPrinterChangeNotification RpcFindClosePrinterChangeNotification "
+			"RpcRouterFindFirstPrinterChangeNotificationOld RpcReplyOpenPrinter RpcRouterReplyPrinter RpcReplyClosePrinter "
+			"RpcAddPortEx RpcRemoteFindFirstPrinterChangeNotification RpcSetAllocFailCount RpcResetPrinterEx "
+			"RpcRemoteFindFirstPrinterChangeNotificationEx RpcRouterReplyPrinterEx "
+			"RpcRouterRefreshPrinterChangeNotification RpcSpoolerInit RpcOpenPrinterEx RpcAddPrinterEx RpcSetPort "
+			"RpcEnumPrinterData RpcDeletePrinterData RpcClusterSplOpen RpcClusterSplClose RpcClusterSplIsAlive "
+			"RpcSetPrinterDataEx RpcGetPrinterDataEx RpcEnumPrinterDataEx RpcEnumPrinterKey RpcDeletePrinterDataEx "
+			"RpcDeletePrinterKey RpcSeekPrinter RpcDeletePrinterDriverEx RpcAddPerMachineConnection "
+			"RpcDeletePerMachineConnection RpcEnumPerMachineConnections RpcXcvData RpcAddPrinterDriverEx RpcSplOpenPrinter "
+			"RpcGetSpoolFileInfo RpcCommitSpoolData RpcGetSpoolFileInfo2 RpcCommitSpoolData2 RpcCloseSpoolFileHandle "
+			"RpcFlushPrinter RpcSendRecvBidiData RpcAddDriverCatalog RpcAddPrinterConnection2 "
+			"RpcInstallPrinterDriverFromPackage RpcUploadPrinterDriverPackage RpcGetCorePrinterDrivers "
+			"RpcCorePrinterDriverInstalled RpcGetPrinterDriverPackagePath RpcDeletePrinterDriverPackage "
+			"RpcFindCompatibleDriver RpcReportJobProcessingProgress RpcSetSpoolerPolicy RpcInternalGetPrinterDriver "
+			"RpcGetJobNamedPropertyValue RpcSetJobNamedProperty RpcDeleteJobNamedProperty RpcEnumJobNamedProperties "
+			"RpcCreateAppSandbox RpcGetUserPropertyBag RpcLogJobInfoForBranchOffice RpcRegeneratePrintDeviceCapabilities "
+			"RpcPrintSupportOperation RpcIppCreateJobOnPrinter RpcIppGetJobAttributes RpcIppSetJobAttributes "
+			"RpcIppGetPrinterAttributes RpcIppSetPrinterAttributes RpcIppCreateJobOnPrinterWithAttributes "
+			"RpcInstallPrinterDriverPackageFromConnection" },
+		{ "srvsvc",
+			"NetrCharDevEnum NetrCharDevGetInfo NetrCharDevControl NetrCharDevQEnum NetrCharDevQGetInfo "
+			"NetrCharDevQSetInfo NetrCharDevQPurge NetrCharDevQPurgeSelf NetrConnectionEnum NetrFileEnum NetrFileGetInfo "
+			"NetrFileClose NetrSessionEnum NetrSessionDel NetrShareAdd NetrShareEnum NetrShareGetInfo NetrShareSetInfo "
+			"NetrShareDel NetrShareDelSticky NetrShareCheck NetrServerGetInfo NetrServerSetInfo NetrServerDiskEnum "
+			"NetrServerStatisticsGet NetrServerTransportAdd NetrServerTransportEnum NetrServerTransportDel NetrRemoteTOD "
+			"I_NetrServerSetServiceBits NetprPathType NetprPathCanonicalize NetprPathCompare NetprNameValidate "
+			"NetprNameCanonicalize NetprNameCompare NetrShareEnumSticky NetrShareDelStart NetrShareDelCommit "
+			"NetrpGetFileSecurity NetrpSetFileSecurity NetrServerTransportAddEx I_NetrServerSetServiceBitsEx "
+			"NetrDfsGetVersion NetrDfsCreateLocalPartition NetrDfsDeleteLocalPartition NetrDfsSetLocalVolumeState "
+			"Opnum47NotUsedOnWire NetrDfsCreateExitPoint NetrDfsDeleteExitPoint NetrDfsModifyPrefix NetrDfsFixLocalVolume "
+			"NetrDfsManagerReportSiteInfo NetrServerTransportDelEx NetrServerAliasAdd NetrServerAliasEnum "
+			"NetrServerAliasDel NetrShareDelEx LocalrSessionEnum LocalrSessionGetInfo LocalrSessionDel LocalrFileEnum "
+			"LocalrFileGetInfo LocalrFileClose LocalrShareEnum LocalrShareGetInfo LocalrShareSetInfo LocalrShareAdd "
+			"LocalrShareDelEx LocalrAliasGet LocalrServerCertificateMappingGet LocalrServerCertificateMappingAdd "
+			"LocalrServerCertificateMappingEnum LocalrServerCertificateMappingRemove LocalrServerCertificateMappingModify "
+			"- - LocalrServerSmbDirectModuleControl LocalrServerCertificateMappingAceAdd "
+			"LocalrServerCertificateMappingAceRemove LocalrServerAlternativePortUpdate LocalrServerAlternativePortEnum" },
+		{ "svcctl",
+			"RCloseServiceHandle RControlService RDeleteService RLockServiceDatabase RQueryServiceObjectSecurity "
+			"RSetServiceObjectSecurity RQueryServiceStatus RSetServiceStatus RUnlockServiceDatabase "
+			"RNotifyBootConfigStatus RI_ScSetServiceBitsW RChangeServiceConfigW RCreateServiceW REnumDependentServicesW "
+			"REnumServicesStatusW ROpenSCManagerW ROpenServiceW RQueryServiceConfigW RQueryServiceLockStatusW "
+			"RStartServiceW RGetServiceDisplayNameW RGetServiceKeyNameW RI_ScSetServiceBitsA RChangeServiceConfigA "
+			"RCreateServiceA REnumDependentServicesA REnumServicesStatusA ROpenSCManagerA ROpenServiceA "
+			"RQueryServiceConfigA RQueryServiceLockStatusA RStartServiceA RGetServiceDisplayNameA RGetServiceKeyNameA "
+			"RI_ScGetCurrentGroupStateW REnumServiceGroupW RChangeServiceConfig2A RChangeServiceConfig2W "
+			"RQueryServiceConfig2A RQueryServiceConfig2W RQueryServiceStatusEx REnumServicesStatusExA "
+			"REnumServicesStatusExW RI_ScBroadcastServiceControlMessage RCreateServiceWOW64A RCreateServiceWOW64W "
+			"RI_ScQueryServiceTagInfo RNotifyServiceStatusChange RGetNotifyResults RCloseNotifyHandle RControlServiceExA "
+			"RControlServiceExW RI_ScSendPnPMessage RI_ScValidatePnPService RI_ScOpenServiceStatusHandle "
+			"RI_ScQueryServiceConfig RQueryServiceConfigEx RI_ScRegisterPreshutdownRestart RI_ScReparseServiceDatabase "
+			"RQueryUserServiceName RCreateWowService RGetServiceRegistryStateKey RGetServiceDirectory "
+			"RGetServiceProcessToken ROpenSCManager2 RGetSharedServiceRegistryStateKey RGetSharedServiceDirectory "
+			"RReparseServiceConfig RScSendSynchronousPowerMessage" },
+		{ "winreg",
+			"OpenClassesRoot OpenCurrentUser OpenLocalMachine OpenPerformanceData OpenUsers BaseRegCloseKey "
+			"BaseRegCreateKey BaseRegDeleteKey BaseRegDeleteValue BaseRegEnumKey BaseRegEnumValue BaseRegFlushKey "
+			"BaseRegGetKeySecurity BaseRegLoadKey BaseRegNotifyChangeKeyValue BaseRegOpenKey BaseRegQueryInfoKey "
+			"BaseRegQueryValue BaseRegReplaceKey BaseRegRestoreKey BaseRegSaveKey BaseRegSetKeySecurity BaseRegSetValue "
+			"BaseRegUnLoadKey BaseInitiateSystemShutdown BaseAbortSystemShutdown BaseRegGetVersion OpenCurrentConfig "
+			"BaseInitiateSystemShutdownEx BaseRegQueryMultipleValues - BaseRegSaveKeyEx OpenPerformanceText "
+			"OpenPerformanceNlsText BaseRegQueryMultipleValues2 BaseRegDeleteKeyEx" },
+		{ "wkssvc",
+			"NetrWkstaGetInfo NetrWkstaSetInfo NetrWkstaUserEnum NetrWkstaUserGetInfo NetrWkstaUserSetInfo "
+			"NetrWkstaTransportEnum NetrWkstaTransportAdd NetrWkstaTransportDel NetrUseAdd NetrUseGetInfo NetrUseDel "
+			"NetrUseEnum - NetrWorkstationStatisticsGet - - - - - - NetrGetJoinInformation - NetrJoinDomain2 "
+			"NetrUnjoinDomain2 NetrRenameMachineInDomain2 NetrValidateName2 NetrGetJoinableOUs2 "
+			"NetrAddAlternateComputerName NetrRemoveAlternateComputerName NetrSetPrimaryComputerName "
+			"NetrEnumerateComputerNames NetrJoinDomain3 NetrUnjoinDomain3 NetrRenameMachineInDomain3 NetrValidateName3 "
+			"NetrGetJoinableOUs3 NetrAddAlternateComputerName2 NetrRemoveAlternateComputerName2 "
+			"NetrSetPrimaryComputerName2 NetpWkstarClientCertificateMappingGet NetpWkstarClientCertificateMappingAdd "
+			"NetpWkstarClientCertificateMappingEnum NetpWkstarClientCertificateMappingRemove "
+			"NetpWkstarClientCertificateMappingModify NetpWkstarClientSmbDirectModuleControl "
+			"NetpWkstarClientGetSmbClientCapabilities" },
+	};
+	auto name = KnownRpcInterface(uuid);
+	if (name.empty())
+		return {};
+	for (auto const& [iface, names] : procedures) {
+		if (name != iface)
+			continue;
+		std::string_view text = names;
+		for (uint32_t i = 0; !text.empty(); i++) {
+			auto end = text.find(' ');
+			auto word = text.substr(0, end);
+			if (i == opnum)
+				return word == "-" ? std::string() : std::string(word);
+			text = end == std::string_view::npos ? std::string_view() : text.substr(end + 1);
+		}
+	}
+	return {};
+}
 std::string RpcBaseTypeName(uint8_t type) {
 	switch (type) {
 		case 0x01: return "unsigned char";		// FC_BYTE

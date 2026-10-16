@@ -91,6 +91,7 @@ public:
 		COMMAND_ID_HANDLER(ID_PE_DRIVER, OnViewDriver)
 		COMMAND_ID_HANDLER(ID_PE_COM, OnViewCom)
 		COMMAND_ID_HANDLER(ID_PE_RPC, OnViewRpc)
+		COMMAND_ID_HANDLER(ID_PE_WINRT, OnViewWinRt)
 		COMMAND_ID_HANDLER(ID_PE_CLRTYPES, OnViewClrTypes)
 		COMMAND_ID_HANDLER(ID_PE_SECURITYSUMMARY, OnViewSecuritySummary)
 		COMMAND_ID_HANDLER(ID_FILE_SAVE, OnFileSave)
@@ -286,6 +287,7 @@ private:
 	LRESULT OnViewDriver(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewCom(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewRpc(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnViewWinRt(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	// the file imports the functions of COM that make objects (or start COM)
 	bool UsesCom() const;
 	LRESULT OnViewClrTypes(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
@@ -495,6 +497,9 @@ private:
 	std::wstring RpcInterfaceName(RpcInterface const& rpc) const override;
 	// the RPC interfaces of the file, and the names and (of 64-bit code) the declarations of their server routines
 	void FindRpcInterfaces();
+	std::vector<WinRtClass> const& WinRtClasses() const override { return m_WinRt; }
+	// the runtime classes of the file, and the names and (of 64-bit code) the declarations of WRL's functions of them
+	void FindWinRtClasses(PCWSTR path);
 	std::vector<ComUse> const& ComUses() override;
 	std::vector<ComServerClass> const& ComServerClasses() const override { return m_ComServer; }
 	std::wstring TypeLibDeclaration(DWORD guid) const override;
@@ -613,6 +618,9 @@ private:
 	std::vector<RpcInterface> m_Rpc;				// the RPC interfaces it serves and calls
 	std::map<DWORD, std::wstring> m_RpcNames;		// the names of the servers' routines ("srvsvc_Opnum12"), by RVA
 	std::unordered_map<DWORD, std::string> m_RpcDeclarations;	// their declarations, for the decompiler (64-bit code)
+	std::vector<WinRtClass> m_WinRt;				// the runtime classes it serves
+	std::map<DWORD, std::wstring> m_WinRtNames;		// the names of WRL's functions of them ("Calendar_CreateFactory"), by RVA
+	std::unordered_map<DWORD, std::string> m_WinRtDeclarations;	// their declarations, for the decompiler (64-bit code)
 	uint32_t m_DriverGeneration{ 0 };
 	std::vector<Anomaly> m_Anomalies;
 	// The cross-references of the PE file, found on a thread of their own when it is opened (a large file takes seconds).

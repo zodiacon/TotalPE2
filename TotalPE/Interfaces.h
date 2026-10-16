@@ -7,6 +7,7 @@
 #include "Overlay.h"
 #include "VirusTotal.h"
 #include <RpcInterfaces.h>
+#include <WinRtServer.h>
 #include "TypeExporter.h"
 #include <GhidraDecompiler.h>
 #include <optional>
@@ -182,6 +183,8 @@ enum class TreeItemType : int64_t {
 	Com,
 	// the RPC interfaces the program serves (their procedures) and those it calls
 	Rpc,
+	// the Windows Runtime classes the program serves (their factories, their interfaces)
+	WinRt,
 
 	ItemMask = 255,
 };
@@ -221,6 +224,8 @@ struct IMainFrame abstract {
 	// symbols ("srvsvc" of srvsvc___RpcServerInterface), of Windows' protocols, or of its UUID ("Rpc_4B324FC8")
 	virtual std::vector<RpcInterface> const& RpcInterfaces() const = 0;
 	virtual std::wstring RpcInterfaceName(RpcInterface const& rpc) const = 0;
+	// the Windows Runtime classes the image serves (of WRL's creator map, and of the registry)
+	virtual std::vector<WinRtClass> const& WinRtClasses() const = 0;
 	// the calls that pass the GUIDs of Windows (once the cross-references are there: empty until then)
 	virtual std::vector<ComUse> const& ComUses() = 0;
 	// the COM classes the DLL serves (DllGetClassObject; once the cross-references are there)

@@ -61,6 +61,9 @@ std::vector<RpcInterface> FindRpcInterfaces(PEFile const& pe);
 std::string RpcUuidText(uint8_t const* uuid);
 // The name of an interface that Windows' protocols have ("samr", "lsarpc"); empty if it is not one of those
 std::string KnownRpcInterface(uint8_t const* uuid);
+// The name of a procedure of such an interface, by its operation number ("ROpenSCManagerW" of svcctl's 15): its protocol's,
+// or that of Windows' public symbols of one the protocol does not have; empty if it is not known
+std::string KnownRpcProcedure(uint8_t const* uuid, uint32_t opnum);
 // "long", "wchar_t" of a base type (FC_LONG, FC_WCHAR...); empty if it is not one
 std::string RpcBaseTypeName(uint8_t type);
 // A parameter as the RPC view shows it: "[in] long", "[out] long *", "[in, out] pointer", "[in] context handle"

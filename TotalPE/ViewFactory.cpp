@@ -32,6 +32,7 @@
 #include "ClassesView.h"
 #include "DriverView.h"
 #include "RpcView.h"
+#include "WinRtView.h"
 #include "ComView.h"
 #include "BoundImportView.h"
 #include "GlobalPtrView.h"
@@ -463,6 +464,15 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		case TreeItemType::Rpc:
 		{
 			auto view = new CRpcView(this, m_PE);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+		case TreeItemType::WinRt:
+		{
+			auto view = new CWinRtView(this, m_PE);
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};

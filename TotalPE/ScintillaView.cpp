@@ -872,7 +872,7 @@ LRESULT CScintillaView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
 			}
 			sub.AppendMenu(MF_SEPARATOR);
 			sub.AppendMenu(MF_STRING, ID_ASSEMBLY_FLOWGRAPH, (L"Function Flow &Graph" + of + L"\tG").c_str());
-			sub.AppendMenu(MF_STRING, ID_ASSEMBLY_CALLGRAPH, (L"Function C&all Graph" + of).c_str());
+			sub.AppendMenu(MF_STRING, ID_ASSEMBLY_CALLGRAPH, (L"Function Ca&ll Graph" + of).c_str());
 		}
 	}
 	// the function of the view: its disassembly and C side by side
