@@ -255,6 +255,15 @@
     <ClCompile Include="WinRtView.cpp">
       <Filter>Views</Filter>
     </ClCompile>
+    <ClCompile Include="CodeColorsDlg.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
+    <ClCompile Include="CodeColors.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
+    <ClCompile Include="Fonts.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
     <ClCompile Include="ComView.cpp">
       <Filter>Views</Filter>
     </ClCompile>
@@ -510,6 +519,15 @@
       <Filter>Views</Filter>
     </ClInclude>
     <ClInclude Include="WinRtView.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="CodeColorsDlg.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="CodeColors.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="Fonts.h">
       <Filter>Views</Filter>
     </ClInclude>
     <ClInclude Include="ComView.h">

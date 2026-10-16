@@ -7,7 +7,8 @@ public:
 	BEGIN_SETTINGS(AppSettings)
 	SETTING(MainWindowPlacement, WINDOWPLACEMENT{}, SettingType::Binary);
 	SETTING(Win32ApiWindowPlacement, WINDOWPLACEMENT{}, SettingType::Binary);
-	SETTING(Font, LOGFONT{}, SettingType::Binary);
+	SETTING(CodeFont, LOGFONT{}, SettingType::Binary);			// of the views of code (Fonts.h)
+	SETTING(ApplicationFont, LOGFONT{}, SettingType::Binary);	// of everything else
 	SETTING(AlwaysOnTop, 0, SettingType::Bool);
 	SETTING(ViewToolBar, 1, SettingType::Bool);
 	SETTING(ViewStatusBar, 1, SettingType::Bool);
@@ -21,12 +22,15 @@ public:
 	SETTING_STRING(VirusTotalApiKey, L"");	// encrypted with DPAPI: see vt::ProtectKey
 	SETTING_STRING(PreferredConstants, L"");	// of the names of a value of Windows, those shown (separated by ;)
 	SETTING(Win32ApiDocumentation, 1, SettingType::Bool);	// Microsoft's documentation shown in the Windows API window
+	SETTING_STRING(CodeColorsLight, L"");	// the colors of code changed from their defaults (CodeColors.h), of the light theme
+	SETTING_STRING(CodeColorsDark, L"");	// and of the dark one
 	END_SETTINGS
 
 	DEF_SETTING(AlwaysOnTop, bool)
 	DEF_SETTING(MainWindowPlacement, WINDOWPLACEMENT)
 	DEF_SETTING(Win32ApiWindowPlacement, WINDOWPLACEMENT)
-	DEF_SETTING(Font, LOGFONT)
+	DEF_SETTING(CodeFont, LOGFONT)
+DEF_SETTING(ApplicationFont, LOGFONT)
 	DEF_SETTING(TreeIconSize, int)
 	DEF_SETTING(DarkMode, bool)
 	DEF_SETTING(ViewToolBar, bool)
@@ -39,6 +43,8 @@ public:
 	DEF_SETTING_STRING(VirusTotalApiKey)
 	DEF_SETTING_STRING(PreferredConstants)
 	DEF_SETTING(Win32ApiDocumentation, bool)
+DEF_SETTING_STRING(CodeColorsLight)
+DEF_SETTING_STRING(CodeColorsDark)
 
 	static constexpr PCWSTR DefaultSymbolServerUrl = L"https://msdl.microsoft.com/download/symbols";
 	static constexpr PCWSTR DefaultSymbolCache = L"%LOCALAPPDATA%\\TotalPE\\Symbols";

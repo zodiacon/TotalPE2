@@ -25,6 +25,7 @@ public:
 	void Activate();
 
 	BEGIN_MSG_MAP(CWin32ApiFrame)
+		MESSAGE_HANDLER(WM_CREATE, OnCreate)
 		MESSAGE_HANDLER(WM_DESTROY, OnDestroy)
 		MESSAGE_HANDLER(WM_SETFOCUS, OnSetFocus)
 		MESSAGE_HANDLER(WM_APPCOMMAND, OnAppCommand)
@@ -35,6 +36,7 @@ public:
 	void OnFinalMessage(HWND) override;
 
 private:
+	LRESULT OnCreate(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnDestroy(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnSetFocus(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnAppCommand(UINT, WPARAM, LPARAM, BOOL&);

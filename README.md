@@ -95,6 +95,7 @@ The kind of file is recognized by its contents, not its extension. Open files fr
 * Save (Ctrl+S) saves what the active view shows: a list as CSV or text, text, the bytes of a hex view, a flow graph as SVG
 * Export List (Ctrl+Shift+S) saves any list as CSV or tab separated text
 * Dark mode
+* The application font (Options > Application Font: lists, trees, edit boxes), the code font (Options > Code Font: disassembly, C/C++, IDL, IL, XML, INF, text) and the colors of code (Options > Colors): those of each element of disassembly, C/C++/C#/IDL, IL, XML/HTML and INF, of the light theme and of the dark one
 
 ## Building
 

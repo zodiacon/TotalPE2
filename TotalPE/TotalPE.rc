@@ -361,7 +361,9 @@ BEGIN
     BEGIN
         MENUITEM "&Always On Top",              ID_OPTIONS_ALWAYSONTOP
         MENUITEM "&Dark Mode",                  ID_OPTIONS_DARKMODE
-        MENUITEM "&Font...",                    ID_OPTIONS_FONT
+        MENUITEM "Application &Font...",        ID_OPTIONS_FONT
+        MENUITEM "Code Fo&nt...",               ID_OPTIONS_CODEFONT
+        MENUITEM "&Colors...",                  ID_OPTIONS_COLORS
         MENUITEM "&Symbols...",                 ID_OPTIONS_SYMBOLS
     END
     POPUP "&Window"
@@ -492,6 +494,22 @@ BEGIN
     LTEXT           "Static",IDC_COPYRIGHT,53,23,123,8
     CONTROL         "<a>https://Github.com/zodiacon/TotalPE2</a>",IDC_LINK,
                     "SysLink",WS_TABSTOP,49,40,125,14
+END
+
+IDD_CODECOLORS DIALOGEX 0, 0, 340, 246
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Colors of Code"
+FONT 9, "Segoe UI", 0, 0, 0x0
+BEGIN
+    LTEXT           "&Theme:",IDC_STATIC,7,9,30,8
+    COMBOBOX        IDC_COLORS_SCHEME,40,7,90,60,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "",IDC_COLORS_LIST,"SysListView32",LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_BORDER | WS_TABSTOP,7,25,326,170
+    PUSHBUTTON      "C&olor...",IDC_COLORS_CHANGE,7,201,50,14
+    CONTROL         "&Bold",IDC_COLORS_BOLD,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,63,203,40,10
+    PUSHBUTTON      "&Default",IDC_COLORS_DEFAULT,227,201,50,14
+    PUSHBUTTON      "Reset &All",IDC_COLORS_RESETALL,283,201,50,14
+    DEFPUSHBUTTON   "OK",IDOK,227,225,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,283,225,50,14
 END
 
 IDD_SYMBOLS DIALOGEX 0, 0, 320, 214
@@ -683,8 +701,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 2,0,0,0
- PRODUCTVERSION 2,0,0,0
+ FILEVERSION 3,0,0,0
+ PRODUCTVERSION 3,0,0,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -701,12 +719,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Pavel Yosifovich"
             VALUE "FileDescription", "Total PE - PE Viewer"
-            VALUE "FileVersion", "2.0.0.0"
+            VALUE "FileVersion", "3.0.0.0"
             VALUE "InternalName", "TotalPE"
             VALUE "LegalCopyright", "©2022-2026 Pavel Yosifovich"
             VALUE "OriginalFilename", "TotalPE.exe"
             VALUE "ProductName", "Total PE"
-            VALUE "ProductVersion", "2.0.0"
+            VALUE "ProductVersion", "3.0.0"
         END
     END
     BLOCK "VarFileInfo"
@@ -835,6 +853,7 @@ BEGIN
     ID_FILE_RUNASADMINISTRATOR 
                             "Relaunch application with elevated permissions"
     ID_OPTIONS_ALWAYSONTOP  "\nAlways On Top"
+    ID_OPTIONS_FONT         "The font of the application: its lists, trees and edit boxes (not code, nor dialogs)\nApplication Font"
     ID_VIEW_EXPORTS         "\nExports"
     ID_VIEW_IMPORTS         "\nImports"
 END
@@ -879,12 +898,14 @@ STRINGTABLE
 BEGIN
     ID_WIN32_DOCS           "Show Microsoft's documentation of the function or type\nDocumentation"
     ID_WIN32_BROWSER        "Open the documentation (or a search of it) in the default browser\nOpen in Browser"
-    ID_PE_COM               "The COM classes the program creates and the interfaces it asks for: the calls that pass their GUIDs\nCOM"
-    ID_PE_RPC               "The RPC interfaces the program serves (their procedures, the routines that serve them) and those it calls\nRPC"
-    ID_PE_WINRT             "The Windows Runtime classes the program serves: their factories, and their interfaces in the metadata of Windows\nWinRT"
     ID_TOOLS_ADDSIGNATURES  "Name the functions of static libraries (.lib, .obj) in files that have no symbols\nAdd Library Signatures"
     ID_PE_CLASSES           "The C++ classes of the program (from its run-time type information): their bases, vtables and virtual functions \nClasses"
     ID_PE_DRIVER            "What the kernel driver sets up: its dispatch routines (IRP_MJ_...), its unload routine, the control codes it handles\nDriver"
+    ID_PE_COM               "The COM classes the program creates and the interfaces it asks for: the calls that pass their GUIDs\nCOM"
+    ID_PE_RPC               "The RPC interfaces the program serves (their procedures, the routines that serve them) and those it calls\nRPC"
+    ID_PE_WINRT             "The Windows Runtime classes the program serves: their factories, and their interfaces in the metadata of Windows\nWinRT"
+    ID_OPTIONS_COLORS       "The colors of code (disassembly, C/C++, IL, XML, INF), of the light and the dark themes\nColors"
+    ID_OPTIONS_CODEFONT     "The font of code: disassembly, C/C++, IDL, IL, XML, INF and text\nCode Font"
 END
 
 STRINGTABLE

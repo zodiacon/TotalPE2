@@ -7,10 +7,16 @@ CWin32ApiFrame::CWin32ApiFrame(IMainFrame* main, PEFile const& pe, std::function
 	m_Main(main), m_PE(pe), m_Closed(std::move(closed)) {
 }
 
+LRESULT CWin32ApiFrame::OnCreate(UINT, WPARAM, LPARAM, BOOL& handled) {
+	// (in WM_CREATE: dark mode's hook themes the frame's controls once it has handled it, as the main window's)
+	CreateSimpleStatusBar(L"");
+	handled = FALSE;
+	return 0;
+}
+
 bool CWin32ApiFrame::Open(Win32Api& api, std::unordered_set<std::string> imports, CString const& title) {
 	if (!Create(nullptr, rcDefault, title, WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN))
 		return false;
-	CreateSimpleStatusBar(L"");
 	m_View = new CWin32ApiView(m_Main, m_PE, api, std::move(imports));
 	m_View->SetStatusBar(m_hWndStatusBar);
 	m_hWndClient = m_View->DoCreate(m_hWnd);
@@ -78,7 +84,9 @@ LRESULT CWin32ApiFrame::OnAppCommand(UINT, WPARAM, LPARAM lParam, BOOL& handled)
 }
 
 LRESULT CWin32ApiFrame::OnUpdateDarkMode(UINT, WPARAM, LPARAM, BOOL&) {
-	WTLHelper::SwitchToMode(AppSettings::Get().DarkMode() ? DarkModeKind::Dark : DarkModeKind::Light, m_hWnd);
+	// (another top-level window may have switched the mode already: this one's controls are themed all the same)
+	if (!WTLHelper::SwitchToMode(AppSettings::Get().DarkMode() ? DarkModeKind::Dark : DarkModeKind::Light, m_hWnd))
+		WTLHelper::ApplyMode(m_hWnd);
 	SendMessageToDescendants(WM_UPDATE_DARKMODE);
 	SendMessageToDescendants(::RegisterWindowMessage(L"WTLHelperUpdateTheme"));
 	RedrawWindow(nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_FRAME);

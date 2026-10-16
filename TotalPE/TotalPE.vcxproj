@@ -417,6 +417,9 @@
     <ClCompile Include="DriverView.cpp" />
     <ClCompile Include="RpcView.cpp" />
     <ClCompile Include="WinRtView.cpp" />
+    <ClCompile Include="CodeColorsDlg.cpp" />
+    <ClCompile Include="CodeColors.cpp" />
+    <ClCompile Include="Fonts.cpp" />
     <ClCompile Include="HexFind.cpp" />
     <ClCompile Include="HexInspector.cpp" />
     <ClCompile Include="BoundImportView.cpp" />
@@ -498,6 +501,9 @@
     <ClInclude Include="DriverView.h" />
     <ClInclude Include="RpcView.h" />
     <ClInclude Include="WinRtView.h" />
+    <ClInclude Include="CodeColorsDlg.h" />
+    <ClInclude Include="CodeColors.h" />
+    <ClInclude Include="Fonts.h" />
     <ClInclude Include="HexFind.h" />
     <ClInclude Include="HexInspector.h" />
     <ClInclude Include="BoundImportView.h" />

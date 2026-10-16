@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "TextView.h"
+#include "Fonts.h"
 
 CTextView::CTextView(IMainFrame* frame, PCWSTR title) : CViewBase(frame), m_Title(title) {
 }
@@ -15,9 +16,9 @@ CString CTextView::GetTitle() const {
 LRESULT CTextView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
     m_hWndClient = m_Edit.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | ES_READONLY | ES_MULTILINE | WS_HSCROLL | WS_VSCROLL);
 
-    CFont font;
-    font.CreatePointFont(110, L"Consolas");
-    m_Edit.SetFont(font.Detach());
+    // the code font (Options > Code Font)
+    Fonts::MarkCode(m_Edit);
+    m_Edit.SetFont(Fonts::CodeFont());
     m_Edit.SetTabStops(10);
 
     return 0;

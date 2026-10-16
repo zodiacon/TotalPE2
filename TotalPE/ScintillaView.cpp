@@ -18,6 +18,8 @@
 #include "PEFile.h"
 #include "CodeAnalysis.h"
 #include "InfSyntax.h"
+#include "CodeColors.h"
+#include "Fonts.h"
 
 // "address mnemonic operands (name of the target) ; bytes": an instruction that refers to a known address gets its name:
 // a branch target, a RIP-relative or absolute operand (x86, x64), the address that adrp and add or ldr make (ARM64)
@@ -615,20 +617,36 @@ void CScintillaView::SetLanguage(LexLanguage lang) {
 }
 
 void CScintillaView::UpdateColors() {
-	// TEMPORARY
 	auto dark = WTLHelper::IsDarkMode();
+	// the user's colors of the theme (Options > Colors): the color of an element, and whether it is bold
+	auto style = [&](int id, char const* key) {
+		auto c = CodeColors::Get(key, dark);
+		m_Sci.StyleSetFore(id, c.Color);
+		m_Sci.StyleSetBold(id, c.Bold);
+	};
 
+	// the code font (Options > Code Font)
+	auto font = Fonts::Code();
+	m_Sci.StyleSetFont(STYLE_DEFAULT, CW2A(font.lfFaceName, CP_UTF8));
+	m_Sci.StyleSetSize(STYLE_DEFAULT, Fonts::Points(font));
+	m_Sci.StyleSetBold(STYLE_DEFAULT, font.lfWeight >= FW_BOLD);
+	m_Sci.StyleSetItalic(STYLE_DEFAULT, font.lfItalic != 0);
 	m_Sci.StyleSetFore(STYLE_DEFAULT, ::GetSysColor(COLOR_WINDOWTEXT));
 	m_Sci.StyleSetBack(STYLE_DEFAULT, ::GetSysColor(COLOR_WINDOW));
 	m_Sci.StyleClearAll();
 
+	// the scroll bars, of the theme (dark mode's themes are of the controls it knows, which Scintilla is not one of)
+	::SetWindowTheme(m_Sci, dark ? L"DarkMode_Explorer" : nullptr, nullptr);
+	m_Sci.SetWindowPos(nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+
 	// the lines marked as related to the other side of a side-by-side view
 	m_Sci.SendMessage(SCI_MARKERDEFINE, MarkerRelated, SC_MARK_BACKGROUND);
-	m_Sci.SendMessage(SCI_MARKERSETBACK, MarkerRelated, dark ? RGB(70, 60, 20) : RGB(255, 240, 170));
+	m_Sci.SendMessage(SCI_MARKERSETBACK, MarkerRelated, CodeColors::Get("Common.Related", dark).Color);
 	// a bookmark: in the margin
+	auto bookmark = CodeColors::Get("Common.Bookmark", dark).Color;
 	m_Sci.SendMessage(SCI_MARKERDEFINE, MarkerBookmark, SC_MARK_BOOKMARK);
-	m_Sci.SendMessage(SCI_MARKERSETFORE, MarkerBookmark, RGB(30, 90, 200));
-	m_Sci.SendMessage(SCI_MARKERSETBACK, MarkerBookmark, RGB(60, 130, 230));
+	m_Sci.SendMessage(SCI_MARKERSETFORE, MarkerBookmark, RGB(GetRValue(bookmark) / 2, GetGValue(bookmark) * 2 / 3, GetBValue(bookmark) * 7 / 8));
+	m_Sci.SendMessage(SCI_MARKERSETBACK, MarkerBookmark, bookmark);
 
 	// the selection and the caret: Scintilla's own colors are for a light background
 	using Scintilla::Element;
@@ -648,61 +666,58 @@ void CScintillaView::UpdateColors() {
 
 	switch (m_Language) {
 		case LexLanguage::Asm:
-			m_Sci.StyleSetFore(SCE_ASM_COMMENT, RGB(0, 128, 0));
-			m_Sci.StyleSetFore(SCE_ASM_CPUINSTRUCTION, dark ? RGB(240, 0, 0) : RGB(160, 0, 0));
-			m_Sci.StyleSetFore(SCE_ASM_NUMBER, dark ? RGB(0, 255, 255) : RGB(0, 0, 255));
-			m_Sci.StyleSetFore(SCE_ASM_STRING, dark ? RGB(128, 0, 128) : RGB(128, 0, 64));
-			m_Sci.StyleSetFore(SCE_ASM_REGISTER, dark ? RGB(128, 128, 0) : RGB(255, 128, 0));
-			m_Sci.StyleSetFore(SCE_ASM_DIRECTIVE, RGB(128, 128, 128));
+			style(SCE_ASM_COMMENT, "Asm.Comment");
+			style(SCE_ASM_CPUINSTRUCTION, "Asm.Instruction");
+			style(SCE_ASM_NUMBER, "Asm.Number");
+			style(SCE_ASM_STRING, "Asm.String");
+			style(SCE_ASM_REGISTER, "Asm.Register");
+			style(SCE_ASM_DIRECTIVE, "Asm.Directive");
 			break;
 
 		case LexLanguage::Xml:
 		case LexLanguage::Html:
-			m_Sci.StyleSetFore(SCE_H_TAG, dark ? RGB(0, 128, 255) : RGB(0, 0, 240));
-			m_Sci.StyleSetFore(SCE_H_ATTRIBUTE, dark ? RGB(240, 128, 128) : RGB(128, 0, 0));
+			style(SCE_H_TAG, "Xml.Tag");
+			style(SCE_H_ATTRIBUTE, "Xml.Attribute");
 			break;
 
 		case LexLanguage::Inf:
-			m_Sci.StyleSetFore((int)InfStyle::Comment, RGB(0, 128, 0));
-			m_Sci.StyleSetFore((int)InfStyle::Section, dark ? RGB(0, 128, 255) : RGB(0, 0, 240));
-			m_Sci.StyleSetBold((int)InfStyle::Section, true);
-			m_Sci.StyleSetFore((int)InfStyle::Key, dark ? RGB(240, 128, 128) : RGB(128, 0, 0));
-			m_Sci.StyleSetFore((int)InfStyle::Operator, RGB(128, 128, 128));
-			m_Sci.StyleSetFore((int)InfStyle::String, dark ? RGB(214, 157, 133) : RGB(163, 21, 21));
-			m_Sci.StyleSetFore((int)InfStyle::StringKey, dark ? RGB(200, 120, 255) : RGB(128, 0, 128));
-			m_Sci.StyleSetFore((int)InfStyle::Number, dark ? RGB(0, 255, 255) : RGB(0, 0, 255));
-			m_Sci.StyleSetFore((int)InfStyle::RootKey, dark ? RGB(255, 160, 0) : RGB(192, 96, 0));
-			m_Sci.StyleSetBold((int)InfStyle::RootKey, true);
+			style((int)InfStyle::Comment, "Inf.Comment");
+			style((int)InfStyle::Section, "Inf.Section");
+			style((int)InfStyle::Key, "Inf.Key");
+			style((int)InfStyle::Operator, "Inf.Operator");
+			style((int)InfStyle::String, "Inf.String");
+			style((int)InfStyle::StringKey, "Inf.StringKey");
+			style((int)InfStyle::Number, "Inf.Number");
+			style((int)InfStyle::RootKey, "Inf.RootKey");
 			break;
 
 		case LexLanguage::IL:
-			m_Sci.StyleSetFore((int)IlStyle::Comment, dark ? RGB(87, 166, 74) : RGB(0, 128, 0));
-			m_Sci.StyleSetFore((int)IlStyle::String, dark ? RGB(214, 157, 133) : RGB(163, 21, 21));
-			m_Sci.StyleSetFore((int)IlStyle::Label, RGB(128, 128, 128));
-			m_Sci.StyleSetFore((int)IlStyle::Opcode, dark ? RGB(240, 100, 100) : RGB(160, 0, 0));
-			m_Sci.StyleSetFore((int)IlStyle::Directive, dark ? RGB(200, 120, 255) : RGB(128, 0, 128));
-			m_Sci.StyleSetBold((int)IlStyle::Directive, true);
-			m_Sci.StyleSetFore((int)IlStyle::Keyword, dark ? RGB(86, 156, 214) : RGB(0, 0, 255));
-			m_Sci.StyleSetFore((int)IlStyle::Type, dark ? RGB(78, 201, 176) : RGB(43, 145, 175));
-			m_Sci.StyleSetFore((int)IlStyle::Number, dark ? RGB(181, 206, 168) : RGB(9, 134, 88));
+			style((int)IlStyle::Comment, "IL.Comment");
+			style((int)IlStyle::String, "IL.String");
+			style((int)IlStyle::Label, "IL.Label");
+			style((int)IlStyle::Opcode, "IL.Opcode");
+			style((int)IlStyle::Directive, "IL.Directive");
+			style((int)IlStyle::Keyword, "IL.Keyword");
+			style((int)IlStyle::Type, "IL.Type");
+			style((int)IlStyle::Number, "IL.Number");
 			break;
 
 		case LexLanguage::C:
 		case LexLanguage::Cpp:
 		case LexLanguage::CSharp:
 		case LexLanguage::Idl:
-			// (IDL's GUIDs: the color of numbers, over the lexer's)
+			// (IDL's GUIDs: an indicator over the lexer's colors)
 			m_Sci.SendMessage(SCI_INDICSETSTYLE, IndicatorGuid, INDIC_TEXTFORE);
-			m_Sci.SendMessage(SCI_INDICSETFORE, IndicatorGuid, dark ? RGB(181, 206, 168) : RGB(9, 134, 88));
-			for (auto style : { SCE_C_COMMENT, SCE_C_COMMENTLINE, SCE_C_COMMENTDOC, SCE_C_COMMENTLINEDOC })
-				m_Sci.StyleSetFore(style, dark ? RGB(87, 166, 74) : RGB(0, 128, 0));
-			m_Sci.StyleSetFore(SCE_C_WORD, dark ? RGB(86, 156, 214) : RGB(0, 0, 255));
-			m_Sci.StyleSetFore(SCE_C_WORD2, dark ? RGB(78, 201, 176) : RGB(43, 145, 175));
-			m_Sci.StyleSetFore(SCE_C_NUMBER, dark ? RGB(181, 206, 168) : RGB(9, 134, 88));
-			m_Sci.StyleSetFore(SCE_C_STRING, dark ? RGB(214, 157, 133) : RGB(163, 21, 21));
-			m_Sci.StyleSetFore(SCE_C_CHARACTER, dark ? RGB(214, 157, 133) : RGB(163, 21, 21));
-			m_Sci.StyleSetFore(SCE_C_PREPROCESSOR, RGB(128, 128, 128));
-			m_Sci.StyleSetFore(SCE_C_OPERATOR, dark ? RGB(180, 180, 180) : RGB(64, 64, 64));
+			m_Sci.SendMessage(SCI_INDICSETFORE, IndicatorGuid, CodeColors::Get("C.Guid", dark).Color);
+			for (auto id : { SCE_C_COMMENT, SCE_C_COMMENTLINE, SCE_C_COMMENTDOC, SCE_C_COMMENTLINEDOC })
+				style(id, "C.Comment");
+			style(SCE_C_WORD, "C.Keyword");
+			style(SCE_C_WORD2, "C.Type");
+			style(SCE_C_NUMBER, "C.Number");
+			style(SCE_C_STRING, "C.String");
+			style(SCE_C_CHARACTER, "C.String");
+			style(SCE_C_PREPROCESSOR, "C.Preprocessor");
+			style(SCE_C_OPERATOR, "C.Operator");
 			break;
 	}
 }
@@ -717,8 +732,9 @@ LRESULT CScintillaView::OnSetFocus(UINT, WPARAM, LPARAM, BOOL&) {
 LRESULT CScintillaView::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& bHandled) {
 	m_hWndClient = m_Sci.Create(m_hWnd);
 
-	m_Sci.StyleSetFont(STYLE_DEFAULT, "Consolas");
-	m_Sci.StyleSetSize(STYLE_DEFAULT, 11);
+	auto font = Fonts::Code();
+	m_Sci.StyleSetFont(STYLE_DEFAULT, CW2A(font.lfFaceName, CP_UTF8));
+	m_Sci.StyleSetSize(STYLE_DEFAULT, Fonts::Points(font));
 	m_Sci.UsePopup(SC_POPUP_NEVER);
 
 	bHandled = FALSE;	// the base class registers the view for the message filter (PreTranslateMessage) and idle handling

@@ -71,6 +71,7 @@
 #define IDI_GLOBE                       267
 #define IDI_ICON2                       268
 #define IDD_SYMBOLS                     269
+#define IDD_CODECOLORS                  287
 #define IDD_HEXFIND                     270
 #define IDI_ICON1                       271
 #define IDI_LOOK                        271
@@ -103,6 +104,12 @@
 #define IDC_SYM_USE_ENV                 1008
 #define IDC_SYM_PREVIEW                 1009
 #define IDC_SYM_DEFAULTS                1010
+#define IDC_COLORS_SCHEME               1044
+#define IDC_COLORS_LIST                 1045
+#define IDC_COLORS_CHANGE               1046
+#define IDC_COLORS_BOLD                 1047
+#define IDC_COLORS_DEFAULT              1048
+#define IDC_COLORS_RESETALL             1049
 #define IDC_HEXFIND_TEXT                1011
 #define IDC_HEXFIND_HEX                 1012
 #define IDC_HEXFIND_ASCII               1013
@@ -282,14 +289,16 @@
 #define ID_IDL_SHOWINCOM                32970
 #define ID_PE_RPC                       32971
 #define ID_PE_WINRT                     32972
+#define ID_OPTIONS_COLORS               32973
+#define ID_OPTIONS_CODEFONT             32974
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        287
-#define _APS_NEXT_COMMAND_VALUE         32973
-#define _APS_NEXT_CONTROL_VALUE         1044
+#define _APS_NEXT_RESOURCE_VALUE        288
+#define _APS_NEXT_COMMAND_VALUE         32975
+#define _APS_NEXT_CONTROL_VALUE         1050
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

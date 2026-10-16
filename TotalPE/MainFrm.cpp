@@ -15,6 +15,8 @@
 #include "ApiSetMap.h"
 #include "AppSettings.h"
 #include "SymbolSettingsDlg.h"
+#include "CodeColorsDlg.h"
+#include "Fonts.h"
 #include "GoToDlg.h"
 #include "SymbolsView.h"
 #include "VtKeyDlg.h"
@@ -233,6 +235,8 @@ bool CMainFrame::DeleteTreeItem(HTREEITEM hItem) {
 
 LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/) {
 	DragAcceptFiles();
+	// (the application font, to the controls as they are made)
+	Fonts::Install();
 	auto& settings = AppSettings::Get();
 	m_RecentFiles.Set(settings.RecentFiles());
 	UpdateRecentFilesMenu();
@@ -4866,7 +4870,9 @@ void CMainFrame::InitDarkTheme() const {
 LRESULT CMainFrame::OnUpdateDarkMode(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/) {
 	auto& settings = AppSettings::Get();
 
-	WTLHelper::SwitchToMode(settings.DarkMode() ? DarkModeKind::Dark : DarkModeKind::Light, m_hWnd);
+	// (another top-level window may have switched the mode already: this one's controls are themed all the same)
+	if (!WTLHelper::SwitchToMode(settings.DarkMode() ? DarkModeKind::Dark : DarkModeKind::Light, m_hWnd))
+		WTLHelper::ApplyMode(m_hWnd);
 	UISetCheck(ID_OPTIONS_DARKMODE, settings.DarkMode());
 	InitMenu(GetMenu());
 	DrawMenuBar();
@@ -4885,6 +4891,47 @@ LRESULT CMainFrame::OnToggleDarkMode(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*
 		return TRUE;
 		}, 0);
 
+	return 0;
+}
+
+void CMainFrame::UpdateCodeStyle() {
+	// the fonts of the controls
+	Fonts::Apply();
+	// (as a change of the theme does: each view of code sets its font and colors again)
+	::EnumThreadWindows(::GetCurrentThreadId(), [](auto hWnd, auto) {
+		::PostMessage(hWnd, WM_UPDATE_DARKMODE, 0, 0);
+		return TRUE;
+		}, 0);
+}
+
+// the application font: of lists, trees, edit boxes... (the default GUI font until one is chosen)
+LRESULT CMainFrame::OnOptionsFont(WORD, WORD, HWND, BOOL&) {
+	LOGFONT font;
+	if (!Fonts::Application(font))
+		::GetObject(AtlGetDefaultGuiFont(), sizeof(font), &font);
+	CFontDialog dlg(&font, CF_SCREENFONTS | CF_INITTOLOGFONTSTRUCT | CF_NOVERTFONTS, nullptr, m_hWnd);
+	if (dlg.DoModal() != IDOK)
+		return 0;
+	AppSettings::Get().ApplicationFont(dlg.m_lf);
+	UpdateCodeStyle();
+	return 0;
+}
+
+// the code font: of disassembly, C/C++, IDL... (fixed pitch, as the columns of disassembly need)
+LRESULT CMainFrame::OnOptionsCodeFont(WORD, WORD, HWND, BOOL&) {
+	auto font = Fonts::Code();
+	CFontDialog dlg(&font, CF_SCREENFONTS | CF_FIXEDPITCHONLY | CF_INITTOLOGFONTSTRUCT | CF_NOVERTFONTS, nullptr, m_hWnd);
+	if (dlg.DoModal() != IDOK)
+		return 0;
+	AppSettings::Get().CodeFont(dlg.m_lf);
+	UpdateCodeStyle();
+	return 0;
+}
+
+LRESULT CMainFrame::OnOptionsColors(WORD, WORD, HWND, BOOL&) {
+	CCodeColorsDlg dlg;
+	if (dlg.DoModal(m_hWnd) == IDOK)
+		UpdateCodeStyle();
 	return 0;
 }
 

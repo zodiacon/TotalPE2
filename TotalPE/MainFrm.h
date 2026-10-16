@@ -112,6 +112,9 @@ public:
 		MESSAGE_HANDLER(WM_MENUSELECT, OnMenuSelect)
 		COMMAND_ID_HANDLER(ID_OPTIONS_DARKMODE, OnToggleDarkMode)
 		COMMAND_ID_HANDLER(ID_OPTIONS_SYMBOLS, OnSymbolSettings)
+		COMMAND_ID_HANDLER(ID_OPTIONS_FONT, OnOptionsFont)
+		COMMAND_ID_HANDLER(ID_OPTIONS_CODEFONT, OnOptionsCodeFont)
+		COMMAND_ID_HANDLER(ID_OPTIONS_COLORS, OnOptionsColors)
 		COMMAND_ID_HANDLER(ID_NAV_GOTO, OnNavGoTo)
 		COMMAND_ID_HANDLER(ID_NAV_GOANYWHERE, OnNavGoAnywhere)
 		COMMAND_ID_HANDLER(ID_NAV_BACK, OnNavBack)
@@ -288,6 +291,11 @@ private:
 	LRESULT OnViewCom(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewRpc(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewWinRt(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnOptionsFont(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnOptionsCodeFont(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnOptionsColors(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	// the controls and the views of code (in this window and the others of the thread) take the fonts and colors of the settings again
+	void UpdateCodeStyle();
 	// the file imports the functions of COM that make objects (or start COM)
 	bool UsesCom() const;
 	LRESULT OnViewClrTypes(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
