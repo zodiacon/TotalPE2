@@ -122,6 +122,8 @@ void CDeclarationView::UpdateColors() {
 	Sci(SCI_INDICSETSTYLE, IndicatorLink, INDIC_PLAIN);
 	Sci(SCI_INDICSETFORE, IndicatorLink, p.Link);
 	Sci(SCI_INDICSETUNDER, IndicatorLink, TRUE);
+	Sci(SCI_INDICSETHOVERSTYLE, IndicatorLink, INDIC_STRAIGHTBOX);
+	Sci(SCI_INDICSETHOVERFORE, IndicatorLink, p.Link);
 
 	// the scroll bars (dark mode's themes are of the controls it knows, which Scintilla is not one of)
 	::SetWindowTheme(m_Sci, WTLHelper::IsDarkMode() ? L"DarkMode_Explorer" : nullptr, nullptr);
@@ -550,6 +552,15 @@ LRESULT CDeclarationView::OnDwellStart(int, LPNMHDR hdr, BOOL&) {
 	return 0;
 }
 
+LRESULT CDeclarationView::OnIndicatorRelease(int, LPNMHDR hdr, BOOL&) {
+	auto scn = (SCNotification*)hdr;
+	if (!(scn->modifiers & SCMOD_CTRL) || !(Sci(SCI_INDICATORALLONFOR, scn->position) & (1 << IndicatorLink)))
+		return 0;
+	// (not while Scintilla handles the click: the text changes)
+	PostMessage(WM_FOLLOWLINE, Sci(SCI_LINEFROMPOSITION, scn->position), (scn->modifiers & SCMOD_SHIFT) ? 1 : 0);
+	return 0;
+}
+
 LRESULT CDeclarationView::OnDwellEnd(int, LPNMHDR, BOOL&) {
 	Sci(SCI_CALLTIPCANCEL);
 	return 0;
@@ -605,6 +616,8 @@ LRESULT CDeclarationView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
 	UINT linkFlags = referred.empty() ? MF_GRAYED : 0;
 	menu.AppendMenu(MF_STRING | linkFlags, ID_GO_DEFINITION,
 		referred.empty() ? L"Go to &Definition\tF12" : std::format(L"Go to &{}\tF12", name).c_str());
+	menu.AppendMenu(MF_STRING, ID_GO_SIDE,
+		referred.empty() ? L"Open to the &Side\tCtrl+\\" : std::format(L"Open {} to the &Side\tCtrl+\\", name).c_str());
 	menu.AppendMenu(MF_STRING | linkFlags, ID_GO_DEFINITION_NEWTAB,
 		referred.empty() ? L"Open Definition in New &Tab\tCtrl+F12" : std::format(L"Open {} in New &Tab\tCtrl+F12", name).c_str());
 	menu.AppendMenu(MF_STRING, ID_GO_USEDBY, L"Find &Usages\tShift+F12");

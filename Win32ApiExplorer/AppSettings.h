@@ -15,7 +15,10 @@ public:
 	SETTING(ActiveTab, -1, SettingType::Int32);
 	SETTING(CodeFont, LOGFONT{}, SettingType::Binary);	// of the declarations (no name: the default)
 	SETTING(UIFont, LOGFONT{}, SettingType::Binary);
-	SETTING(ShowMode, 0, SettingType::Int32);		// of structs: CDeclarationView::Mode	// of the rest: lists, tree, tabs (no name: the default)
+	SETTING(ShowMode, 0, SettingType::Int32);
+	SETTING_STRING(MetadataFolder, L"");		// where the metadata is (empty: next to the executable)
+	SETTING_STRING(MetadataVersion, L"");		// of the metadata there (empty: not known)
+	SETTING_STRING(WdkMetadataVersion, L"");		// of structs: CDeclarationView::Mode	// of the rest: lists, tree, tabs (no name: the default)
 	END_SETTINGS
 
 	DEF_SETTING(MainWindowPlacement, WINDOWPLACEMENT)
@@ -29,6 +32,9 @@ public:
 	DEF_SETTING(CodeFont, LOGFONT)
 	DEF_SETTING(UIFont, LOGFONT)
 	DEF_SETTING(ShowMode, int)
+	DEF_SETTING_STRING(MetadataFolder)
+	DEF_SETTING_STRING(MetadataVersion)
+	DEF_SETTING_STRING(WdkMetadataVersion)
 	DEF_SETTING_MULTI(OpenTabs)		// the names of the tabs kept open, in their order
 	DEF_SETTING_MULTI(Favorites)	// the names of the favorites, in the order they were added
 	DEF_SETTING_MULTI(History)		// the names of what was opened, the last first

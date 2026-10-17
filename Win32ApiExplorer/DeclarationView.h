@@ -62,6 +62,8 @@ public:
 		NOTIFY_CODE_HANDLER(SCN_DOUBLECLICK, OnDoubleClick)
 		NOTIFY_CODE_HANDLER(SCN_DWELLSTART, OnDwellStart)
 		NOTIFY_CODE_HANDLER(SCN_DWELLEND, OnDwellEnd)
+		NOTIFY_CODE_HANDLER(SCN_INDICATORRELEASE, OnIndicatorRelease)
+		MESSAGE_HANDLER(WM_FOLLOWLINE, OnFollowLine)
 	END_MSG_MAP()
 
 private:
@@ -72,6 +74,13 @@ private:
 	LRESULT OnDoubleClick(int, LPNMHDR, BOOL&);
 	LRESULT OnDwellStart(int, LPNMHDR, BOOL&);
 	LRESULT OnDwellEnd(int, LPNMHDR, BOOL&);
+	// Ctrl+click on a link: its type followed (Ctrl+Shift: in a tab of its own), after the click
+	LRESULT OnIndicatorRelease(int, LPNMHDR, BOOL&);
+	static constexpr UINT WM_FOLLOWLINE = WM_APP + 10;	// wParam: the line, lParam: in a tab of its own
+	LRESULT OnFollowLine(UINT, WPARAM wp, LPARAM lp, BOOL&) {
+		FollowLine((int)wp, lp != 0);
+		return 0;
+	}
 	// what the tip of a name says (empty: none)
 	std::string TipOf(std::string const& name) const;
 

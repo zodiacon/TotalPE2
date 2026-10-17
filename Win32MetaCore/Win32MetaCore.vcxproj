@@ -239,6 +239,7 @@
     <ClInclude Include="pch.h" />
     <ClInclude Include="Win32Api.h" />
     <ClInclude Include="CombinedMetadata.h" />
+    <ClInclude Include="MetadataPackages.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -251,6 +252,7 @@
     </ClCompile>
     <ClCompile Include="Win32Api.cpp" />
     <ClCompile Include="CombinedMetadata.cpp" />
+    <ClCompile Include="MetadataPackages.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\PECore\PECore.vcxproj">

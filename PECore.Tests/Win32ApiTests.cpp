@@ -1,5 +1,6 @@
 #include "TestCommon.h"
 #include <Win32Api.h>
+#include <MetadataPackages.h>
 #include <algorithm>
 
 // The Win32 metadata (Windows.Win32.winmd, which GetWin32Metadata.ps1 gets and the build of TotalPE copies next to the
@@ -331,4 +332,26 @@ TEST_CASE("Win32 API: related entries", "[win32api]") {
 	CHECK(std::ranges::find(related, "OSVERSIONINFOA") != related.end());
 	CHECK(std::ranges::find(related, "OSVERSIONINFOEXW") != related.end());
 	CHECK(std::ranges::none_of(related, [&](std::string const& n) { return api->Find(n)->Kind == Win32Api::Entry::Kinds::Function; }));
+}
+
+// (of nuget.org: hidden, run with [metadata-packages])
+TEST_CASE("Win32 API: the metadata's packages", "[.][metadata-packages]") {
+	auto versions = MetadataPackages::Versions(MetadataPackages::Win32Package);
+	REQUIRE(!versions.empty());
+	CHECK(std::ranges::find(versions, "70.0.11-preview") != versions.end());
+	auto wdk = MetadataPackages::Versions(MetadataPackages::WdkPackage);
+	REQUIRE(!wdk.empty());
+	// a version installed in a folder: the files, as large as they are
+	wchar_t temp[MAX_PATH];
+	::GetTempPathW(MAX_PATH, temp);
+	std::wstring folder = std::wstring(temp) + L"Win32MetaCoreTest";
+	REQUIRE(MetadataPackages::Install("70.0.11-preview", wdk.back(), folder));
+	WIN32_FILE_ATTRIBUTE_DATA info;
+	REQUIRE(::GetFileAttributesExW((folder + L"\\Windows.Win32.winmd").c_str(), GetFileExInfoStandard, &info));
+	CHECK(info.nFileSizeLow == 24328704);
+	CHECK(::GetFileAttributesW((folder + L"\\Windows.Wdk.winmd").c_str()) != INVALID_FILE_ATTRIBUTES);
+	CHECK(::GetFileAttributesW((folder + L"\\wdk_license.txt").c_str()) != INVALID_FILE_ATTRIBUTES);
+	for (auto name : { L"Windows.Win32.winmd", L"Windows.Wdk.winmd", L"sdk_license.txt", L"wdk_license.txt" })
+		::DeleteFileW((folder + L"\\" + name).c_str());
+	::RemoveDirectoryW(folder.c_str());
 }

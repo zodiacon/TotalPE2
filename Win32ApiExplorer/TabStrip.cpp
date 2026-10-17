@@ -8,6 +8,7 @@ namespace {
 	constexpr int CloseSize = 16, CloseGap = 6;
 	constexpr int MinWidth = 70, MaxWidth = 260;
 	constexpr int AccentHeight = 2;
+	constexpr int ListWidth = 22;
 
 	struct Colors {
 		COLORREF Strip, Tab, Selected, Hot, Text, SelectedText, Accent, Border, CloseHot;
@@ -25,6 +26,42 @@ namespace {
 void CTabStrip::SetClosable(bool closable) {
 	m_Closable = closable;
 	Layout();
+}
+
+void CTabStrip::SetListButton(bool show) {
+	m_ListButton = show;
+	Layout();
+}
+
+int CTabStrip::TabsWidth() const {
+	CRect rc;
+	GetClientRect(&rc);
+	return std::max(0, rc.Width() - (m_ListButton ? ListWidth : 0));
+}
+
+CRect CTabStrip::ListButtonRect() const {
+	CRect rc;
+	GetClientRect(&rc);
+	return m_ListButton ? CRect(rc.right - ListWidth, rc.top, rc.right, rc.bottom) : CRect();
+}
+
+// a menu of the tabs: the one chosen selected
+void CTabStrip::ShowList() {
+	if (m_Tabs.empty())
+		return;
+	CMenu menu;
+	menu.CreatePopupMenu();
+	for (int i = 0; i < (int)m_Tabs.size(); i++)
+		menu.AppendMenu(MF_STRING | (i == m_Selected ? MF_CHECKED : 0), i + 1, m_Tabs[i].Text.c_str());
+	auto button = ListButtonRect();
+	CPoint pt(button.right, button.bottom);
+	ClientToScreen(&pt);
+	auto chosen = (int)menu.TrackPopupMenu(TPM_RETURNCMD | TPM_RIGHTALIGN, pt.x, pt.y, m_hWnd) - 1;
+	if (chosen >= 0 && chosen != m_Selected) {
+		Select(chosen);
+		if (OnSelected)
+			OnSelected(chosen);
+	}
 }
 
 void CTabStrip::SetImageList(HIMAGELIST images) {
@@ -159,8 +196,7 @@ void CTabStrip::Layout() {
 	if (!m_hWnd)
 		return;
 	CClientDC dc(m_hWnd);
-	CRect rc;
-	GetClientRect(&rc);
+	CRect rc(0, 0, TabsWidth(), 0);
 	auto extra = 2 * PadX + (m_Images ? ImageSize + ImageGap : 0) + (m_Closable ? CloseSize + CloseGap : 0);
 	int total = 0;
 	for (auto& tab : m_Tabs) {
@@ -192,8 +228,7 @@ void CTabStrip::Layout() {
 void CTabStrip::EnsureVisible(int index) {
 	if (index < 0 || index >= (int)m_Tabs.size() || !m_hWnd)
 		return;
-	CRect rc;
-	GetClientRect(&rc);
+	CRect rc(0, 0, TabsWidth(), 0);
 	auto const& tab = m_Tabs[index];
 	if (tab.Left < m_Scroll)
 		m_Scroll = tab.Left;
@@ -223,6 +258,8 @@ bool CTabStrip::HasCloseButton(int index) const {
 int CTabStrip::HitTest(CPoint pt, bool* onClose) const {
 	if (onClose)
 		*onClose = false;
+	if (pt.x >= TabsWidth())
+		return -1;
 	for (int i = 0; i < (int)m_Tabs.size(); i++) {
 		if (!TabRect(i).PtInRect(pt))
 			continue;
@@ -267,9 +304,13 @@ LRESULT CTabStrip::OnPaint(UINT, WPARAM, LPARAM, BOOL&) {
 	dc.MoveTo(client.left, client.bottom - 1);
 	dc.LineTo(client.right, client.bottom - 1);
 
+	// (the tabs: not over the list button)
+	CRect tabs(client.left, client.top, TabsWidth(), client.bottom);
+	dc.SaveDC();
+	dc.IntersectClipRect(&tabs);
 	for (int i = 0; i < (int)m_Tabs.size(); i++) {
 		auto rc = TabRect(i);
-		if (rc.right <= client.left || rc.left >= client.right)
+		if (rc.right <= tabs.left || rc.left >= tabs.right)
 			continue;
 		auto const& tab = m_Tabs[i];
 		bool selected = i == m_Selected;
@@ -315,13 +356,33 @@ LRESULT CTabStrip::OnPaint(UINT, WPARAM, LPARAM, BOOL&) {
 			dc.SelectPen(old);
 		}
 	}
+	dc.RestoreDC(-1);
+	// the list button: a chevron
+	if (m_ListButton) {
+		auto button = ListButtonRect();
+		CPen pen;
+		pen.CreatePen(PS_SOLID, 1, colors.Text);
+		auto old = dc.SelectPen(pen);
+		auto cx = button.left + button.Width() / 2, cy = button.top + button.Height() / 2;
+		for (int row = 0; row < 2; row++) {
+			dc.MoveTo(cx - 4, cy - 2 + row);
+			dc.LineTo(cx, cy + 2 + row);
+			dc.LineTo(cx + 5, cy - 3 + row);
+		}
+		dc.SelectPen(old);
+	}
 	dc.SelectPen(oldPen);
 	return 0;
 }
 
 LRESULT CTabStrip::OnLButtonDown(UINT, WPARAM, LPARAM lp, BOOL&) {
+	CPoint pt(GET_X_LPARAM(lp), GET_Y_LPARAM(lp));
+	if (m_ListButton && ListButtonRect().PtInRect(pt)) {
+		ShowList();
+		return 0;
+	}
 	bool onClose;
-	auto index = HitTest(CPoint(GET_X_LPARAM(lp), GET_Y_LPARAM(lp)), &onClose);
+	auto index = HitTest(pt, &onClose);
 	if (index < 0)
 		return 0;
 	if (onClose && HasCloseButton(index)) {
@@ -336,10 +397,23 @@ LRESULT CTabStrip::OnLButtonDown(UINT, WPARAM, LPARAM lp, BOOL&) {
 		if (OnSelected)
 			OnSelected(index);
 	}
+	// (it may be dragged)
+	if (OnMoved && m_Tabs.size() > 1) {
+		m_Dragged = index;
+		m_DragStart = pt;
+		m_Dragging = false;
+		SetCapture();
+	}
 	return 0;
 }
 
 LRESULT CTabStrip::OnLButtonUp(UINT, WPARAM, LPARAM lp, BOOL&) {
+	if (m_Dragged >= 0) {
+		m_Dragged = -1;
+		m_Dragging = false;
+		::ReleaseCapture();
+		return 0;
+	}
 	if (m_Pressed < 0)
 		return 0;
 	::ReleaseCapture();
@@ -376,7 +450,31 @@ LRESULT CTabStrip::OnRButtonUp(UINT, WPARAM, LPARAM lp, BOOL&) {
 	return 0;
 }
 
-LRESULT CTabStrip::OnMouseMove(UINT, WPARAM, LPARAM lp, BOOL&) {
+LRESULT CTabStrip::OnMouseMove(UINT, WPARAM wp, LPARAM lp, BOOL&) {
+	// a tab dragged: where the mouse is (among the others)
+	if (m_Dragged >= 0 && (wp & MK_LBUTTON)) {
+		CPoint pt(GET_X_LPARAM(lp), GET_Y_LPARAM(lp));
+		if (!m_Dragging && std::abs(pt.x - m_DragStart.x) >= ::GetSystemMetrics(SM_CXDRAG))
+			m_Dragging = true;
+		if (!m_Dragging)
+			return 0;
+		auto target = HitTest(CPoint(std::clamp((int)pt.x, 0, TabsWidth() - 1), TabRect(0).CenterPoint().y));
+		if (target < 0)
+			target = pt.x < 0 ? 0 : (int)m_Tabs.size() - 1;
+		if (target != m_Dragged) {
+			auto tab = std::move(m_Tabs[m_Dragged]);
+			m_Tabs.erase(m_Tabs.begin() + m_Dragged);
+			m_Tabs.insert(m_Tabs.begin() + target, std::move(tab));
+			if (m_Selected == m_Dragged)
+				m_Selected = target;
+			auto from = m_Dragged;
+			m_Dragged = target;
+			Layout();
+			EnsureVisible(target);
+			OnMoved(from, target);
+		}
+		return 0;
+	}
 	if (!m_Tracking) {
 		TRACKMOUSEEVENT tme{ sizeof(tme), TME_LEAVE, m_hWnd };
 		m_Tracking = ::TrackMouseEvent(&tme);
@@ -405,7 +503,7 @@ LRESULT CTabStrip::OnMouseWheel(UINT, WPARAM wp, LPARAM, BOOL&) {
 	CRect rc;
 	GetClientRect(&rc);
 	auto delta = GET_WHEEL_DELTA_WPARAM(wp);
-	m_Scroll = std::clamp(m_Scroll - delta * 60 / WHEEL_DELTA, 0, std::max(0, m_TotalWidth - rc.Width()));
+	m_Scroll = std::clamp(m_Scroll - delta * 60 / WHEEL_DELTA, 0, std::max(0, m_TotalWidth - TabsWidth()));
 	Invalidate();
 	return 0;
 }

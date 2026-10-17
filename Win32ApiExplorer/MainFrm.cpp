@@ -5,6 +5,7 @@
 #include <ToolbarHelper.h>
 #include <ClipboardHelper.h>
 #include <WTLHelper.h>
+#include <MetadataPackages.h>
 
 namespace {
 	// (the names of the metadata are ASCII)
@@ -41,6 +42,8 @@ BOOL CMainFrame::PreTranslateMessage(MSG* pMsg) {
 	if (m_History && m_History->PreTranslateMessage(pMsg))
 		return TRUE;
 	if (auto view = ActiveView(); view && view->PreTranslateMessage(pMsg))
+		return TRUE;
+	if (m_Side && m_Side->PreTranslateMessage(pMsg))
 		return TRUE;
 	return CFrameWindowImpl<CMainFrame>::PreTranslateMessage(pMsg);
 }
@@ -180,6 +183,134 @@ LRESULT CMainFrame::OnCopyData(UINT, WPARAM, LPARAM lp, BOOL&) {
 	return TRUE;
 }
 
+//
+// The metadata
+//
+
+void CMainFrame::AskRestart() {
+	if (AtlMessageBox(m_hWnd, L"The metadata is read when Win32 API Explorer starts. Start it again now?", IDR_MAINFRAME,
+		MB_ICONQUESTION | MB_YESNO) != IDYES)
+		return;
+	// (the settings first: the new one reads them)
+	SaveSettings();
+	AppSettings::Get().Save();
+	WCHAR path[MAX_PATH];
+	::GetModuleFileName(nullptr, path, _countof(path));
+	if ((INT_PTR)::ShellExecute(nullptr, L"open", path, L"/new", nullptr, SW_SHOWNORMAL) > 32)
+		PostMessage(WM_CLOSE);
+}
+
+LRESULT CMainFrame::OnMetadataFolder(WORD, WORD, HWND, BOOL&) {
+	CShellFileOpenDialog dlg(nullptr, FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
+	dlg.GetPtr()->SetTitle(L"The folder of Windows.Win32.winmd (and Windows.Wdk.winmd)");
+	if (dlg.DoModal(m_hWnd) != IDOK)
+		return 0;
+	CString folder;
+	dlg.GetFilePath(folder);
+	if (::GetFileAttributesW(folder + L"\\Windows.Win32.winmd") == INVALID_FILE_ATTRIBUTES) {
+		AtlMessageBox(m_hWnd, L"That folder has no Windows.Win32.winmd.", IDR_MAINFRAME, MB_ICONWARNING);
+		return 0;
+	}
+	auto& settings = AppSettings::Get();
+	settings.MetadataFolder((PCWSTR)folder);
+	settings.MetadataVersion(L"");
+	settings.WdkMetadataVersion(L"");
+	AskRestart();
+	return 0;
+}
+
+LRESULT CMainFrame::OnDefaultMetadata(WORD, WORD, HWND, BOOL&) {
+	auto& settings = AppSettings::Get();
+	if (settings.MetadataFolder().empty()) {
+		AtlMessageBox(m_hWnd, L"The metadata next to Win32ApiExp.exe is the one used.", IDR_MAINFRAME, MB_ICONINFORMATION);
+		return 0;
+	}
+	settings.MetadataFolder(L"");
+	settings.MetadataVersion(L"");
+	settings.WdkMetadataVersion(L"");
+	AskRestart();
+	return 0;
+}
+
+LRESULT CMainFrame::OnCheckMetadata(WORD, WORD, HWND, BOOL&) {
+	if (m_MetadataBusy)
+		return 0;
+	m_MetadataBusy = true;
+	CStatusBarCtrl(m_hWndStatusBar).SetText(0, L"Looking for the newest metadata on nuget.org...");
+	std::thread([hWnd = m_hWnd] {
+		auto win32 = MetadataPackages::Versions(MetadataPackages::Win32Package);
+		auto wdk = MetadataPackages::Versions(MetadataPackages::WdkPackage);
+		auto found = win32.empty() ? nullptr : new MetadataVersions{ win32.back(), wdk.empty() ? std::string() : wdk.back() };
+		if (!::PostMessage(hWnd, WM_METADATA_CHECKED, 0, (LPARAM)found))
+			delete found;
+	}).detach();
+	return 0;
+}
+
+LRESULT CMainFrame::OnMetadataChecked(UINT, WPARAM, LPARAM lp, BOOL&) {
+	std::unique_ptr<MetadataVersions> found((MetadataVersions*)lp);
+	m_MetadataBusy = false;
+	UpdateStatus();
+	if (!found) {
+		AtlMessageBox(m_hWnd, L"The versions of the metadata could not be read from nuget.org.", IDR_MAINFRAME, MB_ICONWARNING);
+		return 0;
+	}
+	auto& settings = AppSettings::Get();
+	auto version = Narrow(settings.MetadataVersion()), wdkVersion = Narrow(settings.WdkMetadataVersion());
+	auto newest = Wide(found->Win32), newestWdk = found->Wdk.empty() ? std::wstring(L"(none)") : Wide(found->Wdk);
+	if (version == found->Win32 && wdkVersion == found->Wdk) {
+		AtlMessageBox(m_hWnd, std::format(L"The metadata used is the newest: {} (the WDK's: {}).", newest, newestWdk).c_str(),
+			IDR_MAINFRAME, MB_ICONINFORMATION);
+		return 0;
+	}
+	auto used = !version.empty() ? std::format(L"{} (the WDK's: {})", Wide(version), wdkVersion.empty() ? L"(none)" : Wide(wdkVersion)) :
+		settings.MetadataFolder().empty() ? std::wstring(L"the one next to Win32ApiExp.exe (its version is not known)") :
+		L"the one in " + settings.MetadataFolder() + L" (its version is not known)";
+	auto text = std::format(L"The newest metadata on nuget.org: {} (the WDK's: {}).\nThe metadata used: {}.\n\n"
+		L"Download it (about 25 MB, under the license of the Windows SDK, which is saved with it) and use it?", newest, newestWdk, used);
+	if (AtlMessageBox(m_hWnd, text.c_str(), IDR_MAINFRAME, MB_ICONQUESTION | MB_YESNO) != IDYES)
+		return 0;
+
+	// to the user's folder of the application, of its version
+	WCHAR local[MAX_PATH];
+	::ExpandEnvironmentStrings(L"%LOCALAPPDATA%\\Win32ApiExplorer\\Metadata\\", local, _countof(local));
+	found->Folder = local + newest;
+	m_MetadataBusy = true;
+	std::thread([hWnd = m_hWnd, versions = *found] {
+		auto ok = MetadataPackages::Install(versions.Win32, versions.Wdk, versions.Folder, [hWnd](std::wstring const& status) {
+			auto text = new std::wstring(status);
+			if (!::PostMessage(hWnd, WM_METADATA_STATUS, 0, (LPARAM)text))
+				delete text;
+		});
+		auto result = new MetadataVersions(versions);
+		if (!::PostMessage(hWnd, WM_METADATA_INSTALLED, ok, (LPARAM)result))
+			delete result;
+	}).detach();
+	return 0;
+}
+
+LRESULT CMainFrame::OnMetadataStatus(UINT, WPARAM, LPARAM lp, BOOL&) {
+	std::unique_ptr<std::wstring> text((std::wstring*)lp);
+	CStatusBarCtrl(m_hWndStatusBar).SetText(0, text->c_str());
+	return 0;
+}
+
+LRESULT CMainFrame::OnMetadataInstalled(UINT, WPARAM ok, LPARAM lp, BOOL&) {
+	std::unique_ptr<MetadataVersions> versions((MetadataVersions*)lp);
+	m_MetadataBusy = false;
+	UpdateStatus();
+	if (!ok) {
+		AtlMessageBox(m_hWnd, L"The metadata could not be downloaded.", IDR_MAINFRAME, MB_ICONWARNING);
+		return 0;
+	}
+	auto& settings = AppSettings::Get();
+	settings.MetadataFolder(versions->Folder);
+	settings.MetadataVersion(Wide(versions->Win32));
+	settings.WdkMetadataVersion(Wide(versions->Wdk));
+	AskRestart();
+	return 0;
+}
+
 LRESULT CMainFrame::OnCommandWhileLoading(UINT, WPARAM wp, LPARAM, BOOL& handled) {
 	handled = FALSE;
 	if (m_Api)
@@ -283,14 +414,35 @@ void CMainFrame::CreateNavigator() {
 		(*pane)->OnOpen = open;
 		(*pane)->OnCountChanged = [this] { UpdateStatus(); };
 	}
+	// (Delete: out of the list)
+	auto remover = [this](std::vector<std::string>& names) {
+		return [this, &names](size_t entry) {
+			std::erase(names, m_Api->Entries()[entry].Name);
+			UpdateLists();
+		};
+	};
+	m_Favorites->OnDelete = remover(m_FavoriteNames);
+	m_History->OnDelete = remover(m_HistoryNames);
 }
 
 void CMainFrame::CreateEditors() {
 	auto& settings = AppSettings::Get();
 	m_Right.Create(m_Splitter, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
-	m_Editors.Create(m_Right, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
+	m_EditorSplit.Create(m_Right, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
+	m_Editors.Create(m_EditorSplit, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
+	m_SideHost.Create(m_EditorSplit, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
+	m_EditorSplit.SetSplitterPanes(m_Editors, m_SideHost);
+	m_EditorSplit.SetSinglePaneMode(SPLIT_PANE_LEFT);
+	m_SideHost.Strip().SetImageList(m_Images);
+	m_SideHost.Strip().OnCloseRequested = [this](int) { CloseSide(); };
 	auto& strip = m_Editors.Strip();
 	strip.SetImageList(m_Images);
+	strip.SetListButton(true);
+	strip.OnMoved = [this](int from, int to) {
+		auto tab = std::move(m_Tabs[from]);
+		m_Tabs.erase(m_Tabs.begin() + from);
+		m_Tabs.insert(m_Tabs.begin() + to, std::move(tab));
+	};
 	strip.OnSelected = [this](int index) { ActivateTab(index); };
 	strip.OnCloseRequested = [this](int index) { CloseTab(index); };
 	strip.OnDoubleClicked = [this](int index) { Pin(index); };
@@ -298,7 +450,7 @@ void CMainFrame::CreateEditors() {
 
 	m_Doc.SetDarkMode(settings.DarkMode());
 	m_Doc.Create(m_Right, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
-	m_Right.SetSplitterPanes(m_Editors, m_Doc);
+	m_Right.SetSplitterPanes(m_EditorSplit, m_Doc);
 	if (!settings.ShowDocumentation())
 		m_Right.SetSinglePaneMode(SPLIT_PANE_TOP);
 }
@@ -368,6 +520,81 @@ int CMainFrame::ActiveTab() const {
 
 int CMainFrame::TargetTab() const {
 	return m_MenuTab >= 0 && m_MenuTab < (int)m_Tabs.size() ? m_MenuTab : ActiveTab();
+}
+
+CDeclarationView* CMainFrame::FocusedView() const {
+	auto focus = ::GetFocus();
+	if (m_Side && focus && (focus == m_Side->m_hWnd || m_Side->IsChild(focus)))
+		return m_Side.get();
+	return ActiveView();
+}
+
+int CMainFrame::SideTarget() const {
+	auto const& entries = m_Api->Entries();
+	if (m_MenuTab >= 0 && m_MenuTab < (int)m_Tabs.size())
+		return m_Tabs[m_MenuTab].View->Entry();
+	auto view = FocusedView();
+	if (!view)
+		return -1;
+	auto referred = view->ReferredAtCaret();
+	if (auto found = referred.empty() ? nullptr : m_Api->Find(referred))
+		return (int)(found - entries.data());
+	return view->Entry();
+}
+
+void CMainFrame::OpenToSide(size_t entry) {
+	if (!m_Side) {
+		m_Side = std::make_unique<CDeclarationView>(*m_Api);
+		auto side = m_Side.get();
+		side->OnFollow = [this, side](std::string const& name, bool newTab) {
+			if (!newTab)
+				side->Navigate(name);
+			else if (auto found = m_Api->Find(name))
+				OpenEntry(found - m_Api->Entries().data(), true);
+		};
+		side->OnShownChanged = [this] { SideChanged(); };
+		side->Create(m_SideHost, rcDefault, nullptr, WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
+		side->SetMode((CDeclarationView::Mode)std::clamp(AppSettings::Get().ShowMode(), 0, 2));
+		m_SideHost.Strip().Add(L"", -1);
+		m_SideHost.Strip().Select(0);
+		m_SideHost.SetPage(*side);
+		m_EditorSplit.SetSinglePaneMode(SPLIT_PANE_NONE);
+		m_EditorSplit.SetSplitterPosPct(50);
+	}
+	m_Side->Show((int)entry);
+	m_Side->SetFocus();
+}
+
+void CMainFrame::SideChanged() {
+	if (!m_Side)
+		return;
+	auto entry = m_Side->Entry();
+	if (entry < 0)
+		return;
+	m_SideHost.Strip().SetText(0, Wide(m_Side->Name()));
+	m_SideHost.Strip().SetImage(0, Images::Of(m_Api->Entries()[entry].Kind));
+}
+
+void CMainFrame::CloseSide() {
+	if (!m_Side)
+		return;
+	m_EditorSplit.SetSinglePaneMode(SPLIT_PANE_LEFT);
+	m_SideHost.SetPage(nullptr);
+	m_SideHost.Strip().RemoveAll();
+	m_Side->DestroyWindow();
+	m_Side.reset();
+	if (auto view = ActiveView())
+		view->SetFocus();
+}
+
+LRESULT CMainFrame::OnOpenToSide(WORD, WORD, HWND, BOOL&) {
+	auto entry = SideTarget();
+	m_MenuTab = -1;
+	if (entry < 0)
+		::MessageBeep(MB_ICONWARNING);
+	else
+		OpenToSide(entry);
+	return 0;
 }
 
 CDeclarationView* CMainFrame::ActiveView() const {
@@ -565,7 +792,7 @@ int CMainFrame::UsagesTarget() const {
 	int entry = -1;
 	if (m_MenuTab >= 0 && m_MenuTab < (int)m_Tabs.size())
 		entry = m_Tabs[m_MenuTab].View->Entry();
-	else if (auto view = ActiveView()) {
+	else if (auto view = FocusedView()) {
 		auto referred = view->ReferredAtCaret();
 		auto found = referred.empty() ? nullptr : m_Api->Find(referred);
 		entry = found ? (int)(found - entries.data()) : view->Entry();
@@ -584,7 +811,7 @@ int CMainFrame::DecodeTarget() const {
 		auto entry = m_Tabs[m_MenuTab].View->Entry();
 		return decodable(entry) ? entry : -1;
 	}
-	auto view = ActiveView();
+	auto view = FocusedView();
 	if (!view)
 		return -1;
 	auto referred = view->ReferredAtCaret();
@@ -665,7 +892,7 @@ void CMainFrame::UpdateUIState() {
 	if (!m_Api)
 		return;
 	auto& settings = AppSettings::Get();
-	auto view = ActiveView();
+	auto view = FocusedView();
 	UIEnable(ID_GO_BACK, view && view->CanGoBack());
 	UIEnable(ID_GO_FORWARD, view && view->CanGoForward());
 	bool referred = view && !view->ReferredAtCaret().empty();
@@ -675,6 +902,7 @@ void CMainFrame::UpdateUIState() {
 	bool shows = target >= 0 && m_Tabs[target].View->Entry() >= 0;
 	UIEnable(ID_GO_REVEAL, shows);
 	UIEnable(ID_GO_USEDBY, UsagesTarget() >= 0);
+	UIEnable(ID_GO_SIDE, SideTarget() >= 0);
 	UIEnable(ID_EDIT_DECODE, DecodeTarget() >= 0);
 	UIEnable(ID_DOC_BROWSER, shows);
 	UIEnable(ID_EDIT_COPYNAME, shows);
@@ -724,6 +952,8 @@ void CMainFrame::SetMachine(Win32Api::Machine machine) {
 	m_History->SetApi(*api);
 	UpdateLists();
 	m_QuickOpen.SetApi(*api);
+	if (m_Side)
+		m_Side->SetApi(*api);
 	m_SwitchingMachine = true;
 	for (auto& tab : m_Tabs)
 		tab.View->SetApi(*api);
@@ -743,8 +973,11 @@ void CMainFrame::ApplyColors() {
 	SendMessageToDescendants(::RegisterWindowMessage(L"WTLHelperUpdateTheme"));
 	m_Navigator.Strip().UpdateColors();
 	m_Editors.Strip().UpdateColors();
+	m_SideHost.Strip().UpdateColors();
 	for (auto& tab : m_Tabs)
 		tab.View->UpdateColors();
+	if (m_Side)
+		m_Side->UpdateColors();
 	m_Doc.SetDarkMode(dark);
 	RedrawWindow(nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
 }
@@ -789,7 +1022,7 @@ namespace {
 // the accelerators take Ctrl+C and Ctrl+A from the edits: they are given back
 LRESULT CMainFrame::OnCopy(WORD, WORD, HWND, BOOL&) {
 	auto focus = ::GetFocus();
-	if (auto view = ActiveView(); view && (focus == view->m_hWnd || view->IsChild(focus)))
+	if (auto view = FocusedView(); view && (focus == view->m_hWnd || view->IsChild(focus)))
 		view->Copy();
 	else if (IsEdit(focus))
 		::SendMessage(focus, WM_COPY, 0, 0);
@@ -802,7 +1035,7 @@ LRESULT CMainFrame::OnCopy(WORD, WORD, HWND, BOOL&) {
 
 LRESULT CMainFrame::OnSelectAll(WORD, WORD, HWND, BOOL&) {
 	auto focus = ::GetFocus();
-	if (auto view = ActiveView(); view && (focus == view->m_hWnd || view->IsChild(focus)))
+	if (auto view = FocusedView(); view && (focus == view->m_hWnd || view->IsChild(focus)))
 		view->SelectAll();
 	else if (IsEdit(focus))
 		::SendMessage(focus, EM_SETSEL, 0, -1);
@@ -893,6 +1126,8 @@ LRESULT CMainFrame::OnViewFont(WORD, WORD, HWND, BOOL&) {
 	AppSettings::Get().CodeFont(dlg.m_lf);
 	for (auto& tab : m_Tabs)
 		tab.View->UpdateColors();
+	if (m_Side)
+		m_Side->UpdateColors();
 	return 0;
 }
 
@@ -917,8 +1152,10 @@ void CMainFrame::ApplyUIFont() {
 	m_Namespaces->SetUIFont(font);
 	m_Navigator.Strip().SetFont(custom ? &logFont : nullptr);
 	m_Editors.Strip().SetFont(custom ? &logFont : nullptr);
+	m_SideHost.Strip().SetFont(custom ? &logFont : nullptr);
 	m_Navigator.Relayout();
 	m_Editors.Relayout();
+	m_SideHost.Relayout();
 	m_MachineBar.SetUIFont(font);
 	m_QuickOpen.SetUIFont(font);
 	m_Decode.SetUIFont(font);
@@ -954,6 +1191,8 @@ LRESULT CMainFrame::OnResetFonts(WORD, WORD, HWND, BOOL&) {
 	settings.UIFont(LOGFONT{});
 	for (auto& tab : m_Tabs)
 		tab.View->UpdateColors();
+	if (m_Side)
+		m_Side->UpdateColors();
 	ApplyUIFont();
 	return 0;
 }
@@ -964,23 +1203,25 @@ LRESULT CMainFrame::OnShowMode(WORD, WORD id, HWND, BOOL&) {
 	AppSettings::Get().ShowMode(mode);
 	for (auto& tab : m_Tabs)
 		tab.View->SetMode((CDeclarationView::Mode)mode);
+	if (m_Side)
+		m_Side->SetMode((CDeclarationView::Mode)mode);
 	return 0;
 }
 
 LRESULT CMainFrame::OnBack(WORD, WORD, HWND, BOOL&) {
-	if (auto view = ActiveView())
+	if (auto view = FocusedView())
 		view->GoBack();
 	return 0;
 }
 
 LRESULT CMainFrame::OnForward(WORD, WORD, HWND, BOOL&) {
-	if (auto view = ActiveView())
+	if (auto view = FocusedView())
 		view->GoForward();
 	return 0;
 }
 
 LRESULT CMainFrame::OnGoToDefinition(WORD, WORD id, HWND, BOOL&) {
-	auto view = ActiveView();
+	auto view = FocusedView();
 	if (!view || !view->FollowCaret(id == ID_GO_DEFINITION_NEWTAB))
 		::MessageBeep(MB_ICONWARNING);
 	return 0;

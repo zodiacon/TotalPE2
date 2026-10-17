@@ -5,7 +5,8 @@
 // its parent in the dark mode). A tab's text can be in italics: a preview, which the next one previewed replaces. The
 // selected tab, and the one under the mouse, have a close button (if the tabs can be closed); the middle button closes
 // one too. Tabs too many to fit are narrowed (to a minimum), then scrolled: by the wheel, and to keep the selected one in
-// view. What the user does is told through the callbacks.
+// view; a button at the end lists them all (SetListButton). A tab dragged moves among them. What the user does is told
+// through the callbacks.
 //
 class CTabStrip : public CWindowImpl<CTabStrip> {
 public:
@@ -15,8 +16,11 @@ public:
 	std::function<void(int)> OnCloseRequested;		// the close button, the middle button
 	std::function<void(int)> OnDoubleClicked;
 	std::function<void(int, CPoint)> OnContextMenu;	// the tab (-1: none), where (screen)
+	std::function<void(int, int)> OnMoved;			// a tab dragged: from where, to where (the strip has moved it)
 
 	void SetClosable(bool closable);
+	// a button at the end, with a menu of all the tabs
+	void SetListButton(bool show);
 	void SetImageList(HIMAGELIST images);
 
 	int Add(std::wstring text, int image = -1, bool italic = false);
@@ -83,6 +87,10 @@ private:
 	void Layout();
 	void EnsureVisible(int index);
 	int HitTest(CPoint pt, bool* onClose = nullptr) const;
+	// the width the tabs have (the list button is after them)
+	int TabsWidth() const;
+	CRect ListButtonRect() const;
+	void ShowList();
 	CRect TabRect(int index) const;
 	CRect CloseRect(int index) const;
 	bool HasCloseButton(int index) const;
@@ -92,6 +100,10 @@ private:
 	int m_Hot{ -1 };
 	bool m_HotClose{ false };
 	int m_Pressed{ -1 };		// a close button pressed
+	int m_Dragged{ -1 };		// a tab the left button is down on (moved as the mouse moves, once it is dragged)
+	CPoint m_DragStart;
+	bool m_Dragging{ false };
+	bool m_ListButton{ false };
 	int m_Scroll{ 0 };			// how far the tabs are scrolled to the left
 	int m_TotalWidth{ 0 };
 	bool m_Closable{ true };

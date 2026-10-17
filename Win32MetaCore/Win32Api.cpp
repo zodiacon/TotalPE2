@@ -51,7 +51,19 @@ namespace {
 	}
 }
 
+namespace {
+	std::wstring s_MetadataFolder;
+}
+
+void Win32Api::SetMetadataFolder(std::wstring folder) {
+	if (!folder.empty() && !folder.ends_with(L'\\'))
+		folder += L'\\';
+	s_MetadataFolder = std::move(folder);
+}
+
 std::wstring Win32Api::MetadataPath() {
+	if (!s_MetadataFolder.empty())
+		return s_MetadataFolder + L"Windows.Win32.winmd";
 	WCHAR path[MAX_PATH];
 	::GetModuleFileNameW(nullptr, path, _countof(path));
 	std::wstring folder = path;

@@ -441,6 +441,13 @@ BOOL CSearchPane::PreTranslateMessage(MSG* pMsg) {
 		m_List.SetFocus();
 		return TRUE;
 	}
+	if (pMsg->hwnd == m_List && pMsg->wParam == VK_DELETE && OnDelete) {
+		if (auto item = SelectedItem()) {
+			auto entry = item->Entry;
+			OnDelete(entry);
+		}
+		return TRUE;
+	}
 	// Enter in the list: in a tab that stays
 	if (pMsg->hwnd == m_List && pMsg->wParam == VK_RETURN && !alt) {
 		if (auto item = SelectedItem())

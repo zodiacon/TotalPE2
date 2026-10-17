@@ -25,6 +25,8 @@ public:
 	std::function<void(size_t entry, bool pin, std::string const& name)> OnOpen;
 	// the counts changed
 	std::function<void()> OnCountChanged;
+	// Delete on an entry of the list (null: Delete does nothing)
+	std::function<void(size_t entry)> OnDelete;
 
 	// the API of another machine (the filter stays; the one selected, by name, if it is there)
 	void SetApi(Win32Api& api);

@@ -30,6 +30,8 @@ public:
 	static std::wstring MetadataPath();
 	// the WDK's (the kernel's functions and types), used with it if it is there
 	static std::wstring WdkMetadataPath();
+	// where the metadata is looked for instead (empty: next to the executable); before the first Get
+	static void SetMetadataFolder(std::wstring folder);
 
 	// A function by its name, as a DLL exports it (of that DLL, if there are others of the name; of that DLL only, if
 	// 'onlyOf'): the id of its type (a function) and the names of its parameters

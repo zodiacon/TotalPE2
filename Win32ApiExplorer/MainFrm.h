@@ -14,8 +14,9 @@
 #include <DocPane.h>
 
 //
-// The main window: on the left, the search (a list), the namespaces (a tree) and what uses a type (a list), in tabs; on the right, the declarations
-// of what was opened, in tabs, and below them Microsoft's documentation of the one shown. What the left side selects is
+// The main window: on the left, the search (a list), the namespaces (a tree), what uses a type, the favorites and the history
+// (lists), in tabs; on the right, the declarations of what was opened, in tabs (and to their side, if one is opened there:
+// a declaration to compare with), and below them Microsoft's documentation of the one shown. What the left side selects is
 // shown in a preview tab (its title in italics), which the next one replaces; Enter or a double-click (or following a
 // type, or Keep Open) makes a tab stay. The machine (x86, x64, ARM64) chooses the functions there are, and the layout of
 // the structs.
@@ -40,6 +41,7 @@ public:
 		UPDATE_ELEMENT(ID_GO_DEFINITION, UPDUI_MENUPOPUP)
 		UPDATE_ELEMENT(ID_GO_DEFINITION_NEWTAB, UPDUI_MENUPOPUP)
 		UPDATE_ELEMENT(ID_GO_REVEAL, UPDUI_MENUPOPUP | UPDUI_TOOLBAR)
+		UPDATE_ELEMENT(ID_GO_SIDE, UPDUI_MENUPOPUP)
 		UPDATE_ELEMENT(ID_GO_USEDBY, UPDUI_MENUPOPUP | UPDUI_TOOLBAR)
 		UPDATE_ELEMENT(ID_DOC_BROWSER, UPDUI_MENUPOPUP | UPDUI_TOOLBAR)
 		UPDATE_ELEMENT(ID_VIEW_DOCUMENTATION, UPDUI_MENUPOPUP | UPDUI_TOOLBAR)
@@ -76,6 +78,12 @@ public:
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
 		MESSAGE_HANDLER(WM_LOADED, OnLoaded)
 		MESSAGE_HANDLER(WM_COPYDATA, OnCopyData)
+		MESSAGE_HANDLER(WM_METADATA_CHECKED, OnMetadataChecked)
+		MESSAGE_HANDLER(WM_METADATA_STATUS, OnMetadataStatus)
+		MESSAGE_HANDLER(WM_METADATA_INSTALLED, OnMetadataInstalled)
+		COMMAND_ID_HANDLER(ID_FILE_METADATAFOLDER, OnMetadataFolder)
+		COMMAND_ID_HANDLER(ID_FILE_DEFAULTMETADATA, OnDefaultMetadata)
+		COMMAND_ID_HANDLER(ID_FILE_CHECKMETADATA, OnCheckMetadata)
 		MESSAGE_HANDLER(WM_DESTROY, OnDestroy)
 		MESSAGE_HANDLER(WM_APPCOMMAND, OnAppCommand)
 		COMMAND_ID_HANDLER(ID_APP_EXIT, OnExit)
@@ -105,6 +113,7 @@ public:
 		COMMAND_ID_HANDLER(ID_GO_REVEAL, OnReveal)
 		COMMAND_ID_HANDLER(ID_GO_USEDBY, OnFindUsages)
 		COMMAND_ID_HANDLER(ID_GO_QUICKOPEN, OnQuickOpen)
+		COMMAND_ID_HANDLER(ID_GO_SIDE, OnOpenToSide)
 		COMMAND_ID_HANDLER(ID_DOC_BROWSER, OnOpenInBrowser)
 		COMMAND_RANGE_HANDLER(ID_MACHINE_X86, ID_MACHINE_ARM64, OnMachine)
 		COMMAND_HANDLER(IDC_MACHINE, CBN_SELCHANGE, OnMachineCombo)
@@ -128,6 +137,22 @@ private:
 
 	LRESULT OnCreate(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnLoaded(UINT, WPARAM, LPARAM, BOOL&);
+	// the metadata: chosen, looked for on nuget.org, downloaded (on threads of their own)
+	static constexpr UINT WM_METADATA_CHECKED = WM_APP + 2;		// lParam: MetadataVersions* (null: not found)
+	static constexpr UINT WM_METADATA_STATUS = WM_APP + 3;		// lParam: std::wstring*
+	static constexpr UINT WM_METADATA_INSTALLED = WM_APP + 4;	// wParam: done, lParam: MetadataVersions*
+	struct MetadataVersions {
+		std::string Win32, Wdk;
+		std::wstring Folder;
+	};
+	LRESULT OnMetadataFolder(WORD, WORD, HWND, BOOL&);
+	LRESULT OnDefaultMetadata(WORD, WORD, HWND, BOOL&);
+	LRESULT OnCheckMetadata(WORD, WORD, HWND, BOOL&);
+	LRESULT OnMetadataChecked(UINT, WPARAM, LPARAM, BOOL&);
+	LRESULT OnMetadataStatus(UINT, WPARAM, LPARAM, BOOL&);
+	LRESULT OnMetadataInstalled(UINT, WPARAM, LPARAM, BOOL&);
+	// the metadata is read when the application starts: again now, if the user wants
+	void AskRestart();
 	LRESULT OnCopyData(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnCommandWhileLoading(UINT, WPARAM, LPARAM, BOOL&);
 	// what needs the metadata: the panes, the tabs
@@ -158,6 +183,7 @@ private:
 	LRESULT OnClearHistory(WORD, WORD, HWND, BOOL&);
 	LRESULT OnFavorite(WORD, WORD, HWND, BOOL&);
 	LRESULT OnQuickOpen(WORD, WORD, HWND, BOOL&);
+	LRESULT OnOpenToSide(WORD, WORD, HWND, BOOL&);
 	LRESULT OnOpenInBrowser(WORD, WORD, HWND, BOOL&);
 	LRESULT OnMachine(WORD, WORD, HWND, BOOL&);
 	LRESULT OnMachineCombo(WORD, WORD, HWND, BOOL&);
@@ -183,6 +209,14 @@ private:
 	// the tab of a command: the one whose menu is shown, else the active one
 	int TargetTab() const;
 	CDeclarationView* ActiveView() const;
+	// the view of the keyboard: the side's, if it has the focus, else the active tab's
+	CDeclarationView* FocusedView() const;
+	// an entry to the side of the tabs (the side is opened, if it is not)
+	void OpenToSide(size_t entry);
+	void CloseSide();
+	void SideChanged();
+	// what Open to the Side opens: the tab's whose menu is shown, else what the caret's line refers to, else what is shown
+	int SideTarget() const;
 	int TabOf(CDeclarationView const* view) const;
 	int TabShowing(int entry) const;
 	// a view's type followed (here, or in a tab of its own)
@@ -221,10 +255,13 @@ private:
 	std::wstring m_StartName;		// to open when the metadata is loaded
 	std::thread m_Loader;
 	CLoadingView m_Loading;
+	bool m_MetadataBusy{ false };	// (looked for, downloaded)
 	CImageList m_Images;
 	CCustomSplitterWindow m_Splitter;
 	CCustomHorSplitterWindow m_Right;
-	CStripHost m_Navigator, m_Editors;
+	CStripHost m_Navigator, m_Editors, m_SideHost;
+	CCustomSplitterWindow m_EditorSplit;		// the tabs, and the side
+	std::unique_ptr<CDeclarationView> m_Side;
 	std::unique_ptr<CSearchPane> m_Search;
 	std::unique_ptr<CNamespacePane> m_Namespaces;
 	std::unique_ptr<CSearchPane> m_UsedBy;

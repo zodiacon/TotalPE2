@@ -93,6 +93,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR cmdLine, int nCmdShow)
 
 	auto& settings = AppSettings::Get();
 	settings.LoadFromKey(L"SOFTWARE\\ScorpioSoftware\\Win32ApiExplorer");
+	// the metadata chosen (File > Metadata Folder, Check for Newer Metadata), if it is there
+	if (auto folder = settings.MetadataFolder(); !folder.empty() &&
+		::GetFileAttributesW((folder + L"\\Windows.Win32.winmd").c_str()) != INVALID_FILE_ATTRIBUTES)
+		Win32Api::SetMetadataFolder(folder);
 
 	hr = _Module.Init(nullptr, hInstance);
 	ATLASSERT(SUCCEEDED(hr));

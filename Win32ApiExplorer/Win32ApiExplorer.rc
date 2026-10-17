@@ -29,6 +29,10 @@ IDR_MAINFRAME MENU
 BEGIN
     POPUP "&File"
     BEGIN
+        MENUITEM "Metadata &Folder...",         ID_FILE_METADATAFOLDER
+        MENUITEM "Use the &Default Metadata",   ID_FILE_DEFAULTMETADATA
+        MENUITEM "Check for &Newer Metadata...", ID_FILE_CHECKMETADATA
+        MENUITEM SEPARATOR
         MENUITEM "E&xit",                       ID_APP_EXIT
     END
     POPUP "&Edit"
@@ -70,6 +74,7 @@ BEGIN
         MENUITEM SEPARATOR
         MENUITEM "Go to &Definition\tF12",      ID_GO_DEFINITION
         MENUITEM "Open Definition in New &Tab\tCtrl+F12", ID_GO_DEFINITION_NEWTAB
+        MENUITEM "Open to the &Side\tCtrl+\\",  ID_GO_SIDE
         MENUITEM "Find &Usages\tShift+F12",     ID_GO_USEDBY
         MENUITEM SEPARATOR
         MENUITEM "&Reveal in Namespaces\tCtrl+Shift+E", ID_GO_REVEAL
@@ -112,6 +117,7 @@ BEGIN
         MENUITEM "&Reveal in Namespaces",       ID_GO_REVEAL
         MENUITEM "Find &Usages",                ID_GO_USEDBY
         MENUITEM "Add to Fa&vorites",           ID_EDIT_FAVORITE
+        MENUITEM "Open to the &Side",           ID_GO_SIDE
         MENUITEM "Open Documentation in &Browser", ID_DOC_BROWSER
     END
 END
@@ -125,6 +131,7 @@ BEGIN
     "F",            ID_EDIT_FIND,           VIRTKEY, CONTROL, NOINVERT
     "Q",            ID_EDIT_FIND,           VIRTKEY, CONTROL, NOINVERT
     "P",            ID_GO_QUICKOPEN,        VIRTKEY, CONTROL, NOINVERT
+    220,            ID_GO_SIDE,             VIRTKEY, CONTROL, NOINVERT
     "1",            ID_VIEW_SEARCH,         VIRTKEY, CONTROL, NOINVERT
     "2",            ID_VIEW_NAMESPACES,     VIRTKEY, CONTROL, NOINVERT
     "3",            ID_VIEW_USEDBY,         VIRTKEY, CONTROL, NOINVERT
