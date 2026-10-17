@@ -7,6 +7,8 @@
 #include "NamespacePane.h"
 #include "MachineBar.h"
 #include "QuickOpen.h"
+#include "LoadingView.h"
+#include <thread>
 #include <CustomSplitterWindow.h>
 #include <DocPane.h>
 
@@ -44,6 +46,9 @@ public:
 		UPDATE_ELEMENT(ID_VIEW_SEARCH, UPDUI_MENUPOPUP)
 		UPDATE_ELEMENT(ID_VIEW_NAMESPACES, UPDUI_MENUPOPUP)
 		UPDATE_ELEMENT(ID_VIEW_USEDBY, UPDUI_MENUPOPUP)
+		UPDATE_ELEMENT(ID_SHOW_DECLARATION, UPDUI_MENUPOPUP | UPDUI_TOOLBAR)
+		UPDATE_ELEMENT(ID_SHOW_LAYOUT, UPDUI_MENUPOPUP | UPDUI_TOOLBAR)
+		UPDATE_ELEMENT(ID_SHOW_COMPARE, UPDUI_MENUPOPUP | UPDUI_TOOLBAR)
 		UPDATE_ELEMENT(ID_MACHINE_X86, UPDUI_MENUPOPUP)
 		UPDATE_ELEMENT(ID_MACHINE_X64, UPDUI_MENUPOPUP)
 		UPDATE_ELEMENT(ID_MACHINE_ARM64, UPDUI_MENUPOPUP)
@@ -56,8 +61,15 @@ public:
 		UPDATE_ELEMENT(ID_EDIT_COPYNAME, UPDUI_MENUPOPUP)
 	END_UPDATE_UI_MAP()
 
+	// a name sent by another instance (Win32ApiExp.exe CreateFileW): the data of WM_COPYDATA, in UTF-16
+	static constexpr ULONG_PTR CopyDataName = 0x4E333257;	// 'W32N'
+
 	BEGIN_MSG_MAP(CMainFrame)
+		// (while the metadata is loaded: Exit and About only)
+		MESSAGE_HANDLER(WM_COMMAND, OnCommandWhileLoading)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
+		MESSAGE_HANDLER(WM_LOADED, OnLoaded)
+		MESSAGE_HANDLER(WM_COPYDATA, OnCopyData)
 		MESSAGE_HANDLER(WM_DESTROY, OnDestroy)
 		MESSAGE_HANDLER(WM_APPCOMMAND, OnAppCommand)
 		COMMAND_ID_HANDLER(ID_APP_EXIT, OnExit)
@@ -72,6 +84,7 @@ public:
 		COMMAND_ID_HANDLER(ID_VIEW_DOCUMENTATION, OnViewDocumentation)
 		COMMAND_ID_HANDLER(ID_VIEW_DARKMODE, OnViewDarkMode)
 		COMMAND_ID_HANDLER(ID_VIEW_FONT, OnViewFont)
+		COMMAND_RANGE_HANDLER(ID_SHOW_DECLARATION, ID_SHOW_COMPARE, OnShowMode)
 		COMMAND_ID_HANDLER(ID_VIEW_UIFONT, OnViewUIFont)
 		COMMAND_ID_HANDLER(ID_VIEW_RESETFONTS, OnResetFonts)
 		COMMAND_ID_HANDLER(ID_GO_BACK, OnBack)
@@ -100,7 +113,16 @@ private:
 		bool Preview{ false };
 	};
 
+	static constexpr UINT WM_LOADED = WM_APP + 1;	// the metadata was loaded (lParam: the API, null if there is none)
+
 	LRESULT OnCreate(UINT, WPARAM, LPARAM, BOOL&);
+	LRESULT OnLoaded(UINT, WPARAM, LPARAM, BOOL&);
+	LRESULT OnCopyData(UINT, WPARAM, LPARAM, BOOL&);
+	LRESULT OnCommandWhileLoading(UINT, WPARAM, LPARAM, BOOL&);
+	// what needs the metadata: the panes, the tabs
+	void FinishCreate();
+	// opens a function, type or constant by its name, in a tab that stays (false if there is none)
+	bool OpenByName(std::wstring const& name);
 	LRESULT OnDestroy(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnAppCommand(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnExit(WORD, WORD, HWND, BOOL&);
@@ -113,6 +135,7 @@ private:
 	LRESULT OnViewDocumentation(WORD, WORD, HWND, BOOL&);
 	LRESULT OnViewDarkMode(WORD, WORD, HWND, BOOL&);
 	LRESULT OnViewFont(WORD, WORD, HWND, BOOL&);
+	LRESULT OnShowMode(WORD, WORD, HWND, BOOL&);
 	LRESULT OnViewUIFont(WORD, WORD, HWND, BOOL&);
 	LRESULT OnResetFonts(WORD, WORD, HWND, BOOL&);
 	LRESULT OnBack(WORD, WORD, HWND, BOOL&);
@@ -175,7 +198,9 @@ private:
 
 	Win32Api* m_Api{ nullptr };
 	Win32Api::Machine m_Machine{ Win32Api::Machine::X64 };
-	std::wstring m_StartName;
+	std::wstring m_StartName;		// to open when the metadata is loaded
+	std::thread m_Loader;
+	CLoadingView m_Loading;
 	CImageList m_Images;
 	CCustomSplitterWindow m_Splitter;
 	CCustomHorSplitterWindow m_Right;

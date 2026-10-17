@@ -14,7 +14,8 @@ public:
 	SETTING(NavigatorPage, 0, SettingType::Int32);		// 0: Search, 1: Namespaces
 	SETTING(ActiveTab, -1, SettingType::Int32);
 	SETTING(CodeFont, LOGFONT{}, SettingType::Binary);	// of the declarations (no name: the default)
-	SETTING(UIFont, LOGFONT{}, SettingType::Binary);	// of the rest: lists, tree, tabs (no name: the default)
+	SETTING(UIFont, LOGFONT{}, SettingType::Binary);
+	SETTING(ShowMode, 0, SettingType::Int32);		// of structs: CDeclarationView::Mode	// of the rest: lists, tree, tabs (no name: the default)
 	END_SETTINGS
 
 	DEF_SETTING(MainWindowPlacement, WINDOWPLACEMENT)
@@ -27,5 +28,6 @@ public:
 	DEF_SETTING(ActiveTab, int)
 	DEF_SETTING(CodeFont, LOGFONT)
 	DEF_SETTING(UIFont, LOGFONT)
+	DEF_SETTING(ShowMode, int)
 	DEF_SETTING_MULTI(OpenTabs)		// the names of the tabs kept open, in their order
 };

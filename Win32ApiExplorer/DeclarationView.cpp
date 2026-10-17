@@ -6,19 +6,20 @@
 
 namespace {
 	constexpr int IndicatorLink = 8;
+	constexpr int MarkerDifferent = 1;
 
 	struct Palette {
-		COLORREF Back, Fore, Comment, Keyword, Type, Number, String, Preprocessor, Link, CaretLine, Selection, Caret, TipBack;
+		COLORREF Back, Fore, Comment, Keyword, Type, Number, String, Preprocessor, Link, CaretLine, Selection, Caret, TipBack, Different;
 	};
 
 	Palette CurrentPalette() {
 		if (WTLHelper::IsDarkMode())
 			return { RGB(30, 30, 30), RGB(220, 220, 220), RGB(87, 166, 74), RGB(86, 156, 214), RGB(78, 201, 176), RGB(181, 206, 168),
 				RGB(214, 157, 133), RGB(155, 155, 155), RGB(100, 160, 230), RGB(40, 40, 44), RGB(38, 79, 120), RGB(240, 240, 240),
-				RGB(50, 50, 54) };
+				RGB(50, 50, 54), RGB(80, 42, 42) };
 		return { RGB(255, 255, 255), RGB(0, 0, 0), RGB(0, 128, 0), RGB(0, 0, 255), RGB(43, 145, 175), RGB(9, 136, 90),
 			RGB(163, 21, 21), RGB(128, 128, 128), RGB(0, 102, 204), RGB(240, 240, 248), RGB(173, 214, 255), RGB(0, 0, 0),
-			RGB(246, 246, 238) };
+			RGB(246, 246, 238), RGB(255, 224, 224) };
 	}
 
 	bool IsWordChar(char c) {
@@ -114,6 +115,10 @@ void CDeclarationView::UpdateColors() {
 	Sci(SCI_SETELEMENTCOLOUR, SC_ELEMENT_SELECTION_INACTIVE_BACK, opaque(p.Selection));
 	Sci(SCI_SETELEMENTCOLOUR, SC_ELEMENT_CARET, opaque(p.Caret));
 
+	// the lines of a comparison that differ: in a color of their own
+	Sci(SCI_MARKERDEFINE, MarkerDifferent, SC_MARK_BACKGROUND);
+	Sci(SCI_MARKERSETBACK, MarkerDifferent, p.Different);
+
 	Sci(SCI_INDICSETSTYLE, IndicatorLink, INDIC_PLAIN);
 	Sci(SCI_INDICSETFORE, IndicatorLink, p.Link);
 	Sci(SCI_INDICSETUNDER, IndicatorLink, TRUE);
@@ -137,6 +142,7 @@ LOGFONT CDeclarationView::CodeFont() {
 }
 
 void CDeclarationView::SetText(std::string const& text) {
+	Sci(SCI_MARKERDELETEALL, MarkerDifferent);
 	Sci(SCI_SETREADONLY, FALSE);
 	Sci(SCI_SETTEXT, 0, (LPARAM)text.c_str());
 	Sci(SCI_SETREADONLY, TRUE);
@@ -169,16 +175,177 @@ void CDeclarationView::Show(int entry) {
 	if (entry >= (int)entries.size())
 		entry = -1;
 	m_Entry = entry;
-	if (entry < 0) {
-		m_LineTypes.clear();
-		SetText("");
-	}
-	else {
-		auto text = m_Api->Declaration(entries[entry], &m_LineTypes);
-		SetText(text);
-	}
+	Render();
 	if (OnShownChanged)
 		OnShownChanged();
+}
+
+void CDeclarationView::SetMode(Mode mode) {
+	if (mode == m_Mode)
+		return;
+	m_Mode = mode;
+	if (m_Sci)
+		Render();
+}
+
+void CDeclarationView::Render() {
+	m_LineTypes.clear();
+	m_DifferentLines.clear();
+	if (m_Entry < 0) {
+		SetText("");
+		return;
+	}
+	auto const& entry = m_Api->Entries()[m_Entry];
+	std::string text;
+	// (a layout is of a struct or union: of the others, their declarations)
+	if (m_Mode != Mode::Declaration && (entry.Kind == Win32Api::Entry::Kinds::Struct || entry.Kind == Win32Api::Entry::Kinds::Union)) {
+		CWaitCursor wait;
+		text = m_Mode == Mode::Layout ? LayoutText(entry) : CompareText(entry);
+	}
+	if (text.empty()) {
+		m_LineTypes.clear();
+		m_DifferentLines.clear();
+		text = m_Api->Declaration(entry, &m_LineTypes);
+	}
+	SetText(text);
+	Sci(SCI_MARKERDELETEALL, MarkerDifferent);
+	for (auto line : m_DifferentLines)
+		Sci(SCI_MARKERADD, line, MarkerDifferent);
+}
+
+namespace {
+	PCSTR MachineName(Win32Api::Machine machine) {
+		return machine == Win32Api::Machine::X86 ? "x86" : machine == Win32Api::Machine::X64 ? "x64" : "ARM64";
+	}
+
+	// "HANDLE hFile", "SECURITY_ATTRIBUTES *lpAttributes"
+	std::string Declare(std::string const& type, std::string const& name) {
+		return type.empty() ? name : type + (type.ends_with("*") ? "" : " ") + name;
+	}
+}
+
+// "0x0008  0x0008      void *lpSecurityDescriptor;": where each field is, from the start, and its size; the fields of the
+// structs and unions in it, further in; the padding
+std::string CDeclarationView::LayoutText(Win32Api::Entry const& entry) {
+	auto layout = m_Api->LayoutOf(entry);
+	if (!layout)
+		return {};
+	std::string text;
+	auto line = [&](std::string const& s, std::string const& type = {}) {
+		text += s + "\r\n";
+		m_LineTypes.push_back(type);
+	};
+	line(std::format("// {} {}: 0x{:X} bytes, aligned to {} ({})", entry.Kind == Win32Api::Entry::Kinds::Union ? "union" : "struct",
+		entry.Name, layout->Size, layout->Alignment, MachineName(m_Api->GetMachine())));
+	line("// offset  size");
+	using Kinds = Win32Api::LayoutItem::Kinds;
+	for (auto const& item : layout->Items) {
+		std::string indent(item.Depth * 4, ' ');
+		switch (item.Kind) {
+			case Kinds::Field:
+				line(std::format("   0x{:04X}  0x{:04X}  {}{};{}", item.Offset, item.Size, indent, Declare(item.Type, item.Name),
+					item.Note.empty() ? "" : "\t// " + item.Note), item.Referred);
+				break;
+			case Kinds::Padding:
+				line(std::format("   0x{:04X}  0x{:04X}  {}// padding", item.Offset, item.Size, indent));
+				break;
+			case Kinds::Bitfield:
+				line(std::format("   0x{:04X}          {}// {}: {}", item.Offset, indent, item.Name, item.Note));
+				break;
+		}
+	}
+	return text;
+}
+
+// The layouts on x86, x64 and ARM64, side by side: each field (by its path) where it is and how large, on each machine
+// (missing: "-"); the lines that differ are marked
+std::string CDeclarationView::CompareText(Win32Api::Entry const& entry) {
+	using Machine = Win32Api::Machine;
+	Machine const machines[] = { Machine::X86, Machine::X64, Machine::Arm64 };
+	constexpr int Count = _countof(machines);
+	std::optional<Win32Api::StructLayout> layouts[Count];
+	for (int m = 0; m < Count; m++)
+		if (auto api = Win32Api::Get(machines[m]))
+			if (auto e = api->Find(entry.Name))
+				layouts[m] = api->LayoutOf(*e);
+	if (std::ranges::none_of(layouts, [](auto const& l) { return l.has_value(); }))
+		return {};
+
+	// the fields of all, in the order they are in (one that is not on the first machines: after the one before it)
+	struct Row {
+		int Depth;
+		std::string Path, Name, Type, Referred;
+		std::optional<std::pair<uint32_t, uint32_t>> At[Count];
+	};
+	std::vector<Row> rows;
+	for (int m = 0; m < Count; m++) {
+		if (!layouts[m])
+			continue;
+		size_t after = 0;
+		for (auto const& item : layouts[m]->Items) {
+			if (item.Kind == Win32Api::LayoutItem::Kinds::Padding)
+				continue;
+			auto it = std::ranges::find(rows, item.Path, &Row::Path);
+			if (it == rows.end()) {
+				it = rows.insert(rows.begin() + std::min(after, rows.size()), Row{ item.Depth, item.Path,
+					item.Kind == Win32Api::LayoutItem::Kinds::Bitfield ? item.Name + ": " + item.Note : Declare(item.Type, item.Name),
+					item.Type, item.Referred });
+			}
+			it->At[m] = { item.Offset, item.Size };
+			after = (size_t)(it - rows.begin()) + 1;
+		}
+	}
+
+	auto cell = [](std::optional<std::pair<uint32_t, uint32_t>> const& at) {
+		return at ? std::format("+0x{:03X} ({:X})", at->first, at->second) : std::string("-");
+	};
+	size_t width = 24;
+	for (auto const& row : rows)
+		width = std::max(width, row.Depth * 4 + row.Name.size() + 2);
+	auto padded = [](std::string s, size_t size) {
+		if (s.size() < size)
+			s.append(size - s.size(), ' ');
+		return s;
+	};
+	constexpr size_t CellWidth = 16;
+
+	std::string text;
+	int lineNumber = 0;
+	auto line = [&](std::string const& s, std::string const& type = {}, bool different = false) {
+		text += s + "\r\n";
+		m_LineTypes.push_back(type);
+		if (different)
+			m_DifferentLines.push_back(lineNumber);
+		lineNumber++;
+	};
+	line(std::format("// {} {} on each machine (what differs is marked)", entry.Kind == Win32Api::Entry::Kinds::Union ? "union" : "struct", entry.Name));
+	std::string header = "   " + padded("", width);
+	for (auto machine : machines)
+		header += padded(MachineName(machine), CellWidth);
+	line("//" + header.substr(2));
+	// its size and alignment
+	auto summary = [&](char const* what, auto value) {
+		std::string s = "   " + padded(std::string("// ") + what, width);
+		std::vector<std::string> cells;
+		for (auto const& layout : layouts)
+			cells.push_back(layout ? std::format("0x{:X}", value(*layout)) : std::string("-"));
+		for (auto const& c : cells)
+			s += padded(c, CellWidth);
+		line(s, {}, std::ranges::adjacent_find(cells, std::not_equal_to{}) != cells.end());
+	};
+	summary("size", [](Win32Api::StructLayout const& l) { return l.Size; });
+	summary("alignment", [](Win32Api::StructLayout const& l) { return l.Alignment; });
+	for (auto const& row : rows) {
+		std::string s = "   " + padded(std::string(row.Depth * 4, ' ') + row.Name, width);
+		std::vector<std::string> cells;
+		for (int m = 0; m < Count; m++)
+			if (layouts[m])
+				cells.push_back(cell(row.At[m]));
+		for (int m = 0; m < Count; m++)
+			s += padded(layouts[m] ? cell(row.At[m]) : std::string("-"), CellWidth);
+		line(s, row.Referred, std::ranges::adjacent_find(cells, std::not_equal_to{}) != cells.end());
+	}
+	return text;
 }
 
 int CDeclarationView::Entry() const {

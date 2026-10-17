@@ -18,22 +18,48 @@ extern "C" int Scintilla_RegisterClasses(void* hInstance);
 #pragma comment(lib, "bcrypt")
 
 namespace {
-	// the name on the command line (quotes and spaces around it removed)
-	std::wstring StartName(PCWSTR cmdLine) {
-		std::wstring name = cmdLine ? cmdLine : L"";
-		auto first = name.find_first_not_of(L" \t\"");
-		if (first == std::wstring::npos)
-			return {};
-		auto last = name.find_last_not_of(L" \t\"");
-		return name.substr(first, last - first + 1);
+	// The command line: [/new] [name]. /new: a window of its own (else the name goes to the window there is, if there is
+	// one); the name: what is opened
+	struct CommandLine {
+		bool New{ false };
+		std::wstring Name;
+	};
+	CommandLine ParseCommandLine(PCWSTR cmdLine) {
+		CommandLine result;
+		int count = 0;
+		auto args = ::CommandLineToArgvW(cmdLine && *cmdLine ? cmdLine : L"", &count);
+		// (CommandLineToArgvW of an empty line: the executable's path, which is not an argument here)
+		for (int i = (cmdLine && *cmdLine) ? 0 : count; i < count; i++) {
+			std::wstring arg = args[i];
+			if (_wcsicmp(arg.c_str(), L"/new") == 0 || _wcsicmp(arg.c_str(), L"-new") == 0)
+				result.New = true;
+			else if (result.Name.empty())
+				result.Name = arg;
+		}
+		::LocalFree(args);
+		return result;
+	}
+
+	// The window of another instance: the name to it, and it to the front; false if there is none
+	bool SendToRunning(std::wstring const& name) {
+		auto hWnd = ::FindWindow(CMainFrame::GetWndClassInfo().m_wc.lpszClassName, nullptr);
+		if (!hWnd)
+			return false;
+		COPYDATASTRUCT data{ CMainFrame::CopyDataName, (DWORD)(name.size() * sizeof(WCHAR)), (PVOID)name.c_str() };
+		DWORD_PTR result = 0;
+		// (it may bring itself to the front: this one is in front, it can let it)
+		DWORD pid = 0;
+		::GetWindowThreadProcessId(hWnd, &pid);
+		::AllowSetForegroundWindow(pid);
+		return ::SendMessageTimeout(hWnd, WM_COPYDATA, 0, (LPARAM)&data, SMTO_ABORTIFHUNG, 5000, &result) && result;
 	}
 }
 
-int Run(PCWSTR cmdLine, int nCmdShow) {
+int Run(std::wstring startName, int nCmdShow) {
 	CMessageLoop loop;
 	_Module.AddMessageLoop(&loop);
 
-	CMainFrame frame(StartName(cmdLine));
+	CMainFrame frame(std::move(startName));
 	if (frame.CreateEx() == nullptr) {
 		_Module.RemoveMessageLoop();
 		return 0;
@@ -55,6 +81,11 @@ int Run(PCWSTR cmdLine, int nCmdShow) {
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR cmdLine, int nCmdShow) {
 	// (WebView2 needs an STA)
+	// one window, unless asked for another: the name goes to the one there is
+	auto commandLine = ParseCommandLine(cmdLine);
+	if (!commandLine.New && SendToRunning(commandLine.Name))
+		return 0;
+
 	HRESULT hr = ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
 	ATLASSERT(SUCCEEDED(hr));
 
@@ -69,7 +100,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR cmdLine, int nCmdShow)
 	Scintilla_RegisterClasses(hInstance);
 	WTLHelper::InitDarkMode(settings.DarkMode() ? DarkModeKind::Dark : DarkModeKind::Light);
 
-	int result = Run(cmdLine, nCmdShow);
+	int result = Run(std::move(commandLine.Name), nCmdShow);
 	settings.Save();
 
 	_Module.Term();

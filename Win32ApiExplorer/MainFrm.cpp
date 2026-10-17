@@ -56,18 +56,6 @@ LRESULT CMainFrame::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 #endif
 	}
 	m_Machine = (Win32Api::Machine)machine;
-	{
-		CWaitCursor wait;
-		m_Api = Win32Api::Get(m_Machine);
-		if (m_Api)
-			m_Api->Entries();
-	}
-	if (!m_Api) {
-		auto text = std::format(L"The Win32 metadata was not found:\n{}\n\nRun GetWin32Metadata.ps1 (in the TotalPE folder of the "
-			L"sources) to download it, and build again.", Win32Api::MetadataPath());
-		AtlMessageBox(nullptr, text.c_str(), IDR_MAINFRAME, MB_ICONERROR);
-		return -1;
-	}
 
 	m_Images = Images::Create();
 	CreateToolBar();
@@ -76,8 +64,46 @@ LRESULT CMainFrame::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 		CStatusBarCtrl status(m_hWndStatusBar);
 		int parts[] = { 320, -1 };
 		status.SetParts(_countof(parts), parts);
+		status.SetText(0, L"Loading...");
 	}
+	m_hWndClient = m_Loading.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE);
 
+	auto loop = _Module.GetMessageLoop();
+	loop->AddMessageFilter(this);
+	loop->AddIdleHandler(this);
+
+	// the metadata, and what is made of it at first (the entries, the namespaces), while the window is there
+	m_Loader = std::thread([hWnd = m_hWnd, machine = m_Machine] {
+		auto api = Win32Api::Get(machine);
+		if (api) {
+			api->Entries();
+			api->Namespaces();
+		}
+		::PostMessage(hWnd, WM_LOADED, 0, (LPARAM)api);
+	});
+	return 0;
+}
+
+LRESULT CMainFrame::OnLoaded(UINT, WPARAM, LPARAM lp, BOOL&) {
+	if (m_Loader.joinable())
+		m_Loader.join();
+	m_Api = (Win32Api*)lp;
+	if (!m_Api) {
+		auto text = std::format(L"The Win32 metadata was not found:\n{}\n\nRun GetWin32Metadata.ps1 (in the TotalPE folder of the "
+			L"sources) to download it, and build again.", Win32Api::MetadataPath());
+		AtlMessageBox(m_hWnd, text.c_str(), IDR_MAINFRAME, MB_ICONERROR);
+		PostMessage(WM_CLOSE);
+		return 0;
+	}
+	SetRedraw(FALSE);
+	FinishCreate();
+	SetRedraw(TRUE);
+	RedrawWindow(nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
+	return 0;
+}
+
+void CMainFrame::FinishCreate() {
+	auto& settings = AppSettings::Get();
 	m_QuickOpen.Create(m_hWnd, rcDefault, nullptr, WS_POPUP | WS_BORDER | WS_CLIPCHILDREN, WS_EX_TOOLWINDOW);
 	m_QuickOpen.SetApi(*m_Api);
 	m_QuickOpen.SetImageList(m_Images);
@@ -87,6 +113,7 @@ LRESULT CMainFrame::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 			view->SetFocus();
 	};
 
+	m_Loading.DestroyWindow();
 	m_hWndClient = m_Splitter.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
 	CreateNavigator();
 	CreateEditors();
@@ -97,25 +124,64 @@ LRESULT CMainFrame::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	m_Splitter.SetSplitterPos(width > 100 ? width : DefaultNavigatorWidth);
 	m_Right.SetSplitterPosPct(100 - std::clamp(settings.DocumentationPercent(), 10, 90));
 
-	auto loop = _Module.GetMessageLoop();
-	loop->AddMessageFilter(this);
-	loop->AddIdleHandler(this);
-
 	// (the default font: as the controls have it)
 	if (settings.UIFont().lfFaceName[0])
 		ApplyUIFont();
 	ShowNavigatorPage(std::min(settings.NavigatorPage(), 1));	// (the Used By page is of a type asked for)
 	RestoreTabs();
-	if (!m_StartName.empty()) {
-		if (auto entry = m_Api->Find(Narrow(m_StartName))) {
-			auto index = (size_t)(entry - m_Api->Entries().data());
-			OpenEntry(index, true);
-			m_Search->SelectEntry(index);
-		}
-	}
+	if (!m_StartName.empty())
+		OpenByName(m_StartName);
 	UpdateStatus();
 	UpdateTitle();
 	UpdateUIState();
+}
+
+bool CMainFrame::OpenByName(std::wstring const& name) {
+	auto entry = m_Api->Find(Narrow(name));
+	if (!entry)
+		return false;
+	auto index = (size_t)(entry - m_Api->Entries().data());
+	OpenEntry(index, true);
+	m_Search->SelectEntry(index);
+	if (auto view = ActiveView())
+		view->SetFocus();
+	return true;
+}
+
+// Another instance's name (it is not started again): opened here, now or when the metadata is loaded; this window to the front
+LRESULT CMainFrame::OnCopyData(UINT, WPARAM, LPARAM lp, BOOL&) {
+	auto data = (COPYDATASTRUCT const*)lp;
+	if (!data || data->dwData != CopyDataName)
+		return FALSE;
+	std::wstring name((PCWSTR)data->lpData, data->cbData / sizeof(WCHAR));
+	if (!name.empty()) {
+		if (m_Api)
+			OpenByName(name);
+		else
+			m_StartName = name;
+	}
+	if (IsIconic())
+		ShowWindow(SW_RESTORE);
+	::SetForegroundWindow(m_hWnd);
+	return TRUE;
+}
+
+LRESULT CMainFrame::OnCommandWhileLoading(UINT, WPARAM wp, LPARAM, BOOL& handled) {
+	handled = FALSE;
+	if (m_Api)
+		return 0;
+	switch (LOWORD(wp)) {
+		case ID_APP_EXIT: case ID_APP_ABOUT:
+			break;
+		case IDC_MACHINE:
+			// (the machine is the one being loaded)
+			m_MachineBar.Combo().SetCurSel((int)m_Machine);
+			handled = TRUE;
+			break;
+		default:
+			handled = TRUE;
+			break;
+	}
 	return 0;
 }
 
@@ -126,6 +192,10 @@ void CMainFrame::CreateToolBar() {
 		{ 0 },
 		{ ID_GO_REVEAL, IDI_NAMESPACE, BTNS_BUTTON | BTNS_AUTOSIZE, L"Reveal" },
 		{ ID_GO_USEDBY, IDI_FIND, BTNS_BUTTON | BTNS_AUTOSIZE, L"Find Usages" },
+		{ 0 },
+		{ ID_SHOW_DECLARATION, 0, BTNS_BUTTON | BTNS_AUTOSIZE, L"Declaration" },
+		{ ID_SHOW_LAYOUT, 0, BTNS_BUTTON | BTNS_AUTOSIZE, L"Layout" },
+		{ ID_SHOW_COMPARE, 0, BTNS_BUTTON | BTNS_AUTOSIZE, L"Compare" },
 		{ 0 },
 		{ ID_VIEW_DOCUMENTATION, IDI_GLOBE, BTNS_CHECK | BTNS_AUTOSIZE, L"Documentation" },
 		{ ID_DOC_BROWSER, 0, BTNS_BUTTON | BTNS_AUTOSIZE, L"Open in Browser" },
@@ -210,6 +280,9 @@ void CMainFrame::CreateEditors() {
 }
 
 LRESULT CMainFrame::OnDestroy(UINT, WPARAM, LPARAM, BOOL& handled) {
+	// (closed while the metadata is loaded: when it is)
+	if (m_Loader.joinable())
+		m_Loader.join();
 	if (m_Api)
 		SaveSettings();
 	auto loop = _Module.GetMessageLoop();
@@ -317,6 +390,7 @@ int CMainFrame::AddTab(int entry, bool preview, int position) {
 	p->OnFollow = [this, p](std::string const& name, bool newTab) { Follow(p, name, newTab); };
 	p->OnShownChanged = [this, p] { ViewChanged(p); };
 	p->Create(m_Editors, rcDefault, nullptr, WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
+	p->SetMode((CDeclarationView::Mode)std::clamp(AppSettings::Get().ShowMode(), 0, 2));
 	p->Show(entry);
 	// (after the active one, as an editor opens one)
 	if (position < 0 || position > (int)m_Tabs.size())
@@ -495,6 +569,8 @@ void CMainFrame::UpdateTitle() {
 }
 
 void CMainFrame::UpdateUIState() {
+	if (!m_Api)
+		return;
 	auto& settings = AppSettings::Get();
 	auto view = ActiveView();
 	UIEnable(ID_GO_BACK, view && view->CanGoBack());
@@ -516,6 +592,8 @@ void CMainFrame::UpdateUIState() {
 	static_assert(ID_MACHINE_X64 == ID_MACHINE_X86 + 1 && ID_MACHINE_ARM64 == ID_MACHINE_X86 + 2);
 	UISetRadioMenuItem(ID_VIEW_SEARCH + std::clamp(page, 0, 2), ID_VIEW_SEARCH, ID_VIEW_USEDBY);
 	UISetRadioMenuItem(ID_MACHINE_X86 + (int)m_Machine, ID_MACHINE_X86, ID_MACHINE_ARM64);
+	static_assert(ID_SHOW_LAYOUT == ID_SHOW_DECLARATION + 1 && ID_SHOW_COMPARE == ID_SHOW_DECLARATION + 2);
+	UISetRadioMenuItem(ID_SHOW_DECLARATION + std::clamp(settings.ShowMode(), 0, 2), ID_SHOW_DECLARATION, ID_SHOW_COMPARE);
 	auto count = (int)m_Tabs.size();
 	UIEnable(ID_TAB_CLOSE, target >= 0);
 	UIEnable(ID_TAB_CLOSEOTHERS, count > 1 && target >= 0);
@@ -753,6 +831,15 @@ LRESULT CMainFrame::OnResetFonts(WORD, WORD, HWND, BOOL&) {
 	return 0;
 }
 
+// what the tabs show of structs and unions (all of them: as a way of looking at them)
+LRESULT CMainFrame::OnShowMode(WORD, WORD id, HWND, BOOL&) {
+	auto mode = id - ID_SHOW_DECLARATION;
+	AppSettings::Get().ShowMode(mode);
+	for (auto& tab : m_Tabs)
+		tab.View->SetMode((CDeclarationView::Mode)mode);
+	return 0;
+}
+
 LRESULT CMainFrame::OnBack(WORD, WORD, HWND, BOOL&) {
 	if (auto view = ActiveView())
 		view->GoBack();
@@ -797,7 +884,10 @@ LRESULT CMainFrame::OnOpenInBrowser(WORD, WORD, HWND, BOOL&) {
 	if (entry < 0)
 		return 0;
 	auto const& e = m_Api->Entries()[entry];
+	// (the metadata's page, else the one the documentation found, else the search for it)
 	auto url = m_Api->DocumentationUrl(e);
+	if (url.empty())
+		url = CDocPane::FoundPage(Wide(e.Name));
 	if (url.empty())
 		url = CDocPane::SearchUrl(Wide(e.Name));
 	::ShellExecute(nullptr, L"open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);

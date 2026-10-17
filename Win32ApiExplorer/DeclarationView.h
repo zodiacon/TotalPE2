@@ -20,6 +20,11 @@ public:
 	// what it shows changed (its title, its documentation)
 	std::function<void()> OnShownChanged;
 
+	// What it shows of a struct or union: its declaration; its layout (the fields of the structs and unions in it too, with
+	// their offsets from its start, and the padding); its layout on each machine (x86, x64, ARM64; the lines that differ
+	// marked). Of the others: their declarations.
+	enum class Mode { Declaration, Layout, Compare };
+	void SetMode(Mode mode);
 	// the entry shown (an index into the API's entries; -1: none), the history unchanged
 	void Show(int entry);
 	// another entry shown, the one shown remembered (Back returns to it); false if there is no such entry
@@ -75,6 +80,10 @@ private:
 	}
 	void SetText(std::string const& text);
 	void MarkLinks();
+	// the text of the entry shown, as the mode says (its lines' types, the lines that differ)
+	void Render();
+	std::string LayoutText(Win32Api::Entry const& entry);
+	std::string CompareText(Win32Api::Entry const& entry);
 	bool FollowLine(int line, bool newTab);
 	void Remember(std::string name);
 
@@ -82,5 +91,7 @@ private:
 	HWND m_Sci{ nullptr };
 	int m_Entry{ -1 };
 	std::vector<std::string> m_LineTypes;	// what each line refers to
+	std::vector<int> m_DifferentLines;		// (of a comparison)
+	Mode m_Mode{ Mode::Declaration };
 	std::vector<std::string> m_Back, m_Forward;
 };

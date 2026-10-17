@@ -45,6 +45,10 @@ BEGIN
         MENUITEM "&Namespaces\tCtrl+2",         ID_VIEW_NAMESPACES
         MENUITEM "&Used By\tCtrl+3",            ID_VIEW_USEDBY
         MENUITEM SEPARATOR
+        MENUITEM "D&eclaration\tCtrl+Shift+D",  ID_SHOW_DECLARATION
+        MENUITEM "&Layout\tCtrl+Shift+L",       ID_SHOW_LAYOUT
+        MENUITEM "&Compare Machines\tCtrl+Shift+M", ID_SHOW_COMPARE
+        MENUITEM SEPARATOR
         MENUITEM "&Documentation\tCtrl+D",      ID_VIEW_DOCUMENTATION
         MENUITEM "Dar&k Mode",                  ID_VIEW_DARKMODE
         MENUITEM SEPARATOR
@@ -118,6 +122,9 @@ BEGIN
     "2",            ID_VIEW_NAMESPACES,     VIRTKEY, CONTROL, NOINVERT
     "3",            ID_VIEW_USEDBY,         VIRTKEY, CONTROL, NOINVERT
     "D",            ID_VIEW_DOCUMENTATION,  VIRTKEY, CONTROL, NOINVERT
+    "D",            ID_SHOW_DECLARATION,    VIRTKEY, SHIFT, CONTROL, NOINVERT
+    "L",            ID_SHOW_LAYOUT,         VIRTKEY, SHIFT, CONTROL, NOINVERT
+    "M",            ID_SHOW_COMPARE,        VIRTKEY, SHIFT, CONTROL, NOINVERT
     VK_LEFT,        ID_GO_BACK,             VIRTKEY, ALT, NOINVERT
     VK_RIGHT,       ID_GO_FORWARD,          VIRTKEY, ALT, NOINVERT
     VK_F12,         ID_GO_DEFINITION,       VIRTKEY, NOINVERT

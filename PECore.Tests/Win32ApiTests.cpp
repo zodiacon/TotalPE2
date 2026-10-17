@@ -244,3 +244,33 @@ TEST_CASE("Win32 API: the WDK's functions and types, with Windows.Win32's", "[wi
 	CHECK(api->Function("IoCreateDevice", "ntoskrnl.exe", type, names));
 	CHECK(names.size() == 7);
 }
+
+TEST_CASE("Win32 API: the layout of a struct", "[win32api]") {
+	auto api = Api();
+	if (!api)
+		SKIP("no Windows.Win32.winmd next to the executable");
+	using Kinds = Win32Api::LayoutItem::Kinds;
+	auto layout = api->LayoutOf(*api->Find("SECURITY_ATTRIBUTES"));
+	REQUIRE(layout);
+	CHECK(layout->Size == 0x18);
+	CHECK(layout->Alignment == 8);
+	REQUIRE(layout->Items.size() == 5);
+	CHECK((layout->Items[0].Name == "nLength" && layout->Items[0].Offset == 0 && layout->Items[0].Size == 4));
+	CHECK((layout->Items[1].Kind == Kinds::Padding && layout->Items[1].Offset == 4 && layout->Items[1].Size == 4));
+	CHECK((layout->Items[2].Name == "lpSecurityDescriptor" && layout->Items[2].Offset == 8 && layout->Items[2].Size == 8));
+	CHECK((layout->Items[3].Name == "bInheritHandle" && layout->Items[3].Offset == 0x10));
+	CHECK((layout->Items[4].Kind == Kinds::Padding && layout->Items[4].Offset == 0x14 && layout->Items[4].Size == 4));
+	// a union in it, and a struct in that: their fields, where they are
+	layout = api->LayoutOf(*api->Find("SYSTEM_INFO"));
+	REQUIRE(layout);
+	auto field = std::ranges::find(layout->Items, std::string("Anonymous.Anonymous.wProcessorArchitecture"), &Win32Api::LayoutItem::Path);
+	REQUIRE(field != layout->Items.end());
+	CHECK(field->Depth == 2);
+	CHECK(field->Offset == 0);
+	CHECK(field->Size == 2);
+	auto pageSize = std::ranges::find(layout->Items, std::string("dwPageSize"), &Win32Api::LayoutItem::Path);
+	REQUIRE(pageSize != layout->Items.end());
+	CHECK(pageSize->Offset == 4);
+	// not a struct
+	CHECK(!api->LayoutOf(*api->Find("CreateFileW")));
+}

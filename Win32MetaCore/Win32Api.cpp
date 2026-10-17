@@ -1408,3 +1408,90 @@ std::string Win32Api::Declaration(Entry const& entry, std::vector<std::string>* 
 	}
 	return text;
 }
+
+//
+// Layouts
+//
+
+std::optional<Win32Api::StructLayout> Win32Api::LayoutOf(Entry const& entry) {
+	if (entry.Kind != Entry::Kinds::Struct && entry.Kind != Entry::Kinds::Union)
+		return std::nullopt;
+	auto id = IdBit | entry.Row;
+	GhidraDecompiler::Type type;
+	if (!Describe(id, type) || (type.Kind != Kind::Struct && type.Kind != Kind::Union))
+		return std::nullopt;
+	StructLayout layout;
+	layout.Size = type.Size;
+	layout.Alignment = Layout(id).second;
+	AddLayout(id, type, 0, 0, {}, layout.Items);
+	return layout;
+}
+
+void Win32Api::AddLayout(uint32_t id, GhidraDecompiler::Type const& type, uint32_t base, int depth, std::string const& path,
+	std::vector<LayoutItem>& items) {
+	auto& md = m_Data.Md;
+	bool isUnion = type.Kind == Kind::Union;
+	// the fields as the metadata has them (of a type of the metadata, not one made): their attributes
+	std::vector<uint32_t> fieldRows;
+	if (IsId(id) && !(id & MadeBit))
+		for (auto f : md.FieldsOf(id & ~IdBit))
+			if ((md.Fields()[f - 1].Flags & 0x10) == 0)
+				fieldRows.push_back(f);
+	// what a type is, through its typedefs (LARGE_INTEGER: a union)
+	auto resolve = [&](uint32_t typeId, GhidraDecompiler::Type& resolved) {
+		for (int i = 0; i < 16 && Describe(typeId, resolved); i++) {
+			if (resolved.Kind != Kind::Typedef)
+				return typeId;
+			typeId = resolved.Target;
+		}
+		return 0u;
+	};
+	uint32_t end = 0;	// (of the fields so far: what is after it, if not a field, is padding)
+	auto padding = [&](uint32_t from, uint32_t to) {
+		if (to > from)
+			items.push_back({ LayoutItem::Kinds::Padding, depth, path + std::format("(padding at 0x{:X})", base + from), "",
+				"", base + from, to - from });
+	};
+	for (size_t i = 0; i < type.Fields.size(); i++) {
+		auto const& f = type.Fields[i];
+		auto size = Layout(f.Type).first;
+		if (!isUnion)
+			padding(end, f.Offset);
+		GhidraDecompiler::Type ft;
+		auto typeText = TypeText(f.Type);
+		auto name = f.Name;
+		uint32_t element = 0;
+		uint32_t count = 0;
+		if (Describe(f.Type, ft) && ft.Kind == Kind::Array) {
+			typeText = TypeText(ft.Target);
+			name += std::format("[{}]", ft.Count);
+			element = ft.Target;
+			count = ft.Count;
+		}
+		auto at = base + f.Offset;
+		items.push_back({ LayoutItem::Kinds::Field, depth, path + f.Name, typeText, name, at, size, Referred(f.Type) });
+		// its bit fields
+		if (i < fieldRows.size())
+			for (auto const& a : AttributesOf((ClrTableId::Field << 24) | fieldRows[i]))
+				if (a.Name == "NativeBitfield") {
+					auto offset = atoi(a["1"].c_str()), length = atoi(a["2"].c_str());
+					items.push_back({ LayoutItem::Kinds::Bitfield, depth + 1, path + f.Name + "." + a["0"], "", a["0"], at, 0, {},
+						length > 1 ? std::format("bits {}-{}", offset, offset + length - 1) : std::format("bit {}", offset) });
+				}
+		// a struct or union in it: its fields (an array's: of its first element)
+		GhidraDecompiler::Type inner;
+		if (depth < 8) {
+			if (auto innerId = resolve(element ? element : f.Type, inner); innerId && (inner.Kind == Kind::Struct || inner.Kind == Kind::Union)) {
+				auto innerPath = path + f.Name + (element ? "[0]." : ".");
+				if (element && count > 1)
+					items.back().Note = std::format("{} of 0x{:X} bytes", count, Layout(element).first);
+				AddLayout(innerId, inner, at, depth + 1, innerPath, items);
+			}
+		}
+		if (!isUnion)
+			end = std::max(end, f.Offset + size);
+		else
+			end = std::max(end, size);
+	}
+	padding(end, type.Size);
+}

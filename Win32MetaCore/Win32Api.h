@@ -87,6 +87,31 @@ public:
 	std::vector<NamedValue> FindValue(uint64_t value);
 	// What a GUID names (an interface, a class, a constant)
 	std::optional<NamedValue> FindGuid(GUID const& guid);
+
+	// The layout of a struct or union: its fields, and those of the structs and unions in them (an array's: of its first
+	// element), each with its offset from the start and its size; the bit fields of a field; the padding between fields and
+	// at the end. Depth is how far a field is in (0: the struct's own); Path names it from the struct ("Anonymous.dwOemId").
+	struct LayoutItem {
+		enum class Kinds : uint8_t { Field, Padding, Bitfield };
+		Kinds Kind;
+		int Depth;
+		std::string Path;
+		std::string Type;		// as C writes it (of an array: of its elements)
+		std::string Name;		// with an array's count ("szCSDVersion[128]")
+		uint32_t Offset;
+		uint32_t Size;
+		std::string Referred;	// the type it refers to (a field's)
+		std::string Note;		// of a bit field: its bits; of an array's element: which one
+	};
+	struct StructLayout {
+		uint32_t Size{ 0 }, Alignment{ 1 };
+		std::vector<LayoutItem> Items;
+	};
+	// none if it is not a struct or union
+	std::optional<StructLayout> LayoutOf(Entry const& entry);
+	Machine GetMachine() const {
+		return m_Machine;
+	}
 	// The C declaration of an entry; 'lines' gets, for each line, the type it refers to (empty for none)
 	std::string Declaration(Entry const& entry, std::vector<std::string>* lines = nullptr);
 	// the page of Microsoft's documentation of an entry (from its [Documentation] attribute); empty if it has none
@@ -162,6 +187,9 @@ private:
 	Namespace m_Namespaces;
 	bool m_NamespacesBuilt{ false };
 	void BuildUsedBy();
+	// the fields of a struct or union (described: type) that is at an offset (base), into a layout
+	void AddLayout(uint32_t id, GhidraDecompiler::Type const& type, uint32_t base, int depth, std::string const& path,
+		std::vector<LayoutItem>& items);
 	std::vector<std::vector<size_t>> m_UsedBy;	// of each entry
 	std::vector<std::pair<int64_t, NamedValue>> m_Values;	// by value
 	bool m_ValuesBuilt{ false };
