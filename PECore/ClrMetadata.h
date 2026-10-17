@@ -271,6 +271,8 @@ public:
 
 	// The custom attributes on what a token is (a type, method, field, parameter, property, event, the assembly...)
 	std::vector<ClrCustomAttribute> CustomAttributes(uint32_t token) const;
+	// The types of those attributes (TypeDef or TypeRef tokens), without decoding them: which there are, quickly
+	std::vector<uint32_t> CustomAttributeTypes(uint32_t token) const;
 	// ".custom instance void [mscorlib]System.ObsoleteAttribute::.ctor(string) = { string('old') }"
 	std::wstring AttributeIl(ClrCustomAttribute const& attribute) const;
 	// "Obsolete(\"old\")" (without the brackets)

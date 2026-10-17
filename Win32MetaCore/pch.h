@@ -8,6 +8,7 @@
 #include <delayimp.h>
 #include <algorithm>
 #include <bit>
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <format>

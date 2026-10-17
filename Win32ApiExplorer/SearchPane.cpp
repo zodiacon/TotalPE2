@@ -114,15 +114,33 @@ CSearchPane::Query CSearchPane::ParseQuery(std::string const& filter) {
 	return query;
 }
 
+std::shared_ptr<CSearchPane::Lowercase const> CSearchPane::LowercaseOf(Win32Api& api) {
+	static std::unordered_map<Win32Api const*, std::shared_ptr<Lowercase const>> made;
+	if (auto it = made.find(&api); it != made.end())
+		return it->second;
+	auto lowercase = std::make_shared<Lowercase>();
+	auto const& entries = api.Entries();
+	lowercase->Names.reserve(entries.size());
+	lowercase->Where.reserve(entries.size());
+	lowercase->Namespaces.reserve(entries.size());
+	for (auto const& e : entries) {
+		lowercase->Names.push_back(Lower(e.Name));
+		lowercase->Where.push_back(Lower(e.Where));
+		lowercase->Namespaces.push_back(Lower(e.Namespace));
+	}
+	made[&api] = lowercase;
+	return lowercase;
+}
+
 bool CSearchPane::Matches(Query const& query, size_t entry) const {
 	auto const& e = m_Api->Entries()[entry];
 	for (auto const& dll : query.Dlls)
-		if (e.Kind != Kinds::Function || m_LowerWhere[entry].find(dll) == std::string::npos)
+		if (e.Kind != Kinds::Function || m_Lowercase->Where[entry].find(dll) == std::string::npos)
 			return false;
 	for (auto const& ns : query.Namespaces)
-		if (m_LowerNamespaces[entry].find(ns) == std::string::npos)
+		if (m_Lowercase->Namespaces[entry].find(ns) == std::string::npos)
 			return false;
-	auto const& name = m_LowerNames[entry];
+	auto const& name = m_Lowercase->Names[entry];
 	for (auto const& term : query.Names) {
 		bool ok = false;
 		switch (term.Kind) {
@@ -213,17 +231,7 @@ void CSearchPane::SetApi(Win32Api& api) {
 	auto name = selected ? m_Api->Entries()[selected->Entry].Name : std::string();
 	m_Api = &api;
 	auto const& entries = api.Entries();
-	m_LowerNames.clear();
-	m_LowerWhere.clear();
-	m_LowerNamespaces.clear();
-	m_LowerNames.reserve(entries.size());
-	m_LowerWhere.reserve(entries.size());
-	m_LowerNamespaces.reserve(entries.size());
-	for (auto const& e : entries) {
-		m_LowerNames.push_back(Lower(e.Name));
-		m_LowerWhere.push_back(Lower(e.Where));
-		m_LowerNamespaces.push_back(Lower(e.Namespace));
-	}
+	m_Lowercase = LowercaseOf(api);
 	m_List.SetItemState(-1, 0, LVIS_SELECTED | LVIS_FOCUSED);
 	Fill();
 	if (auto entry = name.empty() ? nullptr : api.Find(name)) {

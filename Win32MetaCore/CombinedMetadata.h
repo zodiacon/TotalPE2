@@ -38,6 +38,7 @@ public:
 	std::pair<CombinedMetadata const*, uint32_t> ResolveType(uint32_t token) const;
 	std::vector<uint32_t> Interfaces(uint32_t type) const;
 	std::vector<ClrCustomAttribute> CustomAttributes(uint32_t token) const;
+	std::vector<uint32_t> CustomAttributeTypes(uint32_t token) const;
 	std::wstring AttributeCSharp(ClrCustomAttribute const& attribute) const;
 	bool MethodSigTypes(uint32_t method, ClrSigType& result, std::vector<ClrSigType>& params) const;
 	bool FieldSigType(uint32_t field, ClrSigType& type) const;

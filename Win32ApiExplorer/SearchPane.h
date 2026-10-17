@@ -92,8 +92,13 @@ private:
 	void Open(Item const& item, bool pin);
 
 	Win32Api* m_Api;
-	std::vector<std::string> m_LowerNames;	// of the entries (the filter is not case sensitive)
-	std::vector<std::string> m_LowerWhere, m_LowerNamespaces;
+	// the names, DLLs and namespaces of the entries in lowercase (the filter is not case sensitive): of an API, for all the
+	// panes (made once)
+	struct Lowercase {
+		std::vector<std::string> Names, Where, Namespaces;
+	};
+	static std::shared_ptr<Lowercase const> LowercaseOf(Win32Api& api);
+	std::shared_ptr<Lowercase const> m_Lowercase;
 	// the filter's terms
 	struct Term {
 		enum class Kinds { Part, Start, End, All, Pattern } Kind;

@@ -2338,6 +2338,24 @@ std::vector<ClrCustomAttribute> ClrMetadata::CustomAttributes(uint32_t token) co
 	return attributes;
 }
 
+std::vector<uint32_t> ClrMetadata::CustomAttributeTypes(uint32_t token) const {
+	std::vector<uint32_t> types;
+	auto it = std::lower_bound(m_Attributes.begin(), m_Attributes.end(), token, [](auto& a, uint32_t t) { return a.first < t; });
+	for (; it != m_Attributes.end() && it->first == token && types.size() < 256; ++it) {
+		ClrRowReader r(*this, ClrTableId::CustomAttribute, it->second);
+		r.Coded(HasCustomAttribute);
+		auto ctor = r.Coded(CustomAttributeType);
+		// (the type of its constructor)
+		if (TokenTable(ctor) == ClrTableId::MethodDef && TokenRow(ctor) && TokenRow(ctor) <= m_Methods.size())
+			types.push_back((ClrTableId::TypeDef << 24) | m_Methods[TokenRow(ctor) - 1].Type);
+		else if (TokenTable(ctor) == ClrTableId::MemberRef) {
+			ClrRowReader m(*this, ClrTableId::MemberRef, TokenRow(ctor));
+			types.push_back(m.Coded(MemberRefParent));
+		}
+	}
+	return types;
+}
+
 std::wstring ClrMetadata::AttributeIl(ClrCustomAttribute const& attribute) const {
 	auto text = L".custom " + MemberName(attribute.Constructor);
 	if (attribute.Decoded) {

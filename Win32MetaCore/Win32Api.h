@@ -181,6 +181,13 @@ private:
 	uint32_t RowOf(uint32_t token);
 	uint32_t ForMachine(uint32_t row);
 	bool OfMachine(uint32_t token);
+	// whether what a token is has an attribute, by the end of its type's name ("NativeTypedefAttribute"), not decoded
+	bool HasAttribute(uint32_t token, std::wstring_view name);
+	// What a type is ("struct", "enum", "interface", "delegate", "class"), as ClrMetadata's TypeKind says, by its base type
+	// (remembered: there are few)
+	std::wstring const& TypeKindOf(uint32_t row);
+	std::unordered_map<uint32_t, std::wstring> m_KindsOfBases;
+	std::unordered_map<uint32_t, std::wstring> m_AttributeTypeNames;
 	uint32_t Made(std::string const& key, GhidraDecompiler::Type type);
 	uint32_t Primitive(GhidraDecompiler::TypeKind kind, uint32_t size, bool isSigned, char const* name = nullptr);
 	uint32_t Pointer(uint32_t target);

@@ -359,7 +359,7 @@ std::string CDeclarationView::CompareText(Win32Api::Entry const& entry) {
 	line("//" + header.substr(2));
 	// its size and alignment
 	auto summary = [&](char const* what, auto value) {
-		std::string s = "   " + padded(std::string("// ") + what, width);
+		std::string s = "   " + padded(what, width);
 		std::vector<std::string> cells;
 		for (auto const& layout : layouts)
 			cells.push_back(layout ? std::format("0x{:X}", value(*layout)) : std::string("-"));

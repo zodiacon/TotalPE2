@@ -185,7 +185,37 @@ Win32Api::Win32Api(Data& data, Machine machine) : m_Data(data), m_Machine(machin
 }
 
 // Of the machine: a type or function without [SupportedArchitecture], or with this machine in it
+bool Win32Api::HasAttribute(uint32_t token, std::wstring_view name) {
+	for (auto type : m_Data.Md.CustomAttributeTypes(token)) {
+		auto it = m_AttributeTypeNames.find(type);
+		if (it == m_AttributeTypeNames.end())
+			it = m_AttributeTypeNames.emplace(type, m_Data.Md.TypeName(type)).first;
+		if (it->second.ends_with(name))
+			return true;
+	}
+	return false;
+}
+
+std::wstring const& Win32Api::TypeKindOf(uint32_t row) {
+	static std::wstring const interface_ = L"interface", class_ = L"class";
+	auto const& types = m_Data.Md.Types();
+	if (row == 0 || row > types.size())
+		return class_;
+	auto const& t = types[row - 1];
+	if (t.Flags & 0x20)
+		return interface_;
+	if (!t.Extends)
+		return class_;
+	auto it = m_KindsOfBases.find(t.Extends);
+	if (it == m_KindsOfBases.end())
+		it = m_KindsOfBases.emplace(t.Extends, m_Data.Md.TypeKind(row)).first;
+	return it->second;
+}
+
 bool Win32Api::OfMachine(uint32_t token) {
+	// (most have no [SupportedArchitecture]: they are of all, without decoding their attributes)
+	if (!HasAttribute(token, L"SupportedArchitectureAttribute"))
+		return true;
 	auto& md = m_Data.Md;
 	for (auto const& attribute : md.CustomAttributes(token)) {
 		auto name = md.TypeName(attribute.AttributeType);
@@ -311,7 +341,7 @@ uint32_t Win32Api::TypeId(ClrSigType const& type) {
 				return Pointer(0);
 			}
 			// an interface (COM) is used through a pointer
-			auto kind = m_Data.Md.TypeKind(row);
+			auto kind = TypeKindOf(row);
 			if (kind == L"interface")
 				return Pointer(IdBit | row);
 			return IdBit | row;
@@ -344,7 +374,7 @@ bool Win32Api::Describe(uint32_t id, GhidraDecompiler::Type& type) {
 bool Win32Api::DescribeRow(uint32_t row, GhidraDecompiler::Type& type) {
 	auto& md = m_Data.Md;
 	auto token = (ClrTableId::TypeDef << 24) | row;
-	auto kind = md.TypeKind(row);
+	auto kind = TypeKindOf(row);
 	auto name = Name(row);
 	type = {};
 	type.Name = name;
@@ -402,9 +432,7 @@ bool Win32Api::DescribeRow(uint32_t row, GhidraDecompiler::Type& type) {
 			fields.push_back(f);
 
 	// a typedef (HANDLE, PWSTR, BOOL): of its value
-	bool typedefOf = false;
-	for (auto const& attribute : md.CustomAttributes(token))
-		typedefOf |= md.TypeName(attribute.AttributeType).ends_with(L"NativeTypedefAttribute");
+	bool typedefOf = HasAttribute(token, L"NativeTypedefAttribute");
 	if (typedefOf && fields.size() == 1) {
 		ClrSigType value;
 		if (!md.FieldSigType(fields[0], value))
@@ -587,6 +615,8 @@ std::unordered_map<std::string, Win32Api::NamedGuid> const& Win32Api::Guids() {
 	auto& md = m_Data.Md;
 	// [Guid(uint, ushort, ushort, byte x 8)]: after the prolog, the bytes as they are in memory
 	auto guidOf = [&](uint32_t token, std::string& bytes) {
+		if (!HasAttribute(token, L"GuidAttribute"))
+			return false;
 		for (auto const& attribute : md.CustomAttributes(token))
 			if (attribute.Value.size() >= 18 && md.TypeName(attribute.AttributeType).ends_with(L"GuidAttribute")) {
 				bytes.assign((char const*)attribute.Value.data() + 2, 16);
@@ -598,7 +628,7 @@ std::unordered_map<std::string, Win32Api::NamedGuid> const& Win32Api::Guids() {
 	// the interfaces first (an IID names its interface), then the classes, then the constants
 	for (int pass = 0; pass < 2; pass++)
 		for (uint32_t t = 1; t <= md.Types().size(); t++) {
-			auto kind = md.TypeKind(t);
+			auto kind = TypeKindOf(t);
 			if ((pass == 0) != (kind == L"interface") || (pass == 1 && kind != L"struct"))
 				continue;
 			if (guidOf((ClrTableId::TypeDef << 24) | t, bytes))
@@ -677,7 +707,7 @@ uint32_t Win32Api::TypeByName(std::string const& name) {
 		return 0;
 	for (auto row : it->second) {
 		auto& t = m_Data.Md.Types()[row - 1];
-		auto kind = m_Data.Md.TypeKind(row);
+		auto kind = TypeKindOf(row);
 		if (t.Enclosing == 0 && kind != L"class" && OfMachine((ClrTableId::TypeDef << 24) | row))
 			return kind == L"interface" ? IdBit | row : IdBit | row;
 	}
@@ -715,7 +745,7 @@ std::vector<Win32Api::Entry> const& Win32Api::Entries() {
 		auto const& t = md.Types()[row - 1];
 		if (t.Enclosing)
 			continue;
-		auto kind = md.TypeKind(row);
+		auto kind = TypeKindOf(row);
 		Entry::Kinds entry;
 		if (kind == L"enum")
 			entry = Entry::Kinds::Enum;
@@ -724,9 +754,7 @@ std::vector<Win32Api::Entry> const& Win32Api::Entries() {
 		else if (kind == L"interface")
 			entry = Entry::Kinds::Interface;
 		else if (kind == L"struct") {
-			bool typedefOf = false;
-			for (auto const& attribute : md.CustomAttributes((ClrTableId::TypeDef << 24) | row))
-				typedefOf |= md.TypeName(attribute.AttributeType).ends_with(L"NativeTypedefAttribute");
+			bool typedefOf = HasAttribute((ClrTableId::TypeDef << 24) | row, L"NativeTypedefAttribute");
 			entry = typedefOf ? Entry::Kinds::Typedef : (t.Flags & 0x18) == 0x10 ? Entry::Kinds::Union : Entry::Kinds::Struct;
 		}
 		else
@@ -746,7 +774,27 @@ std::vector<Win32Api::Entry> const& Win32Api::Entries() {
 				if ((md.Fields()[f - 1].Flags & 0x10) && OfMachine((ClrTableId::Field << 24) | f))
 					m_Entries.push_back({ Narrow(md.Fields()[f - 1].Name), Entry::Kinds::Constant, where, ns, f });
 		}
-	std::stable_sort(m_Entries.begin(), m_Entries.end(), [](auto const& a, auto const& b) { return _stricmp(a.Name.c_str(), b.Name.c_str()) < 0; });
+	// by name, not case sensitive (as _stricmp compares: in lowercase); of the same name, in the order they were added. The
+	// names in lowercase sorted, then the entries moved once.
+	{
+		std::vector<std::string> keys;
+		keys.reserve(m_Entries.size());
+		for (auto const& e : m_Entries) {
+			std::string key(e.Name);
+			for (auto& c : key)
+				c = (char)tolower((unsigned char)c);
+			keys.push_back(std::move(key));
+		}
+		std::vector<uint32_t> order(m_Entries.size());
+		for (uint32_t i = 0; i < order.size(); i++)
+			order[i] = i;
+		std::ranges::stable_sort(order, [&](uint32_t a, uint32_t b) { return keys[a] < keys[b]; });
+		std::vector<Entry> sorted;
+		sorted.reserve(m_Entries.size());
+		for (auto i : order)
+			sorted.push_back(std::move(m_Entries[i]));
+		m_Entries = std::move(sorted);
+	}
 	for (size_t i = 0; i < m_Entries.size(); i++)
 		m_EntryIndex.try_emplace(m_Entries[i].Name, i);
 	return m_Entries;
@@ -1481,6 +1529,14 @@ void Win32Api::AddLayout(uint32_t id, GhidraDecompiler::Type const& type, uint32
 			count = ft.Count;
 		}
 		auto at = base + f.Offset;
+		// a type nested in another (unnamed in C: "union { ... } Anonymous"): by what it is, not the name made for it
+		auto typeId = element ? element : f.Type;
+		if (IsId(typeId) && !(typeId & MadeBit)) {
+			auto row = typeId & ~IdBit;
+			GhidraDecompiler::Type nested;
+			if (row && row <= md.Types().size() && md.Types()[row - 1].Enclosing && Describe(typeId, nested))
+				typeText = nested.Kind == Kind::Union ? "union" : "struct";
+		}
 		items.push_back({ LayoutItem::Kinds::Field, depth, path + f.Name, typeText, name, at, size, Referred(f.Type) });
 		// its bit fields
 		if (i < fieldRows.size())

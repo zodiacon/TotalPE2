@@ -269,6 +269,13 @@ TEST_CASE("Win32 API: the layout of a struct", "[win32api]") {
 	CHECK(field->Depth == 2);
 	CHECK(field->Offset == 0);
 	CHECK(field->Size == 2);
+	// (the union and the struct in it, unnamed: by what they are)
+	auto anonymous = std::ranges::find(layout->Items, std::string("Anonymous"), &Win32Api::LayoutItem::Path);
+	REQUIRE(anonymous != layout->Items.end());
+	CHECK(anonymous->Type == "union");
+	auto inner = std::ranges::find(layout->Items, std::string("Anonymous.Anonymous"), &Win32Api::LayoutItem::Path);
+	REQUIRE(inner != layout->Items.end());
+	CHECK(inner->Type == "struct");
 	auto pageSize = std::ranges::find(layout->Items, std::string("dwPageSize"), &Win32Api::LayoutItem::Path);
 	REQUIRE(pageSize != layout->Items.end());
 	CHECK(pageSize->Offset == 4);

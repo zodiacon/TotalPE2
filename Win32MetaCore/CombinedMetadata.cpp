@@ -181,6 +181,16 @@ std::vector<ClrCustomAttribute> CombinedMetadata::CustomAttributes(uint32_t toke
 	return attributes;
 }
 
+std::vector<uint32_t> CombinedMetadata::CustomAttributeTypes(uint32_t token) const {
+	auto [module, local] = Local(token);
+	if (!module)
+		return {};
+	auto types = module->Md.CustomAttributeTypes(local);
+	for (auto& t : types)
+		t = Global(*module, t);
+	return types;
+}
+
 std::wstring CombinedMetadata::AttributeCSharp(ClrCustomAttribute const& attribute) const {
 	auto [module, parent] = Local(attribute.Parent);
 	if (!module)
