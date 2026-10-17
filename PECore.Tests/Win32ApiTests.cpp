@@ -362,3 +362,46 @@ TEST_CASE("Win32 API: the metadata's packages", "[.][metadata-packages]") {
 		::DeleteFileW((folder + L"\\" + name).c_str());
 	::RemoveDirectoryW(folder.c_str());
 }
+
+TEST_CASE("Win32 API: declarations in other languages", "[win32api]") {
+	auto api = Api();
+	if (!api)
+		SKIP("no Windows.Win32.winmd next to the executable");
+	using L = Win32Api::Language;
+	auto in = [&](char const* name, L language) {
+		auto entry = api->Find(name);
+		REQUIRE(entry);
+		return api->DeclarationIn(*entry, language);
+	};
+	auto has = [](std::string const& text, char const* part) {
+		INFO(text);
+		CHECK(text.find(part) != std::string::npos);
+	};
+	// a function
+	has(in("CreateFileW", L::CSharp), "[DllImport(\"KERNEL32.dll\", ExactSpelling = true, SetLastError = true)]");
+	has(in("CreateFileW", L::CSharp), "public static extern unsafe HANDLE CreateFileW(PWSTR lpFileName, uint dwDesiredAccess");
+	has(in("CreateFileW", L::Rust), "pub fn CreateFileW(lpFileName: PWSTR, dwDesiredAccess: u32");
+	has(in("CreateFileW", L::Rust), "#[link(name = \"kernel32\")]");
+	has(in("CreateFileW", L::Python), "CreateFileW = ctypes.WinDLL(\"kernel32\", use_last_error=True).CreateFileW");
+	has(in("CreateFileW", L::Python), "ctypes.POINTER(SECURITY_ATTRIBUTES)");
+	// what it uses
+	has(in("CreateFileW", L::CSharp), "it uses: FILE_CREATION_DISPOSITION, FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_MODE, HANDLE, PWSTR, SECURITY_ATTRIBUTES");
+	// a struct, and the types nested in it
+	has(in("SECURITY_ATTRIBUTES", L::CSharp), "public void* lpSecurityDescriptor;");
+	has(in("SECURITY_ATTRIBUTES", L::Python), "(\"lpSecurityDescriptor\", ctypes.c_void_p),");
+	has(in("SYSTEM_INFO", L::Rust), "pub union SYSTEM_INFO_Anonymous {");
+	has(in("SYSTEM_INFO", L::Rust), "pub Anonymous: SYSTEM_INFO_Anonymous,");
+	// an enum, a typedef, constants
+	has(in("FILE_SHARE_MODE", L::CSharp), "[Flags]");
+	has(in("FILE_SHARE_MODE", L::CSharp), "FILE_SHARE_WRITE = 0x2,");
+	has(in("FILE_SHARE_MODE", L::Rust), "pub const FILE_SHARE_WRITE: FILE_SHARE_MODE = 0x2u32;");
+	has(in("HANDLE", L::Rust), "pub type HANDLE = *mut c_void;");
+	has(in("HANDLE", L::Python), "HANDLE = ctypes.c_void_p");
+	has(in("E_FAIL", L::CSharp), "public const int E_FAIL = unchecked((int)0x80004005);");
+	has(in("MAX_PATH", L::Python), "MAX_PATH = 0x104");
+	has(in("FOLDERID_Desktop", L::CSharp), "new Guid(\"B4BFCC3A-DB2C-424C-B029-7FE99A87C641\")");
+	// a callback, an interface
+	has(in("WNDPROC", L::Python), "WNDPROC = ctypes.WINFUNCTYPE(LRESULT, HWND, ctypes.c_uint32, WPARAM, LPARAM)");
+	has(in("IClassFactory", L::CSharp), "[ComImport, Guid(\"00000001-0000-0000-C000-000000000046\")");
+	has(in("IClassFactory", L::Rust), "pub base__: IUnknown_Vtbl,");
+}

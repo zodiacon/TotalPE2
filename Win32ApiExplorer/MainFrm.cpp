@@ -916,6 +916,8 @@ void CMainFrame::UpdateUIState() {
 	UISetRadioMenuItem(ID_VIEW_SEARCH + std::clamp(page, 0, 4), ID_VIEW_SEARCH, ID_VIEW_HISTORY);
 	UIEnable(ID_VIEW_CLEARHISTORY, !m_HistoryNames.empty());
 	UIEnable(ID_EDIT_FAVORITE, shows);
+	for (auto id : { ID_EDIT_COPYCSHARP, ID_EDIT_COPYRUST, ID_EDIT_COPYPYTHON })
+		UIEnable(id, CopyTarget() >= 0);
 	UISetCheck(ID_EDIT_FAVORITE, shows && std::ranges::find(m_FavoriteNames, m_Tabs[target].View->Name()) != m_FavoriteNames.end());
 	UISetRadioMenuItem(ID_MACHINE_X86 + (int)m_Machine, ID_MACHINE_X86, ID_MACHINE_ARM64);
 	static_assert(ID_SHOW_LAYOUT == ID_SHOW_DECLARATION + 1 && ID_SHOW_COMPARE == ID_SHOW_DECLARATION + 2);
@@ -1067,6 +1069,33 @@ LRESULT CMainFrame::OnViewNavigator(WORD, WORD id, HWND, BOOL&) {
 
 LRESULT CMainFrame::OnQuickOpen(WORD, WORD, HWND, BOOL&) {
 	m_QuickOpen.Show();
+	return 0;
+}
+
+int CMainFrame::CopyTarget() const {
+	if (m_MenuTab >= 0 && m_MenuTab < (int)m_Tabs.size())
+		return m_Tabs[m_MenuTab].View->Entry();
+	auto view = FocusedView();
+	return view ? view->Entry() : -1;
+}
+
+// its declaration in C#, Rust or Python, to the clipboard
+LRESULT CMainFrame::OnCopyAs(WORD, WORD id, HWND, BOOL&) {
+	auto entry = CopyTarget();
+	m_MenuTab = -1;
+	if (entry < 0)
+		return 0;
+	static_assert(ID_EDIT_COPYRUST == ID_EDIT_COPYCSHARP + 1 && ID_EDIT_COPYPYTHON == ID_EDIT_COPYCSHARP + 2);
+	auto language = (Win32Api::Language)(id - ID_EDIT_COPYCSHARP);
+	auto const& e = m_Api->Entries()[entry];
+	auto text = m_Api->DeclarationIn(e, language);
+	if (text.empty()) {
+		::MessageBeep(MB_ICONWARNING);
+		return 0;
+	}
+	ClipboardHelper::CopyText(m_hWnd, Wide(text).c_str());
+	PCWSTR const names[] = { L"C#", L"Rust", L"Python" };
+	CStatusBarCtrl(m_hWndStatusBar).SetText(0, std::format(L"{} copied as {}", Wide(e.Name), names[(int)language]).c_str());
 	return 0;
 }
 
@@ -1227,18 +1256,12 @@ LRESULT CMainFrame::OnGoToDefinition(WORD, WORD id, HWND, BOOL&) {
 	return 0;
 }
 
-// in the tree (a constant, which the tree does not have: in the search)
+// in the tree
 LRESULT CMainFrame::OnReveal(WORD, WORD, HWND, BOOL&) {
 	auto target = TargetTab();
 	auto entry = target >= 0 ? m_Tabs[target].View->Entry() : -1;
 	if (entry < 0)
 		return 0;
-	if (m_Api->Entries()[entry].Kind == Win32Api::Entry::Kinds::Constant) {
-		ShowNavigatorPage(0);
-		if (m_Search->SelectEntry(entry))
-			m_Search->SetFocus();
-		return 0;
-	}
 	ShowNavigatorPage(1);
 	if (m_Namespaces->SelectEntry(entry))
 		m_Namespaces->SetFocus();

@@ -6,7 +6,7 @@ namespace {
 	using Kinds = Win32Api::Entry::Kinds;
 
 	// the folders of a namespace, in their order
-	PCWSTR const s_Groups[] = { L"Functions", L"Interfaces", L"Structs", L"Unions", L"Enums", L"Callbacks", L"Typedefs" };
+	PCWSTR const s_Groups[] = { L"Functions", L"Interfaces", L"Structs", L"Unions", L"Enums", L"Callbacks", L"Typedefs", L"Constants" };
 
 	std::wstring Wide(std::string const& text) {
 		return std::wstring(text.begin(), text.end());	// (the names of the metadata are ASCII)
@@ -25,6 +25,7 @@ int CNamespacePane::GroupOf(Kinds kind) {
 		case Kinds::Enum: return 4;
 		case Kinds::Callback: return 5;
 		case Kinds::Typedef: return 6;
+		case Kinds::Constant: return 7;
 	}
 	return -1;
 }

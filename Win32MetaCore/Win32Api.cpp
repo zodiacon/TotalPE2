@@ -1698,3 +1698,482 @@ std::vector<size_t> Win32Api::RelatedOf(size_t entry) {
 				related.push_back(i);
 	return related;
 }
+
+//
+// Declarations in other languages
+//
+
+namespace {
+	// the primitive types of signatures (ELEMENT_TYPE): C#, Rust, Python (ctypes)
+	char const* const* LanguagePrimitive(uint8_t element) {
+		static char const* const types[][3] = {
+			{ "bool", "bool", "ctypes.c_bool" },		// 0x02
+			{ "char", "u16", "ctypes.c_wchar" },		// 0x03
+			{ "sbyte", "i8", "ctypes.c_int8" },			// 0x04
+			{ "byte", "u8", "ctypes.c_uint8" },			// 0x05
+			{ "short", "i16", "ctypes.c_int16" },		// 0x06
+			{ "ushort", "u16", "ctypes.c_uint16" },		// 0x07
+			{ "int", "i32", "ctypes.c_int32" },			// 0x08
+			{ "uint", "u32", "ctypes.c_uint32" },		// 0x09
+			{ "long", "i64", "ctypes.c_int64" },		// 0x0A
+			{ "ulong", "u64", "ctypes.c_uint64" },		// 0x0B
+			{ "float", "f32", "ctypes.c_float" },		// 0x0C
+			{ "double", "f64", "ctypes.c_double" },		// 0x0D
+		};
+		static char const* const native[][3] = {
+			{ "nint", "isize", "ctypes.c_ssize_t" },	// 0x18
+			{ "nuint", "usize", "ctypes.c_size_t" },	// 0x19
+		};
+		if (element >= 0x02 && element <= 0x0D)
+			return types[element - 0x02];
+		if (element == 0x18 || element == 0x19)
+			return native[element - 0x18];
+		return nullptr;
+	}
+
+	// a name that is a keyword of the language: as it can be a name
+	std::string Escaped(std::string const& name, Win32Api::Language language) {
+		static std::set<std::string> const csharp = { "abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char",
+			"checked", "class", "const", "continue", "decimal", "default", "delegate", "do", "double", "else", "enum", "event",
+			"explicit", "extern", "false", "finally", "fixed", "float", "for", "foreach", "goto", "if", "implicit", "in", "int",
+			"interface", "internal", "is", "lock", "long", "namespace", "new", "null", "object", "operator", "out", "override",
+			"params", "private", "protected", "public", "readonly", "ref", "return", "sbyte", "sealed", "short", "sizeof",
+			"stackalloc", "static", "string", "struct", "switch", "this", "throw", "true", "try", "typeof", "uint", "ulong",
+			"unchecked", "unsafe", "ushort", "using", "virtual", "void", "volatile", "while" };
+		static std::set<std::string> const rust = { "as", "break", "const", "continue", "crate", "else", "enum", "extern",
+			"false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref", "return",
+			"static", "struct", "super", "trait", "true", "type", "unsafe", "use", "where", "while", "async", "await", "dyn",
+			"abstract", "become", "box", "do", "final", "macro", "override", "priv", "typeof", "unsized", "virtual", "yield", "try" };
+		if (language == Win32Api::Language::CSharp && csharp.contains(name))
+			return "@" + name;
+		if (language == Win32Api::Language::Rust && (rust.contains(name)))
+			return name == "self" || name == "Self" || name == "crate" || name == "super" ? name + "_" : "r#" + name;
+		return name;
+	}
+}
+
+std::string Win32Api::DeclarationIn(Entry const& entry, Language language) {
+	auto& md = m_Data.Md;
+	bool const cs = language == Language::CSharp, rs = language == Language::Rust, py = language == Language::Python;
+	auto const comment = py ? std::string("# ") : std::string("// ");
+	auto const index = (int)language;
+	std::set<std::string> uses;			// the types it refers to (of the metadata, not nested in it)
+	std::vector<uint32_t> nested;		// the types nested in it that it uses, to declare too
+	std::set<uint32_t> nestedSeen;
+
+	// a type of a signature (constant: of what a pointer points to)
+	std::function<std::string(ClrSigType const&, bool)> typeOf = [&](ClrSigType const& t, bool isConst) -> std::string {
+		if (auto names = LanguagePrimitive(t.Element))
+			return names[index];
+		switch (t.Element) {
+			case 0x01:
+				return cs ? "void" : rs ? "c_void" : "None";
+			case 0x0F: case 0x10:
+			{
+				auto const& inner = t.Inner.empty() ? ClrSigType{ 0x01 } : t.Inner[0];
+				auto target = typeOf(inner, false);
+				if (cs)
+					return target + "*";
+				if (rs)
+					return (isConst ? "*const " : "*mut ") + target;
+				return inner.Element == 0x01 ? "ctypes.c_void_p" : "ctypes.POINTER(" + target + ")";
+			}
+			case 0x1D: case 0x14:
+			{
+				// (an array, not of a struct's field: a pointer to its first)
+				ClrSigType pointer{ 0x0F };
+				if (!t.Inner.empty())
+					pointer.Inner = { t.Inner[0] };
+				return typeOf(pointer, isConst);
+			}
+			case 0x0E:
+				return cs ? "string" : rs ? "*const u16" : "ctypes.c_wchar_p";
+			case 0x11: case 0x12:
+			{
+				auto row = RowOf(t.Token);
+				if (!row) {
+					// of another assembly: a GUID, or what a pointer is
+					if (md.TypeName(t.Token).ends_with(L"System.Guid"))
+						return cs ? "Guid" : (uses.insert("GUID"), "GUID");
+					return cs ? "nint" : rs ? "*mut c_void" : "ctypes.c_void_p";
+				}
+				auto name = Name(row);
+				if (TypeKindOf(row) == L"interface") {
+					// (a COM object: through a pointer)
+					if (cs) {
+						uses.insert(name);
+						return name;
+					}
+					return rs ? "*mut c_void" : "ctypes.c_void_p";
+				}
+				if (md.Types()[row - 1].Enclosing) {
+					if (nestedSeen.insert(row).second)
+						nested.push_back(row);
+				}
+				else
+					uses.insert(name);
+				return name;
+			}
+		}
+		return cs ? "nint" : rs ? "isize" : "ctypes.c_ssize_t";
+	};
+
+	// a method's result and parameters: "HANDLE", { "PCWSTR lpFileName", ... } in the language's way
+	struct Signature {
+		std::string Result;
+		std::vector<std::pair<std::string, std::string>> Parameters;	// type, name
+		bool Void{ false };
+	};
+	auto signatureOf = [&](uint32_t method) {
+		Signature s;
+		ClrSigType result;
+		std::vector<ClrSigType> params;
+		if (!md.MethodSigTypes(method, result, params))
+			return s;
+		s.Void = result.Element == 0x01;
+		s.Result = typeOf(result, false);
+		for (size_t i = 0; i < params.size(); i++) {
+			auto attributes = AttributesOf(md.ParamToken(method, (uint32_t)i + 1));
+			bool isConst = std::ranges::any_of(attributes, [](auto const& a) { return a.Name == "Const"; });
+			auto name = Narrow(md.ParamName(method, (uint32_t)i + 1));
+			s.Parameters.emplace_back(typeOf(params[i], isConst), Escaped(name.empty() ? std::format("param{}", i + 1) : name, language));
+		}
+		return s;
+	};
+	auto parameterList = [&](Signature const& s, bool withThis = false) {
+		std::string list;
+		if (withThis)
+			list = cs ? "" : rs ? "this: *mut c_void" : "ctypes.c_void_p";
+		for (auto const& [type, name] : s.Parameters) {
+			if (!list.empty())
+				list += ", ";
+			list += cs ? type + " " + name : rs ? name + ": " + type : type;
+		}
+		return list;
+	};
+	// a Rust function type: "unsafe extern "system" fn(...) -> T"
+	auto rustFunction = [&](Signature const& s, bool withThis) {
+		return std::format("unsafe extern \"system\" fn({}){}", parameterList(s, withThis), s.Void ? "" : " -> " + s.Result);
+	};
+
+	// a struct or union (its fields; those nested in it are declared too)
+	auto structOf = [&](uint32_t row) {
+		auto name = Name(row);
+		auto const& t = md.Types()[row - 1];
+		bool explicitLayout = (t.Flags & 0x18) == 0x10;
+		GhidraDecompiler::Type described;
+		bool isUnion = Describe(IdBit | row, described) && described.Kind == Kind::Union;
+		auto [packing, classSize] = md.ClassLayout(row);
+		std::string text;
+		if (cs)
+			text += std::format("[StructLayout(LayoutKind.{}{})]\r\npublic unsafe struct {}\r\n{{\r\n", explicitLayout ? "Explicit" : "Sequential",
+				packing ? std::format(", Pack = {}", packing) : "", name);
+		else if (rs)
+			text += std::format("#[repr(C{})]\r\n#[derive(Clone, Copy)]\r\npub {} {} {{\r\n", packing ? std::format(", packed({})", packing) : "",
+				isUnion ? "union" : "struct", name);
+		else
+			text += std::format("class {}(ctypes.{}):\r\n{}    _fields_ = [\r\n", name, isUnion ? "Union" : "Structure",
+				packing ? std::format("    _pack_ = {}\r\n", packing) : "");
+		for (auto f : md.FieldsOf(row)) {
+			if (md.Fields()[f - 1].Flags & 0x10)
+				continue;
+			ClrSigType ft;
+			if (!md.FieldSigType(f, ft))
+				continue;
+			auto fieldName = Escaped(Narrow(md.Fields()[f - 1].Name), language);
+			auto attributes = AttributesOf((ClrTableId::Field << 24) | f);
+			bool isConst = std::ranges::any_of(attributes, [](auto const& a) { return a.Name == "Const"; });
+			// an array: of its count
+			std::string declaration;
+			if (ft.Element == 0x14 && !ft.Inner.empty() && ft.Count) {
+				auto element = typeOf(ft.Inner[0], false);
+				if (cs)
+					declaration = LanguagePrimitive(ft.Inner[0].Element) ? std::format("public fixed {} {}[{}];", element, fieldName, ft.Count) :
+						std::format("[MarshalAs(UnmanagedType.ByValArray, SizeConst = {})] public {}[] {};", ft.Count, element, fieldName);
+				else if (rs)
+					declaration = std::format("pub {}: [{}; {}],", fieldName, element, ft.Count);
+				else
+					declaration = std::format("(\"{}\", {} * {}),", fieldName, element, ft.Count);
+			}
+			else {
+				auto type = typeOf(ft, isConst);
+				declaration = cs ? std::format("public {} {};", type, fieldName) : rs ? std::format("pub {}: {},", fieldName, type) :
+					std::format("(\"{}\", {}),", fieldName, type);
+			}
+			if (cs && explicitLayout)
+				declaration = std::format("[FieldOffset({})] ", md.FieldOffset(f).value_or(0)) + declaration;
+			text += (py ? "        " : "    ") + declaration + "\r\n";
+		}
+		text += cs || rs ? "}\r\n" : "    ]\r\n";
+		return text;
+	};
+
+	std::string body;
+	auto token = ((entry.Kind == Entry::Kinds::Function ? ClrTableId::MethodDef : entry.Kind == Entry::Kinds::Constant ?
+		ClrTableId::Field : ClrTableId::TypeDef) << 24) | entry.Row;
+	switch (entry.Kind) {
+		case Entry::Kinds::Function:
+		{
+			auto native = md.PInvoke(entry.Row);
+			auto module = native ? Narrow(native->Module) : std::string();
+			auto exported = native && !native->EntryPoint.empty() ? Narrow(native->EntryPoint) : entry.Name;
+			bool lastError = native && (native->Flags & 0x40);
+			auto s = signatureOf(entry.Row);
+			auto library = module;
+			for (auto& c : library)
+				c = (char)tolower((unsigned char)c);
+			if (library.ends_with(".dll"))
+				library.resize(library.size() - 4);
+			if (cs)
+				body = std::format("[DllImport(\"{}\", ExactSpelling = true{}{})]\r\npublic static extern unsafe {} {}({});\r\n", module,
+					exported != entry.Name ? std::format(", EntryPoint = \"{}\"", exported) : "", lastError ? ", SetLastError = true" : "",
+					s.Result, entry.Name, parameterList(s));
+			else if (rs)
+				body = std::format("#[link(name = \"{}\")]\r\nextern \"system\" {{\r\n    {}pub fn {}({}){};\r\n}}\r\n", library,
+					exported != entry.Name ? std::format("#[link_name = \"{}\"]\r\n    ", exported) : "", entry.Name, parameterList(s),
+					s.Void ? "" : " -> " + s.Result);
+			else
+				body = std::format("{} = ctypes.WinDLL(\"{}\"{}){}\r\n{}.argtypes = [{}]\r\n{}.restype = {}\r\n", entry.Name, library,
+					lastError ? ", use_last_error=True" : "", exported.starts_with("#") ? std::format("[{}]", exported.substr(1)) : "." + exported,
+					entry.Name, parameterList(s), entry.Name, s.Result);
+			break;
+		}
+
+		case Entry::Kinds::Struct: case Entry::Kinds::Union:
+			body = structOf(entry.Row);
+			break;
+
+		case Entry::Kinds::Enum:
+		{
+			GhidraDecompiler::Type type;
+			if (!Describe(IdBit | entry.Row, type) || type.Kind != Kind::Enum)
+				break;
+			auto size = type.Size;
+			int sizeIndex = size == 1 ? 0 : size == 2 ? 1 : size == 8 ? 3 : 2;
+			static char const* const underlying[2][4][3] = {
+				{ { "byte", "u8", "ctypes.c_uint8" }, { "ushort", "u16", "ctypes.c_uint16" }, { "uint", "u32", "ctypes.c_uint32" }, { "ulong", "u64", "ctypes.c_uint64" } },
+				{ { "sbyte", "i8", "ctypes.c_int8" }, { "short", "i16", "ctypes.c_int16" }, { "int", "i32", "ctypes.c_int32" }, { "long", "i64", "ctypes.c_int64" } },
+			};
+			auto base = underlying[type.Signed ? 1 : 0][sizeIndex][index];
+			uint64_t mask = size >= 8 ? ~0ULL : (1ULL << (size * 8)) - 1;
+			auto literal = [&](uint64_t value) {
+				value &= mask;
+				// (a negative value of a signed one: as a number of its own, not of bits)
+				if (type.Signed && (value >> (size * 8 - 1)) & 1) {
+					auto negative = (int64_t)(value | ~mask);
+					return cs ? std::format("unchecked(({}){})", base, negative) : std::format("{}", negative);
+				}
+				return std::format("0x{:X}", value);
+			};
+			if (cs) {
+				body = std::format("{}public enum {} : {}\r\n{{\r\n", type.Exact ? "" : "[Flags]\r\n", entry.Name, base);
+				for (auto const& [name, value] : type.Values)
+					body += std::format("    {} = {},\r\n", name, literal(value));
+				body += "}\r\n";
+			}
+			else if (rs) {
+				body = std::format("pub type {} = {};\r\n", entry.Name, base);
+				for (auto const& [name, value] : type.Values)
+					body += std::format("pub const {}: {} = {}{};\r\n", name, entry.Name, literal(value), literal(value).starts_with("-") ? "" : base);
+			}
+			else {
+				body = std::format("{} = {}\r\n", entry.Name, base);
+				for (auto const& [name, value] : type.Values)
+					body += std::format("{} = {}\r\n", name, literal(value));
+			}
+			break;
+		}
+
+		case Entry::Kinds::Typedef:
+		{
+			// (a struct of one field, its value)
+			auto fields = md.FieldsOf(entry.Row);
+			ClrSigType value;
+			if (fields.empty() || !md.FieldSigType(fields[0], value))
+				break;
+			auto type = typeOf(value, false);
+			body = cs ? std::format("public unsafe struct {}\r\n{{\r\n    public {} Value;\r\n}}\r\n", entry.Name, type) :
+				rs ? std::format("pub type {} = {};\r\n", entry.Name, type) : std::format("{} = {}\r\n", entry.Name, type);
+			break;
+		}
+
+		case Entry::Kinds::Callback:
+			for (auto m : md.MethodsOf(entry.Row))
+				if (md.Methods()[m - 1].Name == L"Invoke") {
+					auto s = signatureOf(m);
+					if (cs)
+						body = std::format("[UnmanagedFunctionPointer(CallingConvention.Winapi)]\r\npublic unsafe delegate {} {}({});\r\n", s.Result,
+							entry.Name, parameterList(s));
+					else if (rs)
+						body = std::format("pub type {} = Option<{}>;\r\n", entry.Name, rustFunction(s, false));
+					else
+						body = std::format("{} = ctypes.WINFUNCTYPE({}{}{})\r\n", entry.Name, s.Result, s.Parameters.empty() ? "" : ", ", parameterList(s));
+					break;
+				}
+			break;
+
+		case Entry::Kinds::Interface:
+		{
+			// its methods, and its bases' (the vtable's order); its IID
+			std::string guid;
+			for (auto const& a : md.CustomAttributes(token))
+				if (a.Value.size() >= 18 && md.TypeName(a.AttributeType).ends_with(L"GuidAttribute")) {
+					auto b = a.Value.data() + 2;
+					guid = std::format("{:08X}-{:04X}-{:04X}-{:02X}{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}", *(uint32_t const*)b,
+						*(uint16_t const*)(b + 4), *(uint16_t const*)(b + 6), b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]);
+				}
+			std::vector<uint32_t> bases;
+			for (auto t : md.Interfaces(entry.Row))
+				if (auto base = RowOf(t))
+					bases.push_back(base);
+			if (cs) {
+				// (ComImport: the methods of its bases but IUnknown's, then its own)
+				std::vector<uint32_t> rows;
+				std::set<uint32_t> seen;
+				auto collect = [&](auto&& self, uint32_t row) -> void {
+					if (!seen.insert(row).second)
+						return;
+					for (auto t : md.Interfaces(row))
+						if (auto base = RowOf(t))
+							self(self, base);
+					if (Name(row) != "IUnknown")
+						rows.push_back(row);
+				};
+				collect(collect, entry.Row);
+				body = std::format("[ComImport, Guid(\"{}\"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]\r\npublic unsafe interface {}\r\n{{\r\n",
+					guid, entry.Name);
+				for (auto row : rows)
+					for (auto m : md.MethodsOf(row)) {
+						auto s = signatureOf(m);
+						body += std::format("    [PreserveSig] {} {}({});\r\n", s.Result, Narrow(md.Methods()[m - 1].Name), parameterList(s));
+					}
+				body += "}\r\n";
+			}
+			else if (rs) {
+				// its vtable: its base's first
+				body = std::format("#[repr(C)]\r\npub struct {}_Vtbl {{\r\n", entry.Name);
+				if (!bases.empty()) {
+					auto baseName = Name(bases[0]);
+					body += std::format("    pub base__: {}_Vtbl,\r\n", baseName);
+					uses.insert(baseName + "_Vtbl");
+				}
+				for (auto m : md.MethodsOf(entry.Row))
+					body += std::format("    pub {}: {},\r\n", Narrow(md.Methods()[m - 1].Name), rustFunction(signatureOf(m), true));
+				body += "}\r\n";
+			}
+			else {
+				// its vtable, all of it (its bases' methods first)
+				std::vector<uint32_t> methods;
+				std::set<uint32_t> seen;
+				auto collect = [&](auto&& self, uint32_t row) -> void {
+					if (!seen.insert(row).second)
+						return;
+					for (auto t : md.Interfaces(row))
+						if (auto base = RowOf(t))
+							self(self, base);
+					for (auto m : md.MethodsOf(row))
+						methods.push_back(m);
+				};
+				collect(collect, entry.Row);
+				body = std::format("class {}Vtbl(ctypes.Structure):\r\n    _fields_ = [\r\n", entry.Name);
+				for (auto m : methods) {
+					auto s = signatureOf(m);
+					body += std::format("        (\"{}\", ctypes.WINFUNCTYPE({}, {})),\r\n", Narrow(md.Methods()[m - 1].Name), s.Result,
+						parameterList(s, true));
+				}
+				body += "    ]\r\n";
+			}
+			if (!guid.empty() && !cs)
+				body += comment + "IID_" + entry.Name + ": {" + guid + "}\r\n";
+			break;
+		}
+
+		case Entry::Kinds::Constant:
+		{
+			ClrSigType ft;
+			md.FieldSigType(entry.Row, ft);
+			// its type: a typedef's or an enum's (HRESULT): of its value
+			auto valueType = ft;
+			for (int depth = 0; depth < 4 && (valueType.Element == 0x11 || valueType.Element == 0x12); depth++) {
+				auto row = RowOf(valueType.Token);
+				if (!row)
+					break;
+				if (TypeKindOf(row) == L"enum") {
+					if (auto info = md.EnumInfo((ClrTableId::TypeDef << 24) | row))
+						valueType = ClrSigType{ info->Underlying };
+					break;
+				}
+				auto fields = md.FieldsOf(row);
+				ClrSigType inner;
+				if (fields.size() != 1 || !md.FieldSigType(fields[0], inner))
+					break;
+				valueType = inner;
+			}
+			if (auto value = md.ConstantInteger(token)) {
+				auto names = LanguagePrimitive(valueType.Element);
+				auto type = names ? names[index] : (cs ? "int" : rs ? "i32" : "ctypes.c_int32");
+				bool isSigned = valueType.Element == 0x04 || valueType.Element == 0x06 || valueType.Element == 0x08 || valueType.Element == 0x0A ||
+					valueType.Element == 0x18;
+				int bits = valueType.Element == 0x04 || valueType.Element == 0x05 ? 8 : valueType.Element == 0x06 || valueType.Element == 0x07 ? 16 :
+					valueType.Element == 0x0A || valueType.Element == 0x0B || valueType.Element == 0x18 || valueType.Element == 0x19 ? 64 : 32;
+				auto mask = bits == 64 ? ~0ULL : (1ULL << bits) - 1;
+				auto v = (uint64_t)*value & mask;
+				auto text = isSigned && *value < 0 ? std::format("{}", *value) : v < 10 ? std::format("{}", v) : std::format("0x{:X}", v);
+				if (cs)
+					body = std::format("public const {} {} = {};\r\n", type, entry.Name, isSigned && *value < 0 && v > 0x7FFFFFFF ?
+						std::format("unchecked(({})0x{:X})", type, v) : text);
+				else if (rs)
+					body = std::format("pub const {}: {} = {};\r\n", entry.Name, type, text);
+				else
+					body = std::format("{} = {}\r\n", entry.Name, py && isSigned && *value < 0 ? std::format("{}", *value) : text);
+				break;
+			}
+			if (auto value = Narrow(md.ConstantCSharp(token)); !value.empty()) {
+				body = cs ? std::format("public const string {} = {};\r\n", entry.Name, value) :
+					rs ? std::format("pub const {}: &str = {};\r\n", entry.Name, value) : std::format("{} = {}\r\n", entry.Name, value);
+				break;
+			}
+			// a GUID
+			for (auto const& a : md.CustomAttributes(token))
+				if (a.Value.size() >= 18 && md.TypeName(a.AttributeType).ends_with(L"GuidAttribute")) {
+					auto b = a.Value.data() + 2;
+					auto guid = std::format("{:08X}-{:04X}-{:04X}-{:02X}{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}", *(uint32_t const*)b,
+						*(uint16_t const*)(b + 4), *(uint16_t const*)(b + 6), b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]);
+					auto hex = guid;
+					std::erase(hex, '-');
+					if (rs)
+						uses.insert("GUID");
+					body = cs ? std::format("public static readonly Guid {} = new Guid(\"{}\");\r\n", entry.Name, guid) :
+						rs ? std::format("pub const {}: GUID = GUID::from_u128(0x{});\r\n", entry.Name, hex) :
+						std::format("{} = \"{{{}}}\"\r\n", entry.Name, guid);
+					break;
+				}
+			if (body.empty())
+				body = comment + entry.Name + ": a value of " + Narrow(md.TypeName(ft.Token)) + " the metadata has as text: not a constant of the language\r\n";
+			break;
+		}
+	}
+	if (body.empty())
+		return {};
+
+	// the types nested in it (that they use too), before it
+	std::string nestedText;
+	for (size_t i = 0; i < nested.size(); i++) {
+		auto kind = TypeKindOf(nested[i]);
+		if (kind == L"struct")
+			nestedText = structOf(nested[i]) + "\r\n" + nestedText;
+	}
+	static char const* const names[] = { "C#", "Rust", "Python (ctypes)" };
+	std::string header = comment + entry.Name + " in " + names[index] + ", of the Win32 metadata (" + entry.Namespace + ")\r\n";
+	if (cs)
+		header += "using System.Runtime.InteropServices;\r\n";
+	else if (py)
+		header += "import ctypes\r\n";
+	else if ((nestedText + body).find("c_void") != std::string::npos)
+		header += "use core::ffi::c_void;\r\n";
+	uses.erase(entry.Name);
+	std::string used;
+	for (auto const& name : uses)
+		used += (used.empty() ? "" : ", ") + name;
+	return header + "\r\n" + nestedText + body + (used.empty() ? "" : "\r\n" + comment + "it uses: " + used + "\r\n");
+}

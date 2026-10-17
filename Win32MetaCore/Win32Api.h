@@ -130,6 +130,11 @@ public:
 	// ones, its "Ex" and numbered ones (CreateFileW: CreateFileA, CreateFile2); of a type, the same (OSVERSIONINFOW:
 	// OSVERSIONINFOA, OSVERSIONINFOEXW). Functions are related to functions, types to types.
 	std::vector<size_t> RelatedOf(size_t entry);
+
+	// The declaration of an entry in another language: C# (P/Invoke, unsafe), Rust (as windows-sys has it), Python
+	// (ctypes); with the types nested in it, and a line of the other types it uses (each to copy as well)
+	enum class Language { CSharp, Rust, Python };
+	std::string DeclarationIn(Entry const& entry, Language language);
 	uint32_t PointerSize() const {
 		return m_Pointer;
 	}

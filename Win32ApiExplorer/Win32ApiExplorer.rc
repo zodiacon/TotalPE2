@@ -40,6 +40,12 @@ BEGIN
         MENUITEM "&Copy\tCtrl+C",               ID_EDIT_COPY
         MENUITEM "Select &All\tCtrl+A",         ID_EDIT_SELECT_ALL
         MENUITEM "Copy &Name\tCtrl+Shift+C",    ID_EDIT_COPYNAME
+        POPUP "Copy &As"
+        BEGIN
+            MENUITEM "&C#",                     ID_EDIT_COPYCSHARP
+            MENUITEM "&Rust",                   ID_EDIT_COPYRUST
+            MENUITEM "&Python (ctypes)",        ID_EDIT_COPYPYTHON
+        END
         MENUITEM "&Decode Value...\tCtrl+Shift+V", ID_EDIT_DECODE
         MENUITEM "Add to Fa&vorites\tCtrl+Shift+A", ID_EDIT_FAVORITE
         MENUITEM SEPARATOR
@@ -114,6 +120,12 @@ BEGIN
         MENUITEM "Close &All",                  ID_TAB_CLOSEALL
         MENUITEM SEPARATOR
         MENUITEM "Copy &Name",                  ID_EDIT_COPYNAME
+        POPUP "Copy &As"
+        BEGIN
+            MENUITEM "&C#",                     ID_EDIT_COPYCSHARP
+            MENUITEM "&Rust",                   ID_EDIT_COPYRUST
+            MENUITEM "&Python (ctypes)",        ID_EDIT_COPYPYTHON
+        END
         MENUITEM "&Reveal in Namespaces",       ID_GO_REVEAL
         MENUITEM "Find &Usages",                ID_GO_USEDBY
         MENUITEM "Add to Fa&vorites",           ID_EDIT_FAVORITE

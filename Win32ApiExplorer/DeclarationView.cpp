@@ -626,6 +626,12 @@ LRESULT CDeclarationView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
 	menu.AppendMenu(MF_STRING, ID_EDIT_COPY, L"&Copy\tCtrl+C");
 	menu.AppendMenu(MF_STRING, ID_EDIT_SELECT_ALL, L"Select &All\tCtrl+A");
 	menu.AppendMenu(MF_STRING, ID_EDIT_COPYNAME, L"Copy &Name\tCtrl+Shift+C");
+	CMenu copyAs;
+	copyAs.CreatePopupMenu();
+	copyAs.AppendMenu(MF_STRING, ID_EDIT_COPYCSHARP, L"&C#");
+	copyAs.AppendMenu(MF_STRING, ID_EDIT_COPYRUST, L"&Rust");
+	copyAs.AppendMenu(MF_STRING, ID_EDIT_COPYPYTHON, L"&Python (ctypes)");
+	menu.AppendMenu(MF_POPUP, copyAs.Detach(), L"Copy &As");
 	auto command = menu.TrackPopupMenu(TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, m_hWnd);
 	if (command)
 		GetTopLevelParent().SendMessage(WM_COMMAND, command);

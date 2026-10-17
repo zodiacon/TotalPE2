@@ -3,8 +3,8 @@
 #include <Win32Api.h>
 
 //
-// The namespaces of the metadata as a tree: in each, the namespaces in it, then its functions and types in folders of
-// their kinds (not its constants: the search has them). A namespace with nothing but one namespace in it is shown with
+// The namespaces of the metadata as a tree: in each, the namespaces in it, then its functions, types and constants in
+// folders of their kinds. A namespace with nothing but one namespace in it is shown with
 // that one ("Windows.Win32"). The tree is filled as it is expanded. The entry selected is previewed (OnOpen, pin false);
 // Enter or a double-click opens it in a tab that stays (pin true).
 //
@@ -67,7 +67,7 @@ private:
 	HTREEITEM AddNode(HTREEITEM hParent, std::wstring const& text, int image, int selectedImage, Node node, bool children);
 	bool HasContent(Win32Api::Namespace const& ns);
 	Node* NodeOf(HTREEITEM hItem);
-	// the folder an entry is in (-1: none: a constant)
+	// the folder an entry is in
 	static int GroupOf(Win32Api::Entry::Kinds kind);
 	void OpenSelected(bool pin);
 
