@@ -4557,6 +4557,12 @@ bool CMainFrame::ShowImportReferences(std::string const& name) {
 	return ShowXrefs(slot);
 }
 
+LRESULT CMainFrame::OnWin32Explorer(WORD, WORD, HWND, BOOL&) {
+	if (!CWin32ApiView::OpenInExplorer({}))
+		AtlMessageBox(m_hWnd, L"Win32 API Explorer (Win32ApiExp.exe) is not next to TotalPE.exe.", IDR_MAINFRAME, MB_ICONINFORMATION);
+	return 0;
+}
+
 LRESULT CMainFrame::OnViewWin32Api(WORD, WORD, HWND, BOOL&) {
 	if (ShowWin32Api({}))
 		return 0;

@@ -65,6 +65,12 @@
     <ClInclude Include="LoadingView.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="DecodeBox.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Values.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="pch.h">
       <Filter>Header Files</Filter>
     </ClInclude>

@@ -38,6 +38,7 @@ LRESULT CWin32ApiView::OnCreate(UINT, WPARAM, LPARAM, BOOL& handled) {
 		{ 0 },
 		{ ID_WIN32_DOCS, 0, BTNS_CHECK | BTNS_SHOWTEXT | BTNS_AUTOSIZE, L"Documentation" },
 		{ ID_WIN32_BROWSER, 0, BTNS_SHOWTEXT | BTNS_AUTOSIZE, L"Open in Browser" },
+		{ ID_WIN32_EXPLORER, 0, BTNS_SHOWTEXT | BTNS_AUTOSIZE, L"Open in Explorer" },
 	};
 	CreateSimpleReBar(ATL_SIMPLE_REBAR_NOBORDER_STYLE);
 	m_tb = ToolbarHelper::CreateAndInitToolBar(m_hWnd, buttons, _countof(buttons), 16);
@@ -269,6 +270,23 @@ LRESULT CWin32ApiView::OnOpenInBrowser(WORD, WORD, HWND, BOOL&) {
 		return 0;
 	auto url = !m_DocUrl.empty() ? m_DocUrl : CDocPane::SearchUrl(std::wstring(CA2W(m_Api->Entries()[m_Shown].Name.c_str())));
 	::ShellExecute(nullptr, L"open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+	return 0;
+}
+
+bool CWin32ApiView::OpenInExplorer(std::string const& name) {
+	WCHAR path[MAX_PATH];
+	::GetModuleFileName(nullptr, path, _countof(path));
+	std::wstring exe = path;
+	exe = exe.substr(0, exe.find_last_of(L'\\') + 1) + L"Win32ApiExp.exe";
+	if (::GetFileAttributes(exe.c_str()) == INVALID_FILE_ATTRIBUTES)
+		return false;
+	std::wstring arguments(name.begin(), name.end());
+	return (INT_PTR)::ShellExecute(nullptr, L"open", exe.c_str(), arguments.empty() ? nullptr : arguments.c_str(), nullptr, SW_SHOWNORMAL) > 32;
+}
+
+LRESULT CWin32ApiView::OnOpenInExplorer(WORD, WORD, HWND, BOOL&) {
+	if (!OpenInExplorer(m_Shown >= 0 ? m_Api->Entries()[m_Shown].Name : std::string()))
+		AtlMessageBox(m_hWnd, L"Win32 API Explorer (Win32ApiExp.exe) is not next to TotalPE.exe.", IDR_MAINFRAME, MB_ICONINFORMATION);
 	return 0;
 }
 

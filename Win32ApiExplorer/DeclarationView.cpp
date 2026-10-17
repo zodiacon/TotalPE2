@@ -198,7 +198,8 @@ void CDeclarationView::Render() {
 	auto const& entry = m_Api->Entries()[m_Entry];
 	std::string text;
 	// (a layout is of a struct or union: of the others, their declarations)
-	if (m_Mode != Mode::Declaration && (entry.Kind == Win32Api::Entry::Kinds::Struct || entry.Kind == Win32Api::Entry::Kinds::Union)) {
+	if (m_Mode != Mode::Declaration && (entry.Kind == Win32Api::Entry::Kinds::Struct || entry.Kind == Win32Api::Entry::Kinds::Union ||
+		entry.Kind == Win32Api::Entry::Kinds::Interface)) {
 		CWaitCursor wait;
 		text = m_Mode == Mode::Layout ? LayoutText(entry) : CompareText(entry);
 	}
@@ -206,6 +207,17 @@ void CDeclarationView::Render() {
 		m_LineTypes.clear();
 		m_DifferentLines.clear();
 		text = m_Api->Declaration(entry, &m_LineTypes);
+		// those of its name but for a suffix (CreateFileA, CreateFile2): each a line of its own, to follow
+		if (auto related = m_Api->RelatedOf(m_Entry); !related.empty()) {
+			text += "\r\n// related:\r\n";
+			m_LineTypes.push_back({});
+			m_LineTypes.push_back({});
+			for (auto i : related) {
+				auto const& r = m_Api->Entries()[i];
+				text += std::format("//   {} ({})\r\n", r.Name, r.Where);
+				m_LineTypes.push_back(r.Name);
+			}
+		}
 	}
 	SetText(text);
 	Sci(SCI_MARKERDELETEALL, MarkerDifferent);
@@ -227,14 +239,34 @@ namespace {
 // "0x0008  0x0008      void *lpSecurityDescriptor;": where each field is, from the start, and its size; the fields of the
 // structs and unions in it, further in; the padding
 std::string CDeclarationView::LayoutText(Win32Api::Entry const& entry) {
-	auto layout = m_Api->LayoutOf(entry);
-	if (!layout)
-		return {};
 	std::string text;
 	auto line = [&](std::string const& s, std::string const& type = {}) {
 		text += s + "\r\n";
 		m_LineTypes.push_back(type);
 	};
+	// an interface: its vtable ("   3  0x018  HRESULT CreateInstance(...)"), by the interfaces that declare its methods
+	if (entry.Kind == Win32Api::Entry::Kinds::Interface) {
+		auto slots = m_Api->VtableOf(entry);
+		if (slots.empty())
+			return {};
+		auto pointer = m_Api->PointerSize();
+		line(std::format("// interface {}: {} methods, its vtable 0x{:X} bytes ({})", entry.Name, slots.size(), slots.size() * pointer,
+			MachineName(m_Api->GetMachine())));
+		line("// slot  offset");
+		std::string declaredBy;
+		for (size_t i = 0; i < slots.size(); i++) {
+			auto const& slot = slots[i];
+			if (slot.Interface != declaredBy) {
+				declaredBy = slot.Interface;
+				line("   // " + declaredBy, declaredBy);
+			}
+			line(std::format("   {:4}  0x{:03X}  {};", i, i * pointer, slot.Signature), slot.Referred);
+		}
+		return text;
+	}
+	auto layout = m_Api->LayoutOf(entry);
+	if (!layout)
+		return {};
 	line(std::format("// {} {}: 0x{:X} bytes, aligned to {} ({})", entry.Kind == Win32Api::Entry::Kinds::Union ? "union" : "struct",
 		entry.Name, layout->Size, layout->Alignment, MachineName(m_Api->GetMachine())));
 	line("// offset  size");
@@ -576,6 +608,7 @@ LRESULT CDeclarationView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
 	menu.AppendMenu(MF_STRING | linkFlags, ID_GO_DEFINITION_NEWTAB,
 		referred.empty() ? L"Open Definition in New &Tab\tCtrl+F12" : std::format(L"Open {} in New &Tab\tCtrl+F12", name).c_str());
 	menu.AppendMenu(MF_STRING, ID_GO_USEDBY, L"Find &Usages\tShift+F12");
+	menu.AppendMenu(MF_STRING, ID_EDIT_DECODE, L"&Decode Value...\tCtrl+Shift+V");
 	menu.AppendMenu(MF_SEPARATOR);
 	menu.AppendMenu(MF_STRING, ID_EDIT_COPY, L"&Copy\tCtrl+C");
 	menu.AppendMenu(MF_STRING, ID_EDIT_SELECT_ALL, L"Select &All\tCtrl+A");

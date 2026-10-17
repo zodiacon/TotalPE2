@@ -121,6 +121,7 @@ public:
 		COMMAND_ID_HANDLER(ID_NAV_FORWARD, OnNavForward)
 		COMMAND_ID_HANDLER(ID_NAV_BOOKMARKS, OnViewBookmarks)
 		COMMAND_ID_HANDLER(ID_PE_WIN32API, OnViewWin32Api)
+		COMMAND_ID_HANDLER(ID_TOOLS_WIN32EXPLORER, OnWin32Explorer)
 		COMMAND_ID_HANDLER(ID_TOOLS_ADDSIGNATURES, OnAddSignatures)
 		COMMAND_ID_HANDLER(ID_NAV_COMMENT, OnNotInView)
 		COMMAND_ID_HANDLER(ID_HEX_BOOKMARK_TOGGLE, OnNotInView)
@@ -329,6 +330,7 @@ private:
 	bool RemoveBookmark(uint64_t va) override;
 	bool ShowBookmarks() override;
 	bool ShowWin32Api(std::string const& name, bool documentation = false) override;
+	LRESULT OnWin32Explorer(WORD, WORD, HWND, BOOL&);
 	bool IsWin32Api(std::string const& name) override;
 	bool IsWin32Documented(std::string const& name) override;
 	bool ShowImportReferences(std::string const& name) override;

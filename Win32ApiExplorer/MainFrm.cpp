@@ -28,11 +28,17 @@ CMainFrame::CMainFrame(std::wstring startName) : m_StartName(std::move(startName
 BOOL CMainFrame::PreTranslateMessage(MSG* pMsg) {
 	if (m_QuickOpen.PreTranslateMessage(pMsg))
 		return TRUE;
+	if (m_Decode.PreTranslateMessage(pMsg))
+		return TRUE;
 	if (m_Search && m_Search->PreTranslateMessage(pMsg))
 		return TRUE;
 	if (m_Namespaces && m_Namespaces->PreTranslateMessage(pMsg))
 		return TRUE;
 	if (m_UsedBy && m_UsedBy->PreTranslateMessage(pMsg))
+		return TRUE;
+	if (m_Favorites && m_Favorites->PreTranslateMessage(pMsg))
+		return TRUE;
+	if (m_History && m_History->PreTranslateMessage(pMsg))
 		return TRUE;
 	if (auto view = ActiveView(); view && view->PreTranslateMessage(pMsg))
 		return TRUE;
@@ -107,6 +113,7 @@ void CMainFrame::FinishCreate() {
 	m_QuickOpen.Create(m_hWnd, rcDefault, nullptr, WS_POPUP | WS_BORDER | WS_CLIPCHILDREN, WS_EX_TOOLWINDOW);
 	m_QuickOpen.SetApi(*m_Api);
 	m_QuickOpen.SetImageList(m_Images);
+	m_Decode.Create(m_hWnd, rcDefault, nullptr, WS_POPUP | WS_BORDER | WS_CLIPCHILDREN, WS_EX_TOOLWINDOW);
 	m_QuickOpen.OnOpen = [this](size_t entry) {
 		OpenEntry(entry, true);
 		if (auto view = ActiveView())
@@ -127,7 +134,14 @@ void CMainFrame::FinishCreate() {
 	// (the default font: as the controls have it)
 	if (settings.UIFont().lfFaceName[0])
 		ApplyUIFont();
-	ShowNavigatorPage(std::min(settings.NavigatorPage(), 1));	// (the Used By page is of a type asked for)
+	for (auto const& name : settings.Favorites())
+		m_FavoriteNames.push_back(Narrow(name));
+	for (auto const& name : settings.History())
+		m_HistoryNames.push_back(Narrow(name));
+	UpdateLists();
+	// (the Used By page is of a type asked for)
+	auto page = settings.NavigatorPage();
+	ShowNavigatorPage(page == 2 ? 0 : page);
 	RestoreTabs();
 	if (!m_StartName.empty())
 		OpenByName(m_StartName);
@@ -234,6 +248,8 @@ void CMainFrame::CreateNavigator() {
 	strip.Add(L"Search");
 	strip.Add(L"Namespaces");
 	strip.Add(L"Used By");
+	strip.Add(L"Favorites");
+	strip.Add(L"History");
 	strip.OnSelected = [this](int page) { ShowNavigatorPage(page); };
 
 	// (from any: a preview, or a tab that stays, which gets the focus)
@@ -259,6 +275,14 @@ void CMainFrame::CreateNavigator() {
 	m_UsedBy->SetScope(&m_NoEntries, L"what uses a type (Shift+F12 finds it)");
 	m_UsedBy->OnOpen = open;
 	m_UsedBy->OnCountChanged = [this] { UpdateStatus(); };
+
+	for (auto pane : { &m_Favorites, &m_History }) {
+		*pane = std::make_unique<CSearchPane>(*m_Api);
+		(*pane)->Create(m_Navigator, rcDefault, nullptr, WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
+		(*pane)->SetImageList(m_Images);
+		(*pane)->OnOpen = open;
+		(*pane)->OnCountChanged = [this] { UpdateStatus(); };
+	}
 }
 
 void CMainFrame::CreateEditors() {
@@ -313,6 +337,13 @@ void CMainFrame::SaveSettings() {
 		names.push_back(Wide(name));
 	}
 	settings.OpenTabs(names);
+	std::vector<std::wstring> favorites, history;
+	for (auto const& name : m_FavoriteNames)
+		favorites.push_back(Wide(name));
+	for (auto const& name : m_HistoryNames)
+		history.push_back(Wide(name));
+	settings.Favorites(favorites);
+	settings.History(history);
 	settings.ActiveTab(active);
 }
 
@@ -364,6 +395,8 @@ void CMainFrame::OpenEntry(size_t entry, bool pin, std::string const& name) {
 		if (!name.empty())
 			m_Tabs[index].View->HighlightName(name);
 	};
+	if (pin)
+		AddToHistory((int)entry);
 	if (auto index = TabShowing((int)entry); index >= 0) {
 		if (pin)
 			Pin(index);
@@ -439,6 +472,35 @@ void CMainFrame::Pin(int index) {
 		return;
 	m_Tabs[index].Preview = false;
 	m_Editors.Strip().SetItalic(index, false);
+	AddToHistory(m_Tabs[index].View->Entry());
+}
+
+void CMainFrame::AddToHistory(int entry) {
+	constexpr size_t MaxHistory = 100;
+	if (entry < 0 || !m_History || m_SwitchingMachine)
+		return;
+	auto const& name = m_Api->Entries()[entry].Name;
+	if (!m_HistoryNames.empty() && m_HistoryNames.front() == name)
+		return;
+	std::erase(m_HistoryNames, name);
+	m_HistoryNames.insert(m_HistoryNames.begin(), name);
+	if (m_HistoryNames.size() > MaxHistory)
+		m_HistoryNames.resize(MaxHistory);
+	UpdateLists();
+}
+
+void CMainFrame::UpdateLists() {
+	auto entries = [&](std::vector<std::string> const& names) {
+		std::vector<size_t> result;
+		for (auto const& name : names)
+			if (auto entry = m_Api->Find(name))
+				result.push_back(entry - m_Api->Entries().data());
+		return result;
+	};
+	m_FavoriteEntries = entries(m_FavoriteNames);
+	m_HistoryEntries = entries(m_HistoryNames);
+	m_Favorites->SetScope(&m_FavoriteEntries, L"the favorites (Ctrl+Shift+A adds and removes)");
+	m_History->SetScope(&m_HistoryEntries, L"what was opened");
 }
 
 void CMainFrame::Follow(CDeclarationView* view, std::string const& name, bool newTab) {
@@ -462,6 +524,9 @@ void CMainFrame::ViewChanged(CDeclarationView* view) {
 	if (entry >= 0) {
 		strip.SetText(index, Wide(view->Name()));
 		strip.SetImage(index, Images::Of(m_Api->Entries()[entry].Kind));
+		// (a tab that stays went elsewhere: that was opened)
+		if (!m_Tabs[index].Preview)
+			AddToHistory(entry);
 	}
 	if (index == ActiveTab()) {
 		UpdateDocumentation();
@@ -487,8 +552,8 @@ void CMainFrame::ShowTabMenu(int index, CPoint pt) {
 //
 
 void CMainFrame::ShowNavigatorPage(int page) {
-	page = std::clamp(page, 0, 2);
-	HWND const pages[] = { *m_Search, *m_Namespaces, *m_UsedBy };
+	page = std::clamp(page, 0, 4);
+	HWND const pages[] = { *m_Search, *m_Namespaces, *m_UsedBy, *m_Favorites, *m_History };
 	m_Navigator.Strip().Select(page);
 	m_Navigator.SetPage(pages[page]);
 	AppSettings::Get().NavigatorPage(page);
@@ -509,6 +574,33 @@ int CMainFrame::UsagesTarget() const {
 		return -1;
 	auto kind = entries[entry].Kind;
 	return kind == Win32Api::Entry::Kinds::Function || kind == Win32Api::Entry::Kinds::Constant ? -1 : entry;
+}
+
+int CMainFrame::DecodeTarget() const {
+	auto const& entries = m_Api->Entries();
+	// (an enum, or a typedef that is one: HRESULT)
+	auto decodable = [&](int entry) { return entry >= 0 && !m_Api->DecodeValue(entries[entry], 0).empty(); };
+	if (m_MenuTab >= 0 && m_MenuTab < (int)m_Tabs.size()) {
+		auto entry = m_Tabs[m_MenuTab].View->Entry();
+		return decodable(entry) ? entry : -1;
+	}
+	auto view = ActiveView();
+	if (!view)
+		return -1;
+	auto referred = view->ReferredAtCaret();
+	if (auto found = referred.empty() ? nullptr : m_Api->Find(referred); found && decodable((int)(found - entries.data())))
+		return (int)(found - entries.data());
+	return decodable(view->Entry()) ? view->Entry() : -1;
+}
+
+LRESULT CMainFrame::OnDecode(WORD, WORD, HWND, BOOL&) {
+	auto entry = DecodeTarget();
+	m_MenuTab = -1;
+	if (entry < 0)
+		::MessageBeep(MB_ICONWARNING);
+	else
+		m_Decode.Show(*m_Api, entry);
+	return 0;
 }
 
 void CMainFrame::FindUsages(size_t entry) {
@@ -553,7 +645,8 @@ void CMainFrame::UpdateStatus() {
 		return;
 	CStatusBarCtrl status(m_hWndStatusBar);
 	// (of the list shown: the search, or what uses a type)
-	auto list = m_Navigator.Strip().GetSelected() == 2 ? m_UsedBy.get() : m_Search.get();
+	CSearchPane* const lists[] = { m_Search.get(), m_Search.get(), m_UsedBy.get(), m_Favorites.get(), m_History.get() };
+	auto list = lists[std::clamp(m_Navigator.Strip().GetSelected(), 0, 4)];
 	status.SetText(0, std::format(L"{} of {} shown", list->GetShownCount(), list->GetTotalCount()).c_str());
 	status.SetText(1, std::format(L"Machine: {}", s_Machines[(int)m_Machine]).c_str());
 }
@@ -582,15 +675,20 @@ void CMainFrame::UpdateUIState() {
 	bool shows = target >= 0 && m_Tabs[target].View->Entry() >= 0;
 	UIEnable(ID_GO_REVEAL, shows);
 	UIEnable(ID_GO_USEDBY, UsagesTarget() >= 0);
+	UIEnable(ID_EDIT_DECODE, DecodeTarget() >= 0);
 	UIEnable(ID_DOC_BROWSER, shows);
 	UIEnable(ID_EDIT_COPYNAME, shows);
 	UISetCheck(ID_VIEW_DOCUMENTATION, settings.ShowDocumentation());
 	UISetCheck(ID_VIEW_DARKMODE, settings.DarkMode());
 	auto page = m_Navigator.m_hWnd ? m_Navigator.Strip().GetSelected() : 0;
 	// (one of each: a radio item, of the range of its group's IDs)
-	static_assert(ID_VIEW_NAMESPACES == ID_VIEW_SEARCH + 1 && ID_VIEW_USEDBY == ID_VIEW_SEARCH + 2);
+	static_assert(ID_VIEW_NAMESPACES == ID_VIEW_SEARCH + 1 && ID_VIEW_USEDBY == ID_VIEW_SEARCH + 2 &&
+		ID_VIEW_FAVORITES == ID_VIEW_SEARCH + 3 && ID_VIEW_HISTORY == ID_VIEW_SEARCH + 4);
 	static_assert(ID_MACHINE_X64 == ID_MACHINE_X86 + 1 && ID_MACHINE_ARM64 == ID_MACHINE_X86 + 2);
-	UISetRadioMenuItem(ID_VIEW_SEARCH + std::clamp(page, 0, 2), ID_VIEW_SEARCH, ID_VIEW_USEDBY);
+	UISetRadioMenuItem(ID_VIEW_SEARCH + std::clamp(page, 0, 4), ID_VIEW_SEARCH, ID_VIEW_HISTORY);
+	UIEnable(ID_VIEW_CLEARHISTORY, !m_HistoryNames.empty());
+	UIEnable(ID_EDIT_FAVORITE, shows);
+	UISetCheck(ID_EDIT_FAVORITE, shows && std::ranges::find(m_FavoriteNames, m_Tabs[target].View->Name()) != m_FavoriteNames.end());
 	UISetRadioMenuItem(ID_MACHINE_X86 + (int)m_Machine, ID_MACHINE_X86, ID_MACHINE_ARM64);
 	static_assert(ID_SHOW_LAYOUT == ID_SHOW_DECLARATION + 1 && ID_SHOW_COMPARE == ID_SHOW_DECLARATION + 2);
 	UISetRadioMenuItem(ID_SHOW_DECLARATION + std::clamp(settings.ShowMode(), 0, 2), ID_SHOW_DECLARATION, ID_SHOW_COMPARE);
@@ -622,9 +720,14 @@ void CMainFrame::SetMachine(Win32Api::Machine machine) {
 	m_Namespaces->SetApi(*api);
 	m_UsedBy->SetApi(*api);
 	UpdateUsedBy();
+	m_Favorites->SetApi(*api);
+	m_History->SetApi(*api);
+	UpdateLists();
 	m_QuickOpen.SetApi(*api);
+	m_SwitchingMachine = true;
 	for (auto& tab : m_Tabs)
 		tab.View->SetApi(*api);
+	m_SwitchingMachine = false;
 	m_MachineBar.Combo().SetCurSel((int)machine);
 	AppSettings::Get().Machine((int)machine);
 	UpdateDocumentation();
@@ -723,7 +826,7 @@ LRESULT CMainFrame::OnFind(WORD, WORD, HWND, BOOL&) {
 }
 
 LRESULT CMainFrame::OnViewNavigator(WORD, WORD id, HWND, BOOL&) {
-	auto page = id == ID_VIEW_SEARCH ? 0 : id == ID_VIEW_NAMESPACES ? 1 : 2;
+	auto page = id - ID_VIEW_SEARCH;
 	ShowNavigatorPage(page);
 	::SetFocus(m_Navigator.GetPage());
 	return 0;
@@ -731,6 +834,27 @@ LRESULT CMainFrame::OnViewNavigator(WORD, WORD id, HWND, BOOL&) {
 
 LRESULT CMainFrame::OnQuickOpen(WORD, WORD, HWND, BOOL&) {
 	m_QuickOpen.Show();
+	return 0;
+}
+
+LRESULT CMainFrame::OnClearHistory(WORD, WORD, HWND, BOOL&) {
+	m_HistoryNames.clear();
+	UpdateLists();
+	return 0;
+}
+
+// the tab's (whose menu is shown, else the active one): a favorite, or not any more
+LRESULT CMainFrame::OnFavorite(WORD, WORD, HWND, BOOL&) {
+	auto target = TargetTab();
+	m_MenuTab = -1;
+	auto name = target >= 0 ? m_Tabs[target].View->Name() : std::string();
+	if (name.empty())
+		return 0;
+	if (auto it = std::ranges::find(m_FavoriteNames, name); it != m_FavoriteNames.end())
+		m_FavoriteNames.erase(it);
+	else
+		m_FavoriteNames.push_back(name);
+	UpdateLists();
 	return 0;
 }
 
@@ -788,6 +912,8 @@ void CMainFrame::ApplyUIFont() {
 	font.CreateFontIndirect(&logFont);
 	m_Search->SetUIFont(font);
 	m_UsedBy->SetUIFont(font);
+	m_Favorites->SetUIFont(font);
+	m_History->SetUIFont(font);
 	m_Namespaces->SetUIFont(font);
 	m_Navigator.Strip().SetFont(custom ? &logFont : nullptr);
 	m_Editors.Strip().SetFont(custom ? &logFont : nullptr);
@@ -795,6 +921,7 @@ void CMainFrame::ApplyUIFont() {
 	m_Editors.Relayout();
 	m_MachineBar.SetUIFont(font);
 	m_QuickOpen.SetUIFont(font);
+	m_Decode.SetUIFont(font);
 	// (the machine's band as high as its list)
 	CReBarCtrl rebar(m_hWndToolBar);
 	REBARBANDINFO band{ sizeof(band) };

@@ -109,6 +109,28 @@ public:
 	};
 	// none if it is not a struct or union
 	std::optional<StructLayout> LayoutOf(Entry const& entry);
+
+	// A value of an enum by its names: the name it has ("FILE_SHARE_READ"); of flags, those whose bits it has, the larger
+	// first ("FILE_SHARE_READ | FILE_SHARE_WRITE"), and what bits no name has, in hex; empty if it is not an enum
+	std::string DecodeValue(Entry const& entry, uint64_t value);
+
+	// The vtable of an interface: its bases' methods first (IUnknown's), each with the interface that declares it and its
+	// signature ("HRESULT QueryInterface(const GUID *riid, void **ppvObject)"); empty if it is not an interface
+	struct VtableSlot {
+		std::string Interface;
+		std::string Method;
+		std::string Signature;
+		std::string Referred;	// the type its signature refers to first (its result's, else its first parameter's)
+	};
+	std::vector<VtableSlot> VtableOf(Entry const& entry);
+
+	// The entries of the same name but for a suffix (indices into Entries(), by name): of a function, its ANSI and Unicode
+	// ones, its "Ex" and numbered ones (CreateFileW: CreateFileA, CreateFile2); of a type, the same (OSVERSIONINFOW:
+	// OSVERSIONINFOA, OSVERSIONINFOEXW). Functions are related to functions, types to types.
+	std::vector<size_t> RelatedOf(size_t entry);
+	uint32_t PointerSize() const {
+		return m_Pointer;
+	}
 	Machine GetMachine() const {
 		return m_Machine;
 	}
@@ -192,6 +214,7 @@ private:
 		std::vector<LayoutItem>& items);
 	std::vector<std::vector<size_t>> m_UsedBy;	// of each entry
 	std::vector<std::pair<int64_t, NamedValue>> m_Values;	// by value
+	std::unordered_map<std::string, std::vector<size_t>> m_Stems;	// the entries of each name without its suffix
 	bool m_ValuesBuilt{ false };
 
 	Data& m_Data;

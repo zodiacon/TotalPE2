@@ -2,7 +2,7 @@
 #include "SearchPane.h"
 #include "Images.h"
 #include <SortHelper.h>
-#include <charconv>
+#include "Values.h"
 
 namespace {
 	using Kinds = Win32Api::Entry::Kinds;
@@ -30,36 +30,9 @@ namespace {
 		return text;
 	}
 
-	std::wstring Trimmed(std::wstring const& text) {
-		auto first = text.find_first_not_of(L" \t");
-		if (first == std::wstring::npos)
-			return {};
-		return text.substr(first, text.find_last_not_of(L" \t") - first + 1);
-	}
-
-	// a number: decimal (with a sign) or hex (0x); not a name with digits
-	std::optional<uint64_t> ParseValue(std::wstring const& text) {
-		std::string s(CW2A(Trimmed(text).c_str()));
-		bool negative = s.starts_with('-');
-		if (negative)
-			s = s.substr(1);
-		int base = 10;
-		if (s.size() > 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) {
-			base = 16;
-			s = s.substr(2);
-		}
-		uint64_t value = 0;
-		if (s.empty())
-			return std::nullopt;
-		auto [end, error] = std::from_chars(s.data(), s.data() + s.size(), value, base);
-		if (error != std::errc() || end != s.data() + s.size())
-			return std::nullopt;
-		return negative ? (uint64_t)-(int64_t)value : value;
-	}
-
 	// a GUID, with its braces or without
 	std::optional<GUID> ParseGuid(std::wstring const& text) {
-		auto s = Trimmed(text);
+		auto s = Values::Trimmed(text);
 		if (s.starts_with(L'{') && s.ends_with(L'}'))
 			s = s.substr(1, s.size() - 2);
 		if (s.size() != 36 || s[8] != L'-' || s[13] != L'-' || s[18] != L'-' || s[23] != L'-')
@@ -74,6 +47,95 @@ namespace {
 }
 
 CSearchPane::CSearchPane(Win32Api& api) : m_Api(&api) {
+}
+
+namespace {
+	// a name by a pattern: * any letters, ? one
+	bool Like(std::string_view text, std::string_view pattern) {
+		size_t t = 0, p = 0, star = std::string_view::npos, mark = 0;
+		while (t < text.size()) {
+			if (p < pattern.size() && (pattern[p] == '?' || pattern[p] == text[t])) {
+				t++;
+				p++;
+			}
+			else if (p < pattern.size() && pattern[p] == '*') {
+				star = p++;
+				mark = t;
+			}
+			else if (star != std::string_view::npos) {
+				p = star + 1;
+				t = ++mark;
+			}
+			else
+				return false;
+		}
+		while (p < pattern.size() && pattern[p] == '*')
+			p++;
+		return p == pattern.size();
+	}
+}
+
+CSearchPane::Query CSearchPane::ParseQuery(std::string const& filter) {
+	Query query;
+	size_t start = 0;
+	while (start < filter.size()) {
+		auto end = filter.find(' ', start);
+		if (end == std::string::npos)
+			end = filter.size();
+		auto term = filter.substr(start, end - start);
+		start = end + 1;
+		if (term.empty())
+			continue;
+		if (term.starts_with("dll:")) {
+			auto dll = term.substr(4);
+			if (dll.ends_with(".dll"))
+				dll.resize(dll.size() - 4);
+			if (!dll.empty())
+				query.Dlls.push_back(dll);
+			continue;
+		}
+		if (term.starts_with("ns:")) {
+			if (term.size() > 3)
+				query.Namespaces.push_back(term.substr(3));
+			continue;
+		}
+		bool first = term.starts_with('^'), last = term.size() > 1 && term.ends_with('$');
+		if (first)
+			term = term.substr(1);
+		if (last)
+			term.pop_back();
+		if (term.empty())
+			continue;
+		using Kinds = Term::Kinds;
+		auto kind = term.find_first_of("*?") != std::string::npos ? Kinds::Pattern :
+			first && last ? Kinds::All : first ? Kinds::Start : last ? Kinds::End : Kinds::Part;
+		query.Names.push_back({ kind, term });
+	}
+	return query;
+}
+
+bool CSearchPane::Matches(Query const& query, size_t entry) const {
+	auto const& e = m_Api->Entries()[entry];
+	for (auto const& dll : query.Dlls)
+		if (e.Kind != Kinds::Function || m_LowerWhere[entry].find(dll) == std::string::npos)
+			return false;
+	for (auto const& ns : query.Namespaces)
+		if (m_LowerNamespaces[entry].find(ns) == std::string::npos)
+			return false;
+	auto const& name = m_LowerNames[entry];
+	for (auto const& term : query.Names) {
+		bool ok = false;
+		switch (term.Kind) {
+			case Term::Kinds::Part: ok = name.find(term.Text) != std::string::npos; break;
+			case Term::Kinds::Start: ok = name.starts_with(term.Text); break;
+			case Term::Kinds::End: ok = name.ends_with(term.Text); break;
+			case Term::Kinds::All: ok = name == term.Text; break;
+			case Term::Kinds::Pattern: ok = Like(name, term.Text); break;
+		}
+		if (!ok)
+			return false;
+	}
+	return true;
 }
 
 LRESULT CSearchPane::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
@@ -105,7 +167,7 @@ void CSearchPane::UpdateWatermark() {
 	if (m_Scope)
 		m_FilterEdit.SetWatermark(std::format(L"Filter {} by name (Esc clears)", m_ScopeDescription).c_str());
 	else
-		m_FilterEdit.SetWatermark(L"Name, value (0x80070005) or GUID (Ctrl+F; Esc clears)");
+		m_FilterEdit.SetWatermark(L"Name (^start, end$, *), dll:, ns:, a value or a GUID (Ctrl+F)");
 }
 
 void CSearchPane::SetUIFont(HFONT font) {
@@ -152,9 +214,16 @@ void CSearchPane::SetApi(Win32Api& api) {
 	m_Api = &api;
 	auto const& entries = api.Entries();
 	m_LowerNames.clear();
+	m_LowerWhere.clear();
+	m_LowerNamespaces.clear();
 	m_LowerNames.reserve(entries.size());
-	for (auto const& e : entries)
+	m_LowerWhere.reserve(entries.size());
+	m_LowerNamespaces.reserve(entries.size());
+	for (auto const& e : entries) {
 		m_LowerNames.push_back(Lower(e.Name));
+		m_LowerWhere.push_back(Lower(e.Where));
+		m_LowerNamespaces.push_back(Lower(e.Namespace));
+	}
 	m_List.SetItemState(-1, 0, LVIS_SELECTED | LVIS_FOCUSED);
 	Fill();
 	if (auto entry = name.empty() ? nullptr : api.Find(name)) {
@@ -197,15 +266,17 @@ void CSearchPane::Fill() {
 		if (KindShown(entries[entry].Kind))
 			m_Items.push_back({ entry, std::move(name) });
 	};
+	auto query = ParseQuery(m_Filter);
+	bool all = query.Dlls.empty() && query.Namespaces.empty() && query.Names.empty();
 	auto byName = [&](size_t entry) {
-		return m_Filter.empty() || m_LowerNames[entry].find(m_Filter) != std::string::npos;
+		return all || Matches(query, entry);
 	};
 	if (m_Scope) {
 		for (auto entry : *m_Scope)
 			if (byName(entry))
 				add(entry);
 	}
-	else if (auto value = ParseValue(m_FilterText)) {
+	else if (auto value = Values::Parse(m_FilterText)) {
 		// (a constant by its own name; a value of an enum by its name)
 		for (auto& v : m_Api->FindValue(*value))
 			add(v.Entry, v.Name == entries[v.Entry].Name ? std::string() : std::move(v.Name));
@@ -266,7 +337,8 @@ void CSearchPane::DoSort(SortInfo const* si) {
 	auto const& entries = m_Api->Entries();
 	if (si == nullptr) {
 		// (the entries are by name; the values and GUIDs are found by name)
-		if (m_Scope || m_Items.empty() || m_Items[0].Name.empty())
+		// (a scope's are in its order: of history, the last first)
+		if (!m_Scope && (m_Items.empty() || m_Items[0].Name.empty()))
 			std::ranges::sort(m_Items, {}, &Item::Entry);
 		return;
 	}

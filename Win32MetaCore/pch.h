@@ -7,6 +7,7 @@
 #include <WinTrust.h>
 #include <delayimp.h>
 #include <algorithm>
+#include <bit>
 #include <cstdint>
 #include <cstring>
 #include <format>

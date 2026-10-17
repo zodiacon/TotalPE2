@@ -1495,3 +1495,138 @@ void Win32Api::AddLayout(uint32_t id, GhidraDecompiler::Type const& type, uint32
 	}
 	padding(end, type.Size);
 }
+
+//
+// Values of enums, vtables
+//
+
+std::string Win32Api::DecodeValue(Entry const& entry, uint64_t value) {
+	if (entry.Kind != Entry::Kinds::Enum && entry.Kind != Entry::Kinds::Typedef)
+		return {};
+	GhidraDecompiler::Type type;
+	if (!Describe(IdBit | entry.Row, type) || type.Kind != Kind::Enum)
+		return {};
+	uint64_t mask = type.Size >= 8 ? ~0ULL : (1ULL << (type.Size * 8)) - 1;
+	value &= mask;
+	// a name of the value itself (the first: the one code uses)
+	for (auto const& [name, v] : type.Values)
+		if ((v & mask) == value)
+			return name;
+	if (type.Exact || value == 0)
+		return std::format("0x{:X} (none of its names)", value);
+	// of flags: the names whose bits it has, those of more bits first (each adds bits the others do not have)
+	std::vector<std::pair<std::string, uint64_t>> candidates;
+	for (auto const& [name, v] : type.Values)
+		if ((v & mask) != 0 && ((v & mask) & ~value) == 0)
+			candidates.emplace_back(name, v & mask);
+	std::ranges::stable_sort(candidates, [](auto const& a, auto const& b) {
+		auto bitsA = std::popcount(a.second), bitsB = std::popcount(b.second);
+		return bitsA != bitsB ? bitsA > bitsB : a.second < b.second;
+	});
+	uint64_t covered = 0;
+	std::vector<std::pair<std::string, uint64_t>> chosen;
+	for (auto const& candidate : candidates)
+		if (candidate.second & ~covered) {
+			chosen.push_back(candidate);
+			covered |= candidate.second;
+		}
+	std::ranges::sort(chosen, {}, &std::pair<std::string, uint64_t>::second);
+	std::string text;
+	for (auto const& [name, v] : chosen)
+		text += (text.empty() ? "" : " | ") + name;
+	if (auto rest = value & ~covered)
+		text += (text.empty() ? "" : " | ") + std::format("0x{:X}", rest);
+	return text;
+}
+
+std::vector<Win32Api::VtableSlot> Win32Api::VtableOf(Entry const& entry) {
+	if (entry.Kind != Entry::Kinds::Interface)
+		return {};
+	auto& md = m_Data.Md;
+	std::vector<VtableSlot> slots;
+	std::set<uint32_t> seen;
+	auto declare = [](std::string const& type, std::string const& name) {
+		return type + (type.ends_with("*") ? "" : " ") + name;
+	};
+	// (as the vtable has them: the bases' first)
+	auto collect = [&](auto&& self, uint32_t row) -> void {
+		if (!seen.insert(row).second)
+			return;
+		for (auto token : md.Interfaces(row))
+			if (auto base = RowOf(token))
+				self(self, base);
+		auto owner = Name(row);
+		for (auto m : md.MethodsOf(row)) {
+			VtableSlot slot{ owner, Narrow(md.Methods()[m - 1].Name) };
+			ClrSigType result;
+			std::vector<ClrSigType> params;
+			if (md.MethodSigTypes(m, result, params)) {
+				auto ret = TypeId(result);
+				std::string list;
+				for (size_t i = 0; i < params.size(); i++) {
+					auto id = TypeId(params[i]);
+					auto name = Narrow(md.ParamName(m, (uint32_t)i + 1));
+					list += (i ? ", " : "") + declare(TypeText(id), name.empty() ? std::format("param{}", i + 1) : name);
+					if (slot.Referred.empty())
+						slot.Referred = Referred(id);
+				}
+				slot.Signature = std::format("{} {}({})", TypeText(ret), slot.Method, list.empty() ? "void" : list);
+				if (auto referred = Referred(ret); !referred.empty())
+					slot.Referred = referred;
+			}
+			else
+				slot.Signature = slot.Method + "(?)";
+			slots.push_back(std::move(slot));
+		}
+	};
+	collect(collect, entry.Row);
+	return slots;
+}
+
+//
+// Related entries
+//
+
+namespace {
+	// a name without its suffix: of ANSI or Unicode (A, W), then "Ex" (or "EX") and a number, in that order
+	// ("CreateWindowExW": "CreateWindow"; "CreateFile2": "CreateFile"; "OSVERSIONINFOEXW": "OSVERSIONINFO")
+	std::string Stem(std::string name) {
+		auto strip = [&](std::string_view suffix) {
+			if (name.size() > suffix.size() + 2 && name.ends_with(suffix)) {
+				name.resize(name.size() - suffix.size());
+				return true;
+			}
+			return false;
+		};
+		if (!strip("A"))
+			strip("W");
+		while (name.size() > 3 && isdigit((unsigned char)name.back()))
+			name.pop_back();
+		if (!strip("Ex"))
+			strip("EX");
+		while (name.size() > 3 && isdigit((unsigned char)name.back()))
+			name.pop_back();
+		return name;
+	}
+}
+
+std::vector<size_t> Win32Api::RelatedOf(size_t entry) {
+	auto const& entries = Entries();
+	if (entry >= entries.size())
+		return {};
+	using Kinds = Entry::Kinds;
+	if (entries[entry].Kind == Kinds::Constant)
+		return {};
+	if (m_Stems.empty())
+		for (size_t i = 0; i < entries.size(); i++)
+			if (entries[i].Kind != Kinds::Constant)
+				m_Stems[Stem(entries[i].Name)].push_back(i);
+	auto isFunction = entries[entry].Kind == Kinds::Function;
+	std::vector<size_t> related;
+	if (auto it = m_Stems.find(Stem(entries[entry].Name)); it != m_Stems.end())
+		for (auto i : it->second)
+			if (entries[i].Name != entries[entry].Name && (entries[i].Kind == Kinds::Function) == isFunction &&
+				std::ranges::none_of(related, [&](size_t r) { return entries[r].Name == entries[i].Name; }))
+				related.push_back(i);
+	return related;
+}

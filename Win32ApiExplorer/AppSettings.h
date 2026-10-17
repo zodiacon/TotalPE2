@@ -30,4 +30,6 @@ public:
 	DEF_SETTING(UIFont, LOGFONT)
 	DEF_SETTING(ShowMode, int)
 	DEF_SETTING_MULTI(OpenTabs)		// the names of the tabs kept open, in their order
+	DEF_SETTING_MULTI(Favorites)	// the names of the favorites, in the order they were added
+	DEF_SETTING_MULTI(History)		// the names of what was opened, the last first
 };

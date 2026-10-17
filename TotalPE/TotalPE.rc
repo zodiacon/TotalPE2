@@ -354,6 +354,7 @@ BEGIN
     POPUP "&Tools"
     BEGIN
         MENUITEM "&Windows API",                ID_PE_WIN32API
+        MENUITEM "Windows API &Explorer",       ID_TOOLS_WIN32EXPLORER
         MENUITEM SEPARATOR
         MENUITEM "Add Library &Signatures...",  ID_TOOLS_ADDSIGNATURES
     END
@@ -890,6 +891,8 @@ BEGIN
     ID_NAV_BOOKMARKS        "The bookmarks of the file\nBookmarks"
     ID_NAV_COMMENT          "Comment the instruction of the caret\nComment"
     ID_PE_WIN32API          "The functions and types of Windows, with their declarations\nWindows API"
+    ID_TOOLS_WIN32EXPLORER  "The Windows API in Win32 API Explorer (Win32ApiExp.exe), in tabs\nWindows API Explorer"
+    ID_WIN32_EXPLORER       "What is shown, in Win32 API Explorer (Win32ApiExp.exe)\nOpen in Explorer"
     ID_WIN32_IMPORTS        "Only the functions the file imports\nImports"
     ID_WIN32_REFERENCES     "The places the file calls the function (in the main window)\nReferences"
 END

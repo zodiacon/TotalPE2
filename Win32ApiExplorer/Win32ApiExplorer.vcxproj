@@ -129,6 +129,8 @@
     <ClInclude Include="NamespacePane.h" />
     <ClInclude Include="QuickOpen.h" />
     <ClInclude Include="LoadingView.h" />
+    <ClInclude Include="DecodeBox.h" />
+    <ClInclude Include="Values.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="SearchPane.h" />

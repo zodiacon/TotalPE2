@@ -5,8 +5,10 @@
 #include <VirtualListView.h>
 
 //
-// The functions, types and constants of the metadata in a list: those whose names contain the filter's text, of the kinds
-// chosen. A filter that is a number (5, -1, 0x80070005) shows what has that value: constants, and the values of enums
+// The functions, types and constants of the metadata in a list: those the filter's terms match (all of them), of the kinds
+// chosen. A term is a part of the name ("file"), its start ("^Create"), its end ("W$"), all of it ("^CreateFileW$"), or a
+// pattern of it ("Create*W", ? for one letter); "dll:kernel32", the DLL of a function; "ns:threading", a namespace. Case
+// does not matter. A filter that is a number (5, -1, 0x80070005) shows what has that value: constants, and the values of enums
 // (by their names, with their enums); a GUID shows what it names (IID_IUnknown). With a scope (SetScope), only the entries
 // in it are shown (by name): what uses a type. The one selected is previewed (OnOpen, pin false); Enter or a double-click
 // opens it in a tab that stays (pin true). Down or Enter in the filter goes to the list.
@@ -89,6 +91,18 @@ private:
 
 	Win32Api* m_Api;
 	std::vector<std::string> m_LowerNames;	// of the entries (the filter is not case sensitive)
+	std::vector<std::string> m_LowerWhere, m_LowerNamespaces;
+	// the filter's terms
+	struct Term {
+		enum class Kinds { Part, Start, End, All, Pattern } Kind;
+		std::string Text;
+	};
+	struct Query {
+		std::vector<std::string> Dlls, Namespaces;
+		std::vector<Term> Names;
+	};
+	static Query ParseQuery(std::string const& filter);
+	bool Matches(Query const& query, size_t entry) const;
 	std::vector<Item> m_Items;				// shown
 	std::vector<size_t> const* m_Scope{ nullptr };
 	std::wstring m_ScopeDescription;

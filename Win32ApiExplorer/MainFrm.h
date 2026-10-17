@@ -8,6 +8,7 @@
 #include "MachineBar.h"
 #include "QuickOpen.h"
 #include "LoadingView.h"
+#include "DecodeBox.h"
 #include <thread>
 #include <CustomSplitterWindow.h>
 #include <DocPane.h>
@@ -46,6 +47,10 @@ public:
 		UPDATE_ELEMENT(ID_VIEW_SEARCH, UPDUI_MENUPOPUP)
 		UPDATE_ELEMENT(ID_VIEW_NAMESPACES, UPDUI_MENUPOPUP)
 		UPDATE_ELEMENT(ID_VIEW_USEDBY, UPDUI_MENUPOPUP)
+		UPDATE_ELEMENT(ID_VIEW_FAVORITES, UPDUI_MENUPOPUP)
+		UPDATE_ELEMENT(ID_VIEW_HISTORY, UPDUI_MENUPOPUP)
+		UPDATE_ELEMENT(ID_VIEW_CLEARHISTORY, UPDUI_MENUPOPUP)
+		UPDATE_ELEMENT(ID_EDIT_FAVORITE, UPDUI_MENUPOPUP)
 		UPDATE_ELEMENT(ID_SHOW_DECLARATION, UPDUI_MENUPOPUP | UPDUI_TOOLBAR)
 		UPDATE_ELEMENT(ID_SHOW_LAYOUT, UPDUI_MENUPOPUP | UPDUI_TOOLBAR)
 		UPDATE_ELEMENT(ID_SHOW_COMPARE, UPDUI_MENUPOPUP | UPDUI_TOOLBAR)
@@ -59,6 +64,7 @@ public:
 		UPDATE_ELEMENT(ID_TAB_PREV, UPDUI_MENUPOPUP)
 		UPDATE_ELEMENT(ID_TAB_KEEPOPEN, UPDUI_MENUPOPUP)
 		UPDATE_ELEMENT(ID_EDIT_COPYNAME, UPDUI_MENUPOPUP)
+		UPDATE_ELEMENT(ID_EDIT_DECODE, UPDUI_MENUPOPUP)
 	END_UPDATE_UI_MAP()
 
 	// a name sent by another instance (Win32ApiExp.exe CreateFileW): the data of WM_COPYDATA, in UTF-16
@@ -77,10 +83,15 @@ public:
 		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnCopy)
 		COMMAND_ID_HANDLER(ID_EDIT_SELECT_ALL, OnSelectAll)
 		COMMAND_ID_HANDLER(ID_EDIT_COPYNAME, OnCopyName)
+		COMMAND_ID_HANDLER(ID_EDIT_DECODE, OnDecode)
 		COMMAND_ID_HANDLER(ID_EDIT_FIND, OnFind)
 		COMMAND_ID_HANDLER(ID_VIEW_SEARCH, OnViewNavigator)
 		COMMAND_ID_HANDLER(ID_VIEW_NAMESPACES, OnViewNavigator)
 		COMMAND_ID_HANDLER(ID_VIEW_USEDBY, OnViewNavigator)
+		COMMAND_ID_HANDLER(ID_VIEW_FAVORITES, OnViewNavigator)
+		COMMAND_ID_HANDLER(ID_VIEW_HISTORY, OnViewNavigator)
+		COMMAND_ID_HANDLER(ID_VIEW_CLEARHISTORY, OnClearHistory)
+		COMMAND_ID_HANDLER(ID_EDIT_FAVORITE, OnFavorite)
 		COMMAND_ID_HANDLER(ID_VIEW_DOCUMENTATION, OnViewDocumentation)
 		COMMAND_ID_HANDLER(ID_VIEW_DARKMODE, OnViewDarkMode)
 		COMMAND_ID_HANDLER(ID_VIEW_FONT, OnViewFont)
@@ -130,6 +141,7 @@ private:
 	LRESULT OnCopy(WORD, WORD, HWND, BOOL&);
 	LRESULT OnSelectAll(WORD, WORD, HWND, BOOL&);
 	LRESULT OnCopyName(WORD, WORD, HWND, BOOL&);
+	LRESULT OnDecode(WORD, WORD, HWND, BOOL&);
 	LRESULT OnFind(WORD, WORD, HWND, BOOL&);
 	LRESULT OnViewNavigator(WORD, WORD, HWND, BOOL&);
 	LRESULT OnViewDocumentation(WORD, WORD, HWND, BOOL&);
@@ -143,6 +155,8 @@ private:
 	LRESULT OnGoToDefinition(WORD, WORD, HWND, BOOL&);
 	LRESULT OnReveal(WORD, WORD, HWND, BOOL&);
 	LRESULT OnFindUsages(WORD, WORD, HWND, BOOL&);
+	LRESULT OnClearHistory(WORD, WORD, HWND, BOOL&);
+	LRESULT OnFavorite(WORD, WORD, HWND, BOOL&);
 	LRESULT OnQuickOpen(WORD, WORD, HWND, BOOL&);
 	LRESULT OnOpenInBrowser(WORD, WORD, HWND, BOOL&);
 	LRESULT OnMachine(WORD, WORD, HWND, BOOL&);
@@ -177,6 +191,10 @@ private:
 	void ShowTabMenu(int index, CPoint pt);
 
 	void ShowNavigatorPage(int page);
+	// the favorites and the history, by name: their entries (of the machine), in their panes
+	void UpdateLists();
+	// what was opened (in a tab that stays): first in the history
+	void AddToHistory(int entry);
 	// what uses a type, in the Used By page (which is shown)
 	void FindUsages(size_t entry);
 	// the scope of the Used By page: of the type it was asked for (by name: of the machine's API)
@@ -184,6 +202,8 @@ private:
 	// the type whose usages Find Usages finds: the tab's whose menu is shown, else the one the caret's line refers to, else
 	// the active tab's (-1: none, or not a type)
 	int UsagesTarget() const;
+	// the enum whose values Decode Value is of: as Find Usages', of an enum (-1: none)
+	int DecodeTarget() const;
 	void SetMachine(Win32Api::Machine machine);
 	void UpdateDocumentation();
 	void UpdateStatus();
@@ -208,6 +228,10 @@ private:
 	std::unique_ptr<CSearchPane> m_Search;
 	std::unique_ptr<CNamespacePane> m_Namespaces;
 	std::unique_ptr<CSearchPane> m_UsedBy;
+	std::unique_ptr<CSearchPane> m_Favorites, m_History;
+	std::vector<std::string> m_FavoriteNames, m_HistoryNames;	// (the history: the last first)
+	std::vector<size_t> m_FavoriteEntries, m_HistoryEntries;
+	bool m_SwitchingMachine{ false };	// (the tabs show the same as they did: not opened)
 	std::string m_UsedBySubject;		// the type whose usages are shown (empty: none)
 	std::vector<size_t> const m_NoEntries;
 	CDocPane m_Doc;
@@ -217,4 +241,5 @@ private:
 	CToolBarCtrl m_ToolBar;
 	CFont m_UIFont;
 	CQuickOpen m_QuickOpen;
+	CDecodeBox m_Decode;
 };

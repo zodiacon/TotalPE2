@@ -29,6 +29,9 @@ public:
 	BOOL PreTranslateMessage(MSG* pMsg);
 	// selects a function or type by its name (the filter is cleared if it hides it); false if there is none
 	bool Select(std::string const& name);
+	// Win32 API Explorer (Win32ApiExp.exe, next to TotalPE.exe), with a function or type of it opened (empty: none); the
+	// window it has, if it is running (it is one). False if it is not there.
+	static bool OpenInExplorer(std::string const& name);
 	// another file was opened (or none is): the API of its machine, the functions it imports
 	void SetFile(Win32Api& api, std::unordered_set<std::string> imports);
 	// shows a function or type, which Back returns from
@@ -59,6 +62,7 @@ public:
 		COMMAND_ID_HANDLER(ID_WIN32_REFERENCES, OnReferences)
 		COMMAND_ID_HANDLER(ID_WIN32_DOCS, OnDocumentation)
 		COMMAND_ID_HANDLER(ID_WIN32_BROWSER, OnOpenInBrowser)
+		COMMAND_ID_HANDLER(ID_WIN32_EXPLORER, OnOpenInExplorer)
 		COMMAND_ID_HANDLER(ID_NAV_BACK, OnBack)
 		COMMAND_ID_HANDLER(ID_NAV_FORWARD, OnForwardCommand)
 		CHAIN_MSG_MAP(CVirtualListView<CWin32ApiView>)
@@ -84,6 +88,7 @@ private:
 	LRESULT OnForwardCommand(WORD, WORD, HWND, BOOL&);
 	LRESULT OnDocumentation(WORD, WORD, HWND, BOOL&);
 	LRESULT OnOpenInBrowser(WORD, WORD, HWND, BOOL&);
+	LRESULT OnOpenInExplorer(WORD, WORD, HWND, BOOL&);
 	// the documentation of the one shown (if it is shown)
 	void ShowDocumentation();
 

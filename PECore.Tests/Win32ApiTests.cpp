@@ -274,3 +274,61 @@ TEST_CASE("Win32 API: the layout of a struct", "[win32api]") {
 	// not a struct
 	CHECK(!api->LayoutOf(*api->Find("CreateFileW")));
 }
+
+TEST_CASE("Win32 API: a value of an enum by its names", "[win32api]") {
+	auto api = Api();
+	if (!api)
+		SKIP("no Windows.Win32.winmd next to the executable");
+	auto shareMode = api->Find("FILE_SHARE_MODE");
+	REQUIRE(shareMode);
+	CHECK(api->DecodeValue(*shareMode, 1) == "FILE_SHARE_READ");
+	CHECK(api->DecodeValue(*shareMode, 3) == "FILE_SHARE_READ | FILE_SHARE_WRITE");
+	CHECK(api->DecodeValue(*shareMode, 7) == "FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE");
+	// bits no name has
+	CHECK(api->DecodeValue(*shareMode, 0x81) == "FILE_SHARE_READ | 0x80");
+	// a value that is not of flags
+	auto error = api->Find("WIN32_ERROR");
+	REQUIRE(error);
+	CHECK(api->DecodeValue(*error, 5) == "ERROR_ACCESS_DENIED");
+	CHECK(api->DecodeValue(*api->Find("CreateFileW"), 1).empty());
+}
+
+TEST_CASE("Win32 API: the vtable of an interface", "[win32api]") {
+	auto api = Api();
+	if (!api)
+		SKIP("no Windows.Win32.winmd next to the executable");
+	auto slots = api->VtableOf(*api->Find("IClassFactory"));
+	REQUIRE(slots.size() == 5);
+	CHECK((slots[0].Interface == "IUnknown" && slots[0].Method == "QueryInterface"));
+	CHECK((slots[2].Interface == "IUnknown" && slots[2].Method == "Release"));
+	CHECK((slots[3].Interface == "IClassFactory" && slots[3].Method == "CreateInstance"));
+	INFO(slots[3].Signature);
+	CHECK(slots[3].Signature.starts_with("HRESULT CreateInstance(IUnknown *pUnkOuter"));
+	CHECK(slots[4].Method == "LockServer");
+	CHECK(api->VtableOf(*api->Find("CreateFileW")).empty());
+}
+
+TEST_CASE("Win32 API: related entries", "[win32api]") {
+	auto api = Api();
+	if (!api)
+		SKIP("no Windows.Win32.winmd next to the executable");
+	auto const& entries = api->Entries();
+	auto names = [&](char const* name) {
+		std::vector<std::string> result;
+		for (auto i : api->RelatedOf(api->Find(name) - entries.data()))
+			result.push_back(entries[i].Name);
+		return result;
+	};
+	auto related = names("CreateFileW");
+	CHECK(std::ranges::find(related, "CreateFileA") != related.end());
+	CHECK(std::ranges::find(related, "CreateFile2") != related.end());
+	CHECK(std::ranges::find(related, "CreateFileW") == related.end());
+	CHECK(std::ranges::find(related, "CreateFileTransactedW") == related.end());
+	related = names("CreateWindowExW");
+	CHECK(std::ranges::find(related, "CreateWindowExA") != related.end());
+	// types with types
+	related = names("OSVERSIONINFOW");
+	CHECK(std::ranges::find(related, "OSVERSIONINFOA") != related.end());
+	CHECK(std::ranges::find(related, "OSVERSIONINFOEXW") != related.end());
+	CHECK(std::ranges::none_of(related, [&](std::string const& n) { return api->Find(n)->Kind == Win32Api::Entry::Kinds::Function; }));
+}

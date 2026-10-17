@@ -291,13 +291,15 @@
 #define ID_PE_WINRT                     32972
 #define ID_OPTIONS_COLORS               32973
 #define ID_OPTIONS_CODEFONT             32974
+#define ID_TOOLS_WIN32EXPLORER          32975
+#define ID_WIN32_EXPLORER               32976
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        288
-#define _APS_NEXT_COMMAND_VALUE         32975
+#define _APS_NEXT_COMMAND_VALUE         32977
 #define _APS_NEXT_CONTROL_VALUE         1050
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
