@@ -1,21 +1,24 @@
 #include "pch.h"
 #include "DeclarationView.h"
 #include "resource.h"
+#include "AppSettings.h"
 #include <WTLHelper.h>
 
 namespace {
 	constexpr int IndicatorLink = 8;
 
 	struct Palette {
-		COLORREF Back, Fore, Comment, Keyword, Type, Number, String, Preprocessor, Link, CaretLine, Selection, Caret;
+		COLORREF Back, Fore, Comment, Keyword, Type, Number, String, Preprocessor, Link, CaretLine, Selection, Caret, TipBack;
 	};
 
 	Palette CurrentPalette() {
 		if (WTLHelper::IsDarkMode())
 			return { RGB(30, 30, 30), RGB(220, 220, 220), RGB(87, 166, 74), RGB(86, 156, 214), RGB(78, 201, 176), RGB(181, 206, 168),
-				RGB(214, 157, 133), RGB(155, 155, 155), RGB(100, 160, 230), RGB(40, 40, 44), RGB(38, 79, 120), RGB(240, 240, 240) };
+				RGB(214, 157, 133), RGB(155, 155, 155), RGB(100, 160, 230), RGB(40, 40, 44), RGB(38, 79, 120), RGB(240, 240, 240),
+				RGB(50, 50, 54) };
 		return { RGB(255, 255, 255), RGB(0, 0, 0), RGB(0, 128, 0), RGB(0, 0, 255), RGB(43, 145, 175), RGB(9, 136, 90),
-			RGB(163, 21, 21), RGB(128, 128, 128), RGB(0, 102, 204), RGB(240, 240, 248), RGB(173, 214, 255), RGB(0, 0, 0) };
+			RGB(163, 21, 21), RGB(128, 128, 128), RGB(0, 102, 204), RGB(240, 240, 248), RGB(173, 214, 255), RGB(0, 0, 0),
+			RGB(246, 246, 238) };
 	}
 
 	bool IsWordChar(char c) {
@@ -51,6 +54,7 @@ LRESULT CDeclarationView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	Sci(SCI_SETCARETLINEVISIBLEALWAYS, TRUE);
 	Sci(SCI_SETSCROLLWIDTHTRACKING, TRUE);
 	Sci(SCI_SETSCROLLWIDTH, 1);
+	Sci(SCI_SETMOUSEDWELLTIME, 500);
 
 	auto lexer = CreateLexer("cpp");
 	lexer->WordListSet(0, "auto break case char const continue default do double else enum extern float for goto if inline "
@@ -79,8 +83,13 @@ void CDeclarationView::UpdateColors() {
 	if (!m_Sci)
 		return;
 	auto p = CurrentPalette();
-	Sci(SCI_STYLESETFONT, STYLE_DEFAULT, (LPARAM)"Consolas");
-	Sci(SCI_STYLESETSIZE, STYLE_DEFAULT, 10);
+	auto font = CodeFont();
+	CClientDC dc(m_hWnd);
+	auto points = std::max(1, ::MulDiv(std::abs(font.lfHeight), 72, dc.GetDeviceCaps(LOGPIXELSY)));
+	Sci(SCI_STYLESETFONT, STYLE_DEFAULT, (LPARAM)(PCSTR)CW2A(font.lfFaceName, CP_UTF8));
+	Sci(SCI_STYLESETSIZE, STYLE_DEFAULT, points);
+	Sci(SCI_STYLESETBOLD, STYLE_DEFAULT, font.lfWeight >= FW_BOLD);
+	Sci(SCI_STYLESETITALIC, STYLE_DEFAULT, font.lfItalic != 0);
 	Sci(SCI_STYLESETFORE, STYLE_DEFAULT, p.Fore);
 	Sci(SCI_STYLESETBACK, STYLE_DEFAULT, p.Back);
 	Sci(SCI_STYLECLEARALL);
@@ -94,6 +103,10 @@ void CDeclarationView::UpdateColors() {
 	Sci(SCI_STYLESETFORE, SCE_C_PREPROCESSOR, p.Preprocessor);
 	Sci(SCI_STYLESETFORE, STYLE_LINENUMBER, p.Fore);
 	Sci(SCI_STYLESETBACK, STYLE_LINENUMBER, p.Back);
+	// the tips: in the code's font, a little apart from the code's background
+	Sci(SCI_CALLTIPUSESTYLE, 0);
+	Sci(SCI_STYLESETFORE, STYLE_CALLTIP, p.Fore);
+	Sci(SCI_STYLESETBACK, STYLE_CALLTIP, p.TipBack);
 
 	auto opaque = [](COLORREF c) { return (LPARAM)(c | 0xFF000000); };
 	Sci(SCI_SETELEMENTCOLOUR, SC_ELEMENT_CARET_LINE_BACK, opaque(p.CaretLine));
@@ -108,6 +121,19 @@ void CDeclarationView::UpdateColors() {
 	// the scroll bars (dark mode's themes are of the controls it knows, which Scintilla is not one of)
 	::SetWindowTheme(m_Sci, WTLHelper::IsDarkMode() ? L"DarkMode_Explorer" : nullptr, nullptr);
 	::SetWindowPos(m_Sci, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+}
+
+LOGFONT CDeclarationView::CodeFont() {
+	auto font = AppSettings::Get().CodeFont();
+	if (font.lfFaceName[0])
+		return font;
+	font = {};
+	wcscpy_s(font.lfFaceName, L"Consolas");
+	CClientDC dc(nullptr);
+	font.lfHeight = -::MulDiv(10, dc.GetDeviceCaps(LOGPIXELSY), 72);
+	font.lfWeight = FW_NORMAL;
+	font.lfCharSet = DEFAULT_CHARSET;
+	return font;
 }
 
 void CDeclarationView::SetText(std::string const& text) {
@@ -252,6 +278,84 @@ bool CDeclarationView::FollowCaret(bool newTab) {
 	return FollowLine((int)Sci(SCI_LINEFROMPOSITION, Sci(SCI_GETCURRENTPOS)), newTab);
 }
 
+bool CDeclarationView::HighlightName(std::string const& name) {
+	if (name.empty())
+		return false;
+	Sci(SCI_SETTARGETRANGE, 0, Sci(SCI_GETLENGTH));
+	Sci(SCI_SETSEARCHFLAGS, SCFIND_MATCHCASE | SCFIND_WHOLEWORD);
+	auto at = Sci(SCI_SEARCHINTARGET, name.size(), (LPARAM)name.c_str());
+	if (at < 0)
+		return false;
+	Sci(SCI_SETSEL, at, at + name.size());
+	// (in the middle of what is shown)
+	auto line = (int)Sci(SCI_LINEFROMPOSITION, at);
+	auto shown = (int)Sci(SCI_LINESONSCREEN);
+	Sci(SCI_SETFIRSTVISIBLELINE, std::max(0, line - shown / 2));
+	return true;
+}
+
+std::string CDeclarationView::TipOf(std::string const& name) const {
+	constexpr int MaxLines = 16;
+	// a type, function or constant (not the one shown): its declaration, its first lines
+	if (auto entry = m_Api->Find(name); entry && name != Name()) {
+		auto text = m_Api->Declaration(*entry);
+		std::string tip;
+		int lines = 0;
+		for (size_t start = 0; start < text.size(); lines++) {
+			auto end = text.find("\r\n", start);
+			if (end == std::string::npos)
+				end = text.size();
+			if (lines == MaxLines) {
+				tip += "\n...";
+				break;
+			}
+			if (!tip.empty())
+				tip += '\n';
+			tip += text.substr(start, end - start);
+			start = end + 2;
+		}
+		return tip;
+	}
+	// a value of an enum: its value, and its other names
+	if (auto constant = m_Api->ConstantOf(name)) {
+		auto tip = std::format("{} = 0x{:X} ({})\n{}", name, constant->Value, (int64_t)constant->Value, constant->Type);
+		std::string others;
+		for (auto const& other : constant->Names)
+			if (other != name)
+				others += (others.empty() ? "" : ", ") + other;
+		if (!others.empty())
+			tip += "\nalso: " + others;
+		return tip;
+	}
+	return {};
+}
+
+LRESULT CDeclarationView::OnDwellStart(int, LPNMHDR hdr, BOOL&) {
+	auto scn = (SCNotification*)hdr;
+	if (scn->position < 0)
+		return 0;
+	auto start = Sci(SCI_WORDSTARTPOSITION, scn->position, TRUE);
+	auto end = Sci(SCI_WORDENDPOSITION, scn->position, TRUE);
+	if (end <= start)
+		return 0;
+	std::string word(end - start + 1, '\0');
+	Sci_TextRangeFull range{ { start, end }, word.data() };
+	Sci(SCI_GETTEXTRANGEFULL, 0, (LPARAM)&range);
+	word.resize(strlen(word.c_str()));
+	auto tip = TipOf(word);
+	// (a tip does not expand tabs)
+	for (size_t at = 0; (at = tip.find('\t', at)) != std::string::npos; at += 4)
+		tip.replace(at, 1, "    ");
+	if (!tip.empty())
+		Sci(SCI_CALLTIPSHOW, start, (LPARAM)tip.c_str());
+	return 0;
+}
+
+LRESULT CDeclarationView::OnDwellEnd(int, LPNMHDR, BOOL&) {
+	Sci(SCI_CALLTIPCANCEL);
+	return 0;
+}
+
 void CDeclarationView::Copy() {
 	Sci(SCI_COPYALLOWLINE);
 }
@@ -304,6 +408,7 @@ LRESULT CDeclarationView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
 		referred.empty() ? L"Go to &Definition\tF12" : std::format(L"Go to &{}\tF12", name).c_str());
 	menu.AppendMenu(MF_STRING | linkFlags, ID_GO_DEFINITION_NEWTAB,
 		referred.empty() ? L"Open Definition in New &Tab\tCtrl+F12" : std::format(L"Open {} in New &Tab\tCtrl+F12", name).c_str());
+	menu.AppendMenu(MF_STRING, ID_GO_USEDBY, L"Find &Usages\tShift+F12");
 	menu.AppendMenu(MF_SEPARATOR);
 	menu.AppendMenu(MF_STRING, ID_EDIT_COPY, L"&Copy\tCtrl+C");
 	menu.AppendMenu(MF_STRING, ID_EDIT_SELECT_ALL, L"Select &All\tCtrl+A");

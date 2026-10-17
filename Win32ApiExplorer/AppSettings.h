@@ -13,6 +13,8 @@ public:
 	SETTING(DocumentationPercent, 45, SettingType::Int32);	// of the height of the right side
 	SETTING(NavigatorPage, 0, SettingType::Int32);		// 0: Search, 1: Namespaces
 	SETTING(ActiveTab, -1, SettingType::Int32);
+	SETTING(CodeFont, LOGFONT{}, SettingType::Binary);	// of the declarations (no name: the default)
+	SETTING(UIFont, LOGFONT{}, SettingType::Binary);	// of the rest: lists, tree, tabs (no name: the default)
 	END_SETTINGS
 
 	DEF_SETTING(MainWindowPlacement, WINDOWPLACEMENT)
@@ -23,5 +25,7 @@ public:
 	DEF_SETTING(DocumentationPercent, int)
 	DEF_SETTING(NavigatorPage, int)
 	DEF_SETTING(ActiveTab, int)
+	DEF_SETTING(CodeFont, LOGFONT)
+	DEF_SETTING(UIFont, LOGFONT)
 	DEF_SETTING_MULTI(OpenTabs)		// the names of the tabs kept open, in their order
 };

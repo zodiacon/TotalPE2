@@ -118,17 +118,40 @@ void CTabStrip::UpdateColors() {
 		Invalidate();
 }
 
+void CTabStrip::SetFont(LOGFONT const* font) {
+	if (font)
+		m_CustomFont = *font;
+	else
+		m_CustomFont.reset();
+	if (m_hWnd) {
+		CreateFonts();
+		Layout();
+	}
+}
+
 void CTabStrip::CreateFonts() {
-	NONCLIENTMETRICS ncm{ sizeof(ncm) };
-	::SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
+	LOGFONT font;
+	if (m_CustomFont)
+		font = *m_CustomFont;
+	else {
+		NONCLIENTMETRICS ncm{ sizeof(ncm) };
+		::SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
+		font = ncm.lfMessageFont;
+	}
 	if (!m_Font.IsNull())
 		m_Font.DeleteObject();
 	if (!m_ItalicFont.IsNull())
 		m_ItalicFont.DeleteObject();
-	m_Font.CreateFontIndirect(&ncm.lfMessageFont);
-	ncm.lfMessageFont.lfItalic = TRUE;
-	m_ItalicFont.CreateFontIndirect(&ncm.lfMessageFont);
-	m_FontHeight = std::abs(ncm.lfMessageFont.lfHeight) + 4;
+	m_Font.CreateFontIndirect(&font);
+	font.lfItalic = TRUE;
+	m_ItalicFont.CreateFontIndirect(&font);
+	// (the height of its characters: lfHeight may be of the cell)
+	CClientDC dc(m_hWnd);
+	auto old = dc.SelectFont(m_Font);
+	TEXTMETRIC tm;
+	dc.GetTextMetrics(&tm);
+	dc.SelectFont(old);
+	m_FontHeight = tm.tmHeight + 2;
 }
 
 // The tabs' widths: as their texts need (within limits), narrower if they do not fit (to the minimum: then they scroll)

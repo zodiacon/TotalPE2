@@ -43,17 +43,25 @@ BEGIN
     BEGIN
         MENUITEM "&Search\tCtrl+1",             ID_VIEW_SEARCH
         MENUITEM "&Namespaces\tCtrl+2",         ID_VIEW_NAMESPACES
+        MENUITEM "&Used By\tCtrl+3",            ID_VIEW_USEDBY
         MENUITEM SEPARATOR
         MENUITEM "&Documentation\tCtrl+D",      ID_VIEW_DOCUMENTATION
         MENUITEM "Dar&k Mode",                  ID_VIEW_DARKMODE
+        MENUITEM SEPARATOR
+        MENUITEM "Code &Font...",               ID_VIEW_FONT
+        MENUITEM "&Interface Font...",          ID_VIEW_UIFONT
+        MENUITEM "&Reset Fonts",                ID_VIEW_RESETFONTS
     END
     POPUP "&Go"
     BEGIN
+        MENUITEM "&Quick Open...\tCtrl+P",      ID_GO_QUICKOPEN
+        MENUITEM SEPARATOR
         MENUITEM "&Back\tAlt+Left",             ID_GO_BACK
         MENUITEM "&Forward\tAlt+Right",         ID_GO_FORWARD
         MENUITEM SEPARATOR
         MENUITEM "Go to &Definition\tF12",      ID_GO_DEFINITION
         MENUITEM "Open Definition in New &Tab\tCtrl+F12", ID_GO_DEFINITION_NEWTAB
+        MENUITEM "Find &Usages\tShift+F12",     ID_GO_USEDBY
         MENUITEM SEPARATOR
         MENUITEM "&Reveal in Namespaces\tCtrl+Shift+E", ID_GO_REVEAL
         MENUITEM "Open Documentation in &Browser\tCtrl+Shift+B", ID_DOC_BROWSER
@@ -93,6 +101,7 @@ BEGIN
         MENUITEM SEPARATOR
         MENUITEM "Copy &Name",                  ID_EDIT_COPYNAME
         MENUITEM "&Reveal in Namespaces",       ID_GO_REVEAL
+        MENUITEM "Find &Usages",                ID_GO_USEDBY
         MENUITEM "Open Documentation in &Browser", ID_DOC_BROWSER
     END
 END
@@ -104,13 +113,16 @@ BEGIN
     "C",            ID_EDIT_COPYNAME,       VIRTKEY, SHIFT, CONTROL, NOINVERT
     "F",            ID_EDIT_FIND,           VIRTKEY, CONTROL, NOINVERT
     "Q",            ID_EDIT_FIND,           VIRTKEY, CONTROL, NOINVERT
+    "P",            ID_GO_QUICKOPEN,        VIRTKEY, CONTROL, NOINVERT
     "1",            ID_VIEW_SEARCH,         VIRTKEY, CONTROL, NOINVERT
     "2",            ID_VIEW_NAMESPACES,     VIRTKEY, CONTROL, NOINVERT
+    "3",            ID_VIEW_USEDBY,         VIRTKEY, CONTROL, NOINVERT
     "D",            ID_VIEW_DOCUMENTATION,  VIRTKEY, CONTROL, NOINVERT
     VK_LEFT,        ID_GO_BACK,             VIRTKEY, ALT, NOINVERT
     VK_RIGHT,       ID_GO_FORWARD,          VIRTKEY, ALT, NOINVERT
     VK_F12,         ID_GO_DEFINITION,       VIRTKEY, NOINVERT
     VK_F12,         ID_GO_DEFINITION_NEWTAB, VIRTKEY, CONTROL, NOINVERT
+    VK_F12,         ID_GO_USEDBY,           VIRTKEY, SHIFT, NOINVERT
     "E",            ID_GO_REVEAL,           VIRTKEY, SHIFT, CONTROL, NOINVERT
     "B",            ID_DOC_BROWSER,         VIRTKEY, SHIFT, CONTROL, NOINVERT
     "K",            ID_TAB_KEEPOPEN,        VIRTKEY, CONTROL, NOINVERT

@@ -6,7 +6,8 @@
 // The C declaration of a function, type or constant of the Win32 metadata (in Scintilla, colored as C), with the history of
 // what it showed: following the type a line refers to (Enter, a double-click, F12) shows that type here, and Back returns.
 // The lines that refer to a type have its name underlined. With Ctrl, the owner is asked to open the type in a tab of its
-// own (OnFollow). One for each tab of the main window.
+// own (OnFollow). The mouse resting on a name shows what it is: the declaration of a type, function or constant (its first
+// lines), the value of a value of an enum. One for each tab of the main window.
 //
 class CDeclarationView : public CWindowImpl<CDeclarationView> {
 public:
@@ -34,11 +35,16 @@ public:
 	std::string Name() const;
 	// the API of another machine: the entry of the name (the history is by name)
 	void SetApi(Win32Api& api);
+	// the colors and the font (the code font, of the settings)
 	void UpdateColors();
+	// the code font: the user's, else Consolas of 10 points
+	static LOGFONT CodeFont();
 	// the type the line of the caret refers to (empty: none)
 	std::string ReferredAtCaret() const;
 	// follows the type of the caret's line (false if it refers to none)
 	bool FollowCaret(bool newTab);
+	// selects a name in the declaration (a value of an enum), as a word of its own; false if it is not in it
+	bool HighlightName(std::string const& name);
 	void Copy();
 	void SelectAll();
 	BOOL PreTranslateMessage(MSG* pMsg);
@@ -49,6 +55,8 @@ public:
 		MESSAGE_HANDLER(WM_SETFOCUS, OnSetFocus)
 		MESSAGE_HANDLER(WM_CONTEXTMENU, OnContextMenu)
 		NOTIFY_CODE_HANDLER(SCN_DOUBLECLICK, OnDoubleClick)
+		NOTIFY_CODE_HANDLER(SCN_DWELLSTART, OnDwellStart)
+		NOTIFY_CODE_HANDLER(SCN_DWELLEND, OnDwellEnd)
 	END_MSG_MAP()
 
 private:
@@ -57,6 +65,10 @@ private:
 	LRESULT OnSetFocus(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnContextMenu(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnDoubleClick(int, LPNMHDR, BOOL&);
+	LRESULT OnDwellStart(int, LPNMHDR, BOOL&);
+	LRESULT OnDwellEnd(int, LPNMHDR, BOOL&);
+	// what the tip of a name says (empty: none)
+	std::string TipOf(std::string const& name) const;
 
 	LRESULT Sci(UINT msg, WPARAM wp = 0, LPARAM lp = 0) const {
 		return ::SendMessage(m_Sci, msg, wp, lp);

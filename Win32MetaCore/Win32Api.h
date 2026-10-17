@@ -28,6 +28,8 @@ public:
 	static Win32Api* Get(Machine machine);
 	// where the metadata is looked for: next to the executable
 	static std::wstring MetadataPath();
+	// the WDK's (the kernel's functions and types), used with it if it is there
+	static std::wstring WdkMetadataPath();
 
 	// A function by its name, as a DLL exports it (of that DLL, if there are others of the name; of that DLL only, if
 	// 'onlyOf'): the id of its type (a function) and the names of its parameters
@@ -68,10 +70,29 @@ public:
 		std::vector<size_t> Entries;
 	};
 	Namespace const& Namespaces();
+	// The entries that use a type (indices into Entries(), by name): the functions with a parameter or result of it (or a
+	// pointer to it, an array of it), the structs and unions with a field of it (in a nested one too), the callbacks and the
+	// interfaces with a method that takes or returns it, the interfaces derived from it, the typedefs of it and the
+	// constants of it. Empty for a function or a constant. (All of them are found when the first is asked for.)
+	std::vector<size_t> const& UsedBy(size_t entry);
+
+	// A constant (its entry), a value of an enum (its name and the enum's entry), a GUID's name (IID_IUnknown: the entry of
+	// the interface, class or constant it is of)
+	struct NamedValue {
+		std::string Name;
+		size_t Entry;
+	};
+	// Those of a value: as the metadata has it, or as an integer of 32, 16 or 8 bits (0xFFFFFFFF is -1 of an int, and -1
+	// is 0xFFFFFFFF of a uint); by name
+	std::vector<NamedValue> FindValue(uint64_t value);
+	// What a GUID names (an interface, a class, a constant)
+	std::optional<NamedValue> FindGuid(GUID const& guid);
 	// The C declaration of an entry; 'lines' gets, for each line, the type it refers to (empty for none)
 	std::string Declaration(Entry const& entry, std::vector<std::string>* lines = nullptr);
 	// the page of Microsoft's documentation of an entry (from its [Documentation] attribute); empty if it has none
 	std::wstring DocumentationUrl(Entry const& entry);
+	// the header a page of the documentation is of ("fileapi.h"; empty if it is not known)
+	static std::string HeaderOf(std::wstring const& url);
 	// a type as C writes it ("HANDLE", "WIN32_FIND_DATAW *", "wchar_t[260]")
 	std::string TypeText(uint32_t id);
 
@@ -124,10 +145,26 @@ private:
 	std::string Referred(uint32_t id);
 	// the declaration of a constant (a field of a class of the functions and constants)
 	std::string ConstantDeclaration(Entry const& entry, std::vector<std::string>* lines);
+	// The attributes of the metadata on what a token is: by their short names ("MemorySize", "Obsolete"), with their
+	// arguments (a named one by its name, a constructor's by its position: "0", "1"), strings without their quotes
+	struct Attribute {
+		std::string Name;
+		std::vector<std::pair<std::string, std::string>> Arguments;
+		// an argument's value (empty if it has none)
+		std::string operator[](std::string const& name) const;
+	};
+	std::vector<Attribute> AttributesOf(uint32_t token);
+	// What the attributes say of a function, a type, a field or a parameter, as notes ("Windows XP+", "size:
+	// nNumberOfBytesToRead"); method: of a parameter, for the names of those its sizes and counts are
+	std::vector<std::string> Notes(std::vector<Attribute> const& attributes, uint32_t method = 0);
 	std::vector<Entry> m_Entries;
 	std::unordered_map<std::string, size_t> m_EntryIndex;
 	Namespace m_Namespaces;
 	bool m_NamespacesBuilt{ false };
+	void BuildUsedBy();
+	std::vector<std::vector<size_t>> m_UsedBy;	// of each entry
+	std::vector<std::pair<int64_t, NamedValue>> m_Values;	// by value
+	bool m_ValuesBuilt{ false };
 
 	Data& m_Data;
 	Machine m_Machine;

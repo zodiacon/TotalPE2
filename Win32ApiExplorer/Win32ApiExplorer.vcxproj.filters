@@ -27,6 +27,9 @@
     <ClCompile Include="NamespacePane.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="QuickOpen.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="SearchPane.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -54,6 +57,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="NamespacePane.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="QuickOpen.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="pch.h">

@@ -26,9 +26,13 @@ CMainFrame::CMainFrame(std::wstring startName) : m_StartName(std::move(startName
 }
 
 BOOL CMainFrame::PreTranslateMessage(MSG* pMsg) {
+	if (m_QuickOpen.PreTranslateMessage(pMsg))
+		return TRUE;
 	if (m_Search && m_Search->PreTranslateMessage(pMsg))
 		return TRUE;
 	if (m_Namespaces && m_Namespaces->PreTranslateMessage(pMsg))
+		return TRUE;
+	if (m_UsedBy && m_UsedBy->PreTranslateMessage(pMsg))
 		return TRUE;
 	if (auto view = ActiveView(); view && view->PreTranslateMessage(pMsg))
 		return TRUE;
@@ -74,6 +78,15 @@ LRESULT CMainFrame::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 		status.SetParts(_countof(parts), parts);
 	}
 
+	m_QuickOpen.Create(m_hWnd, rcDefault, nullptr, WS_POPUP | WS_BORDER | WS_CLIPCHILDREN, WS_EX_TOOLWINDOW);
+	m_QuickOpen.SetApi(*m_Api);
+	m_QuickOpen.SetImageList(m_Images);
+	m_QuickOpen.OnOpen = [this](size_t entry) {
+		OpenEntry(entry, true);
+		if (auto view = ActiveView())
+			view->SetFocus();
+	};
+
 	m_hWndClient = m_Splitter.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
 	CreateNavigator();
 	CreateEditors();
@@ -88,7 +101,10 @@ LRESULT CMainFrame::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	loop->AddMessageFilter(this);
 	loop->AddIdleHandler(this);
 
-	ShowNavigatorPage(settings.NavigatorPage());
+	// (the default font: as the controls have it)
+	if (settings.UIFont().lfFaceName[0])
+		ApplyUIFont();
+	ShowNavigatorPage(std::min(settings.NavigatorPage(), 1));	// (the Used By page is of a type asked for)
 	RestoreTabs();
 	if (!m_StartName.empty()) {
 		if (auto entry = m_Api->Find(Narrow(m_StartName))) {
@@ -109,6 +125,7 @@ void CMainFrame::CreateToolBar() {
 		{ ID_GO_FORWARD, IDI_FORWARD },
 		{ 0 },
 		{ ID_GO_REVEAL, IDI_NAMESPACE, BTNS_BUTTON | BTNS_AUTOSIZE, L"Reveal" },
+		{ ID_GO_USEDBY, IDI_FIND, BTNS_BUTTON | BTNS_AUTOSIZE, L"Find Usages" },
 		{ 0 },
 		{ ID_VIEW_DOCUMENTATION, IDI_GLOBE, BTNS_CHECK | BTNS_AUTOSIZE, L"Documentation" },
 		{ ID_DOC_BROWSER, 0, BTNS_BUTTON | BTNS_AUTOSIZE, L"Open in Browser" },
@@ -146,11 +163,12 @@ void CMainFrame::CreateNavigator() {
 	strip.SetClosable(false);
 	strip.Add(L"Search");
 	strip.Add(L"Namespaces");
+	strip.Add(L"Used By");
 	strip.OnSelected = [this](int page) { ShowNavigatorPage(page); };
 
-	// (from either: a preview, or a tab that stays, which gets the focus)
-	auto open = [this](size_t entry, bool pin) {
-		OpenEntry(entry, pin);
+	// (from any: a preview, or a tab that stays, which gets the focus)
+	auto open = [this](size_t entry, bool pin, std::string const& name) {
+		OpenEntry(entry, pin, name);
 		if (auto view = ActiveView(); view && pin)
 			view->SetFocus();
 	};
@@ -163,7 +181,14 @@ void CMainFrame::CreateNavigator() {
 	m_Namespaces = std::make_unique<CNamespacePane>(*m_Api);
 	m_Namespaces->Create(m_Navigator, rcDefault, nullptr, WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
 	m_Namespaces->SetImageList(m_Images);
-	m_Namespaces->OnOpen = open;
+	m_Namespaces->OnOpen = [open](size_t entry, bool pin) { open(entry, pin, {}); };
+
+	m_UsedBy = std::make_unique<CSearchPane>(*m_Api);
+	m_UsedBy->Create(m_Navigator, rcDefault, nullptr, WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
+	m_UsedBy->SetImageList(m_Images);
+	m_UsedBy->SetScope(&m_NoEntries, L"what uses a type (Shift+F12 finds it)");
+	m_UsedBy->OnOpen = open;
+	m_UsedBy->OnCountChanged = [this] { UpdateStatus(); };
 }
 
 void CMainFrame::CreateEditors() {
@@ -260,11 +285,16 @@ int CMainFrame::TabShowing(int entry) const {
 	return -1;
 }
 
-void CMainFrame::OpenEntry(size_t entry, bool pin) {
+void CMainFrame::OpenEntry(size_t entry, bool pin, std::string const& name) {
+	auto show = [&](int index) {
+		ActivateTab(index);
+		if (!name.empty())
+			m_Tabs[index].View->HighlightName(name);
+	};
 	if (auto index = TabShowing((int)entry); index >= 0) {
 		if (pin)
 			Pin(index);
-		ActivateTab(index);
+		show(index);
 		return;
 	}
 	if (!pin) {
@@ -274,11 +304,11 @@ void CMainFrame::OpenEntry(size_t entry, bool pin) {
 			auto view = m_Tabs[i].View.get();
 			view->ClearHistory();
 			view->Show((int)entry);
-			ActivateTab(i);
+			show(i);
 			return;
 		}
 	}
-	ActivateTab(AddTab((int)entry, !pin));
+	show(AddTab((int)entry, !pin));
 }
 
 int CMainFrame::AddTab(int entry, bool preview, int position) {
@@ -383,10 +413,50 @@ void CMainFrame::ShowTabMenu(int index, CPoint pt) {
 //
 
 void CMainFrame::ShowNavigatorPage(int page) {
-	page = std::clamp(page, 0, 1);
+	page = std::clamp(page, 0, 2);
+	HWND const pages[] = { *m_Search, *m_Namespaces, *m_UsedBy };
 	m_Navigator.Strip().Select(page);
-	m_Navigator.SetPage(page == 0 ? m_Search->m_hWnd : m_Namespaces->m_hWnd);
+	m_Navigator.SetPage(pages[page]);
 	AppSettings::Get().NavigatorPage(page);
+	UpdateStatus();
+}
+
+int CMainFrame::UsagesTarget() const {
+	auto const& entries = m_Api->Entries();
+	int entry = -1;
+	if (m_MenuTab >= 0 && m_MenuTab < (int)m_Tabs.size())
+		entry = m_Tabs[m_MenuTab].View->Entry();
+	else if (auto view = ActiveView()) {
+		auto referred = view->ReferredAtCaret();
+		auto found = referred.empty() ? nullptr : m_Api->Find(referred);
+		entry = found ? (int)(found - entries.data()) : view->Entry();
+	}
+	if (entry < 0)
+		return -1;
+	auto kind = entries[entry].Kind;
+	return kind == Win32Api::Entry::Kinds::Function || kind == Win32Api::Entry::Kinds::Constant ? -1 : entry;
+}
+
+void CMainFrame::FindUsages(size_t entry) {
+	m_UsedBySubject = m_Api->Entries()[entry].Name;
+	UpdateUsedBy();
+	ShowNavigatorPage(2);
+	m_UsedBy->SetFocus();
+}
+
+void CMainFrame::UpdateUsedBy() {
+	auto entry = m_UsedBySubject.empty() ? nullptr : m_Api->Find(m_UsedBySubject);
+	auto& strip = m_Navigator.Strip();
+	if (!entry) {
+		m_UsedBy->SetScope(&m_NoEntries, L"what uses a type (Shift+F12 finds it)");
+		strip.SetText(2, L"Used By");
+		return;
+	}
+	CWaitCursor wait;
+	auto const& users = m_Api->UsedBy(entry - m_Api->Entries().data());
+	auto name = Wide(m_UsedBySubject);
+	m_UsedBy->SetScope(&users, std::format(L"the {} that use {}", users.size(), name));
+	strip.SetText(2, L"Used By: " + name);
 }
 
 void CMainFrame::UpdateDocumentation() {
@@ -408,7 +478,9 @@ void CMainFrame::UpdateStatus() {
 	if (!m_hWndStatusBar || !m_Search)
 		return;
 	CStatusBarCtrl status(m_hWndStatusBar);
-	status.SetText(0, std::format(L"{} of {} shown", m_Search->GetShownCount(), m_Api->Entries().size()).c_str());
+	// (of the list shown: the search, or what uses a type)
+	auto list = m_Navigator.Strip().GetSelected() == 2 ? m_UsedBy.get() : m_Search.get();
+	status.SetText(0, std::format(L"{} of {} shown", list->GetShownCount(), list->GetTotalCount()).c_str());
 	status.SetText(1, std::format(L"Machine: {}", s_Machines[(int)m_Machine]).c_str());
 }
 
@@ -433,15 +505,17 @@ void CMainFrame::UpdateUIState() {
 	auto target = TargetTab();
 	bool shows = target >= 0 && m_Tabs[target].View->Entry() >= 0;
 	UIEnable(ID_GO_REVEAL, shows);
+	UIEnable(ID_GO_USEDBY, UsagesTarget() >= 0);
 	UIEnable(ID_DOC_BROWSER, shows);
 	UIEnable(ID_EDIT_COPYNAME, shows);
 	UISetCheck(ID_VIEW_DOCUMENTATION, settings.ShowDocumentation());
 	UISetCheck(ID_VIEW_DARKMODE, settings.DarkMode());
 	auto page = m_Navigator.m_hWnd ? m_Navigator.Strip().GetSelected() : 0;
-	UISetRadio(ID_VIEW_SEARCH, page == 0);
-	UISetRadio(ID_VIEW_NAMESPACES, page == 1);
-	for (int i = 0; i < (int)_countof(s_Machines); i++)
-		UISetRadio(ID_MACHINE_X86 + i, i == (int)m_Machine);
+	// (one of each: a radio item, of the range of its group's IDs)
+	static_assert(ID_VIEW_NAMESPACES == ID_VIEW_SEARCH + 1 && ID_VIEW_USEDBY == ID_VIEW_SEARCH + 2);
+	static_assert(ID_MACHINE_X64 == ID_MACHINE_X86 + 1 && ID_MACHINE_ARM64 == ID_MACHINE_X86 + 2);
+	UISetRadioMenuItem(ID_VIEW_SEARCH + std::clamp(page, 0, 2), ID_VIEW_SEARCH, ID_VIEW_USEDBY);
+	UISetRadioMenuItem(ID_MACHINE_X86 + (int)m_Machine, ID_MACHINE_X86, ID_MACHINE_ARM64);
 	auto count = (int)m_Tabs.size();
 	UIEnable(ID_TAB_CLOSE, target >= 0);
 	UIEnable(ID_TAB_CLOSEOTHERS, count > 1 && target >= 0);
@@ -468,6 +542,9 @@ void CMainFrame::SetMachine(Win32Api::Machine machine) {
 	m_Api = api;
 	m_Search->SetApi(*api);
 	m_Namespaces->SetApi(*api);
+	m_UsedBy->SetApi(*api);
+	UpdateUsedBy();
+	m_QuickOpen.SetApi(*api);
 	for (auto& tab : m_Tabs)
 		tab.View->SetApi(*api);
 	m_MachineBar.Combo().SetCurSel((int)machine);
@@ -568,12 +645,24 @@ LRESULT CMainFrame::OnFind(WORD, WORD, HWND, BOOL&) {
 }
 
 LRESULT CMainFrame::OnViewNavigator(WORD, WORD id, HWND, BOOL&) {
-	auto page = id == ID_VIEW_SEARCH ? 0 : 1;
+	auto page = id == ID_VIEW_SEARCH ? 0 : id == ID_VIEW_NAMESPACES ? 1 : 2;
 	ShowNavigatorPage(page);
-	if (page == 0)
-		m_Search->SetFocus();
+	::SetFocus(m_Navigator.GetPage());
+	return 0;
+}
+
+LRESULT CMainFrame::OnQuickOpen(WORD, WORD, HWND, BOOL&) {
+	m_QuickOpen.Show();
+	return 0;
+}
+
+LRESULT CMainFrame::OnFindUsages(WORD, WORD, HWND, BOOL&) {
+	auto entry = UsagesTarget();
+	m_MenuTab = -1;
+	if (entry < 0)
+		::MessageBeep(MB_ICONWARNING);
 	else
-		m_Namespaces->SetFocus();
+		FindUsages(entry);
 	return 0;
 }
 
@@ -590,6 +679,77 @@ LRESULT CMainFrame::OnViewDarkMode(WORD, WORD, HWND, BOOL&) {
 	auto& settings = AppSettings::Get();
 	settings.DarkMode(!settings.DarkMode());
 	ApplyColors();
+	return 0;
+}
+
+// the font of the declarations (and of their tips)
+LRESULT CMainFrame::OnViewFont(WORD, WORD, HWND, BOOL&) {
+	auto font = CDeclarationView::CodeFont();
+	CFontDialog dlg(&font, CF_SCREENFONTS | CF_INITTOLOGFONTSTRUCT | CF_NOVERTFONTS, nullptr, m_hWnd);
+	if (!WTLHelper::InvokeFontDialog(dlg, m_hWnd))
+		return 0;
+	AppSettings::Get().CodeFont(dlg.m_lf);
+	for (auto& tab : m_Tabs)
+		tab.View->UpdateColors();
+	return 0;
+}
+
+LOGFONT CMainFrame::UIFont() {
+	auto font = AppSettings::Get().UIFont();
+	if (font.lfFaceName[0])
+		return font;
+	NONCLIENTMETRICS ncm{ sizeof(ncm) };
+	::SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
+	return ncm.lfMessageFont;
+}
+
+void CMainFrame::ApplyUIFont() {
+	auto logFont = UIFont();
+	bool custom = AppSettings::Get().UIFont().lfFaceName[0] != 0;
+	CFont font;
+	font.CreateFontIndirect(&logFont);
+	m_Search->SetUIFont(font);
+	m_UsedBy->SetUIFont(font);
+	m_Namespaces->SetUIFont(font);
+	m_Navigator.Strip().SetFont(custom ? &logFont : nullptr);
+	m_Editors.Strip().SetFont(custom ? &logFont : nullptr);
+	m_Navigator.Relayout();
+	m_Editors.Relayout();
+	m_MachineBar.SetUIFont(font);
+	m_QuickOpen.SetUIFont(font);
+	// (the machine's band as high as its list)
+	CReBarCtrl rebar(m_hWndToolBar);
+	REBARBANDINFO band{ sizeof(band) };
+	band.fMask = RBBIM_CHILDSIZE;
+	rebar.GetBandInfo(1, &band);
+	band.cyMinChild = m_MachineBar.GetIdealHeight();
+	rebar.SetBandInfo(1, &band);
+	::SendMessage(m_hWndStatusBar, WM_SETFONT, (WPARAM)(HFONT)font, TRUE);
+	// (the one the controls had goes when they have this one)
+	if (!m_UIFont.IsNull())
+		m_UIFont.DeleteObject();
+	m_UIFont.Attach(font.Detach());
+	UpdateLayout();
+	RedrawWindow(nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+}
+
+LRESULT CMainFrame::OnViewUIFont(WORD, WORD, HWND, BOOL&) {
+	auto font = UIFont();
+	CFontDialog dlg(&font, CF_SCREENFONTS | CF_INITTOLOGFONTSTRUCT | CF_NOVERTFONTS, nullptr, m_hWnd);
+	if (!WTLHelper::InvokeFontDialog(dlg, m_hWnd))
+		return 0;
+	AppSettings::Get().UIFont(dlg.m_lf);
+	ApplyUIFont();
+	return 0;
+}
+
+LRESULT CMainFrame::OnResetFonts(WORD, WORD, HWND, BOOL&) {
+	auto& settings = AppSettings::Get();
+	settings.CodeFont(LOGFONT{});
+	settings.UIFont(LOGFONT{});
+	for (auto& tab : m_Tabs)
+		tab.View->UpdateColors();
+	ApplyUIFont();
 	return 0;
 }
 

@@ -31,6 +31,10 @@ public:
 	HWND GetPage() const {
 		return m_hPage;
 	}
+	// (the strip's height changed: its font)
+	void Relayout() {
+		UpdateLayout();
+	}
 
 	BEGIN_MSG_MAP(CStripHost)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)

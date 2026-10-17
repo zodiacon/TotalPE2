@@ -1,12 +1,12 @@
 #include "pch.h"
 #include "Win32Api.h"
+#include "CombinedMetadata.h"
 #include <mutex>
 
 using Kind = GhidraDecompiler::TypeKind;
 
 struct Win32Api::Data {
-	PEFile Pe;
-	ClrMetadata Md;
+	CombinedMetadata Md;	// Windows.Win32.winmd, and Windows.Wdk.winmd if it is there
 	std::unordered_map<std::string, std::vector<uint32_t>> Functions;	// MethodDef rows, by the name they are exported by
 	std::unordered_map<std::string, std::vector<uint32_t>> Types;		// TypeDef rows, by their names
 	std::unordered_map<uint32_t, std::vector<std::pair<std::string, uint64_t>>> Constants;	// of a type (HRESULT...), by its row
@@ -40,10 +40,13 @@ namespace {
 		return alignment > 1 ? (value + alignment - 1) / alignment * alignment : value;
 	}
 
-	// a namespace as the entries show it: "System.Threading" (of "Windows.Win32.System.Threading")
+	// a namespace as the entries show it: "System.Threading" (of "Windows.Win32.System.Threading"), "Wdk.Foundation" (of
+	// "Windows.Wdk.Foundation")
 	std::string ShortNamespace(std::string ns) {
 		if (ns.starts_with("Windows.Win32."))
 			ns = ns.substr(14);
+		else if (ns.starts_with("Windows."))
+			ns = ns.substr(8);
 		return ns;
 	}
 }
@@ -53,6 +56,11 @@ std::wstring Win32Api::MetadataPath() {
 	::GetModuleFileNameW(nullptr, path, _countof(path));
 	std::wstring folder = path;
 	return folder.substr(0, folder.find_last_of(L'\\') + 1) + L"Windows.Win32.winmd";
+}
+
+std::wstring Win32Api::WdkMetadataPath() {
+	auto path = MetadataPath();
+	return path.substr(0, path.find_last_of(L'\\') + 1) + L"Windows.Wdk.winmd";
 }
 
 Win32Api::Data* Win32Api::Shared() {
@@ -67,8 +75,11 @@ Win32Api::Data* Win32Api::Shared() {
 	if (::GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES)
 		return nullptr;
 	auto loaded = std::make_unique<Data>();
-	if (!loaded->Pe.Open(path) || !loaded->Md.Parse(loaded->Pe) || !loaded->Md.HasMetadata())
+	if (!loaded->Md.Add(path))
 		return nullptr;
+	// the kernel's (the WDK's), if it is there: after Windows.Win32's (whose types it uses)
+	if (auto wdk = WdkMetadataPath(); ::GetFileAttributesW(wdk.c_str()) != INVALID_FILE_ATTRIBUTES)
+		loaded->Md.Add(wdk);
 	auto& md = loaded->Md;
 	// the functions (those of DLLs: P/Invoke), by the names the DLLs export them by
 	for (uint32_t m = 1; m <= md.Methods().size(); m++)
@@ -767,6 +778,170 @@ Win32Api::Namespace const& Win32Api::Namespaces() {
 	return m_Namespaces;
 }
 
+std::vector<size_t> const& Win32Api::UsedBy(size_t entry) {
+	static std::vector<size_t> const none;
+	if (m_UsedBy.empty())
+		BuildUsedBy();
+	return entry < m_UsedBy.size() ? m_UsedBy[entry] : none;
+}
+
+// For each type, who uses it: from the signatures of the functions and methods and the types of the fields, the types they
+// name (through pointers and arrays; a nested type is its outermost one's)
+void Win32Api::BuildUsedBy() {
+	auto const& entries = Entries();
+	auto& md = m_Data.Md;
+	auto const& types = md.Types();
+	m_UsedBy.assign(entries.size(), {});
+	std::unordered_map<uint32_t, size_t> typeEntries;	// by TypeDef row
+	for (size_t i = 0; i < entries.size(); i++)
+		if (entries[i].Kind != Entry::Kinds::Function && entries[i].Kind != Entry::Kinds::Constant)
+			typeEntries.try_emplace(entries[i].Row, i);
+	std::unordered_map<uint32_t, std::vector<uint32_t>> nested;
+	for (uint32_t row = 1; row <= types.size(); row++)
+		if (types[row - 1].Enclosing)
+			nested[types[row - 1].Enclosing].push_back(row);
+
+	auto useType = [&](size_t user, uint32_t row) {
+		for (int up = 0; up < 16 && row && types[row - 1].Enclosing; up++)
+			row = types[row - 1].Enclosing;
+		if (auto it = typeEntries.find(row); it != typeEntries.end() && it->second != user)
+			m_UsedBy[it->second].push_back(user);
+	};
+	auto use = [&](auto&& self, size_t user, ClrSigType const& type) -> void {
+		if (type.Element == 0x11 || type.Element == 0x12) {
+			if (auto row = RowOf(type.Token))
+				useType(user, row);
+		}
+		for (auto const& inner : type.Inner)
+			self(self, user, inner);
+	};
+	auto useMethod = [&](size_t user, uint32_t method) {
+		ClrSigType result;
+		std::vector<ClrSigType> params;
+		if (!md.MethodSigTypes(method, result, params))
+			return;
+		use(use, user, result);
+		for (auto const& p : params)
+			use(use, user, p);
+	};
+	auto useFields = [&](auto&& self, size_t user, uint32_t row) -> void {
+		for (auto f : md.FieldsOf(row)) {
+			ClrSigType type;
+			if ((md.Fields()[f - 1].Flags & 0x10) == 0 && md.FieldSigType(f, type))
+				use(use, user, type);
+		}
+		if (auto it = nested.find(row); it != nested.end())
+			for (auto inner : it->second)
+				self(self, user, inner);
+	};
+
+	for (size_t i = 0; i < entries.size(); i++) {
+		auto const& e = entries[i];
+		switch (e.Kind) {
+			case Entry::Kinds::Function:
+				useMethod(i, e.Row);
+				break;
+			case Entry::Kinds::Callback: case Entry::Kinds::Interface:
+				for (auto m : md.MethodsOf(e.Row))
+					useMethod(i, m);
+				for (auto token : md.Interfaces(e.Row))
+					if (auto base = RowOf(token))
+						useType(i, base);
+				break;
+			case Entry::Kinds::Struct: case Entry::Kinds::Union: case Entry::Kinds::Typedef:
+				useFields(useFields, i, e.Row);
+				break;
+			case Entry::Kinds::Constant:
+			{
+				ClrSigType type;
+				if (md.FieldSigType(e.Row, type))
+					use(use, i, type);
+				break;
+			}
+			default:
+				break;
+		}
+	}
+	// (the entries are by name: so are the users, by their indices)
+	for (auto& users : m_UsedBy) {
+		std::ranges::sort(users);
+		users.erase(std::unique(users.begin(), users.end()), users.end());
+	}
+}
+
+std::vector<Win32Api::NamedValue> Win32Api::FindValue(uint64_t value) {
+	if (!m_ValuesBuilt) {
+		m_ValuesBuilt = true;
+		auto const& entries = Entries();
+		auto& md = m_Data.Md;
+		for (size_t i = 0; i < entries.size(); i++) {
+			auto const& e = entries[i];
+			if (e.Kind == Entry::Kinds::Constant) {
+				if (auto v = md.ConstantInteger((ClrTableId::Field << 24) | e.Row))
+					m_Values.push_back({ *v, { {}, i } });	// (a constant: the entry's name)
+			}
+			else if (e.Kind == Entry::Kinds::Enum) {
+				if (auto info = md.EnumInfo((ClrTableId::TypeDef << 24) | e.Row))
+					for (auto const& member : info->Values)
+						m_Values.push_back({ member.Value, { Narrow(member.Name), i } });
+			}
+		}
+		std::ranges::sort(m_Values, {}, &std::pair<int64_t, NamedValue>::first);
+	}
+	// the value, and what it is in fewer bits (signed and not)
+	std::vector<int64_t> keys{ (int64_t)value };
+	auto signedValue = (int64_t)value;
+	for (int bits : { 32, 16, 8 }) {
+		auto max = (int64_t)((1ULL << bits) - 1);
+		auto min = -(int64_t)(1ULL << (bits - 1));
+		if (signedValue < min || signedValue > max)
+			continue;
+		auto low = (uint64_t)value & (uint64_t)max;
+		keys.push_back((int64_t)low);
+		keys.push_back(low >> (bits - 1) ? (int64_t)low - (int64_t)(1ULL << bits) : (int64_t)low);
+	}
+	std::ranges::sort(keys);
+	keys.erase(std::unique(keys.begin(), keys.end()), keys.end());
+
+	auto const& entries = Entries();
+	std::vector<NamedValue> found;
+	for (auto key : keys) {
+		auto [first, last] = std::ranges::equal_range(m_Values, key, {}, &std::pair<int64_t, NamedValue>::first);
+		for (auto it = first; it != last; ++it) {
+			auto named = it->second;
+			if (named.Name.empty())
+				named.Name = entries[named.Entry].Name;
+			found.push_back(std::move(named));
+		}
+	}
+	std::ranges::sort(found, [](auto const& a, auto const& b) {
+		auto c = _stricmp(a.Name.c_str(), b.Name.c_str());
+		return c != 0 ? c < 0 : a.Entry < b.Entry;
+	});
+	found.erase(std::unique(found.begin(), found.end(), [](auto const& a, auto const& b) {
+		return a.Name == b.Name && a.Entry == b.Entry;
+	}), found.end());
+	return found;
+}
+
+std::optional<Win32Api::NamedValue> Win32Api::FindGuid(GUID const& guid) {
+	auto const& guids = Guids();
+	auto it = guids.find(std::string((char const*)&guid, sizeof(guid)));
+	if (it == guids.end())
+		return std::nullopt;
+	// IID_IUnknown: of IUnknown; CLSID_FileOpenDialog: of FileOpenDialog; a constant: itself
+	auto const& name = it->second.Name;
+	Entry const* entry = nullptr;
+	for (auto prefix : { "IID_", "CLSID_" })
+		if (!entry && name.starts_with(prefix))
+			entry = Find(name.substr(strlen(prefix)));
+	if (!entry)
+		entry = Find(name);
+	if (!entry)
+		return std::nullopt;
+	return NamedValue{ name, (size_t)(entry - Entries().data()) };
+}
+
 std::string Win32Api::TypeText(uint32_t id) {
 	if (id == 0)
 		return "void";
@@ -903,6 +1078,159 @@ std::string Win32Api::ConstantDeclaration(Entry const& entry, std::vector<std::s
 	return text;
 }
 
+//
+// What the attributes of the metadata say
+//
+
+std::string Win32Api::Attribute::operator[](std::string const& name) const {
+	for (auto const& [n, v] : Arguments)
+		if (n == name)
+			return v;
+	return {};
+}
+
+std::vector<Win32Api::Attribute> Win32Api::AttributesOf(uint32_t token) {
+	auto& md = m_Data.Md;
+	std::vector<Attribute> result;
+	for (auto const& a : md.CustomAttributes(token)) {
+		auto type = Narrow(md.TypeName(a.AttributeType));
+		auto name = type.substr(type.find_last_of(".]") + 1);
+		if (name.ends_with("Attribute"))
+			name.resize(name.size() - 9);
+		Attribute attribute{ name };
+		int position = 0;
+		for (auto const& argument : a.Arguments) {
+			auto value = Narrow(argument.CSharp);
+			// "\"text\"": text; "-1L", "5u": the number
+			if (value.size() >= 2 && value.front() == '"' && value.back() == '"')
+				value = value.substr(1, value.size() - 2);
+			else if (!value.empty() && (isdigit((unsigned char)value[0]) || value[0] == '-'))
+				while (!value.empty() && strchr("uUlL", value.back()))
+					value.pop_back();
+			attribute.Arguments.emplace_back(argument.Name.empty() ? std::to_string(position++) : Narrow(argument.Name), value);
+		}
+		result.push_back(std::move(attribute));
+	}
+	return result;
+}
+
+namespace {
+	// "windows5.1.2600": "Windows XP+"
+	std::string WindowsVersion(std::string const& platform) {
+		if (!platform.starts_with("windows"))
+			return platform;
+		int major = 0, minor = 0, build = 0;
+		sscanf_s(platform.c_str() + 7, "%d.%d.%d", &major, &minor, &build);
+		std::string name;
+		if (major == 5)
+			name = minor == 0 ? "Windows 2000" : minor == 1 ? "Windows XP" : "Windows Server 2003";
+		else if (major == 6)
+			name = minor == 0 ? "Windows Vista" : minor == 1 ? "Windows 7" : minor == 2 ? "Windows 8" : "Windows 8.1";
+		else if (major == 8)
+			name = minor == 0 ? "Windows 8" : "Windows 8.1";
+		else if (major == 10)
+			name = build >= 22000 ? std::format("Windows 11 (build {})", build) : build ? std::format("Windows 10 (build {})", build) : "Windows 10";
+		else
+			name = "Windows " + platform.substr(7);
+		return name + "+";
+	}
+
+	std::string Joined(std::vector<std::string> const& parts) {
+		std::string text;
+		for (auto const& part : parts)
+			text += (text.empty() ? "" : ", ") + part;
+		return text;
+	}
+}
+
+std::vector<std::string> Win32Api::Notes(std::vector<Attribute> const& attributes, uint32_t method) {
+	// a parameter by its index (0 is the first): its name
+	auto parameter = [&](std::string const& index) {
+		if (index.empty() || !method)
+			return index;
+		auto name = Narrow(m_Data.Md.ParamName(method, (uint32_t)atoi(index.c_str()) + 1));
+		return name.empty() ? index : name;
+	};
+	std::vector<std::string> notes;
+	for (auto const& a : attributes) {
+		auto const& n = a.Name;
+		if (n == "SupportedOSPlatform")
+			notes.push_back(WindowsVersion(a["0"]));
+		else if (n == "Obsolete")
+			notes.push_back(a["0"].empty() ? "obsolete" : "obsolete: " + a["0"]);
+		else if (n == "DoesNotReturn")
+			notes.push_back("does not return");
+		else if (n == "Const")
+			notes.push_back("const");
+		else if (n == "MemorySize" && !a["BytesParamIndex"].empty())
+			notes.push_back("size in bytes: " + parameter(a["BytesParamIndex"]));
+		else if (n == "NativeArrayInfo") {
+			if (!a["CountParamIndex"].empty())
+				notes.push_back("count: " + parameter(a["CountParamIndex"]));
+			else if (!a["CountFieldName"].empty())
+				notes.push_back("count: " + a["CountFieldName"]);
+			else if (!a["CountConst"].empty())
+				notes.push_back("count: " + a["CountConst"]);
+		}
+		else if (n == "ComOutPtr")
+			notes.push_back("COM object out");
+		else if (n == "RetVal")
+			notes.push_back("retval");
+		else if (n == "Reserved")
+			notes.push_back("reserved");
+		else if (n == "NullNullTerminated")
+			notes.push_back("double-null-terminated");
+		else if (n == "NotNullTerminated")
+			notes.push_back("not null-terminated");
+		else if (n == "FreeWith" || n == "RAIIFree")
+			notes.push_back("free with " + a["0"]);
+		else if (n == "DoNotRelease")
+			notes.push_back("do not release");
+		else if (n == "Retained")
+			notes.push_back("retained");
+		else if (n == "AssociatedEnum")
+			notes.push_back("values: " + a["0"]);
+		else if (n == "StructSizeField")
+			notes.push_back("set " + a["0"] + " to its size");
+		else if (n == "InvalidHandleValue")
+			notes.push_back("invalid: " + a["0"]);
+		else if (n == "FlexibleArray")
+			notes.push_back("flexible array");
+	}
+	// (the invalid values of a handle: in one)
+	auto invalid = [](std::string const& note) { return note.starts_with("invalid: "); };
+	if (std::ranges::count_if(notes, invalid) > 1) {
+		std::string values;
+		for (auto const& note : notes)
+			if (invalid(note))
+				values += (values.empty() ? "" : " or ") + note.substr(9);
+		std::erase_if(notes, invalid);
+		notes.push_back("invalid: " + values);
+	}
+	return notes;
+}
+
+std::string Win32Api::HeaderOf(std::wstring const& url) {
+	// ".../windows/win32/api/fileapi/nf-fileapi-createfilew", ".../windows-hardware/drivers/ddi/wdm/nf-wdm-..."
+	auto text = Narrow(url);
+	for (auto marker : { "/api/", "/ddi/" }) {
+		auto at = text.find(marker);
+		if (at == std::string::npos)
+			continue;
+		at += strlen(marker);
+		auto end = text.find('/', at);
+		if (end == std::string::npos || end == at)
+			continue;
+		auto header = text.substr(at, end - at);
+		if (header.find_first_of("#?.") != std::string::npos)
+			continue;
+		for (auto& c : header)
+			c = (char)tolower((unsigned char)c);
+		return header + ".h";
+	}
+	return {};
+}
+
 std::string Win32Api::Declaration(Entry const& entry, std::vector<std::string>* lines) {
 	if (entry.Kind == Entry::Kinds::Constant) {
 		if (lines)
@@ -922,7 +1250,15 @@ std::string Win32Api::Declaration(Entry const& entry, std::vector<std::string>* 
 	};
 	if (lines)
 		lines->clear();
-	// a function (or a method of an interface, or a callback's): "Type Name(\n\tType param, /* in */ ...);"
+	// what a line refers to: its type, else the enum its values are of (a uint of the values of an enum)
+	auto referredOr = [](std::string referred, std::vector<Attribute> const& attributes) {
+		if (referred.empty())
+			for (auto const& a : attributes)
+				if (a.Name == "AssociatedEnum")
+					return a["0"];
+		return referred;
+	};
+	// a function (or a method of an interface, or a callback's): "Type Name(\n\tType param, // in ..."
 	auto signature = [&](uint32_t method, std::string const& name, std::string const& prefix, std::string const& indent) {
 		ClrSigType result;
 		std::vector<ClrSigType> params;
@@ -931,36 +1267,68 @@ std::string Win32Api::Declaration(Entry const& entry, std::vector<std::string>* 
 			return;
 		}
 		auto ret = TypeId(result);
+		auto returnAttributes = AttributesOf(md.ParamToken(method, 0));
+		auto returnNotes = Joined(Notes(returnAttributes, method));
+		auto returned = TypeText(ret);
+		if (std::ranges::any_of(returnAttributes, [](auto const& a) { return a.Name == "Const"; }) && returned.ends_with("*"))
+			returned = "const " + returned;
+		auto head = indent + prefix + returned + " " + name + "(";
+		auto returnNote = returnNotes.empty() ? std::string() : "\t// returns: " + returnNotes;
 		if (params.empty()) {
-			line(indent + prefix + TypeText(ret) + " " + name + "(void);", Referred(ret));
+			line(head + "void);" + returnNote, referredOr(Referred(ret), returnAttributes));
 			return;
 		}
-		line(indent + prefix + TypeText(ret) + " " + name + "(", Referred(ret));
+		line(head + returnNote, referredOr(Referred(ret), returnAttributes));
 		for (size_t i = 0; i < params.size(); i++) {
 			auto id = TypeId(params[i]);
 			auto flags = md.ParamFlags(method, (uint32_t)i + 1);
-			std::string notes;
+			std::vector<std::string> notes;
 			if (flags & 1)
-				notes += "in";
+				notes.push_back("in");
 			if (flags & 2)
-				notes += std::string(notes.empty() ? "" : ", ") + "out";
+				notes.push_back("out");
 			if (flags & 0x10)
-				notes += std::string(notes.empty() ? "" : ", ") + "optional";
+				notes.push_back("optional");
+			auto attributes = AttributesOf(md.ParamToken(method, (uint32_t)i + 1));
+			auto typeText = TypeText(id);
+			// (a pointer to what is not changed: as C writes it)
+			bool isConst = std::ranges::any_of(attributes, [](auto const& a) { return a.Name == "Const"; });
+			auto referred = Referred(id);
+			if (isConst && typeText.ends_with("*"))
+				typeText = "const " + typeText;
+			// (a string that is not changed: PCWSTR, as the SDK has it; it is PWSTR's, if the metadata has no PCWSTR)
+			else if (isConst && (typeText == "PWSTR" || typeText == "PSTR")) {
+				typeText = "PC" + typeText.substr(1);
+				if (Find(typeText))
+					referred = typeText;
+			}
+			for (auto& note : Notes(attributes, method))
+				if (note != "const" || (!typeText.starts_with("const ") && !typeText.starts_with("PC")))
+					notes.push_back(std::move(note));
 			auto pname = Narrow(md.ParamName(method, (uint32_t)i + 1));
-			line(std::format("{}\t{}{}{}", indent, declare(TypeText(id), pname.empty() ? std::format("param{}", i + 1) : pname),
-				i + 1 < params.size() ? "," : ");", notes.empty() ? "" : "\t// " + notes), Referred(id));
+			line(std::format("{}\t{}{}{}", indent, declare(typeText, pname.empty() ? std::format("param{}", i + 1) : pname),
+				i + 1 < params.size() ? "," : ");", notes.empty() ? "" : "\t// " + Joined(notes)), referredOr(referred, attributes));
 		}
 	};
-	auto where = std::format("// {}{}", entry.Kind == Entry::Kinds::Function ? "" : "Windows.Win32.", entry.Where);
+	// where it is ("// KERNEL32.dll", "// Windows.Win32.Security"), with its header; then what its attributes say of it
+	auto header = HeaderOf(DocumentationUrl(entry));
+	auto where = std::format("// {}{}", entry.Kind == Entry::Kinds::Function ? entry.Where : entry.Namespace,
+		header.empty() ? "" : " (" + header + ")");
+	auto token = ((entry.Kind == Entry::Kinds::Function ? ClrTableId::MethodDef : ClrTableId::TypeDef) << 24) | entry.Row;
+	auto notes = Notes(AttributesOf(token));
+	if (entry.Kind == Entry::Kinds::Function)
+		if (auto native = md.PInvoke(entry.Row); native && (native->Flags & 0x40))
+			notes.insert(notes.begin(), "sets the last error");
+	line(where);
+	if (!notes.empty())
+		line("// " + Joined(notes));
 
 	switch (entry.Kind) {
 		case Entry::Kinds::Function:
-			line(where);
 			signature(entry.Row, entry.Name, "", "");
 			break;
 
 		case Entry::Kinds::Callback:
-			line(where);
 			for (auto m : md.MethodsOf(entry.Row))
 				if (md.Methods()[m - 1].Name == L"Invoke") {
 					signature(m, "(*" + entry.Name + ")", "typedef ", "");
@@ -970,7 +1338,6 @@ std::string Win32Api::Declaration(Entry const& entry, std::vector<std::string>* 
 
 		case Entry::Kinds::Interface:
 		{
-			line(where);
 			std::string bases;
 			for (auto token : md.Interfaces(entry.Row))
 				bases += (bases.empty() ? " : " : ", ") + Narrow(md.TypeName(token).substr(md.TypeName(token).rfind(L'.') + 1));
@@ -988,11 +1355,9 @@ std::string Win32Api::Declaration(Entry const& entry, std::vector<std::string>* 
 			GhidraDecompiler::Type type;
 			auto id = IdBit | entry.Row;
 			if (!Describe(id, type)) {
-				line(where);
 				line("// (not described)");
 				break;
 			}
-			line(where);
 			if (type.Kind == Kind::Enum) {
 				line(std::format("enum {} : {}{}", entry.Name, type.Signed ? "" : "u",
 					type.Size == 1 ? "char" : type.Size == 2 ? "short" : type.Size == 8 ? "longlong" : "int"));
@@ -1007,7 +1372,13 @@ std::string Win32Api::Declaration(Entry const& entry, std::vector<std::string>* 
 			else if (type.Kind == Kind::Struct || type.Kind == Kind::Union) {
 				line(std::format("{} {}\t// 0x{:X} bytes", type.Kind == Kind::Union ? "union" : "struct", entry.Name, type.Size));
 				line("{");
-				for (auto const& f : type.Fields) {
+				// (the fields as the metadata has them: their attributes)
+				std::vector<uint32_t> fieldRows;
+				for (auto f : md.FieldsOf(entry.Row))
+					if ((md.Fields()[f - 1].Flags & 0x10) == 0)
+						fieldRows.push_back(f);
+				for (size_t i = 0; i < type.Fields.size(); i++) {
+					auto const& f = type.Fields[i];
 					// an array's count goes after the name
 					GhidraDecompiler::Type ft;
 					auto typeText = TypeText(f.Type);
@@ -1016,7 +1387,17 @@ std::string Win32Api::Declaration(Entry const& entry, std::vector<std::string>* 
 						typeText = TypeText(ft.Target);
 						suffix = std::format("[{}]", ft.Count);
 					}
-					line(std::format("\t/* 0x{:03X} */ {}{};", f.Offset, declare(typeText, f.Name), suffix), Referred(f.Type));
+					auto attributes = i < fieldRows.size() ? AttributesOf((ClrTableId::Field << 24) | fieldRows[i]) : std::vector<Attribute>();
+					auto fieldNotes = Notes(attributes);
+					line(std::format("\t/* 0x{:03X} */ {}{};{}", f.Offset, declare(typeText, f.Name), suffix,
+						fieldNotes.empty() ? "" : "\t// " + Joined(fieldNotes)), referredOr(Referred(f.Type), attributes));
+					// the bit fields it holds: "Depth : 16 (bits 0-15)"
+					for (auto const& a : attributes)
+						if (a.Name == "NativeBitfield") {
+							auto offset = atoi(a["1"].c_str()), length = atoi(a["2"].c_str());
+							line(std::format("\t\t//   {} : {} (bit{} {})", a["0"], length, length > 1 ? "s" : "",
+								length > 1 ? std::format("{}-{}", offset, offset + length - 1) : std::to_string(offset)));
+						}
 				}
 				line("};");
 			}

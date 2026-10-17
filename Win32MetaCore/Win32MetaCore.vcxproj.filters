@@ -17,12 +17,18 @@
     <ClInclude Include="Win32Api.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="CombinedMetadata.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Win32Api.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="CombinedMetadata.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

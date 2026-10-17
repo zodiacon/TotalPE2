@@ -19,6 +19,9 @@ public:
 	// the API of another machine (the tree is made again)
 	void SetApi(Win32Api& api);
 	void SetImageList(HIMAGELIST images);
+	void SetUIFont(HFONT font) {
+		m_Tree.SetFont(font);
+	}
 	// shows an entry in the tree (its namespace and folder expanded), without opening it; false if it is not in it
 	bool SelectEntry(size_t entry);
 	BOOL PreTranslateMessage(MSG* pMsg);

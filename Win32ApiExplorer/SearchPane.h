@@ -6,8 +6,10 @@
 
 //
 // The functions, types and constants of the metadata in a list: those whose names contain the filter's text, of the kinds
-// chosen. The one selected is previewed (OnOpen, pin false); Enter or a double-click opens it in a tab that stays
-// (pin true). Down or Enter in the filter goes to the list.
+// chosen. A filter that is a number (5, -1, 0x80070005) shows what has that value: constants, and the values of enums
+// (by their names, with their enums); a GUID shows what it names (IID_IUnknown). With a scope (SetScope), only the entries
+// in it are shown (by name): what uses a type. The one selected is previewed (OnOpen, pin false); Enter or a double-click
+// opens it in a tab that stays (pin true). Down or Enter in the filter goes to the list.
 //
 class CSearchPane :
 	public CWindowImpl<CSearchPane>,
@@ -17,17 +19,24 @@ public:
 
 	explicit CSearchPane(Win32Api& api);
 
-	std::function<void(size_t entry, bool pin)> OnOpen;
+	// an entry opened (name: of a value of an enum, a GUID, to show in it; empty for the entry itself)
+	std::function<void(size_t entry, bool pin, std::string const& name)> OnOpen;
 	// the counts changed
 	std::function<void()> OnCountChanged;
 
 	// the API of another machine (the filter stays; the one selected, by name, if it is there)
 	void SetApi(Win32Api& api);
+	// the entries shown (null: all of them, and values and GUIDs can be looked for); what they are, for the filter's hint
+	void SetScope(std::vector<size_t> const* entries, std::wstring const& description = {});
 	void SetImageList(HIMAGELIST images);
+	// the font of the filter, the kinds and the list
+	void SetUIFont(HFONT font);
 	void FocusFilter();
 	// selects an entry (the filter is cleared if it hides it), without opening it
 	bool SelectEntry(size_t entry);
 	size_t GetShownCount() const;
+	// of all (or of the scope)
+	size_t GetTotalCount() const;
 	BOOL PreTranslateMessage(MSG* pMsg);
 
 	CString GetColumnText(HWND, int row, int col) const;
@@ -47,6 +56,13 @@ public:
 	END_MSG_MAP()
 
 private:
+	// a row: an entry, or a name of a value or GUID that is of it
+	struct Item {
+		size_t Entry;
+		std::string Name;	// (empty: the entry's)
+		bool operator==(Item const&) const = default;
+	};
+
 	LRESULT OnCreate(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnSize(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnSetFocus(UINT, WPARAM, LPARAM, BOOL&);
@@ -64,12 +80,19 @@ private:
 
 	void Fill();
 	void UpdateLayout();
+	void UpdateWatermark();
+	void ClearFilter();
 	bool KindShown(Win32Api::Entry::Kinds kind) const;
-	int SelectedEntry() const;
+	Item const* SelectedItem() const;
+	std::string const& NameOf(Item const& item) const;
+	void Open(Item const& item, bool pin);
 
 	Win32Api* m_Api;
 	std::vector<std::string> m_LowerNames;	// of the entries (the filter is not case sensitive)
-	std::vector<size_t> m_Items;			// the entries shown
+	std::vector<Item> m_Items;				// shown
+	std::vector<size_t> const* m_Scope{ nullptr };
+	std::wstring m_ScopeDescription;
+	std::wstring m_FilterText;
 	std::string m_Filter;					// in lowercase
 	int m_KindFilter{ 0 };
 	bool m_Selecting{ false };				// (a selection that is not the user's)

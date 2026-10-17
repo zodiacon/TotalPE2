@@ -686,5 +686,10 @@
     <Copy SourceFiles="$(SolutionDir)Win32Metadata\Windows.Win32.winmd" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
     <Copy SourceFiles="$(SolutionDir)Win32Metadata\sdk_license.txt" DestinationFiles="$(OutDir)Win32Metadata_license.txt" SkipUnchangedFiles="true" />
   </Target>
+  <!-- the WDK's metadata (the kernel's functions and types), if GetWin32Metadata.ps1 got it -->
+  <Target Name="CopyWdkMetadata" AfterTargets="Build" Condition="Exists('$(SolutionDir)Win32Metadata\Windows.Wdk.winmd')">
+    <Copy SourceFiles="$(SolutionDir)Win32Metadata\Windows.Wdk.winmd" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(SolutionDir)Win32Metadata\wdk_license.txt" DestinationFiles="$(OutDir)WdkMetadata_license.txt" SkipUnchangedFiles="true" Condition="Exists('$(SolutionDir)Win32Metadata\wdk_license.txt')" />
+  </Target>
   <ImportGroup Label="ExtensionTargets" />
 </Project>

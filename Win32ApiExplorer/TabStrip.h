@@ -35,6 +35,8 @@ public:
 	// the height it needs
 	int GetIdealHeight() const;
 	void UpdateColors();
+	// the font of the texts (an italic one is made of it); null: the system's (of messages)
+	void SetFont(LOGFONT const* font);
 
 	BEGIN_MSG_MAP(CTabStrip)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
@@ -97,4 +99,5 @@ private:
 	HIMAGELIST m_Images{ nullptr };
 	CFont m_Font, m_ItalicFont;
 	int m_FontHeight{ 16 };
+	std::optional<LOGFONT> m_CustomFont;
 };

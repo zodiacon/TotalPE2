@@ -2,6 +2,7 @@
 #include "SearchPane.h"
 #include "Images.h"
 #include <SortHelper.h>
+#include <charconv>
 
 namespace {
 	using Kinds = Win32Api::Entry::Kinds;
@@ -29,6 +30,46 @@ namespace {
 		return text;
 	}
 
+	std::wstring Trimmed(std::wstring const& text) {
+		auto first = text.find_first_not_of(L" \t");
+		if (first == std::wstring::npos)
+			return {};
+		return text.substr(first, text.find_last_not_of(L" \t") - first + 1);
+	}
+
+	// a number: decimal (with a sign) or hex (0x); not a name with digits
+	std::optional<uint64_t> ParseValue(std::wstring const& text) {
+		std::string s(CW2A(Trimmed(text).c_str()));
+		bool negative = s.starts_with('-');
+		if (negative)
+			s = s.substr(1);
+		int base = 10;
+		if (s.size() > 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) {
+			base = 16;
+			s = s.substr(2);
+		}
+		uint64_t value = 0;
+		if (s.empty())
+			return std::nullopt;
+		auto [end, error] = std::from_chars(s.data(), s.data() + s.size(), value, base);
+		if (error != std::errc() || end != s.data() + s.size())
+			return std::nullopt;
+		return negative ? (uint64_t)-(int64_t)value : value;
+	}
+
+	// a GUID, with its braces or without
+	std::optional<GUID> ParseGuid(std::wstring const& text) {
+		auto s = Trimmed(text);
+		if (s.starts_with(L'{') && s.ends_with(L'}'))
+			s = s.substr(1, s.size() - 2);
+		if (s.size() != 36 || s[8] != L'-' || s[13] != L'-' || s[18] != L'-' || s[23] != L'-')
+			return std::nullopt;
+		GUID guid;
+		if (FAILED(::IIDFromString((L"{" + s + L"}").c_str(), &guid)))
+			return std::nullopt;
+		return guid;
+	}
+
 	constexpr int KindsWidth = 140, Gap = 4;
 }
 
@@ -39,7 +80,7 @@ LRESULT CSearchPane::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	auto font = AtlGetDefaultGuiFont();
 	m_FilterEdit.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL, WS_EX_CLIENTEDGE);
 	m_FilterEdit.SetFont(font);
-	m_FilterEdit.SetWatermark(L"Filter by name (Ctrl+F; Esc clears)");
+	UpdateWatermark();
 
 	CRect rc(0, 0, KindsWidth, 300);
 	m_Kinds.Create(m_hWnd, rc, nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | CBS_DROPDOWNLIST);
@@ -53,11 +94,25 @@ LRESULT CSearchPane::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	m_List.SetExtendedListViewStyle(LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP);
 	auto cm = GetColumnManager(m_List);
 	cm->AddColumn(L"Name", LVCFMT_LEFT, 250);
-	cm->AddColumn(L"Kind", LVCFMT_LEFT, 70);
-	cm->AddColumn(L"DLL or Namespace", LVCFMT_LEFT, 180);
+	cm->AddColumn(L"Kind", LVCFMT_LEFT, 80);
+	cm->AddColumn(L"DLL, Namespace or Enum", LVCFMT_LEFT, 180);
 
 	SetApi(*m_Api);
 	return 0;
+}
+
+void CSearchPane::UpdateWatermark() {
+	if (m_Scope)
+		m_FilterEdit.SetWatermark(std::format(L"Filter {} by name (Esc clears)", m_ScopeDescription).c_str());
+	else
+		m_FilterEdit.SetWatermark(L"Name, value (0x80070005) or GUID (Ctrl+F; Esc clears)");
+}
+
+void CSearchPane::SetUIFont(HFONT font) {
+	m_FilterEdit.SetFont(font);
+	m_Kinds.SetFont(font);
+	m_List.SetFont(font);
+	UpdateLayout();	// (the list of kinds is as high as its font)
 }
 
 void CSearchPane::SetImageList(HIMAGELIST images) {
@@ -92,8 +147,8 @@ void CSearchPane::FocusFilter() {
 }
 
 void CSearchPane::SetApi(Win32Api& api) {
-	auto selected = SelectedEntry();
-	auto name = selected >= 0 ? m_Api->Entries()[selected].Name : std::string();
+	auto selected = SelectedItem();
+	auto name = selected ? m_Api->Entries()[selected->Entry].Name : std::string();
 	m_Api = &api;
 	auto const& entries = api.Entries();
 	m_LowerNames.clear();
@@ -109,6 +164,23 @@ void CSearchPane::SetApi(Win32Api& api) {
 	}
 }
 
+void CSearchPane::SetScope(std::vector<size_t> const* entries, std::wstring const& description) {
+	m_Scope = entries;
+	m_ScopeDescription = description;
+	UpdateWatermark();
+	m_List.SetItemState(-1, 0, LVIS_SELECTED | LVIS_FOCUSED);
+	ClearFilter();
+}
+
+void CSearchPane::ClearFilter() {
+	m_Filter.clear();
+	m_FilterText.clear();
+	m_KindFilter = 0;
+	m_Kinds.SetCurSel(0);
+	m_FilterEdit.SetWindowText(L"");
+	Fill();
+}
+
 bool CSearchPane::KindShown(Win32Api::Entry::Kinds kind) const {
 	auto const& kinds = s_KindChoices[m_KindFilter].Shown;
 	return kinds.size() == 0 || std::ranges::find(kinds, kind) != kinds.end();
@@ -116,23 +188,42 @@ bool CSearchPane::KindShown(Win32Api::Entry::Kinds kind) const {
 
 // The one selected stays selected if it is still there; else none is
 void CSearchPane::Fill() {
-	auto selected = SelectedEntry();
+	std::optional<Item> selected;
+	if (auto item = SelectedItem())
+		selected = *item;
 	auto const& entries = m_Api->Entries();
 	m_Items.clear();
-	for (size_t i = 0; i < entries.size(); i++) {
-		if (!KindShown(entries[i].Kind))
-			continue;
-		if (!m_Filter.empty() && m_LowerNames[i].find(m_Filter) == std::string::npos)
-			continue;
-		m_Items.push_back(i);
+	auto add = [&](size_t entry, std::string name = {}) {
+		if (KindShown(entries[entry].Kind))
+			m_Items.push_back({ entry, std::move(name) });
+	};
+	auto byName = [&](size_t entry) {
+		return m_Filter.empty() || m_LowerNames[entry].find(m_Filter) != std::string::npos;
+	};
+	if (m_Scope) {
+		for (auto entry : *m_Scope)
+			if (byName(entry))
+				add(entry);
+	}
+	else if (auto value = ParseValue(m_FilterText)) {
+		// (a constant by its own name; a value of an enum by its name)
+		for (auto& v : m_Api->FindValue(*value))
+			add(v.Entry, v.Name == entries[v.Entry].Name ? std::string() : std::move(v.Name));
+	}
+	else if (auto guid = ParseGuid(m_FilterText)) {
+		if (auto named = m_Api->FindGuid(*guid))
+			add(named->Entry, named->Name == entries[named->Entry].Name ? std::string() : named->Name);
+	}
+	else {
+		for (size_t i = 0; i < entries.size(); i++)
+			if (byName(i))
+				add(i);
 	}
 	m_Selecting = true;
 	m_List.SetItemCountEx((int)m_Items.size(), 0);
 	Sort(m_List);
-	if (auto it = std::ranges::find(m_Items, (size_t)selected); selected >= 0 && it != m_Items.end()) {
-		auto row = (int)(it - m_Items.begin());
-		m_List.SelectItem(row);
-	}
+	if (auto it = selected ? std::ranges::find(m_Items, *selected) : m_Items.end(); it != m_Items.end())
+		m_List.SelectItem((int)(it - m_Items.begin()));
 	else
 		m_List.SetItemState(-1, 0, LVIS_SELECTED | LVIS_FOCUSED);
 	m_Selecting = false;
@@ -145,54 +236,65 @@ size_t CSearchPane::GetShownCount() const {
 	return m_Items.size();
 }
 
+size_t CSearchPane::GetTotalCount() const {
+	return m_Scope ? m_Scope->size() : m_Api->Entries().size();
+}
+
+std::string const& CSearchPane::NameOf(Item const& item) const {
+	return item.Name.empty() ? m_Api->Entries()[item.Entry].Name : item.Name;
+}
+
 CString CSearchPane::GetColumnText(HWND, int row, int col) const {
-	auto const& e = m_Api->Entries()[m_Items[row]];
+	auto const& item = m_Items[row];
+	auto const& e = m_Api->Entries()[item.Entry];
 	switch (col) {
-		case 0: return CString(e.Name.c_str());
-		case 1: return Win32Api::KindName(e.Kind);
-		case 2: return CString(e.Where.c_str());
+		case 0: return CString(NameOf(item).c_str());
+		// (a value of an enum, a GUID's name: of the entry)
+		case 1: return !item.Name.empty() && e.Kind == Kinds::Enum ? L"Enum value" : Win32Api::KindName(e.Kind);
+		case 2: return CString((item.Name.empty() ? e.Where : e.Name).c_str());
 	}
 	return CString();
 }
 
 int CSearchPane::GetRowImage(HWND, int row, int) const {
-	return Images::Of(m_Api->Entries()[m_Items[row]].Kind);
+	auto const& item = m_Items[row];
+	auto kind = m_Api->Entries()[item.Entry].Kind;
+	return !item.Name.empty() && kind == Kinds::Enum ? Images::Constant : Images::Of(kind);
 }
 
 void CSearchPane::DoSort(SortInfo const* si) {
 	auto const& entries = m_Api->Entries();
 	if (si == nullptr) {
-		std::ranges::sort(m_Items);	// (the entries are by name)
+		// (the entries are by name; the values and GUIDs are found by name)
+		if (m_Scope || m_Items.empty() || m_Items[0].Name.empty())
+			std::ranges::sort(m_Items, {}, &Item::Entry);
 		return;
 	}
 	auto asc = si->SortAscending;
-	std::stable_sort(m_Items.begin(), m_Items.end(), [&](size_t a, size_t b) {
-		auto& x = entries[a];
-		auto& y = entries[b];
+	std::stable_sort(m_Items.begin(), m_Items.end(), [&](Item const& a, Item const& b) {
+		auto& x = entries[a.Entry];
+		auto& y = entries[b.Entry];
 		switch (si->SortColumn) {
-			case 0: return SortHelper::Sort(x.Name, y.Name, asc);
+			case 0: return SortHelper::Sort(NameOf(a), NameOf(b), asc);
 			case 1: return SortHelper::Sort((int)x.Kind, (int)y.Kind, asc);
-			case 2: return SortHelper::Sort(x.Where, y.Where, asc);
+			case 2: return SortHelper::Sort(a.Name.empty() ? x.Where : x.Name, b.Name.empty() ? y.Where : y.Name, asc);
 		}
 		return false;
 	});
 }
 
-int CSearchPane::SelectedEntry() const {
-	auto row = m_List.GetSelectedIndex();
-	return row >= 0 && row < (int)m_Items.size() ? (int)m_Items[row] : -1;
+CSearchPane::Item const* CSearchPane::SelectedItem() const {
+	auto row = m_List.m_hWnd ? m_List.GetSelectedIndex() : -1;
+	return row >= 0 && row < (int)m_Items.size() ? &m_Items[row] : nullptr;
 }
 
 bool CSearchPane::SelectEntry(size_t entry) {
-	auto it = std::ranges::find(m_Items, entry);
+	auto find = [&] { return std::ranges::find(m_Items, entry, &Item::Entry); };
+	auto it = find();
 	if (it == m_Items.end()) {
 		// hidden by the filter: all are shown again
-		m_Filter.clear();
-		m_KindFilter = 0;
-		m_Kinds.SetCurSel(0);
-		m_FilterEdit.SetWindowText(L"");
-		Fill();
-		it = std::ranges::find(m_Items, entry);
+		ClearFilter();
+		it = find();
 		if (it == m_Items.end())
 			return false;
 	}
@@ -205,22 +307,31 @@ bool CSearchPane::SelectEntry(size_t entry) {
 	return true;
 }
 
+void CSearchPane::Open(Item const& item, bool pin) {
+	if (OnOpen) {
+		// (copies: what is opened may fill the list again)
+		auto entry = item.Entry;
+		auto name = item.Name;
+		OnOpen(entry, pin, name);
+	}
+}
+
 LRESULT CSearchPane::OnItemChanged(int, LPNMHDR hdr, BOOL& handled) {
 	if (hdr->hwndFrom != m_List) {
 		handled = FALSE;
 		return 0;
 	}
 	auto lv = (NMLISTVIEW*)hdr;
-	if ((lv->uChanged & LVIF_STATE) && (lv->uNewState & LVIS_SELECTED) && !m_Selecting && OnOpen)
-		if (auto entry = SelectedEntry(); entry >= 0)
-			OnOpen(entry, false);
+	if ((lv->uChanged & LVIF_STATE) && (lv->uNewState & LVIS_SELECTED) && !m_Selecting)
+		if (auto item = SelectedItem())
+			Open(*item, false);
 	return 0;
 }
 
 bool CSearchPane::OnDoubleClickList(HWND, int row, int, CPoint const&) {
-	if (row < 0 || row >= (int)m_Items.size() || !OnOpen)
+	if (row < 0 || row >= (int)m_Items.size())
 		return false;
-	OnOpen(m_Items[row], true);
+	Open(m_Items[row], true);
 	return true;
 }
 
@@ -231,6 +342,7 @@ LRESULT CSearchPane::OnFilterChanged(WORD, WORD, HWND hWnd, BOOL& handled) {
 	}
 	CString text;
 	m_FilterEdit.GetWindowText(text);
+	m_FilterText = (PCWSTR)text;
 	m_Filter = Lower(std::string(CW2A(text)));
 	Fill();
 	return 0;
@@ -259,8 +371,8 @@ BOOL CSearchPane::PreTranslateMessage(MSG* pMsg) {
 	}
 	// Enter in the list: in a tab that stays
 	if (pMsg->hwnd == m_List && pMsg->wParam == VK_RETURN && !alt) {
-		if (auto entry = SelectedEntry(); entry >= 0 && OnOpen)
-			OnOpen(entry, true);
+		if (auto item = SelectedItem())
+			Open(*item, true);
 		return TRUE;
 	}
 	return FALSE;

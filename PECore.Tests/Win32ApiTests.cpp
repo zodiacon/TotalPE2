@@ -119,3 +119,128 @@ TEST_CASE("Win32 API: the layout of a struct is of its machine", "[win32api]") {
 	CHECK(text86.find("0xC bytes") != std::string::npos);
 	CHECK(text86.find("/* 0x004 */ void *lpSecurityDescriptor;") != std::string::npos);
 }
+
+TEST_CASE("Win32 API: what uses a type", "[win32api]") {
+	auto api = Api();
+	if (!api)
+		SKIP("no Windows.Win32.winmd next to the executable");
+	auto const& entries = api->Entries();
+	auto index = [&](char const* name) { return (size_t)(api->Find(name) - entries.data()); };
+	auto names = [&](size_t entry) {
+		std::vector<std::string> result;
+		for (auto i : api->UsedBy(entry))
+			result.push_back(entries[i].Name);
+		return result;
+	};
+	auto users = names(index("SECURITY_ATTRIBUTES"));
+	CHECK(std::ranges::find(users, "CreateFileW") != users.end());		// a parameter (a pointer)
+	CHECK(std::ranges::find(users, "CreateProcessW") != users.end());
+	CHECK(std::ranges::find(users, "SECURITY_ATTRIBUTES") == users.end());	// (not itself)
+	// a field (of a nested union too): SYSTEM_INFO's dwOemId is in an anonymous union
+	users = names(index("PROCESSOR_ARCHITECTURE"));
+	CHECK(std::ranges::find(users, "SYSTEM_INFO") != users.end());
+	// a base interface
+	users = names(index("IUnknown"));
+	CHECK(std::ranges::find(users, "IClassFactory") != users.end());
+	// by name, once each
+	auto const& used = api->UsedBy(index("HANDLE"));
+	CHECK(std::ranges::is_sorted(used));
+	CHECK(std::ranges::adjacent_find(used) == used.end());
+	// a function uses, it is not used
+	CHECK(api->UsedBy(index("CreateFileW")).empty());
+}
+
+TEST_CASE("Win32 API: what has a value", "[win32api]") {
+	auto api = Api();
+	if (!api)
+		SKIP("no Windows.Win32.winmd next to the executable");
+	auto const& entries = api->Entries();
+	auto has = [&](std::vector<Win32Api::NamedValue> const& found, std::string const& name, std::string const& entry) {
+		return std::ranges::any_of(found, [&](auto const& v) { return v.Name == name && entries[v.Entry].Name == entry; });
+	};
+	// a constant of HRESULT, by its bits and as a negative number
+	CHECK(has(api->FindValue(0x80070005), "E_ACCESSDENIED", "E_ACCESSDENIED"));
+	CHECK(has(api->FindValue((uint64_t)(int64_t)-2147024891), "E_ACCESSDENIED", "E_ACCESSDENIED"));
+	// (the error codes are an enum's)
+	CHECK(has(api->FindValue(5), "ERROR_ACCESS_DENIED", "WIN32_ERROR"));
+	// a value of an enum: its name, and the enum
+	CHECK(has(api->FindValue(1), "FILE_SHARE_READ", "FILE_SHARE_MODE"));
+	// a GUID: IID_IUnknown, of IUnknown
+	GUID iunknown{ 0x00000000, 0x0000, 0x0000, { 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46 } };
+	auto guid = api->FindGuid(iunknown);
+	REQUIRE(guid);
+	CHECK(guid->Name == "IID_IUnknown");
+	CHECK(entries[guid->Entry].Name == "IUnknown");
+}
+
+TEST_CASE("Win32 API: what the attributes say, in the declarations", "[win32api]") {
+	auto api = Api();
+	if (!api)
+		SKIP("no Windows.Win32.winmd next to the executable");
+	auto declaration = [&](char const* name) {
+		auto entry = api->Find(name);
+		REQUIRE(entry);
+		return api->Declaration(*entry);
+	};
+	auto text = declaration("CreateFileW");
+	INFO(text);
+	CHECK(text.find("// KERNEL32.dll (fileapi.h)") != std::string::npos);
+	CHECK(text.find("sets the last error") != std::string::npos);
+	CHECK(text.find("Windows XP+") != std::string::npos);
+	CHECK(text.find("PCWSTR lpFileName") != std::string::npos);
+	text = declaration("ReadFile");
+	INFO(text);
+	CHECK(text.find("size in bytes: nNumberOfBytesToRead") != std::string::npos);
+	text = declaration("CoCreateInstance");
+	INFO(text);
+	CHECK(text.find("const GUID *rclsid") != std::string::npos);
+	CHECK(text.find("COM object out") != std::string::npos);
+	text = declaration("HANDLE");
+	INFO(text);
+	CHECK(text.find("free with CloseHandle") != std::string::npos);
+	CHECK(text.find("invalid: -1 or 0") != std::string::npos);
+	CHECK(Win32Api::HeaderOf(L"https://learn.microsoft.com/windows-hardware/drivers/ddi/wdm/nf-wdm-iocreatedevice") == "wdm.h");
+	CHECK(Win32Api::HeaderOf(L"https://learn.microsoft.com/windows/win32/SecBioMet/winbio-setting-source-constants").empty());
+	// the lines and what they refer to are as many
+	std::vector<std::string> lines;
+	text = api->Declaration(*api->Find("CreateFileW"), &lines);
+	CHECK((size_t)std::ranges::count(text, '\n') == lines.size());
+}
+
+TEST_CASE("Win32 API: the WDK's functions and types, with Windows.Win32's", "[win32api]") {
+	auto api = Api();
+	if (!api || ::GetFileAttributesW(Win32Api::WdkMetadataPath().c_str()) == INVALID_FILE_ATTRIBUTES)
+		SKIP("no Windows.Wdk.winmd next to the executable");
+	auto const& entries = api->Entries();
+	auto create = api->Find("IoCreateDevice");
+	REQUIRE(create);
+	CHECK(create->Kind == Win32Api::Entry::Kinds::Function);
+	CHECK(_stricmp(create->Where.c_str(), "ntoskrnl.exe") == 0);
+	CHECK(create->Namespace.starts_with("Windows.Wdk."));
+	auto text = api->Declaration(*create);
+	INFO(text);
+	// (the WDK's metadata has no pages of the documentation: no header)
+	// a type of the WDK, and one of Windows.Win32 (UNICODE_STRING): not void
+	CHECK(text.find("DRIVER_OBJECT *DriverObject") != std::string::npos);
+	CHECK(text.find("UNICODE_STRING *DeviceName") != std::string::npos);
+	CHECK(text.find("NTSTATUS IoCreateDevice(") != std::string::npos);
+	// a struct of the WDK: as large as it is
+	auto driver = api->Find("DRIVER_OBJECT");
+	REQUIRE(driver);
+	text = api->Declaration(*driver);
+	INFO(text);
+	CHECK(text.find("0x150 bytes") != std::string::npos);
+	// what uses a type of Windows.Win32: the WDK's functions too
+	auto users = api->UsedBy(api->Find("UNICODE_STRING") - entries.data());
+	CHECK(std::ranges::any_of(users, [&](size_t i) { return entries[i].Name == "IoCreateDevice"; }));
+	// the namespaces: Windows.Wdk with Windows.Win32
+	auto windows = Child(api->Namespaces(), "Windows");
+	REQUIRE(windows);
+	CHECK(Child(*windows, "Wdk"));
+	CHECK(Child(*windows, "Win32"));
+	// the decompiler's: a function of the kernel, by its DLL
+	uint32_t type = 0;
+	std::vector<std::string> names;
+	CHECK(api->Function("IoCreateDevice", "ntoskrnl.exe", type, names));
+	CHECK(names.size() == 7);
+}

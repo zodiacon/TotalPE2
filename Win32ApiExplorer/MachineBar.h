@@ -13,6 +13,16 @@ public:
 	CComboBox& Combo() {
 		return m_Combo;
 	}
+	// the font of the label and the list
+	void SetUIFont(HFONT font) {
+		m_Font = font;
+		m_Combo.SetFont(font);
+		MeasureLabel();
+		CRect rc;
+		m_Combo.GetWindowRect(&rc);
+		m_Combo.SetWindowPos(nullptr, m_LabelWidth + Gap, 0, ComboWidth, rc.Height(), SWP_NOZORDER | SWP_NOACTIVATE);
+		Invalidate();
+	}
 	int GetIdealHeight() const {
 		CRect rc;
 		m_Combo.GetWindowRect(&rc);
@@ -29,17 +39,19 @@ public:
 private:
 	static constexpr int ComboWidth = 90, Gap = 6;
 
-	LRESULT OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
-		SetFont(AtlGetDefaultGuiFont());
+	void MeasureLabel() {
 		CClientDC dc(m_hWnd);
-		auto font = dc.SelectFont(AtlGetDefaultGuiFont());
+		auto font = dc.SelectFont(m_Font);
 		CSize size;
 		dc.GetTextExtent(Label, -1, &size);
 		dc.SelectFont(font);
 		m_LabelWidth = size.cx;
+	}
+	LRESULT OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
+		MeasureLabel();
 		CRect rc(m_LabelWidth + Gap, 0, m_LabelWidth + Gap + ComboWidth, 200);
 		m_Combo.Create(m_hWnd, rc, nullptr, WS_CHILD | WS_VISIBLE | WS_VSCROLL | CBS_DROPDOWNLIST, 0, IDC_MACHINE);
-		m_Combo.SetFont(AtlGetDefaultGuiFont());
+		m_Combo.SetFont(m_Font);
 		return 0;
 	}
 	LRESULT OnEraseBkgnd(UINT, WPARAM wp, LPARAM, BOOL&) {
@@ -53,7 +65,7 @@ private:
 		rc.right = m_LabelWidth;
 		dc.SetBkMode(TRANSPARENT);
 		dc.SetTextColor(WTLHelper::IsDarkMode() ? RGB(220, 220, 220) : ::GetSysColor(COLOR_BTNTEXT));
-		auto font = dc.SelectFont(AtlGetDefaultGuiFont());
+		auto font = dc.SelectFont(m_Font);
 		dc.DrawText(Label, -1, &rc, DT_SINGLELINE | DT_VCENTER | DT_LEFT | DT_NOPREFIX);
 		dc.SelectFont(font);
 		return 0;
@@ -65,4 +77,5 @@ private:
 	static constexpr PCWSTR Label = L"Machine:";
 	CComboBox m_Combo;
 	int m_LabelWidth{ 0 };
+	HFONT m_Font{ AtlGetDefaultGuiFont() };
 };
