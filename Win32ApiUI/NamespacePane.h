@@ -1,5 +1,8 @@
 #pragma once
 
+#include <deque>
+#include <functional>
+#include <unordered_map>
 #include <Win32Api.h>
 
 //
@@ -10,7 +13,7 @@
 //
 class CNamespacePane : public CWindowImpl<CNamespacePane> {
 public:
-	DECLARE_WND_CLASS_EX(L"Win32ApiExplorerNamespaces", 0, -1)
+	DECLARE_WND_CLASS_EX(L"Win32ApiUINamespaces", 0, -1)
 
 	explicit CNamespacePane(Win32Api& api);
 

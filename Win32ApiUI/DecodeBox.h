@@ -1,5 +1,7 @@
 #pragma once
 
+#include <format>
+#include <string>
 #include <Win32Api.h>
 #include <ClipboardHelper.h>
 #include "Values.h"
@@ -10,7 +12,7 @@
 //
 class CDecodeBox : public CWindowImpl<CDecodeBox> {
 public:
-	DECLARE_WND_CLASS_EX(L"Win32ApiExplorerDecode", CS_DROPSHADOW, -1)
+	DECLARE_WND_CLASS_EX(L"Win32ApiUIDecode", CS_DROPSHADOW, -1)
 
 	// shown at the top of the owner's client area, for an enum of an API
 	void Show(Win32Api& api, size_t entry) {

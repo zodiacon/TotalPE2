@@ -4468,12 +4468,7 @@ bool CMainFrame::ShowWin32Api(std::string const& name, bool documentation) {
 	if (!api)
 		return false;
 	if (!m_Win32Frame) {
-		// without a file, the images (of the kinds of the entries) are not there yet (the tree makes them)
-		if (BuildTreeImageList(16)) {
-			m_Tree.SetImageList(m_TreeImages);
-			m_Tabs.SetImageList(m_TreeImages);
-		}
-		auto frame = new CWin32ApiFrame(this, m_PE, [this] { m_Win32Frame = nullptr; });
+		auto frame = new CWin32ApiFrame(this, [this] { m_Win32Frame = nullptr; });
 		m_Win32Frame = frame;
 		CWaitCursor wait;
 		if (!frame->Open(*api, FileImportNames(), Win32WindowTitle())) {
@@ -4558,7 +4553,7 @@ bool CMainFrame::ShowImportReferences(std::string const& name) {
 }
 
 LRESULT CMainFrame::OnWin32Explorer(WORD, WORD, HWND, BOOL&) {
-	if (!CWin32ApiView::OpenInExplorer({}))
+	if (!CWin32ApiFrame::OpenInExplorer({}))
 		AtlMessageBox(m_hWnd, L"Win32 API Explorer (Win32ApiExp.exe) is not next to TotalPE.exe.", IDR_MAINFRAME, MB_ICONINFORMATION);
 	return 0;
 }

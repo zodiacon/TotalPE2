@@ -1,5 +1,10 @@
 #pragma once
 
+#include <functional>
+#include <optional>
+#include <string>
+#include <vector>
+
 //
 // A strip of tabs that paints itself, in the colors of the light or the dark mode (a tab control's owner drawing is left to
 // its parent in the dark mode). A tab's text can be in italics: a preview, which the next one previewed replaces. The
@@ -10,7 +15,7 @@
 //
 class CTabStrip : public CWindowImpl<CTabStrip> {
 public:
-	DECLARE_WND_CLASS_EX(L"Win32ApiExplorerTabStrip", CS_DBLCLKS, -1)
+	DECLARE_WND_CLASS_EX(L"Win32ApiUITabStrip", CS_DBLCLKS, -1)
 
 	std::function<void(int)> OnSelected;			// the user selected a tab
 	std::function<void(int)> OnCloseRequested;		// the close button, the middle button

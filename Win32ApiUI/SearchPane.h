@@ -1,5 +1,9 @@
 #pragma once
 
+#include <functional>
+#include <memory>
+#include <string>
+#include <vector>
 #include <Win32Api.h>
 #include <QuickFindEdit.h>
 #include <VirtualListView.h>
@@ -17,7 +21,7 @@ class CSearchPane :
 	public CWindowImpl<CSearchPane>,
 	public CVirtualListView<CSearchPane> {
 public:
-	DECLARE_WND_CLASS_EX(L"Win32ApiExplorerSearch", 0, -1)
+	DECLARE_WND_CLASS_EX(L"Win32ApiUISearch", 0, -1)
 
 	explicit CSearchPane(Win32Api& api);
 

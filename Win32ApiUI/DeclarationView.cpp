@@ -1,8 +1,12 @@
 #include "pch.h"
 #include "DeclarationView.h"
-#include "resource.h"
-#include "AppSettings.h"
+#include "ApiBrowserIds.h"
 #include <WTLHelper.h>
+#include <lexilla/lexlib/LexerModule.h>
+
+// the lexer of C (of the Lexilla library, where it is const): by itself, not through the catalogue of all of them (CreateLexer),
+// which a host that builds some of the lexers itself (TotalPE) would have twice
+extern const Lexilla::LexerModule lmCPP;
 
 namespace {
 	constexpr int IndicatorLink = 8;
@@ -57,7 +61,7 @@ LRESULT CDeclarationView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	Sci(SCI_SETSCROLLWIDTH, 1);
 	Sci(SCI_SETMOUSEDWELLTIME, 500);
 
-	auto lexer = CreateLexer("cpp");
+	auto lexer = lmCPP.Create();
 	lexer->WordListSet(0, "auto break case char const continue default do double else enum extern float for goto if inline "
 		"int long register restrict return short signed sizeof static struct switch typedef union unsigned void volatile "
 		"while interface bool wchar_t");
@@ -130,11 +134,18 @@ void CDeclarationView::UpdateColors() {
 	::SetWindowPos(m_Sci, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
 }
 
+namespace {
+	LOGFONT s_CodeFont{};
+}
+
+void CDeclarationView::SetCodeFont(LOGFONT const& font) {
+	s_CodeFont = font;
+}
+
 LOGFONT CDeclarationView::CodeFont() {
-	auto font = AppSettings::Get().CodeFont();
-	if (font.lfFaceName[0])
-		return font;
-	font = {};
+	if (s_CodeFont.lfFaceName[0])
+		return s_CodeFont;
+	LOGFONT font{};
 	wcscpy_s(font.lfFaceName, L"Consolas");
 	CClientDC dc(nullptr);
 	font.lfHeight = -::MulDiv(10, dc.GetDeviceCaps(LOGPIXELSY), 72);
@@ -632,6 +643,8 @@ LRESULT CDeclarationView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
 	copyAs.AppendMenu(MF_STRING, ID_EDIT_COPYRUST, L"&Rust");
 	copyAs.AppendMenu(MF_STRING, ID_EDIT_COPYPYTHON, L"&Python (ctypes)");
 	menu.AppendMenu(MF_POPUP, copyAs.Detach(), L"Copy &As");
+	if (OnExtendMenu)
+		OnExtendMenu(menu);
 	auto command = menu.TrackPopupMenu(TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, m_hWnd);
 	if (command)
 		GetTopLevelParent().SendMessage(WM_COMMAND, command);

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "resource.h"
 #include <Win32Api.h>
 
 //
@@ -12,12 +11,8 @@ namespace Images {
 		Count
 	};
 
-	inline CImageList Create() {
-		static UINT const icons[] = {
-			IDI_FUNCTION, IDI_FUNCTION2, IDI_TYPE, IDI_UNION, IDI_ENUM, IDI_DATA, IDI_INTERFACE, IDI_FIELD, IDI_NAMESPACE,
-			IDI_FOLDER_CLOSED, IDI_FOLDER,
-		};
-		static_assert(_countof(icons) == Count);
+	// of the host's icons (of its resources), in the order of Index
+	inline CImageList Create(UINT const (&icons)[Count]) {
 		CImageList images;
 		images.Create(16, 16, ILC_COLOR32 | ILC_MASK, Count, 4);
 		for (auto id : icons)

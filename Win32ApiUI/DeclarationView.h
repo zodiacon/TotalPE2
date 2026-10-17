@@ -1,5 +1,8 @@
 #pragma once
 
+#include <functional>
+#include <string>
+#include <vector>
 #include <Win32Api.h>
 
 //
@@ -7,11 +10,11 @@
 // what it showed: following the type a line refers to (Enter, a double-click, F12) shows that type here, and Back returns.
 // The lines that refer to a type have its name underlined. With Ctrl, the owner is asked to open the type in a tab of its
 // own (OnFollow). The mouse resting on a name shows what it is: the declaration of a type, function or constant (its first
-// lines), the value of a value of an enum. One for each tab of the main window.
+// lines), the value of a value of an enum. One for each tab of the browser (CApiBrowser).
 //
 class CDeclarationView : public CWindowImpl<CDeclarationView> {
 public:
-	DECLARE_WND_CLASS_EX(L"Win32ApiExplorerDeclaration", 0, -1)
+	DECLARE_WND_CLASS_EX(L"Win32ApiUIDeclaration", 0, -1)
 
 	explicit CDeclarationView(Win32Api& api);
 
@@ -19,6 +22,8 @@ public:
 	std::function<void(std::string const& name, bool newTab)> OnFollow;
 	// what it shows changed (its title, its documentation)
 	std::function<void()> OnShownChanged;
+	// its menu, before it is shown: the owner's commands (and their states) to it
+	std::function<void(CMenu& menu)> OnExtendMenu;
 
 	// What it shows of a struct or union: its declaration; its layout (the fields of the structs and unions in it too, with
 	// their offsets from its start, and the padding); its layout on each machine (x86, x64, ARM64; the lines that differ
@@ -40,10 +45,12 @@ public:
 	std::string Name() const;
 	// the API of another machine: the entry of the name (the history is by name)
 	void SetApi(Win32Api& api);
-	// the colors and the font (the code font, of the settings)
+	// the colors and the font (the code font)
 	void UpdateColors();
-	// the code font: the user's, else Consolas of 10 points
+	// the code font: the host's (SetCodeFont), else Consolas of 10 points
 	static LOGFONT CodeFont();
+	// (an empty name: the default; the views there are, updated by UpdateColors)
+	static void SetCodeFont(LOGFONT const& font);
 	// the type the line of the caret refers to (empty: none)
 	std::string ReferredAtCaret() const;
 	// follows the type of the caret's line (false if it refers to none)

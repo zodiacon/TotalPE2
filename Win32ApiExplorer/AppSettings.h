@@ -18,7 +18,7 @@ public:
 	SETTING(ShowMode, 0, SettingType::Int32);
 	SETTING_STRING(MetadataFolder, L"");		// where the metadata is (empty: next to the executable)
 	SETTING_STRING(MetadataVersion, L"");		// of the metadata there (empty: not known)
-	SETTING_STRING(WdkMetadataVersion, L"");		// of structs: CDeclarationView::Mode	// of the rest: lists, tree, tabs (no name: the default)
+	SETTING_STRING(WdkMetadataVersion, L"");	// of the WDK's metadata there
 	END_SETTINGS
 
 	DEF_SETTING(MainWindowPlacement, WINDOWPLACEMENT)

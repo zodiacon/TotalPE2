@@ -1,16 +1,19 @@
 #pragma once
 
+#include <functional>
+#include <string>
+#include <vector>
 #include <Win32Api.h>
 
 //
-// Quick Open (Ctrl+P): a box to type in and the best matches below it, at the top of the main window. A name matches
+// Quick Open (Ctrl+P): a box to type in and the best matches below it, at the top of the frame. A name matches
 // exactly, by its start, by the initials of its words (CFW: CreateFileW; sa: SECURITY_ATTRIBUTES), by a part of it, or by
 // its letters in order; the better and shorter ones first. Enter (or a double-click) opens the one selected; Esc, or
 // going elsewhere, closes it.
 //
 class CQuickOpen : public CWindowImpl<CQuickOpen> {
 public:
-	DECLARE_WND_CLASS_EX(L"Win32ApiExplorerQuickOpen", CS_DROPSHADOW, -1)
+	DECLARE_WND_CLASS_EX(L"Win32ApiUIQuickOpen", CS_DROPSHADOW, -1)
 
 	std::function<void(size_t entry)> OnOpen;
 

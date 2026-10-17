@@ -13,27 +13,18 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;png</Extensions>
     </Filter>
+    <Filter Include="Resource Files\Icons">
+      <UniqueIdentifier>{6249a01a-125a-4bae-b46c-ff69aca6ddf8}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="DeclarationView.cpp">
+    <ClCompile Include="AboutDlg.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="MainFrm.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="NamespacePane.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="QuickOpen.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="SearchPane.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="TabStrip.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Win32ApiExplorer.cpp">
@@ -41,13 +32,10 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AboutDlg.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="AppSettings.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="DeclarationView.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Images.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="MachineBar.h">
@@ -56,34 +44,13 @@
     <ClInclude Include="MainFrm.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="NamespacePane.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="QuickOpen.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="LoadingView.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="DecodeBox.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Values.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="pch.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="resource.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="SearchPane.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="StripHost.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="TabStrip.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -94,55 +61,55 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="res\Back.ico">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="res\Data.ico">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="res\Forward.ico">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="res\System.ico">
-      <Filter>Resource Files</Filter>
+      <Filter>Resource Files\Icons</Filter>
     </Image>
     <Image Include="res\copy.ico">
-      <Filter>Resource Files</Filter>
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\Data.ico">
+      <Filter>Resource Files\Icons</Filter>
     </Image>
     <Image Include="res\enum.ico">
-      <Filter>Resource Files</Filter>
+      <Filter>Resource Files\Icons</Filter>
     </Image>
     <Image Include="res\field.ico">
-      <Filter>Resource Files</Filter>
+      <Filter>Resource Files\Icons</Filter>
     </Image>
     <Image Include="res\find.ico">
-      <Filter>Resource Files</Filter>
+      <Filter>Resource Files\Icons</Filter>
     </Image>
     <Image Include="res\folder.ico">
-      <Filter>Resource Files</Filter>
+      <Filter>Resource Files\Icons</Filter>
     </Image>
     <Image Include="res\folder_closed.ico">
-      <Filter>Resource Files</Filter>
+      <Filter>Resource Files\Icons</Filter>
     </Image>
-    <Image Include="res\function-export2.ico">
-      <Filter>Resource Files</Filter>
+    <Image Include="res\Forward.ico">
+      <Filter>Resource Files\Icons</Filter>
     </Image>
     <Image Include="res\function.ico">
-      <Filter>Resource Files</Filter>
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\function-export2.ico">
+      <Filter>Resource Files\Icons</Filter>
     </Image>
     <Image Include="res\globe.ico">
-      <Filter>Resource Files</Filter>
+      <Filter>Resource Files\Icons</Filter>
     </Image>
     <Image Include="res\interface.ico">
-      <Filter>Resource Files</Filter>
+      <Filter>Resource Files\Icons</Filter>
     </Image>
     <Image Include="res\symbols.ico">
-      <Filter>Resource Files</Filter>
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\System.ico">
+      <Filter>Resource Files\Icons</Filter>
     </Image>
     <Image Include="res\type.ico">
-      <Filter>Resource Files</Filter>
+      <Filter>Resource Files\Icons</Filter>
     </Image>
     <Image Include="res\union.ico">
-      <Filter>Resource Files</Filter>
+      <Filter>Resource Files\Icons</Filter>
     </Image>
   </ItemGroup>
 </Project>

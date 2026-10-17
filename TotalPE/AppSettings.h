@@ -22,6 +22,12 @@ public:
 	SETTING_STRING(VirusTotalApiKey, L"");	// encrypted with DPAPI: see vt::ProtectKey
 	SETTING_STRING(PreferredConstants, L"");	// of the names of a value of Windows, those shown (separated by ;)
 	SETTING(Win32ApiDocumentation, 1, SettingType::Bool);	// Microsoft's documentation shown in the Windows API window
+	// the rest of the Windows API window's (CApiBrowser::State)
+	SETTING(Win32ApiDocumentationPercent, 45, SettingType::Int32);
+	SETTING(Win32ApiNavigatorWidth, 0, SettingType::Int32);
+	SETTING(Win32ApiNavigatorPage, 0, SettingType::Int32);
+	SETTING(Win32ApiShowMode, 0, SettingType::Int32);
+	SETTING(Win32ApiActiveTab, -1, SettingType::Int32);
 	SETTING_STRING(CodeColorsLight, L"");	// the colors of code changed from their defaults (CodeColors.h), of the light theme
 	SETTING_STRING(CodeColorsDark, L"");	// and of the dark one
 	END_SETTINGS
@@ -43,6 +49,14 @@ DEF_SETTING(ApplicationFont, LOGFONT)
 	DEF_SETTING_STRING(VirusTotalApiKey)
 	DEF_SETTING_STRING(PreferredConstants)
 	DEF_SETTING(Win32ApiDocumentation, bool)
+	DEF_SETTING(Win32ApiDocumentationPercent, int)
+	DEF_SETTING(Win32ApiNavigatorWidth, int)
+	DEF_SETTING(Win32ApiNavigatorPage, int)
+	DEF_SETTING(Win32ApiShowMode, int)
+	DEF_SETTING(Win32ApiActiveTab, int)
+	DEF_SETTING_MULTI(Win32ApiTabs)		// the names of the tabs kept open, in their order
+	DEF_SETTING_MULTI(Win32ApiFavorites)
+	DEF_SETTING_MULTI(Win32ApiHistory)	// the last first
 DEF_SETTING_STRING(CodeColorsLight)
 DEF_SETTING_STRING(CodeColorsDark)
 

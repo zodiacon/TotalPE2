@@ -265,6 +265,8 @@ IDI_FORWARD             ICON                    "res\\Forward.ico"
 
 IDI_SYSTEM              ICON                    "res\\System.ico"
 
+IDI_FOLDER_CLOSED       ICON                    "res\\folder_closed.ico"
+
 
 /////////////////////////////////////////////////////////////////////////////
 //

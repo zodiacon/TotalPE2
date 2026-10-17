@@ -63,7 +63,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_WINDOWS;STRICT;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>..\Win32MetaCore;..\Decompiler;..\PECore;..\WTLHelper\WTLHelper;..\WTLHelper\WTL;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\Win32ApiUI;..\Win32MetaCore;..\Decompiler;..\PECore;..\WTLHelper\WTLHelper;..\WTLHelper\WTL;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -72,7 +72,7 @@
     <ResourceCompile>
       <Culture>0x0409</Culture>
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>..\WTLHelper\WTL;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\Win32ApiUI;..\WTLHelper\WTL;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ResourceCompile>
     <Manifest>
       <EnableDpiAwareness>false</EnableDpiAwareness>
@@ -90,7 +90,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>_WINDOWS;STRICT;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>..\Win32MetaCore;..\Decompiler;..\PECore;..\WTLHelper\WTLHelper;..\WTLHelper\WTL;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\Win32ApiUI;..\Win32MetaCore;..\Decompiler;..\PECore;..\WTLHelper\WTLHelper;..\WTLHelper\WTL;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -101,7 +101,7 @@
     <ResourceCompile>
       <Culture>0x0409</Culture>
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>..\WTLHelper\WTL;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\Win32ApiUI;..\WTLHelper\WTL;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ResourceCompile>
     <Manifest>
       <EnableDpiAwareness>false</EnableDpiAwareness>
@@ -112,30 +112,18 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="DeclarationView.cpp" />
+    <ClCompile Include="AboutDlg.cpp" />
     <ClCompile Include="MainFrm.cpp" />
-    <ClCompile Include="NamespacePane.cpp" />
-    <ClCompile Include="QuickOpen.cpp" />
-    <ClCompile Include="SearchPane.cpp" />
-    <ClCompile Include="TabStrip.cpp" />
     <ClCompile Include="Win32ApiExplorer.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AboutDlg.h" />
     <ClInclude Include="AppSettings.h" />
-    <ClInclude Include="DeclarationView.h" />
-    <ClInclude Include="Images.h" />
     <ClInclude Include="MachineBar.h" />
     <ClInclude Include="MainFrm.h" />
-    <ClInclude Include="NamespacePane.h" />
-    <ClInclude Include="QuickOpen.h" />
     <ClInclude Include="LoadingView.h" />
-    <ClInclude Include="DecodeBox.h" />
-    <ClInclude Include="Values.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="resource.h" />
-    <ClInclude Include="SearchPane.h" />
-    <ClInclude Include="StripHost.h" />
-    <ClInclude Include="TabStrip.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Win32ApiExplorer.rc" />
@@ -160,6 +148,9 @@
     <Image Include="res\union.ico" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Win32ApiUI\Win32ApiUI.vcxproj">
+      <Project>{3b105e96-c3d4-4d00-b06b-9c6cbaa6d2e1}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\Win32MetaCore\Win32MetaCore.vcxproj">
       <Project>{05583fab-e339-4750-b51b-851d20651629}</Project>
     </ProjectReference>

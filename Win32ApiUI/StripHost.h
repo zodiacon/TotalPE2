@@ -8,7 +8,7 @@
 //
 class CStripHost : public CWindowImpl<CStripHost> {
 public:
-	DECLARE_WND_CLASS_EX(L"Win32ApiExplorerStripHost", 0, -1)
+	DECLARE_WND_CLASS_EX(L"Win32ApiUIStripHost", 0, -1)
 
 	CTabStrip& Strip() {
 		return m_Strip;
