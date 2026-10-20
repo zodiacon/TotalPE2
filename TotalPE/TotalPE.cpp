@@ -9,6 +9,7 @@
 #include "Win32Api.h"
 #include <WTLHelper.h>
 #include "DecompilerThread.h"
+#include "RecentFilesManager.h"
 
 CAppModule _Module;
 AppSettings g_Settings;
@@ -73,6 +74,8 @@ int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPTSTR lp
 	WTLHelper::InitDarkMode(settings.DarkMode() ? DarkModeKind::Dark : DarkModeKind::Light);
 
 	int nRet = Run(lpstrCmdLine, nCmdShow);
+	// (the recent files as they are now: another TotalPE may have added some since this one did)
+	settings.RecentFiles(RecentFilesManager::Files());
 	settings.Save();
 
 	// a function that is still decompiled (the decompiler cannot be stopped, and its objects go with the process's): the

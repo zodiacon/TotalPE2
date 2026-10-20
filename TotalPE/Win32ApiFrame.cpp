@@ -33,6 +33,7 @@ void CWin32ApiFrame::CreateToolBar() {
 		{ ID_SHOW_DECLARATION, 0, BTNS_BUTTON | BTNS_AUTOSIZE, L"Declaration" },
 		{ ID_SHOW_LAYOUT, 0, BTNS_BUTTON | BTNS_AUTOSIZE, L"Layout" },
 		{ ID_SHOW_COMPARE, 0, BTNS_BUTTON | BTNS_AUTOSIZE, L"Compare" },
+		{ ID_SHOW_SINGLELINE, 0, BTNS_CHECK | BTNS_AUTOSIZE, L"Single Line" },
 		{ 0 },
 		{ ID_VIEW_DOCUMENTATION, IDI_GLOBE, BTNS_CHECK | BTNS_AUTOSIZE, L"Documentation" },
 		{ ID_DOC_BROWSER, 0, BTNS_BUTTON | BTNS_AUTOSIZE, L"Open in Browser" },
@@ -55,6 +56,7 @@ bool CWin32ApiFrame::Open(Win32Api& api, std::unordered_set<std::string> imports
 	state.NavigatorWidth = settings.Win32ApiNavigatorWidth();
 	state.NavigatorPage = settings.Win32ApiNavigatorPage();
 	state.ShowMode = settings.Win32ApiShowMode();
+	state.SingleLine = settings.Win32ApiSingleLine();
 	state.OpenTabs = settings.Win32ApiTabs();
 	state.ActiveTab = settings.Win32ApiActiveTab();
 	state.Favorites = settings.Win32ApiFavorites();
@@ -163,6 +165,8 @@ void CWin32ApiFrame::SaveState() {
 	settings.Win32ApiNavigatorWidth(state.NavigatorWidth);
 	settings.Win32ApiNavigatorPage(state.NavigatorPage);
 	settings.Win32ApiShowMode(state.ShowMode);
+	settings.Win32ApiSingleLine(state.SingleLine);
+
 	settings.Win32ApiTabs(state.OpenTabs);
 	settings.Win32ApiActiveTab(state.ActiveTab);
 	settings.Win32ApiFavorites(state.Favorites);

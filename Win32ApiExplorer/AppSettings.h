@@ -16,6 +16,7 @@ public:
 	SETTING(CodeFont, LOGFONT{}, SettingType::Binary);	// of the declarations (no name: the default)
 	SETTING(UIFont, LOGFONT{}, SettingType::Binary);
 	SETTING(ShowMode, 0, SettingType::Int32);
+	SETTING(SingleLine, 0, SettingType::Bool);			// functions declared on a line each
 	SETTING_STRING(MetadataFolder, L"");		// where the metadata is (empty: next to the executable)
 	SETTING_STRING(MetadataVersion, L"");		// of the metadata there (empty: not known)
 	SETTING_STRING(WdkMetadataVersion, L"");	// of the WDK's metadata there
@@ -32,6 +33,8 @@ public:
 	DEF_SETTING(CodeFont, LOGFONT)
 	DEF_SETTING(UIFont, LOGFONT)
 	DEF_SETTING(ShowMode, int)
+	DEF_SETTING(SingleLine, bool)
+
 	DEF_SETTING_STRING(MetadataFolder)
 	DEF_SETTING_STRING(MetadataVersion)
 	DEF_SETTING_STRING(WdkMetadataVersion)

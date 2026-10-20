@@ -206,7 +206,19 @@ TEST_CASE("Win32 API: what the attributes say, in the declarations", "[win32api]
 	std::vector<std::string> lines;
 	text = api->Declaration(*api->Find("CreateFileW"), &lines);
 	CHECK((size_t)std::ranges::count(text, '\n') == lines.size());
+	// on a line of its own: its parameters without their notes
+	text = api->Declaration(*api->Find("CreateFileW"), &lines, true);
+	INFO(text);
+	CHECK((size_t)std::ranges::count(text, '\n') == lines.size());
+	CHECK(text.find("HANDLE CreateFileW(PCWSTR lpFileName, ") != std::string::npos);
+	CHECK(text.find("hTemplateFile);\r\n") != std::string::npos);
+	CHECK(text.find("// in") == std::string::npos);
+	// an interface's methods: a line each
+	text = api->Declaration(*api->Find("IUnknown"), nullptr, true);
+	INFO(text);
+	CHECK(text.find("\tHRESULT QueryInterface(const GUID *riid, void **ppvObject);\r\n") != std::string::npos);
 }
+
 
 TEST_CASE("Win32 API: the WDK's functions and types, with Windows.Win32's", "[win32api]") {
 	auto api = Api();

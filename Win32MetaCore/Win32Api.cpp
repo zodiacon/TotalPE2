@@ -1291,7 +1291,7 @@ std::string Win32Api::HeaderOf(std::wstring const& url) {
 	return {};
 }
 
-std::string Win32Api::Declaration(Entry const& entry, std::vector<std::string>* lines) {
+std::string Win32Api::Declaration(Entry const& entry, std::vector<std::string>* lines, bool singleLine) {
 	if (entry.Kind == Entry::Kinds::Constant) {
 		if (lines)
 			lines->clear();
@@ -1318,7 +1318,8 @@ std::string Win32Api::Declaration(Entry const& entry, std::vector<std::string>* 
 					return a["0"];
 		return referred;
 	};
-	// a function (or a method of an interface, or a callback's): "Type Name(\n\tType param, // in ..."
+	// a function (or a method of an interface, or a callback's): "Type Name(\n\tType param, // in ..." (on a line of its
+	// own: "Type Name(Type param, ...);")
 	auto signature = [&](uint32_t method, std::string const& name, std::string const& prefix, std::string const& indent) {
 		ClrSigType result;
 		std::vector<ClrSigType> params;
@@ -1333,12 +1334,15 @@ std::string Win32Api::Declaration(Entry const& entry, std::vector<std::string>* 
 		if (std::ranges::any_of(returnAttributes, [](auto const& a) { return a.Name == "Const"; }) && returned.ends_with("*"))
 			returned = "const " + returned;
 		auto head = indent + prefix + returned + " " + name + "(";
-		auto returnNote = returnNotes.empty() ? std::string() : "\t// returns: " + returnNotes;
+		auto returnNote = returnNotes.empty() || singleLine ? std::string() : "\t// returns: " + returnNotes;
+		auto returnReferred = referredOr(Referred(ret), returnAttributes);
 		if (params.empty()) {
-			line(head + "void);" + returnNote, referredOr(Referred(ret), returnAttributes));
+			line(head + "void);" + returnNote, returnReferred);
 			return;
 		}
-		line(head + returnNote, referredOr(Referred(ret), returnAttributes));
+		if (!singleLine)
+			line(head + returnNote, returnReferred);
+		std::string joined, firstReferred;
 		for (size_t i = 0; i < params.size(); i++) {
 			auto id = TypeId(params[i]);
 			auto flags = md.ParamFlags(method, (uint32_t)i + 1);
@@ -1366,10 +1370,20 @@ std::string Win32Api::Declaration(Entry const& entry, std::vector<std::string>* 
 				if (note != "const" || (!typeText.starts_with("const ") && !typeText.starts_with("PC")))
 					notes.push_back(std::move(note));
 			auto pname = Narrow(md.ParamName(method, (uint32_t)i + 1));
-			line(std::format("{}\t{}{}{}", indent, declare(typeText, pname.empty() ? std::format("param{}", i + 1) : pname),
-				i + 1 < params.size() ? "," : ");", notes.empty() ? "" : "\t// " + Joined(notes)), referredOr(referred, attributes));
+			auto declared = declare(typeText, pname.empty() ? std::format("param{}", i + 1) : pname);
+			if (singleLine) {
+				joined += (i ? ", " : "") + declared;
+				if (firstReferred.empty())
+					firstReferred = referredOr(referred, attributes);
+				continue;
+			}
+			line(std::format("{}\t{}{}{}", indent, declared, i + 1 < params.size() ? "," : ");",
+				notes.empty() ? "" : "\t// " + Joined(notes)), referredOr(referred, attributes));
 		}
+		if (singleLine)
+			line(head + joined + ");", returnReferred.empty() ? firstReferred : returnReferred);
 	};
+
 	// where it is ("// KERNEL32.dll", "// Windows.Win32.Security"), with its header; then what its attributes say of it
 	auto header = HeaderOf(DocumentationUrl(entry));
 	auto where = std::format("// {}{}", entry.Kind == Entry::Kinds::Function ? entry.Where : entry.Namespace,

@@ -103,6 +103,7 @@ void CMainFrame::FinishCreate() {
 	state.NavigatorWidth = settings.NavigatorWidth();
 	state.NavigatorPage = settings.NavigatorPage();
 	state.ShowMode = settings.ShowMode();
+	state.SingleLine = settings.SingleLine();
 	state.OpenTabs = settings.OpenTabs();
 	state.ActiveTab = settings.ActiveTab();
 	state.Favorites = settings.Favorites();
@@ -304,9 +305,9 @@ void CMainFrame::CreateToolBar() {
 		{ ID_GO_REVEAL, IDI_NAMESPACE, BTNS_BUTTON | BTNS_AUTOSIZE, L"Reveal" },
 		{ ID_GO_USEDBY, IDI_FIND, BTNS_BUTTON | BTNS_AUTOSIZE, L"Find Usages" },
 		{ 0 },
-		{ ID_SHOW_DECLARATION, 0, BTNS_BUTTON | BTNS_AUTOSIZE, L"Declaration" },
-		{ ID_SHOW_LAYOUT, 0, BTNS_BUTTON | BTNS_AUTOSIZE, L"Layout" },
-		{ ID_SHOW_COMPARE, 0, BTNS_BUTTON | BTNS_AUTOSIZE, L"Compare" },
+		{ ID_SHOW_DECLARATION, IDI_TYPE, BTNS_BUTTON | BTNS_AUTOSIZE, L"Declaration" },
+		{ ID_SHOW_LAYOUT, IDI_LAYOUT, BTNS_BUTTON | BTNS_AUTOSIZE, L"Layout" },
+		{ ID_SHOW_COMPARE, IDI_COMPARE, BTNS_BUTTON | BTNS_AUTOSIZE, L"Compare" },
 		{ 0 },
 		{ ID_VIEW_DOCUMENTATION, IDI_GLOBE, BTNS_CHECK | BTNS_AUTOSIZE, L"Documentation" },
 		{ ID_DOC_BROWSER, 0, BTNS_BUTTON | BTNS_AUTOSIZE, L"Open in Browser" },
@@ -362,6 +363,8 @@ void CMainFrame::SaveSettings() {
 	settings.ShowDocumentation(state.ShowDocumentation);
 	settings.NavigatorPage(state.NavigatorPage);
 	settings.ShowMode(state.ShowMode);
+	settings.SingleLine(state.SingleLine);
+
 	settings.OpenTabs(state.OpenTabs);
 	settings.ActiveTab(state.ActiveTab);
 	settings.Favorites(state.Favorites);

@@ -201,6 +201,14 @@ void CDeclarationView::SetMode(Mode mode) {
 		Render();
 }
 
+void CDeclarationView::SetSingleLine(bool singleLine) {
+	if (singleLine == m_SingleLine)
+		return;
+	m_SingleLine = singleLine;
+	if (m_Sci)
+		Render();
+}
+
 void CDeclarationView::Render() {
 	m_LineTypes.clear();
 	m_DifferentLines.clear();
@@ -219,7 +227,7 @@ void CDeclarationView::Render() {
 	if (text.empty()) {
 		m_LineTypes.clear();
 		m_DifferentLines.clear();
-		text = m_Api->Declaration(entry, &m_LineTypes);
+		text = m_Api->Declaration(entry, &m_LineTypes, m_SingleLine);
 		// those of its name but for a suffix (CreateFileA, CreateFile2): each a line of its own, to follow
 		if (auto related = m_Api->RelatedOf(m_Entry); !related.empty()) {
 			text += "\r\n// related:\r\n";
@@ -510,7 +518,7 @@ std::string CDeclarationView::TipOf(std::string const& name) const {
 	constexpr int MaxLines = 16;
 	// a type, function or constant (not the one shown): its declaration, its first lines
 	if (auto entry = m_Api->Find(name); entry && name != Name()) {
-		auto text = m_Api->Declaration(*entry);
+		auto text = m_Api->Declaration(*entry, nullptr, m_SingleLine);
 		std::string tip;
 		int lines = 0;
 		for (size_t start = 0; start < text.size(); lines++) {
@@ -643,6 +651,9 @@ LRESULT CDeclarationView::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
 	copyAs.AppendMenu(MF_STRING, ID_EDIT_COPYRUST, L"&Rust");
 	copyAs.AppendMenu(MF_STRING, ID_EDIT_COPYPYTHON, L"&Python (ctypes)");
 	menu.AppendMenu(MF_POPUP, copyAs.Detach(), L"Copy &As");
+	menu.AppendMenu(MF_SEPARATOR);
+	menu.AppendMenu(MF_STRING, ID_SHOW_SINGLELINE, L"&Single Line Functions");
+
 	if (OnExtendMenu)
 		OnExtendMenu(menu);
 	auto command = menu.TrackPopupMenu(TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, m_hWnd);

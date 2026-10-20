@@ -71,6 +71,21 @@ namespace {
 	}
 }
 
+// (a folder without the language files is said to be one, not "No sleigh specification for ..." when decompiling)
+TEST_CASE("The folder of the language files", "[decompiler]") {
+	std::string error;
+	auto missing = std::filesystem::temp_directory_path() / L"TotalPE.NoLanguages";
+	CHECK_FALSE(GhidraDecompiler::Initialize(missing.wstring(), error));
+	CHECK_THAT(error, ContainsSubstring("language files are not in") && ContainsSubstring("TotalPE.NoLanguages"));
+
+	error.clear();
+	CHECK_FALSE(GhidraDecompiler::Initialize(L"C:\\Caf\u00E9\\Decompiler\\languages", error));
+	CHECK_THAT(error, ContainsSubstring("not ASCII") && ContainsSubstring("Caf\xC3\xA9"));
+
+	// (and the real ones are found, after them as before)
+	Initialize();
+}
+
 TEST_CASE("A function of x64 code", "[decompiler]") {
 	Fixture f;
 	f.Image.At(Code).Bytes({ 0x8D, 0x04, 0x11, 0xC3 });		// lea eax, [rcx+rdx]; ret

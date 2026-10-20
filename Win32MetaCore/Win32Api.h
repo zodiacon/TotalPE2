@@ -141,8 +141,11 @@ public:
 	Machine GetMachine() const {
 		return m_Machine;
 	}
-	// The C declaration of an entry; 'lines' gets, for each line, the type it refers to (empty for none)
-	std::string Declaration(Entry const& entry, std::vector<std::string>* lines = nullptr);
+	// The C declaration of an entry; 'lines' gets, for each line, the type it refers to (empty for none). singleLine: a
+	// function (a method, a callback) on a line of its own, without the notes of its parameters ("BOOL CloseHandle(HANDLE
+	// hObject);"); its line refers to its result's type, else to the first type a parameter refers to.
+	std::string Declaration(Entry const& entry, std::vector<std::string>* lines = nullptr, bool singleLine = false);
+
 	// the page of Microsoft's documentation of an entry (from its [Documentation] attribute); empty if it has none
 	std::wstring DocumentationUrl(Entry const& entry);
 	// the header a page of the documentation is of ("fileapi.h"; empty if it is not known)

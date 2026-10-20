@@ -111,5 +111,14 @@
     <Image Include="res\union.ico">
       <Filter>Resource Files\Icons</Filter>
     </Image>
+    <Image Include="res\Windows.ico">
+      <Filter>Resource Files\Icons</Filter>
+    </Image>
+    <Image Include="res\compare.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\layout.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>

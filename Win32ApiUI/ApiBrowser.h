@@ -37,6 +37,7 @@ public:
 		int NavigatorWidth{ 0 };		// in pixels (0: the default)
 		int NavigatorPage{ 0 };
 		int ShowMode{ 0 };				// CDeclarationView::Mode
+		bool SingleLine{ false };		// functions declared on a line each (CDeclarationView::SetSingleLine)
 		std::vector<std::wstring> OpenTabs;		// the names of the tabs that stay, in their order
 		int ActiveTab{ -1 };
 		std::vector<std::wstring> Favorites;	// in the order they were added
@@ -107,6 +108,7 @@ public:
 		COMMAND_ID_HANDLER(ID_EDIT_FAVORITE, OnFavorite)
 		COMMAND_RANGE_HANDLER(ID_EDIT_COPYCSHARP, ID_EDIT_COPYPYTHON, OnCopyAs)
 		COMMAND_RANGE_HANDLER(ID_SHOW_DECLARATION, ID_SHOW_COMPARE, OnShowMode)
+		COMMAND_ID_HANDLER(ID_SHOW_SINGLELINE, OnSingleLine)
 		COMMAND_ID_HANDLER(ID_GO_BACK, OnBack)
 		COMMAND_ID_HANDLER(ID_GO_FORWARD, OnForward)
 		COMMAND_ID_HANDLER(ID_GO_DEFINITION, OnGoToDefinition)
@@ -155,6 +157,8 @@ private:
 	LRESULT OnFavorite(WORD, WORD, HWND, BOOL&);
 	LRESULT OnCopyAs(WORD, WORD, HWND, BOOL&);
 	LRESULT OnShowMode(WORD, WORD, HWND, BOOL&);
+	LRESULT OnSingleLine(WORD, WORD, HWND, BOOL&);
+
 	LRESULT OnBack(WORD, WORD, HWND, BOOL&);
 	LRESULT OnForward(WORD, WORD, HWND, BOOL&);
 	LRESULT OnGoToDefinition(WORD, WORD, HWND, BOOL&);

@@ -159,7 +159,8 @@ public:
 	using FrameSource = std::function<bool(uint64_t address, std::vector<Local>& frame, std::string& function, std::string& reg)>;
 
 	// Once per process: the folder of the language definitions (.ldefs, .sla, .pspec, .cspec), in it or in its
-	// subfolders (one per processor)
+	// subfolders (one per processor). Its path must be ASCII. False (with the reason) if it is not, or if the folder has
+	// no definitions (.ldefs).
 	static bool Initialize(std::wstring const& languagesFolder, std::string& error);
 
 	// 'target': the language and compiler, for example "x86:LE:64:default:windows"

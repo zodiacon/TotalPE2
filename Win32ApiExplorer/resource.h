@@ -20,6 +20,11 @@
 #define IDI_COPY                        214
 #define IDI_FIND                        215
 #define IDI_NAMESPACE                   216
+#define IDI_ICON1                       217
+#define IDI_WINDOWS                     217
+#define IDI_COMPARE                     218
+#define IDI_ICON3                       219
+#define IDI_LAYOUT                      219
 #define IDC_MACHINE                     1001
 #define IDC_VERSION                     1002
 #define IDC_COPYRIGHT                   1003
@@ -40,7 +45,7 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        217
+#define _APS_NEXT_RESOURCE_VALUE        220
 #define _APS_NEXT_COMMAND_VALUE         32873
 #define _APS_NEXT_CONTROL_VALUE         1006
 #define _APS_NEXT_SYMED_VALUE           101

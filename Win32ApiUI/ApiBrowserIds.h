@@ -37,6 +37,8 @@
 #define ID_SHOW_DECLARATION         40990
 #define ID_SHOW_LAYOUT              40991
 #define ID_SHOW_COMPARE             40992
+#define ID_SHOW_SINGLELINE          40993
+
 
 #define ID_TAB_CLOSE                41000
 #define ID_TAB_CLOSEOTHERS          41001

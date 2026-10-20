@@ -1726,21 +1726,42 @@ void GhidraDecompiler::Impl::CollectVariables(Funcdata* fd, Variables& variables
 }
 
 bool GhidraDecompiler::Initialize(std::wstring const& languagesFolder, std::string& error) {
+	namespace fs = std::filesystem;
+	// (the folder as a message names it)
+	auto shown = [&] {
+		auto text = fs::path(languagesFolder).u8string();
+		return std::string(text.begin(), text.end());
+	};
+	// The decompiler's file names are narrow: a folder that is not ASCII is not found (silently)
+	if (std::any_of(languagesFolder.begin(), languagesFolder.end(), [](wchar_t ch) { return ch > 0x7F; })) {
+		error = "The decompiler cannot open its language files: the path of their folder is not ASCII (" + shown() + ")";
+		return false;
+	}
+	// The folder and its subfolders (one per processor). The languages are those their .ldefs files declare: without one,
+	// each would be "No sleigh specification for ...", which does not say that the files are missing.
+	std::vector<fs::path> folders{ languagesFolder };
+	std::error_code ec;
+	for (auto const& entry : fs::directory_iterator(languagesFolder, ec))
+		if (entry.is_directory())
+			folders.push_back(entry.path());
+	auto hasDefinitions = [](fs::path const& folder) {
+		std::error_code ec;
+		for (auto const& entry : fs::directory_iterator(folder, ec))
+			if (entry.path().extension() == L".ldefs")
+				return true;
+		return false;
+	};
+	if (std::none_of(folders.begin(), folders.end(), hasDefinitions)) {
+		error = "The decompiler's language files are not in " + shown();
+		return false;
+	}
+
 	if (s_Initialized)
 		return true;
 	try {
-		// the decompiler's file names are narrow: the folder is expected to be ASCII
-		auto narrow = [](std::wstring const& text) {
-			std::string result;
-			for (auto ch : text)
-				result += (char)ch;
-			return result;
-		};
-		std::vector<std::string> paths{ narrow(languagesFolder) };
-		std::error_code ec;
-		for (auto const& entry : std::filesystem::directory_iterator(languagesFolder, ec))
-			if (entry.is_directory())
-				paths.push_back(narrow(entry.path().wstring()));
+		std::vector<std::string> paths;
+		for (auto const& folder : folders)
+			paths.push_back(folder.string());
 		startDecompilerLibrary(paths);
 		s_Initialized = true;
 		return true;

@@ -27,6 +27,7 @@ public:
 	SETTING(Win32ApiNavigatorWidth, 0, SettingType::Int32);
 	SETTING(Win32ApiNavigatorPage, 0, SettingType::Int32);
 	SETTING(Win32ApiShowMode, 0, SettingType::Int32);
+	SETTING(Win32ApiSingleLine, 0, SettingType::Bool);	// functions declared on a line each
 	SETTING(Win32ApiActiveTab, -1, SettingType::Int32);
 	SETTING_STRING(CodeColorsLight, L"");	// the colors of code changed from their defaults (CodeColors.h), of the light theme
 	SETTING_STRING(CodeColorsDark, L"");	// and of the dark one
@@ -53,6 +54,8 @@ DEF_SETTING(ApplicationFont, LOGFONT)
 	DEF_SETTING(Win32ApiNavigatorWidth, int)
 	DEF_SETTING(Win32ApiNavigatorPage, int)
 	DEF_SETTING(Win32ApiShowMode, int)
+	DEF_SETTING(Win32ApiSingleLine, bool)
+
 	DEF_SETTING(Win32ApiActiveTab, int)
 	DEF_SETTING_MULTI(Win32ApiTabs)		// the names of the tabs kept open, in their order
 	DEF_SETTING_MULTI(Win32ApiFavorites)

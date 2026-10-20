@@ -30,6 +30,8 @@ public:
 	// marked). Of the others: their declarations.
 	enum class Mode { Declaration, Layout, Compare };
 	void SetMode(Mode mode);
+	// functions, methods and callbacks declared on a line each, without their parameters' notes (in the tips too)
+	void SetSingleLine(bool singleLine);
 	// the entry shown (an index into the API's entries; -1: none), the history unchanged
 	void Show(int entry);
 	// another entry shown, the one shown remembered (Back returns to it); false if there is no such entry
@@ -109,5 +111,7 @@ private:
 	std::vector<std::string> m_LineTypes;	// what each line refers to
 	std::vector<int> m_DifferentLines;		// (of a comparison)
 	Mode m_Mode{ Mode::Declaration };
+	bool m_SingleLine{ false };
+
 	std::vector<std::string> m_Back, m_Forward;
 };

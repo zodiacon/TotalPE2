@@ -290,6 +290,7 @@ std::unique_ptr<CDeclarationView> CApiBrowser::CreateView(HWND hParent) {
 	};
 	view->Create(hParent, rcDefault, nullptr, WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
 	view->SetMode((CDeclarationView::Mode)std::clamp(m_State.ShowMode, 0, 2));
+	view->SetSingleLine(m_State.SingleLine);
 	return view;
 }
 
@@ -828,6 +829,7 @@ std::vector<CApiBrowser::CommandState> CApiBrowser::CommandStates() const {
 		{ ID_EDIT_COPYPYTHON, copyable },
 		{ ID_EDIT_FAVORITE, shows, favorite ? 1 : 0 },
 		{ ID_VIEW_DOCUMENTATION, true, m_State.ShowDocumentation ? 1 : 0 },
+		{ ID_SHOW_SINGLELINE, true, m_State.SingleLine ? 1 : 0 },
 		{ ID_VIEW_CLEARHISTORY, !m_HistoryNames.empty() },
 		{ ID_VIEW_HOSTLIST, !m_HostTitle.empty() },
 		{ ID_TAB_CLOSE, target >= 0 },
@@ -999,6 +1001,17 @@ LRESULT CApiBrowser::OnShowMode(WORD, WORD id, HWND, BOOL&) {
 		m_Side->SetMode((CDeclarationView::Mode)mode);
 	return 0;
 }
+
+// how the tabs declare functions (all of them)
+LRESULT CApiBrowser::OnSingleLine(WORD, WORD, HWND, BOOL&) {
+	m_State.SingleLine = !m_State.SingleLine;
+	for (auto& tab : m_Tabs)
+		tab.View->SetSingleLine(m_State.SingleLine);
+	if (m_Side)
+		m_Side->SetSingleLine(m_State.SingleLine);
+	return 0;
+}
+
 
 LRESULT CApiBrowser::OnBack(WORD, WORD, HWND, BOOL&) {
 	GoBack();
