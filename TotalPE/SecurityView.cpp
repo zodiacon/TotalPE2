@@ -19,10 +19,17 @@ CSecurityView::~CSecurityView() {
 }
 
 CString CSecurityView::GetTitle() const {
-	return L"Security";
+	return m_Catalog ? L"Catalog Signature" : L"Security";
 }
 
 CString CSecurityView::GetColumnText(HWND, int row, int col) const {
+	if (m_Catalog) {
+		switch (col) {
+			case 0: return L"Catalog (PKCS#7)";
+			case 2: return std::format(L"{} bytes", m_CatalogData.size()).c_str();
+		}
+		return {};
+	}
 	auto& item = m_Items[row];
 	switch (col) {
 		case 0: return PEStrings::CertificateTypeToString(item.WinCert.wCertificateType);
@@ -63,6 +70,22 @@ LRESULT CSecurityView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 }
 
 void CSecurityView::BuildItems() {
+	if (m_Catalog) {
+		// the catalog is the one item (it was decoded and verified when it was found)
+		if (wil::unique_hfile file(::CreateFileW(m_Catalog->Catalog.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr)); file) {
+			LARGE_INTEGER size{};
+			if (::GetFileSizeEx(file.get(), &size) && size.QuadPart > 0 && size.QuadPart < (64 << 20)) {
+				m_CatalogData.resize((size_t)size.QuadPart);
+				DWORD read = 0;
+				if (!::ReadFile(file.get(), m_CatalogData.data(), (DWORD)m_CatalogData.size(), &read, nullptr) || read != m_CatalogData.size())
+					m_CatalogData.clear();
+			}
+		}
+		m_List.SetItemCount(1);
+		m_List.SelectItem(0);
+		return;
+	}
+
 	m_Items = *m_PE.GetSecurity();
 	m_List.SetItemCount((int)m_Items.size());
 
@@ -129,13 +152,36 @@ void CSecurityView::PopulateCertDetails(int index) {
 	m_DetailList.DeleteAllItems();
 	FreeCertContext();
 
+	if (m_Catalog) {
+		if (index != 0)
+			return;
+		FindSigningCertificate(m_CatalogData);
+		AddProperty(L"Catalog", m_Catalog->Catalog);
+		AddProperty(L"File Hash (" + m_Catalog->HashAlgorithm + L")", m_Catalog->MemberTag);
+		if (!m_Catalog->Trust.empty())
+			AddProperty(L"Trust", m_Catalog->Trust + (m_Catalog->TrustCode ? std::format(L"  (0x{:08X})", (uint32_t)m_Catalog->TrustCode) : L""));
+		for (auto const& [name, value] : DescribeSignature(m_Catalog->Signature))
+			AddProperty(name, value);
+		return;
+	}
+
 	if (index < 0 || index >= (int)m_Items.size())
 		return;
-	auto const& certData = m_Items[index].CertData;
+	FindSigningCertificate(m_Items[index].CertData);
+
+	if (index >= (int)m_Auth.Signatures.size())
+		return;
+	// what the system thinks of the file as a whole
+	if (!m_Auth.Trust.empty())
+		AddProperty(L"Trust", m_Auth.Trust + (m_Auth.TrustCode ? std::format(L"  (0x{:08X})", (uint32_t)m_Auth.TrustCode) : L""));
+	for (auto const& [name, value] : DescribeSignature(m_Auth.Signatures[index]))
+		AddProperty(name, value);
+}
+
+// The signing certificate of a signature, for "View Certificate"
+void CSecurityView::FindSigningCertificate(std::vector<BYTE> const& certData) {
 	if (certData.empty())
 		return;
-
-	// the signing certificate, for "View Certificate"
 	CERT_BLOB blob{ (DWORD)certData.size(), const_cast<BYTE*>(certData.data()) };
 	DWORD dwEncoding{}, dwContentType{}, dwFormatType{};
 	if (CryptQueryObject(CERT_QUERY_OBJECT_BLOB, &blob, CERT_QUERY_CONTENT_FLAG_PKCS7_SIGNED, CERT_QUERY_FORMAT_FLAG_BINARY,
@@ -151,12 +197,4 @@ void CSecurityView::PopulateCertDetails(int index) {
 			m_CurrentCert = CertFindCertificateInStore(m_CurrentStore, X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, 0, CERT_FIND_SUBJECT_CERT, &ci, nullptr);
 		}
 	}
-
-	if (index >= (int)m_Auth.Signatures.size())
-		return;
-	// what the system thinks of the file as a whole
-	if (!m_Auth.Trust.empty())
-		AddProperty(L"Trust", m_Auth.Trust + (m_Auth.TrustCode ? std::format(L"  (0x{:08X})", (uint32_t)m_Auth.TrustCode) : L""));
-	for (auto const& [name, value] : DescribeSignature(m_Auth.Signatures[index]))
-		AddProperty(name, value);
 }

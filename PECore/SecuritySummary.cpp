@@ -89,38 +89,6 @@ namespace {
 	}
 }
 
-// The catalog (of the system) that has the hash of a file: system files are signed that way, not in the file
-static bool FindCatalog(std::wstring const& path, std::wstring& catalog) {
-	wil::unique_hfile file(::CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-		nullptr, OPEN_EXISTING, 0, nullptr));
-	if (!file)
-		return false;
-	// newer catalogs have SHA-256 hashes, older ones SHA-1
-	for (auto algorithm : { BCRYPT_SHA256_ALGORITHM, (PCWSTR)nullptr }) {
-		HCATADMIN admin = nullptr;
-		if (!::CryptCATAdminAcquireContext2(&admin, nullptr, algorithm, nullptr, 0))
-			continue;
-		DWORD size = 0;
-		::CryptCATAdminCalcHashFromFileHandle2(admin, file.get(), &size, nullptr, 0);
-		std::vector<BYTE> hash(size);
-		bool found = false;
-		if (size && ::CryptCATAdminCalcHashFromFileHandle2(admin, file.get(), &size, hash.data(), 0)) {
-			if (auto info = ::CryptCATAdminEnumCatalogFromHash(admin, hash.data(), size, 0, nullptr)) {
-				CATALOG_INFO ci{ sizeof(ci) };
-				if (::CryptCATCatalogInfoFromContext(info, &ci, 0)) {
-					catalog = ci.wszCatalogFile;
-					found = true;
-				}
-				::CryptCATAdminReleaseCatalogContext(admin, info, 0);
-			}
-		}
-		::CryptCATAdminReleaseContext(admin, 0);
-		if (found)
-			return true;
-	}
-	return false;
-}
-
 const wchar_t* SecurityStateToString(SecurityState state) {
 	switch (state) {
 		case SecurityState::Enabled: return L"Yes";
@@ -296,9 +264,14 @@ std::vector<SecurityFeature> AnalyzeSecurity(PEFile const& pe, bool verifyTrust)
 		add(L"AppContainer", SecurityState::Info, L"APPCONTAINER: the image runs in an app container");
 
 	// the signature
-	std::wstring catalog;
-	if (!info->HasSecurity && verifyTrust && FindCatalog(pe.GetPath(), catalog))
-		add(L"Signature", SecurityState::Enabled, L"Signed in a catalog of the system: " + catalog);
+	CatalogSignature catalog;
+	if (!info->HasSecurity && verifyTrust && FindCatalogSignature(pe.GetPath(), catalog)) {
+		auto details = L"Signed in a catalog of the system: " + catalog.Catalog;
+		if (catalog.Signature.HasSigner)
+			details += L", by " + CommonName(catalog.Signature.Signer.Subject);
+		details += L"; " + catalog.Trust;
+		add(L"Signature", catalog.TrustCode == 0 ? SecurityState::Enabled : SecurityState::Partial, details);
+	}
 	else if (!info->HasSecurity)
 		add(L"Signature", SecurityState::Disabled, L"The file is not signed");
 	else {

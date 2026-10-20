@@ -130,13 +130,15 @@ public:
 		MESSAGE_HANDLER(WM_DECOMPILED, OnDecompiled)
 		MESSAGE_HANDLER(WM_XREFS_BUILT, OnXrefsBuilt)
 		MESSAGE_HANDLER(WM_DRIVER_ANALYZED, OnDriverAnalyzed)
+		MESSAGE_HANDLER(WM_CATALOG_FOUND, OnCatalogFound)
 		MESSAGE_HANDLER(WM_VT_STATUS, OnVirusTotalStatus)
 		COMMAND_ID_HANDLER(ID_PE_VIRUSTOTAL, OnVirusTotal)
 		COMMAND_ID_HANDLER(ID_PE_VTAPIKEY, OnVirusTotalKey)
 		MESSAGE_HANDLER(WM_UPDATE_DARKMODE, OnUpdateDarkMode)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
 		MESSAGE_HANDLER(WM_DESTROY, OnDestroy)
-		COMMAND_RANGE_HANDLER(ATL_IDS_MRU_FILE, ATL_IDS_MRU_FILE + 29, OnRecentFile)
+		COMMAND_RANGE_HANDLER(ID_FILE_MRU_FIRST, ID_FILE_MRU_LAST, OnRecentFile)
+		MESSAGE_HANDLER(WM_INITMENUPOPUP, OnInitMenuPopup)
 		COMMAND_ID_HANDLER(ID_APP_EXIT, OnFileExit)
 		CHAIN_MSG_MAP(CTreeViewHelper<CMainFrame>)
 		CHAIN_MSG_MAP(CAutoUpdateUI<CMainFrame>)
@@ -161,6 +163,7 @@ private:
 	std::wstring ResolveRva(DWORD rva) const override;
 	std::wstring ResolveVa(ULONGLONG va) const override;
 	std::vector<Anomaly> const& GetAnomalies() const override;
+	CatalogSignature const* GetCatalogSignature() const override;
 	bool GoToFileOffset(int64_t offset, bool disassemble = false) override;
 	bool GoToVa(uint64_t va) override;
 	XrefMap const& GetXrefs() override;
@@ -192,7 +195,7 @@ private:
 	void InitDarkTheme() const;
 	bool ShowView(HTREEITEM hItem);
 	bool ShowView(TreeItemType type, HTREEITEM hItem = nullptr, UINT icon = 0);
-	void UpdateRecentFilesMenu();
+	void FileOpened(PCWSTR path);
 	void UpdateUI();
 	void InitMenu(HMENU hMenu);
 	void BuildTree(int iconSize = 16);
@@ -275,6 +278,7 @@ private:
 	LRESULT OnEditFind(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnFind(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnRecentFile(WORD, WORD, HWND, BOOL&);
+	LRESULT OnInitMenuPopup(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnViewExports(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewImports(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnViewResources(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
@@ -547,6 +551,7 @@ private:
 	LRESULT OnNavBack(WORD, WORD, HWND, BOOL&);
 	LRESULT OnNavForward(WORD, WORD, HWND, BOOL&);
 	LRESULT OnSymbolsLoaded(UINT, WPARAM, LPARAM, BOOL&);
+	LRESULT OnCatalogFound(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnVirusTotalStatus(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnVirusTotal(WORD, WORD, HWND, BOOL&);
 	LRESULT OnVirusTotalKey(WORD, WORD, HWND, BOOL&);
@@ -597,7 +602,7 @@ private:
 	CFindReplaceDialog* m_pFindDlg{ nullptr };
 	CString m_SearchText;
 	DiaSession m_Symbols;
-	RecentFilesManager m_RecentFiles;
+	std::vector<std::wstring> m_RecentFilesShown;	// in File > Recent Files, as it was opened last
 	HTREEITEM m_hResVersion, m_hResManifest;
 	std::unordered_map<TreeItemType, ContextMenuInfo> m_ContextMenus;
 	mutable std::unordered_map<std::wstring, DiaSession> m_SymbolsForModules;
@@ -684,6 +689,10 @@ private:
 	std::shared_ptr<std::atomic_bool> m_VtCancel;
 	uint32_t m_VtGeneration{ 0 };
 	void StartSymbolLoad(std::wstring path);
+	// the catalog of a file without a signature of its own is looked for on a worker thread (it hashes the whole file)
+	std::unique_ptr<CatalogSignature> m_Catalog;
+	uint32_t m_CatalogGeneration{ 0 };
+	void StartCatalogLookup(std::wstring path);
 	void RefreshViews();
 	void BuildNamedRvas();
 	inline static std::unordered_map<UINT, int> s_ImageIndices;

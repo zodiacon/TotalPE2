@@ -25,3 +25,7 @@ inline std::string Narrow(std::wstring const& s) {
 	::WideCharToMultiByte(CP_UTF8, 0, s.data(), (int)s.size(), result.data(), len, nullptr, nullptr);
 	return result;
 }
+
+// A system file that has no signature of its own but is signed in a catalog of the system (most files of Windows are),
+// or an empty path
+std::wstring FindCatalogSignedFile();

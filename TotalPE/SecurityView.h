@@ -5,6 +5,7 @@
 #include <VirtualListView.h>
 #include <CustomSplitterWindow.h>
 #include "Authenticode.h"
+#include <optional>
 
 class PEFile;
 
@@ -13,6 +14,8 @@ class CSecurityView :
 	public CVirtualListView<CSecurityView> {
 public:
 	CSecurityView(IMainFrame* frame, PEFile const& pe) : CViewBase(frame), m_PE(pe) {}
+	// the signature of a file that is signed in a catalog of the system rather than in itself
+	CSecurityView(IMainFrame* frame, PEFile const& pe, CatalogSignature const& catalog) : CViewBase(frame), m_PE(pe), m_Catalog(catalog) {}
 	~CSecurityView();
 
 	CString GetTitle() const override;
@@ -39,6 +42,7 @@ public:
 private:
 	void BuildItems();
 	void PopulateCertDetails(int index);
+	void FindSigningCertificate(std::vector<BYTE> const& pkcs7);
 	void AddProperty(std::wstring_view name, std::wstring_view value);
 	void FreeCertContext();
 
@@ -46,6 +50,8 @@ private:
 	CCustomHorSplitterWindow m_Splitter;
 	std::vector<PESecurity>  m_Items;
 	AuthenticodeResult       m_Auth;
+	std::optional<CatalogSignature> m_Catalog;
+	std::vector<BYTE>        m_CatalogData;	// the catalog file: PKCS#7 SignedData, as an entry of the certificate table is
 	PCCERT_CONTEXT           m_CurrentCert{};
 	HCERTSTORE               m_CurrentStore{};
 	HCRYPTMSG                m_CurrentMsg{};

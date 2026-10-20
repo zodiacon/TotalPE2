@@ -5,6 +5,7 @@
 #include <bcrypt.h>
 #include <softpub.h>
 #include <wintrust.h>
+#include <mscat.h>
 #include <optional>
 
 #pragma comment(lib, "Crypt32.lib")
@@ -495,7 +496,12 @@ long VerifyFileTrust(std::wstring const& path, std::wstring& message) {
 	auto result = ::WinVerifyTrust((HWND)INVALID_HANDLE_VALUE, &action, &data);
 	data.dwStateAction = WTD_STATEACTION_CLOSE;
 	::WinVerifyTrust((HWND)INVALID_HANDLE_VALUE, &action, &data);
+	message = TrustMessage(result);
+	return result;
+}
 
+std::wstring TrustMessage(long result) {
+	std::wstring message;
 	switch ((uint32_t)result) {
 		case 0: message = L"The signature is valid and trusted"; break;
 		case 0x800B0100: message = L"The file is not signed"; break;
@@ -517,7 +523,79 @@ long VerifyFileTrust(std::wstring const& path, std::wstring& message) {
 			break;
 		}
 	}
-	return result;
+	return message;
+}
+
+bool FindCatalogSignature(std::wstring const& path, CatalogSignature& result, bool verifyTrust) {
+	wil::unique_hfile file(::CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+		nullptr, OPEN_EXISTING, 0, nullptr));
+	if (!file)
+		return false;
+
+	// newer catalogs have SHA-256 hashes, older ones SHA-1 (the default of a context without an algorithm)
+	for (auto [algorithm, name] : { std::pair{ BCRYPT_SHA256_ALGORITHM, L"SHA-256" }, std::pair{ (PCWSTR)nullptr, L"SHA-1" } }) {
+		HCATADMIN admin = nullptr;
+		if (!::CryptCATAdminAcquireContext2(&admin, nullptr, algorithm, nullptr, 0))
+			continue;
+		auto releaseAdmin = wil::scope_exit([&] { ::CryptCATAdminReleaseContext(admin, 0); });
+
+		DWORD size = 0;
+		::CryptCATAdminCalcHashFromFileHandle2(admin, file.get(), &size, nullptr, 0);
+		std::vector<BYTE> hash(size);
+		if (!size || !::CryptCATAdminCalcHashFromFileHandle2(admin, file.get(), &size, hash.data(), 0))
+			continue;
+		auto info = ::CryptCATAdminEnumCatalogFromHash(admin, hash.data(), size, 0, nullptr);
+		if (!info)
+			continue;
+		auto releaseInfo = wil::scope_exit([&] { ::CryptCATAdminReleaseCatalogContext(admin, info, 0); });
+		CATALOG_INFO ci{ sizeof(ci) };
+		if (!::CryptCATCatalogInfoFromContext(info, &ci, 0))
+			continue;
+
+		result = {};
+		result.Catalog = ci.wszCatalogFile;
+		result.HashAlgorithm = name;
+		result.MemberTag = BytesToHexString(hash);
+
+		// the catalog is PKCS#7 SignedData, whose content is the list of hashes rather than an Authenticode hash
+		if (wil::unique_hfile cat(::CreateFileW(result.Catalog.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr)); cat) {
+			LARGE_INTEGER catSize{};
+			if (::GetFileSizeEx(cat.get(), &catSize) && catSize.QuadPart > 0 && catSize.QuadPart < (64 << 20)) {
+				std::vector<std::byte> data((size_t)catSize.QuadPart);
+				DWORD read = 0;
+				if (::ReadFile(cat.get(), data.data(), (DWORD)data.size(), &read, nullptr) && read == data.size()) {
+					result.Signature = AnalyzeSignature(data, nullptr);
+					if (result.Signature.Decoded)
+						result.Signature.Error.clear();
+				}
+			}
+		}
+
+		if (verifyTrust) {
+			WINTRUST_CATALOG_INFO catalog{ sizeof(catalog) };
+			catalog.pcwszCatalogFilePath = result.Catalog.c_str();
+			catalog.pcwszMemberTag = result.MemberTag.c_str();
+			catalog.pcwszMemberFilePath = path.c_str();
+			catalog.hMemberFile = file.get();
+			catalog.pbCalculatedFileHash = hash.data();
+			catalog.cbCalculatedFileHash = size;
+			catalog.hCatAdmin = admin;	// a SHA-256 catalog is verified with the context that hashed the file
+			WINTRUST_DATA data{ sizeof(data) };
+			data.dwUIChoice = WTD_UI_NONE;
+			data.fdwRevocationChecks = WTD_REVOKE_NONE;
+			data.dwUnionChoice = WTD_CHOICE_CATALOG;
+			data.pCatalog = &catalog;
+			data.dwStateAction = WTD_STATEACTION_VERIFY;
+			data.dwProvFlags = WTD_CACHE_ONLY_URL_RETRIEVAL | WTD_REVOCATION_CHECK_NONE;
+			GUID action = WINTRUST_ACTION_GENERIC_VERIFY_V2;
+			result.TrustCode = ::WinVerifyTrust((HWND)INVALID_HANDLE_VALUE, &action, &data);
+			data.dwStateAction = WTD_STATEACTION_CLOSE;
+			::WinVerifyTrust((HWND)INVALID_HANDLE_VALUE, &action, &data);
+			result.Trust = TrustMessage(result.TrustCode);
+		}
+		return true;
+	}
+	return false;
 }
 
 AuthenticodeResult AnalyzeAuthenticode(PEFile const& pe, bool verifyTrust) {

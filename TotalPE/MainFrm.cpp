@@ -127,7 +127,7 @@ void CMainFrame::UpdateUI() {
 	UIEnable(ID_VIEW_DEBUG, fi && fi->HasDebug);
 	UIEnable(ID_VIEW_DIRECTORIES, fi && fi->HasDataDirs);
 	UIEnable(ID_VIEW_SECTIONS, fi && fi->HasSections);
-	UIEnable(ID_PE_SECURITY, fi && fi->HasSecurity);
+	UIEnable(ID_PE_SECURITY, fi && (fi->HasSecurity || m_Catalog));
 	UIEnable(ID_FILE_CLOSE, fi != nullptr || m_Archive || m_Object || m_Elf);
 	m_SaveUIPage = (HWND)-1;	// Save and Export List: from the active view, on the next idle
 	UIEnable(ID_PE_STRINGS, fi != nullptr || m_Elf);
@@ -238,8 +238,6 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 	// (the application font, to the controls as they are made)
 	Fonts::Install();
 	auto& settings = AppSettings::Get();
-	m_RecentFiles.Set(settings.RecentFiles());
-	UpdateRecentFilesMenu();
 
 	CreateSimpleStatusBar();
 	m_StatusBar.SubclassWindow(m_hWndStatusBar);
@@ -304,6 +302,7 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 	InitMenu(hMenu);
 	UIAddMenu(hMenu);
 	UIAddMenu(IDR_CONTEXT);
+	UIEnable(ID_RECENTFILES_, false);	// (Recent Files' "(Empty)")
 
 	if (settings.DarkMode()) {
 		UISetCheck(ID_OPTIONS_DARKMODE, true);
@@ -1360,6 +1359,7 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	StartXrefs();
 	ResetNavigation();
 	StartSymbolLoad(path);	// the window is usable at once; symbols arrive later (WM_SYMBOLS_LOADED)
+	StartCatalogLookup(path);
 	CloseFileViews();
 	m_Archive.Close();
 	m_Object.Close();
@@ -1371,16 +1371,7 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 
 	BuildTree(16);
 
-	CString ftitle;
-	ftitle.LoadString(IDR_MAINFRAME);
-	if (SecurityHelper::IsRunningElevated())
-		ftitle += L" (Administrator)";
-	CString spath(path);
-	CString title = spath.Mid(spath.ReverseFind(L'\\') + 1) + L" - " + ftitle;
-	SetWindowText(title);
-	m_RecentFiles.AddFile(path);
-	AppSettings::Get().RecentFiles(m_RecentFiles.Files());
-	UpdateRecentFilesMenu();
+	FileOpened(path);
 
 	RefreshWin32View();
 	ShowView(m_hRoot);
@@ -1405,15 +1396,7 @@ bool CMainFrame::OpenArchive(PCWSTR path) {
 
 	BuildArchiveTree(16);
 
-	CString ftitle;
-	ftitle.LoadString(IDR_MAINFRAME);
-	if (SecurityHelper::IsRunningElevated())
-		ftitle += L" (Administrator)";
-	CString spath(path);
-	SetWindowText(spath.Mid(spath.ReverseFind(L'\\') + 1) + L" - " + ftitle);
-	m_RecentFiles.AddFile(path);
-	AppSettings::Get().RecentFiles(m_RecentFiles.Files());
-	UpdateRecentFilesMenu();
+	FileOpened(path);
 
 	ShowView(m_hRoot);
 	UpdateUI();
@@ -1465,6 +1448,8 @@ void CMainFrame::ResetFileState() {
 	m_SymbolsForModules.clear();
 	m_Anomalies.clear();
 	CancelVirusTotal();
+	++m_CatalogGeneration;
+	m_Catalog.reset();
 	m_Overlay = {};
 	m_hOverlay = nullptr;
 	m_hResVersion = m_hResManifest = nullptr;
@@ -1504,15 +1489,7 @@ bool CMainFrame::OpenObject(PCWSTR path) {
 	SetStatusText(0, L"");
 	BuildObjectTree(16);
 
-	CString ftitle;
-	ftitle.LoadString(IDR_MAINFRAME);
-	if (SecurityHelper::IsRunningElevated())
-		ftitle += L" (Administrator)";
-	CString spath(path);
-	SetWindowText(spath.Mid(spath.ReverseFind(L'\\') + 1) + L" - " + ftitle);
-	m_RecentFiles.AddFile(path);
-	AppSettings::Get().RecentFiles(m_RecentFiles.Files());
-	UpdateRecentFilesMenu();
+	FileOpened(path);
 
 	ShowView(m_hRoot);
 	UpdateUI();
@@ -1640,15 +1617,7 @@ bool CMainFrame::OpenElf(PCWSTR path) {
 	SetStatusText(0, L"");
 	BuildElfTree(16);
 
-	CString ftitle;
-	ftitle.LoadString(IDR_MAINFRAME);
-	if (SecurityHelper::IsRunningElevated())
-		ftitle += L" (Administrator)";
-	CString spath(path);
-	SetWindowText(spath.Mid(spath.ReverseFind(L'\\') + 1) + L" - " + ftitle);
-	m_RecentFiles.AddFile(path);
-	AppSettings::Get().RecentFiles(m_RecentFiles.Files());
-	UpdateRecentFilesMenu();
+	FileOpened(path);
 
 	ShowView(m_hRoot);
 	UpdateUI();
@@ -1914,6 +1883,8 @@ void CMainFrame::BuildTree(int iconSize) {
 
 	InsertTreeItem(m_Tree, std::format(L"Anomalies ({})", m_Anomalies.size()).c_str(), GetTreeIcon(IDI_EXCEPTION), TreeItemType::Anomalies, root);
 	InsertTreeItem(m_Tree, L"Security Summary", GetTreeIcon(IDI_SECURITY), TreeItemType::SecuritySummary, root);
+	if (m_Catalog)	// (usually it is found later: OnCatalogFound)
+		InsertTreeItem(m_Tree, L"Catalog Signature", GetTreeIcon(IDI_SECURITY), TreeItemType::CatalogSignature, root);
 	InsertTreeItem(m_Tree, L"Bookmarks", GetTreeIcon(IDI_BOOKMARK), TreeItemType::Bookmarks, root);
 	m_hOverlay = nullptr;
 	if (!m_Overlay.Empty())
@@ -2054,6 +2025,8 @@ LRESULT CMainFrame::OnFileClose(WORD, WORD, HWND, BOOL&) {
 	m_Symbols.Close();
 	m_Anomalies.clear();
 	CancelVirusTotal();
+	++m_CatalogGeneration;	// as for the symbols: a lookup in progress is of the file that was closed
+	m_Catalog.reset();
 	m_Overlay = {};
 	m_hOverlay = nullptr;
 	m_Xrefs.Clear();
@@ -2305,26 +2278,43 @@ LRESULT CMainFrame::OnFind(UINT msg, WPARAM wp, LPARAM lp, BOOL&) {
 	return 0;
 }
 
-void CMainFrame::UpdateRecentFilesMenu() {
-	if (m_RecentFiles.IsEmpty())
-		return;
+// A file opened (of any kind): the window's title has its name, and it is the first of the recent files
+void CMainFrame::FileOpened(PCWSTR path) {
+	CString title;
+	title.LoadString(IDR_MAINFRAME);
+	if (SecurityHelper::IsRunningElevated())
+		title += L" (Administrator)";
+	CString spath(path);
+	SetWindowText(spath.Mid(spath.ReverseFind(L'\\') + 1) + L" - " + title);
+	RecentFilesManager::AddFile(path);
+}
 
-	auto menu = ((CMenuHandle)GetMenu()).GetSubMenu(0);
-	CString text;
-	int i = 0;
-	for (; ; i++) {
-		menu.GetMenuString(i, text, MF_BYPOSITION);
-		if (text == L"&Recent Files")
-			break;
-	}
-	menu = menu.GetSubMenu(i);
+// File > Recent Files, as it opens: the files as they are now (another window or another TotalPE may have opened some)
+LRESULT CMainFrame::OnInitMenuPopup(UINT, WPARAM wParam, LPARAM, BOOL& bHandled) {
+	bHandled = FALSE;	// (the menu's commands are updated too)
+	CMenuHandle menu((HMENU)wParam);
+	auto id = menu.GetMenuItemID(0);
+	if (id != ID_RECENTFILES_ && (id < ID_FILE_MRU_FIRST || id > ID_FILE_MRU_LAST))
+		return 0;
+
 	while (menu.DeleteMenu(0, MF_BYPOSITION))
 		;
-
-	i = 0;
-	for (auto& file : m_RecentFiles.Files()) {
-		menu.AppendMenu(MF_BYPOSITION, ATL_IDS_MRU_FILE + i++, file.c_str());
+	m_RecentFilesShown = RecentFilesManager::Files();
+	if (m_RecentFilesShown.empty()) {
+		menu.AppendMenu(MF_STRING | MF_GRAYED, ID_RECENTFILES_, L"(Empty)");
+		return 0;
 	}
+	int i = 0;
+	for (auto const& file : m_RecentFilesShown) {
+		// (1-9 choose the first ones; an & of the path is shown as one)
+		std::wstring text(file);
+		for (size_t pos = 0; (pos = text.find(L'&', pos)) != std::wstring::npos; pos += 2)
+			text.insert(pos, 1, L'&');
+		if (i < 9)
+			text = std::format(L"&{} {}", i + 1, text);
+		menu.AppendMenu(MF_STRING, ID_FILE_MRU_FIRST + i++, text.c_str());
+	}
+	return 0;
 }
 
 std::vector<FlatResource> const& CMainFrame::GetFlatResources() const {
@@ -2332,9 +2322,20 @@ std::vector<FlatResource> const& CMainFrame::GetFlatResources() const {
 }
 
 LRESULT CMainFrame::OnRecentFile(WORD, WORD id, HWND, BOOL&) {
-	auto& path = m_RecentFiles.Files()[id - ATL_IDS_MRU_FILE];
-	if (path != m_PE.GetPath())
-		OpenPE(path.c_str());
+	size_t index = id - ID_FILE_MRU_FIRST;
+	if (index >= m_RecentFilesShown.size())
+		return 0;
+	auto path = m_RecentFilesShown[index];	// (a copy: opening the file changes the list)
+	if (RecentFilesManager::SamePath(path, CurrentPath()))
+		return 0;
+	if (::GetFileAttributes(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
+		// (moved or deleted: it is no longer offered)
+		AtlMessageBox(m_hWnd, std::format(L"{} no longer exists. It is removed from the recent files.", path).c_str(),
+			IDR_MAINFRAME, MB_ICONWARNING);
+		RecentFilesManager::RemoveFile(path);
+		return 0;
+	}
+	OpenPE(path.c_str());
 	return 0;
 }
 
@@ -2342,7 +2343,8 @@ void CMainFrame::ParseCommandLine() {
 	int count;
 	auto args = ::CommandLineToArgvW(::GetCommandLine(), &count);
 	if (args && count > 1) {
-		OpenPE(args[1]);
+		// (by its full path: a relative one is of this process's current directory only)
+		OpenPE(RecentFilesManager::FullPath(args[1]).c_str());
 	}
 	if (args)
 		::LocalFree(args);
@@ -2670,7 +2672,11 @@ LRESULT CMainFrame::OnViewDebug(WORD, WORD, HWND, BOOL&) {
 }
 
 LRESULT CMainFrame::OnViewSecurity(WORD, WORD, HWND, BOOL&) {
-	ShowView(TreeItemType::DirectorySecurity, nullptr, IDI_SECURITY);
+	// a file signed in a catalog has no security directory: its signature is the catalog's
+	if (!m_PE.GetFileInfo()->HasSecurity && m_Catalog)
+		ShowView(TreeItemType::CatalogSignature, nullptr, IDI_SECURITY);
+	else
+		ShowView(TreeItemType::DirectorySecurity, nullptr, IDI_SECURITY);
 	return 0;
 }
 
@@ -3538,6 +3544,12 @@ std::shared_ptr<CMainFrame::DecompilerSession> CMainFrame::Decompiler(std::wstri
 	::GetModuleFileName(nullptr, folder, _countof(folder));
 	*wcsrchr(folder, L'\\') = 0;
 	session->Languages = std::wstring(folder) + L"\\Decompiler\\languages";
+	// (the decompiler opens them by narrow names: a path that is not ASCII is given by its short name, if it has one)
+	if (std::ranges::any_of(session->Languages, [](wchar_t ch) { return ch > 0x7F; })) {
+		WCHAR shortPath[MAX_PATH];
+		if (auto chars = ::GetShortPathName(session->Languages.c_str(), shortPath, _countof(shortPath)); chars && chars < _countof(shortPath))
+			session->Languages = shortPath;
+	}
 
 	// Calls by name: of the functions the symbols know (asked for when a call is seen: a debug build has hundreds of
 	// thousands), of the exports, and of the imports (through their entries in the import address table)
@@ -5070,6 +5082,40 @@ void CMainFrame::StartSymbolLoad(std::wstring path) {
 	}).detach();
 }
 
+//
+// the catalog signature in the background
+//
+
+void CMainFrame::StartCatalogLookup(std::wstring path) {
+	auto generation = ++m_CatalogGeneration;
+	m_Catalog.reset();
+	// a file with a signature of its own is not looked for in the catalogs (and the lookup hashes the whole file)
+	if (m_PE.GetFileInfo()->HasSecurity || path.empty())
+		return;
+
+	std::thread([hWnd = m_hWnd, generation, path = std::move(path)] {
+		auto catalog = std::make_unique<CatalogSignature>();
+		if (!FindCatalogSignature(path, *catalog))
+			catalog.reset();
+		// ownership moves to the UI thread, unless the window is gone
+		if (::PostMessage(hWnd, WM_CATALOG_FOUND, generation, (LPARAM)catalog.get()))
+			catalog.release();
+	}).detach();
+}
+
+LRESULT CMainFrame::OnCatalogFound(UINT, WPARAM generation, LPARAM lParam, BOOL&) {
+	std::unique_ptr<CatalogSignature> catalog((CatalogSignature*)lParam);
+	if ((uint32_t)generation != m_CatalogGeneration || !m_PE || !catalog)
+		return 0;	// none, or the file was closed or another one opened in the meantime
+
+	m_Catalog = std::move(catalog);
+	if (auto summary = FindTreeItem(TreeItemType::SecuritySummary); summary && !FindTreeItem(TreeItemType::CatalogSignature))
+		InsertTreeItem(m_Tree, L"Catalog Signature", GetTreeIcon(IDI_SECURITY), TreeItemType::CatalogSignature,
+			m_Tree.GetParentItem(summary), summary);
+	UpdateUI();
+	return 0;
+}
+
 // All the symbols, and those of a kind under them (in a list of their own, for searching and filtering): a kind
 // the symbols have none of has no node
 void CMainFrame::InsertSymbolsNode(HTREEITEM hRoot) {
@@ -5535,6 +5581,10 @@ bool CMainFrame::GoToVa(uint64_t va) {
 
 std::vector<Anomaly> const& CMainFrame::GetAnomalies() const {
 	return m_Anomalies;
+}
+
+CatalogSignature const* CMainFrame::GetCatalogSignature() const {
+	return m_Catalog.get();
 }
 
 LRESULT CMainFrame::OnViewFileInHex(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {

@@ -15,6 +15,7 @@
 #include "Rtti.h"
 #include "Driver.h"
 #include "ComServer.h"
+#include "Authenticode.h"
 
 class Annotations;
 
@@ -32,6 +33,9 @@ static const UINT WM_DECOMPILED = WM_APP + 60;
 static const UINT WM_XREFS_BUILT = WM_APP + 61;
 // posted by the decompiler's thread: wParam is the generation of the request, lParam a DriverInfo* that the receiver deletes
 static const UINT WM_DRIVER_ANALYZED = WM_APP + 62;
+// posted by the thread that looks for the catalog of the system that signs the file: wParam is the generation of the request,
+// lParam a CatalogSignature* (null if no catalog has the file) that the receiver deletes
+static const UINT WM_CATALOG_FOUND = WM_APP + 63;
 
 constexpr uint32_t ItemShift = 8;
 
@@ -185,6 +189,8 @@ enum class TreeItemType : int64_t {
 	Rpc,
 	// the Windows Runtime classes the program serves (their factories, their interfaces)
 	WinRt,
+	// the catalog of the system that signs a file that has no signature of its own
+	CatalogSignature,
 
 	ItemMask = 255,
 };
@@ -240,6 +246,8 @@ struct IMainFrame abstract {
 	virtual std::wstring ShortFunctionName(DWORD rva) const = 0;
 	virtual std::wstring ResolveVa(ULONGLONG va) const = 0;
 	virtual std::vector<Anomaly> const& GetAnomalies() const = 0;
+	// the catalog of the system that signs the file, if it has no signature of its own (null if none does, or not known yet)
+	virtual CatalogSignature const* GetCatalogSignature() const = 0;
 	// Shows a place in the file: in the hex view, or as disassembly if the offset is in a code section.
 	virtual bool GoToFileOffset(int64_t offset, bool disassemble = false) = 0;
 	// Shows an address (a virtual address): in a disassembly view that already contains it, in a new one if it is in a code

@@ -286,6 +286,7 @@
     <ClInclude Include="PEStrings.h" />
     <ClInclude Include="PEDiff.h" />
     <ClInclude Include="VersionInfo.h" />
+    <ClInclude Include="PEReport.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -345,6 +346,7 @@
     <ClCompile Include="PEStrings.cpp" />
     <ClCompile Include="PEDiff.cpp" />
     <ClCompile Include="VersionInfo.cpp" />
+    <ClCompile Include="PEReport.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />

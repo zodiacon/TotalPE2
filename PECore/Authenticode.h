@@ -52,6 +52,24 @@ AuthenticodeResult AnalyzeAuthenticode(PEFile const& pe, bool verifyTrust = true
 // Asks the system if the signature of the file is valid. Returns the HRESULT.
 long VerifyFileTrust(std::wstring const& path, std::wstring& message);
 
+// A file signed in a catalog of the system rather than in itself (most files of Windows are): the catalog (a .cat file in
+// catroot) has the hash of the file, and the catalog is signed.
+struct CatalogSignature {
+	std::wstring Catalog;			// the path of the catalog file
+	std::wstring HashAlgorithm;		// of the hash of the file in the catalog: "SHA-256" (newer catalogs) or "SHA-1"
+	std::wstring MemberTag;			// that hash, as the catalog names its member (hex)
+	SignatureSummary Signature;		// the signature of the catalog: its signer, certificates and time stamps
+	std::wstring Trust;				// the verdict of the system about the file through the catalog; empty if not checked
+	long TrustCode{ 0 };
+};
+
+// The catalog of the system that has the hash of the file. 'verifyTrust' also asks the system (WinVerifyTrust) whether the
+// file is valid and trusted through that catalog. False if no catalog has the file (or the file cannot be read).
+bool FindCatalogSignature(std::wstring const& path, CatalogSignature& result, bool verifyTrust = true);
+
+// A message for a result of WinVerifyTrust
+std::wstring TrustMessage(long result);
+
 // The Authenticode hash of a file: of everything except the checksum, the certificate table entry and the certificate table.
 // 'algorithm' is the name of a CNG algorithm ("SHA256"). Empty if the file cannot be hashed.
 std::vector<uint8_t> ComputeAuthenticodeDigest(PEFile const& pe, PCWSTR algorithm);

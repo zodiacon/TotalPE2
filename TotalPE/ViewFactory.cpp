@@ -442,6 +442,18 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 			return { view, view };
 		}
 
+		case TreeItemType::CatalogSignature:
+		{
+			if (!m_Catalog)
+				return {};
+			auto view = new CSecurityView(this, m_PE, *m_Catalog);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
 		case TreeItemType::Com:
 		{
 			auto view = new CComView(this, m_PE);

@@ -384,3 +384,58 @@ TEST_CASE("A signed file that was changed", "[authenticode][system]") {
 	CHECK((uint32_t)result.TrustCode == 0x80096010);	// TRUST_E_BAD_DIGEST
 	CHECK(result.Trust.find(L"changed") != std::wstring::npos);
 }
+
+std::wstring FindCatalogSignedFile() {
+	WCHAR dir[MAX_PATH];
+	::GetSystemDirectoryW(dir, MAX_PATH);
+	for (auto name : { L"drivers\\beep.sys", L"drivers\\null.sys", L"notepad.exe", L"cmd.exe", L"alg.exe", L"calc.exe" }) {
+		auto path = std::wstring(dir) + L"\\" + name;
+		PEFile pe;
+		CatalogSignature catalog;
+		if (pe.Open(path) && pe.GetSecurity()->empty() && FindCatalogSignature(path, catalog, false))
+			return path;
+	}
+	return L"";
+}
+
+TEST_CASE("The catalog signature of a system file", "[authenticode][system]") {
+	auto path = FindCatalogSignedFile();
+	if (path.empty())
+		SKIP("no system file signed in a catalog was found");
+	INFO(Narrow(path));
+
+	CatalogSignature catalog;
+	REQUIRE(FindCatalogSignature(path, catalog));
+	INFO(Narrow(catalog.Catalog));
+	CHECK(catalog.Catalog.ends_with(L".cat"));
+	CHECK((catalog.HashAlgorithm == L"SHA-256" || catalog.HashAlgorithm == L"SHA-1"));
+	CHECK(catalog.MemberTag.size() == (catalog.HashAlgorithm == L"SHA-256" ? 64 : 40));
+	REQUIRE(catalog.Signature.Decoded);
+	CHECK(catalog.Signature.Error.empty());
+	REQUIRE(catalog.Signature.HasSigner);
+	CHECK(catalog.Signature.Signer.Subject.find(L"Microsoft") != std::wstring::npos);
+	INFO(Narrow(catalog.Trust));
+	CHECK(catalog.TrustCode == 0);
+	CHECK_FALSE(catalog.Trust.empty());
+
+	SECTION("without asking the system") {
+		CatalogSignature unverified;
+		REQUIRE(FindCatalogSignature(path, unverified, false));
+		CHECK(unverified.Catalog == catalog.Catalog);
+		CHECK(unverified.Trust.empty());
+	}
+}
+
+TEST_CASE("A file that no catalog has", "[authenticode]") {
+	SyntheticPE spec;
+	TempFile file(spec.Build(), L".dll");
+	CatalogSignature catalog;
+	CHECK_FALSE(FindCatalogSignature(file.Path(), catalog));
+	CHECK_FALSE(FindCatalogSignature(L"C:\\no\\such\\file.dll", catalog));
+}
+
+TEST_CASE("Trust messages", "[authenticode]") {
+	CHECK(TrustMessage(0) == L"The signature is valid and trusted");
+	CHECK(TrustMessage((long)TRUST_E_NOSIGNATURE) == L"The file is not signed");
+	CHECK_FALSE(TrustMessage(E_FAIL).empty());
+}
