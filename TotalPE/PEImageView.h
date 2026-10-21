@@ -58,6 +58,6 @@ private:
 	vt::Status m_Vt;
 	PEFile const& m_PE;
 	// of the whole file: computed once, as the items are rebuilt when the VirusTotal scan progresses
-	std::wstring m_Md5, m_Sha1, m_Sha256;
+	std::wstring m_Md5, m_Sha1, m_Sha256, m_Ssdeep, m_Tlsh;
 	uint32_t m_FileChecksum{ 0 };
 };

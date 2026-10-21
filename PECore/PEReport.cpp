@@ -12,6 +12,7 @@
 #include "YaraRules.h"
 #include "Capabilities.h"
 #include "PEStrings.h"
+#include "FuzzyHash.h"
 #include <bcrypt.h>
 
 namespace {
@@ -228,6 +229,9 @@ namespace {
 		};
 		auto imphash = pe.GetImport() ? ComputeImphash(pe) : std::string();
 		file["imphash"] = imphash.empty() ? JsonValue() : JsonValue(imphash);
+		file["ssdeep"] = FuzzyHash::Ssdeep(bytes);
+		auto tlsh = FuzzyHash::Tlsh(bytes);
+		file["tlsh"] = tlsh.empty() ? JsonValue() : JsonValue(tlsh);
 		return file;
 	}
 
@@ -295,7 +299,11 @@ namespace {
 				size = std::min<uint64_t>(hdr.SizeOfRawData, pe.GetFileSize() - hdr.PointerToRawData);
 			auto data = pe.GetSpan(hdr.PointerToRawData, (uint32_t)size);
 			auto entropy = data.empty() ? 0.0 : ComputeEntropy((const uint8_t*)data.data(), data.size());
+			// the hashes of the raw data find the sections that variants share (the same code with other resources)
+			auto tlsh = FuzzyHash::Tlsh(data);
 			sections.emplace_back(Object{
+				{ "md5", data.empty() ? JsonValue() : JsonValue(HexOf(HashBytes(BCRYPT_MD5_ALGORITHM, data))) },
+				{ "tlsh", tlsh.empty() ? JsonValue() : JsonValue(tlsh) },
 				{ "name", Text(s.SectionName) },
 				{ "rva", Hex(hdr.VirtualAddress) },
 				{ "virtualSize", Num(hdr.Misc.VirtualSize) },
@@ -758,7 +766,7 @@ std::vector<std::string> const& ReportSummaryColumns() {
 	static const std::vector<std::string> columns{
 		"path", "sha256", "machine", "subsystem", "isDll", "isDriver", "timestamp", "company", "fileVersion",
 		"signed", "signatureKind", "signer", "trusted", "aslr", "dep", "cfg", "cet", "maxEntropy", "overlaySize", "anomalyErrors", "anomalyWarnings",
-		"imphash", "pdb", "capabilities", "yara", "error",
+		"imphash", "ssdeep", "tlsh", "pdb", "capabilities", "yara", "error",
 	};
 	return columns;
 }
@@ -776,6 +784,8 @@ JsonValue SummarizeReport(JsonValue const& report) {
 	copy("path", file["path"]);
 	copy("sha256", file["sha256"]);
 	copy("imphash", file["imphash"]);
+	copy("ssdeep", file["ssdeep"]);
+	copy("tlsh", file["tlsh"]);
 	copy("error", report["error"]);
 
 	auto const& h = report["headers"];
@@ -910,11 +920,23 @@ namespace {
 	}
 
 	JsonValue DiffSide(PEFile const& pe) {
+		auto bytes = FileBytes(pe);
+		auto tlsh = FuzzyHash::Tlsh(bytes);
 		return Object{
 			{ "path", Utf8(pe.GetPath()) },
 			{ "size", Num(pe.GetFileSize()) },
-			{ "sha256", Lower(Sha256Hex(FileBytes(pe))) },
+			{ "sha256", Lower(Sha256Hex(bytes)) },
+			{ "ssdeep", FuzzyHash::Ssdeep(bytes) },
+			{ "tlsh", tlsh.empty() ? JsonValue() : JsonValue(tlsh) },
 		};
+	}
+
+	// How alike the files are as a whole, which says more than the items when much has changed (a new build, a variant)
+	JsonValue Similarity(JsonValue const& left, JsonValue const& right) {
+		Object similarity{ { "ssdeep", Num(std::max(0, FuzzyHash::CompareSsdeep(left["ssdeep"].AsString(), right["ssdeep"].AsString()))) } };
+		similarity["tlsh"] = left["tlsh"].IsNull() || right["tlsh"].IsNull() ? JsonValue()
+			: Num(FuzzyHash::TlshDistance(left["tlsh"].AsString(), right["tlsh"].AsString()));
+		return similarity;
 	}
 }
 
@@ -938,10 +960,13 @@ JsonValue BuildDiffReport(PEFile const& left, PEFile const& right, bool includeS
 		items.push_back(std::move(entry));
 	}
 	auto changed = diff.Count(DiffStatus::Changed), added = diff.Count(DiffStatus::Added), removed = diff.Count(DiffStatus::Removed);
+	auto leftSide = DiffSide(left), rightSide = DiffSide(right);
+	auto similarity = Similarity(leftSide, rightSide);
 	return Object{
 		{ "schema", DiffSchema },
-		{ "left", DiffSide(left) },
-		{ "right", DiffSide(right) },
+		{ "left", std::move(leftSide) },
+		{ "right", std::move(rightSide) },
+		{ "similarity", std::move(similarity) },
 		{ "status", diff.Identical ? "identical" : "changed" },
 		{ "counts", Object{ { "changed", Num(changed) }, { "added", Num(added) }, { "removed", Num(removed) } } },
 		{ "items", std::move(items) },

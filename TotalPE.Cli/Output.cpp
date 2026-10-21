@@ -156,6 +156,8 @@ std::string FormatReportText(JsonValue const& report) {
 		Line(out, "Size", Thousands(file["size"].AsNumber()) + " bytes");
 	Line(out, "SHA-256", file["sha256"].AsString());
 	Line(out, "Imphash", file["imphash"].AsString());
+	Line(out, "ssdeep", file["ssdeep"].AsString());
+	Line(out, "TLSH", file["tlsh"].AsString());
 
 	auto const& version = report["version"];
 	if (version.IsObject()) {
@@ -278,6 +280,9 @@ std::string FormatDiffText(JsonValue const& diff) {
 		return out + "  error: " + diff["error"].AsString() + "\n";
 	if (status == "identical")
 		return out + "  the files are identical\n";
+	if (auto const& similarity = diff["similarity"]; similarity.IsObject())
+		out += std::format("  similarity: ssdeep {} of 100, TLSH distance {} (0 is alike)\n", similarity["ssdeep"].Write(false),
+			similarity["tlsh"].IsNull() ? "-" : similarity["tlsh"].Write(false));
 
 	for (auto const& item : diff["items"].AsArray()) {
 		auto const& left = item["left"], &right = item["right"];

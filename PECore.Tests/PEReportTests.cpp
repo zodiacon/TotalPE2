@@ -1,5 +1,6 @@
 #include "TestCommon.h"
 #include <PEReport.h>
+#include <FuzzyHash.h>
 #include <filesystem>
 
 namespace {
@@ -89,6 +90,8 @@ TEST_CASE("A report of a synthetic DLL", "[report]") {
 		CHECK(Contains((*text)["flags"], "EXECUTE"));
 		CHECK((*text)["entropy"].AsNumber() < 1);
 		CHECK(!(*text)["highEntropy"].AsBool());
+		CHECK((*text)["md5"].AsString().size() == 32);
+		CHECK(Has(*text, "tlsh"));
 	}
 	SECTION("imports") {
 		auto kernel32 = FindByName(report["imports"], "module", "kernel32.dll");
@@ -120,6 +123,31 @@ TEST_CASE("A report of a synthetic DLL", "[report]") {
 		CHECK(!Has(report, "tls"));
 		CHECK(!Has(report, "version"));
 	}
+}
+
+TEST_CASE("A report has the fuzzy hashes of the file", "[report][fuzzy]") {
+	SyntheticPE spec;
+	auto bytes = spec.Build();
+	// some text in a section, so that the file is not too uniform for TLSH
+	std::string text;
+	for (int i = 0; text.size() < SyntheticPE::SectionSize; i++)
+		text += std::format("{} the quick brown fox ", i);
+	std::copy_n(text.begin(), SyntheticPE::SectionSize, bytes.begin() + 0x200);
+	auto report = RoundTrip(Report(bytes));
+	auto span = std::as_bytes(std::span(bytes));
+	auto const& file = report["file"];
+	CHECK(file["ssdeep"].AsString() == FuzzyHash::Ssdeep(span));
+	REQUIRE(file["tlsh"].IsString());
+	CHECK(file["tlsh"].AsString() == FuzzyHash::Tlsh(span));
+	CHECK(file["tlsh"].AsString().size() == 72);
+
+	auto row = SummarizeReport(report);
+	CHECK(row["ssdeep"].AsString() == file["ssdeep"].AsString());
+	CHECK(row["tlsh"].AsString() == file["tlsh"].AsString());
+
+	auto section = FindByName(report["sections"], "name", ".text");
+	REQUIRE(section);
+	CHECK((*section)["tlsh"].AsString() == FuzzyHash::Tlsh(span.subspan(0x200, SyntheticPE::SectionSize)));
 }
 
 TEST_CASE("A report shows imports by ordinal", "[report]") {
@@ -371,6 +399,9 @@ TEST_CASE("A diff report of the same file", "[report][diff]") {
 	CHECK(diff["items"].AsArray().empty());
 	CHECK(diff["counts"]["changed"].AsNumber() == 0);
 	CHECK(diff["left"]["sha256"].AsString() == diff["right"]["sha256"].AsString());
+	CHECK(diff["left"]["ssdeep"].AsString() == diff["right"]["ssdeep"].AsString());
+	CHECK(diff["similarity"]["ssdeep"].AsNumber() == 100);
+	CHECK((diff["similarity"]["tlsh"].IsNull() || diff["similarity"]["tlsh"].AsNumber() == 0));
 
 	auto all = BuildDiffReport(a.PE, b.PE, true);
 	REQUIRE(!all["items"].AsArray().empty());
@@ -394,6 +425,8 @@ TEST_CASE("A diff report of two versions", "[report][diff]") {
 	CHECK((*added)["status"].AsString() == "added");
 	CHECK(diff["counts"]["added"].AsNumber() >= 1);
 	CHECK(diff["counts"]["removed"].AsNumber() >= 1);
+	CHECK(diff["similarity"]["ssdeep"].IsNumber());
+	CHECK(Has(diff["similarity"], "tlsh"));
 	for (auto const& item : diff["items"].AsArray())
 		CHECK(item["status"].AsString() != "same");
 }

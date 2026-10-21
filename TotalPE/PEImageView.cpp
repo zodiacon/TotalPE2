@@ -11,6 +11,7 @@
 #include "PEAnomalies.h"
 #include "Overlay.h"
 #include "Md5.h"
+#include "FuzzyHash.h"
 #include <SortHelper.h>
 #include <ClipboardHelper.h>
 #include <ctime>
@@ -37,6 +38,8 @@ void CPEImageView::ComputeHashes() {
 	m_Md5 = wide(Md5Hex(data.data(), data.size()));
 	m_Sha1 = wide(Sha1Hex(data));
 	m_Sha256 = wide(Sha256Hex(data));
+	m_Ssdeep = wide(FuzzyHash::Ssdeep(data));
+	m_Tlsh = wide(FuzzyHash::Tlsh(data));
 	m_FileChecksum = ComputeFileChecksum(m_PE);
 }
 
@@ -148,6 +151,8 @@ void CPEImageView::BuildItems() {
 		{ L"Size of Uninitialized Data", PEStrings::ToMemorySize(is64 ? opt64.SizeOfUninitializedData : opt32.SizeOfUninitializedData) },
 		{ L"Is Managed?", m_PE.GetFileInfo()->HasCOMDescr ? L"Yes" : L"No" },
 		{ L"Import Hash (imphash)", imphash.empty() ? L"(no imports)" : imphash, L"MD5 of the imported functions in order; the same value as the pefile library and VirusTotal compute" },
+		{ L"ssdeep", m_Ssdeep, L"Fuzzy hash: files that are alike have digests that score high (0-100) against each other" },
+		{ L"TLSH", m_Tlsh.empty() ? L"(too small or uniform)" : m_Tlsh, L"Fuzzy hash: files that are alike have a small distance (under 30 is very close)" },
 		{ L"Entry Point", std::format(L"0x{:X}", is64 ? opt64.AddressOfEntryPoint : opt32.AddressOfEntryPoint),
 			Frame()->ResolveRva(is64 ? opt64.AddressOfEntryPoint : opt32.AddressOfEntryPoint) },
 		{ L"Base of Code", std::format(L"0x{:X}", is64 ? opt64.BaseOfCode : opt32.BaseOfCode) },
