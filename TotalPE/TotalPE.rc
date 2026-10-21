@@ -343,6 +343,8 @@ BEGIN
         MENUITEM "&Debug",                      ID_VIEW_DEBUG
         MENUITEM "Security",                    ID_PE_SECURITY
         MENUITEM "Security Summar&y",           ID_PE_SECURITYSUMMARY
+        MENUITEM "&YARA Matches",               ID_PE_YARA
+        MENUITEM "Ca&pabilities",               ID_PE_CAPABILITIES
         MENUITEM SEPARATOR
         MENUITEM "Disassemble Entry Point",     ID_PE_DISASSEMBLEENTRYPOINT
         MENUITEM "Disassemble &Function...",    ID_PE_DISASSEMBLEFUNCTION
@@ -359,6 +361,10 @@ BEGIN
         MENUITEM "Windows API &Explorer",       ID_TOOLS_WIN32EXPLORER
         MENUITEM SEPARATOR
         MENUITEM "Add Library &Signatures...",  ID_TOOLS_ADDSIGNATURES
+        MENUITEM SEPARATOR
+        MENUITEM "&YARA Rules File...",         ID_TOOLS_YARAFILE
+        MENUITEM "YARA Rules F&older...",       ID_TOOLS_YARAFOLDER
+        MENUITEM "&Clear YARA Rules",           ID_TOOLS_YARACLEAR
     END
     POPUP "&Options"
     BEGIN
@@ -904,6 +910,11 @@ BEGIN
     ID_WIN32_DOCS           "Show Microsoft's documentation of the function or type\nDocumentation"
     ID_WIN32_BROWSER        "Open the documentation (or a search of it) in the default browser\nOpen in Browser"
     ID_TOOLS_ADDSIGNATURES  "Name the functions of static libraries (.lib, .obj) in files that have no symbols\nAdd Library Signatures"
+    ID_TOOLS_YARAFILE       "Match the rules of a YARA file (.yar, .yara, or compiled .yarc) against every file that is opened\nYARA Rules File"
+    ID_TOOLS_YARAFOLDER     "Match the YARA rules of a folder (its .yar and .yara files, and those of its subfolders) against every file that is opened\nYARA Rules Folder"
+    ID_TOOLS_YARACLEAR      "Stop matching YARA rules\nClear YARA Rules"
+    ID_PE_YARA              "The YARA rules that matched the file (Tools > YARA Rules chooses them)\nYARA Matches"
+    ID_PE_CAPABILITIES      "What the program can do, from its imports, strings and shape (with ATT&CK techniques)\nCapabilities"
     ID_PE_CLASSES           "The C++ classes of the program (from its run-time type information): their bases, vtables and virtual functions \nClasses"
     ID_PE_DRIVER            "What the kernel driver sets up: its dispatch routines (IRP_MJ_...), its unload routine, the control codes it handles\nDriver"
     ID_PE_COM               "The COM classes the program creates and the interfaces it asks for: the calls that pass their GUIDs\nCOM"

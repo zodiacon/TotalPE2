@@ -39,6 +39,9 @@
 #include "DialogView.h"
 #include "MenuView.h"
 #include "AnomalyView.h"
+#include "YaraView.h"
+#include "CapabilitiesView.h"
+#include "AppSettings.h"
 #include "AnimatedCursorView.h"
 #include "XrefView.h"
 #include "OverlayView.h"
@@ -435,6 +438,26 @@ std::pair<IView*, CMessageMap*> CMainFrame::CreateView(TreeItemType type) {
 		case TreeItemType::SecuritySummary:
 		{
 			auto view = new CSecuritySummaryView(this, m_PE);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::Capabilities:
+		{
+			auto view = new CCapabilitiesView(this, m_PE);
+			if (nullptr == view->DoCreate(m_Tabs)) {
+				ATLASSERT(false);
+				return {};
+			}
+			return { view, view };
+		}
+
+		case TreeItemType::Yara:
+		{
+			auto view = new CYaraView(this, m_PE, m_YaraMatches, m_YaraErrors);
 			if (nullptr == view->DoCreate(m_Tabs)) {
 				ATLASSERT(false);
 				return {};

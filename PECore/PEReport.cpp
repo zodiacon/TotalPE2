@@ -9,6 +9,8 @@
 #include "SecuritySummary.h"
 #include "VersionInfo.h"
 #include "PEDiff.h"
+#include "YaraRules.h"
+#include "Capabilities.h"
 #include "PEStrings.h"
 #include <bcrypt.h>
 
@@ -605,6 +607,65 @@ namespace {
 		return classes;
 	}
 
+	// where a file offset is: the section and the RVA (null if it is not in the raw data of a section)
+	std::pair<JsonValue, JsonValue> SectionOf(PEFile const& pe, uint64_t offset) {
+		if (auto sections = pe.GetSecHeaders())
+			for (auto const& s : *sections) {
+				auto const& h = s.SecHdr;
+				if (h.SizeOfRawData && offset >= h.PointerToRawData && offset < (uint64_t)h.PointerToRawData + h.SizeOfRawData)
+					return { Text(s.SectionName), Hex(h.VirtualAddress + (offset - h.PointerToRawData)) };
+			}
+		return {};
+	}
+
+	JsonValue YaraPart(PEFile const& pe, YaraRules const& rules, int timeout, Array& errors) {
+		Object part{ { "rules", Utf8(rules.Source()) }, { "ruleCount", Num(rules.RuleCount()) } };
+		std::vector<YaraMatch> matches;
+		std::string error;
+		if (!rules.Scan(FileBytes(pe), pe.GetPath(), matches, &error, timeout)) {
+			part["error"] = error;
+			errors.emplace_back("yara: " + error);
+		}
+		Array list;
+		for (auto const& m : matches) {
+			Array tags;
+			for (auto const& t : m.Tags)
+				tags.emplace_back(Text(t));
+			Object meta;
+			for (auto const& [name, value] : m.Meta)
+				if (!meta.contains(Text(name)))
+					meta[Text(name)] = Text(value);
+			Array strings;
+			for (auto const& s : m.Strings) {
+				auto [section, rva] = SectionOf(pe, s.Offset);
+				std::string data;
+				for (auto b : s.Data)
+					data += std::format("{:02x}", b);
+				strings.emplace_back(Object{
+					{ "id", Text(s.Identifier) },
+					{ "offset", Hex(s.Offset) },
+					{ "section", section },
+					{ "rva", rva },
+					{ "length", Num(s.Length) },
+					{ "data", data },
+				});
+			}
+			Object entry{
+				{ "rule", Text(m.Rule) },
+				{ "namespace", Text(m.Namespace) },
+				{ "tags", std::move(tags) },
+				{ "meta", std::move(meta) },
+				{ "strings", std::move(strings) },
+				{ "stringMatches", Num(m.StringMatchCount) },
+			};
+			if (m.TooManyMatches)
+				entry["tooManyMatches"] = true;
+			list.push_back(std::move(entry));
+		}
+		part["matches"] = std::move(list);
+		return part;
+	}
+
 	struct PartName {
 		ReportPart Part;
 		const char* Name;
@@ -616,6 +677,7 @@ namespace {
 		{ ReportPart::Rich, "rich" }, { ReportPart::Tls, "tls" }, { ReportPart::Version, "version" },
 		{ ReportPart::Signature, "signature" }, { ReportPart::Security, "security" }, { ReportPart::Overlay, "overlay" },
 		{ ReportPart::Anomalies, "anomalies" }, { ReportPart::Rtti, "rtti" },
+		{ ReportPart::Capabilities, "capabilities" },
 	};
 }
 
@@ -661,6 +723,24 @@ JsonValue BuildReport(PEFile const& pe, ReportOptions const& options) {
 	add(ReportPart::Overlay, "overlay", [&] { return OverlayPart(pe); });
 	add(ReportPart::Anomalies, "anomalies", [&] { return AnomaliesPart(pe); });
 	add(ReportPart::Rtti, "rtti", [&] { return RttiPart(pe); });
+	add(ReportPart::Capabilities, "capabilities", [&] {
+		Array list;
+		auto const& rules = options.Capabilities ? *options.Capabilities : CapabilityRules::BuiltIn();
+		for (auto const& m : rules.Match(pe)) {
+			Array attack, evidence;
+			for (auto const& a : m.Attack)
+				attack.emplace_back(a);
+			for (auto const& e : m.Evidence)
+				evidence.emplace_back(Text(e));
+			Object entry{ { "name", m.Name }, { "namespace", m.Namespace }, { "attack", std::move(attack) }, { "evidence", std::move(evidence) } };
+			if (!m.Description.empty())
+				entry["description"] = m.Description;
+			list.push_back(std::move(entry));
+		}
+		return JsonValue(std::move(list));
+	});
+	if (options.Yara)
+		add(ReportPart::All, "yara", [&] { return YaraPart(pe, *options.Yara, options.YaraTimeout, errors); });
 
 	report["errors"] = std::move(errors);
 	return report;
@@ -678,7 +758,7 @@ std::vector<std::string> const& ReportSummaryColumns() {
 	static const std::vector<std::string> columns{
 		"path", "sha256", "machine", "subsystem", "isDll", "isDriver", "timestamp", "company", "fileVersion",
 		"signed", "signatureKind", "signer", "trusted", "aslr", "dep", "cfg", "cet", "maxEntropy", "overlaySize", "anomalyErrors", "anomalyWarnings",
-		"imphash", "pdb", "error",
+		"imphash", "pdb", "capabilities", "yara", "error",
 	};
 	return columns;
 }
@@ -734,6 +814,18 @@ JsonValue SummarizeReport(JsonValue const& report) {
 		row["maxEntropy"] = max;
 	}
 	copy("overlaySize", report["overlay"]["size"]);
+	if (report["capabilities"].IsArray()) {
+		std::string names;
+		for (auto const& c : report["capabilities"].AsArray())
+			names += (names.empty() ? "" : ";") + c["name"].AsString();
+		row["capabilities"] = names;
+	}
+	if (report["yara"].IsObject()) {
+		std::string rules;
+		for (auto const& m : report["yara"]["matches"].AsArray())
+			rules += (rules.empty() ? "" : ";") + m["rule"].AsString();
+		row["yara"] = rules;
+	}
 
 	if (report["anomalies"].IsArray()) {
 		int errors = 0, warnings = 0;
@@ -988,6 +1080,16 @@ std::vector<std::string> CheckReport(JsonValue const& report, std::vector<std::s
 					counts[r] > 1 && r != 1 ? "s" : "");
 		if (!text.empty())
 			failures.push_back("anomalies: " + text);
+	}
+
+	if (report["yara"].IsObject()) {
+		std::string rules;
+		for (auto const& m : report["yara"]["matches"].AsArray())
+			rules += (rules.empty() ? "" : ", ") + m["rule"].AsString();
+		if (!rules.empty())
+			failures.push_back("yara: " + rules);
+		if (report["yara"]["error"].IsString())
+			failures.push_back("yara: " + report["yara"]["error"].AsString());
 	}
 	return failures;
 }

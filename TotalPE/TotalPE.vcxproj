@@ -399,6 +399,8 @@
     <ClCompile Include="SymbolSettingsDlg.cpp" />
     <ClCompile Include="AnimatedCursorView.cpp" />
     <ClCompile Include="AnomalyView.cpp" />
+    <ClCompile Include="YaraView.cpp" />
+    <ClCompile Include="CapabilitiesView.cpp" />
     <ClCompile Include="FlowGraphView.cpp" />
     <ClCompile Include="ArchiveView.cpp" />
     <ClCompile Include="OverlayView.cpp" />
@@ -480,6 +482,8 @@
     <ClInclude Include="SymbolSettingsDlg.h" />
     <ClInclude Include="AnimatedCursorView.h" />
     <ClInclude Include="AnomalyView.h" />
+    <ClInclude Include="YaraView.h" />
+    <ClInclude Include="CapabilitiesView.h" />
     <ClInclude Include="FlowGraphView.h" />
     <ClInclude Include="ArchiveView.h" />
     <ClInclude Include="OverlayView.h" />

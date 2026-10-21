@@ -287,6 +287,8 @@
     <ClInclude Include="PEDiff.h" />
     <ClInclude Include="VersionInfo.h" />
     <ClInclude Include="PEReport.h" />
+    <ClInclude Include="YaraRules.h" />
+    <ClInclude Include="Capabilities.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -347,6 +349,8 @@
     <ClCompile Include="PEDiff.cpp" />
     <ClCompile Include="VersionInfo.cpp" />
     <ClCompile Include="PEReport.cpp" />
+    <ClCompile Include="YaraRules.cpp" />
+    <ClCompile Include="Capabilities.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />

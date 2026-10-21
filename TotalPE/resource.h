@@ -283,6 +283,11 @@
 #define ID_WIN32_BROWSER                32963
 #define ID_CODE_WIN32DOCS               32964
 #define ID_TOOLS_ADDSIGNATURES          32965
+#define ID_TOOLS_YARAFILE               32977
+#define ID_TOOLS_YARAFOLDER             32978
+#define ID_TOOLS_YARACLEAR              32979
+#define ID_PE_YARA                      32980
+#define ID_PE_CAPABILITIES              32981
 #define ID_PE_CLASSES                   32966
 #define ID_PE_DRIVER                    32967
 #define ID_PE_COM                       32968
@@ -300,7 +305,7 @@
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        289
-#define _APS_NEXT_COMMAND_VALUE         32977
+#define _APS_NEXT_COMMAND_VALUE         32982
 #define _APS_NEXT_CONTROL_VALUE         1050
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

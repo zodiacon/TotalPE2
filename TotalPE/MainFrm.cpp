@@ -139,6 +139,9 @@ void CMainFrame::UpdateUI() {
 	UIEnable(ID_PE_WINRT, fi && !m_WinRt.empty());
 	UIEnable(ID_PE_CLRTYPES, fi && FindTreeItem(TreeItemType::ClrTypes) != nullptr);
 	UIEnable(ID_PE_SECURITYSUMMARY, fi != nullptr);
+	UIEnable(ID_TOOLS_YARACLEAR, !AppSettings::Get().YaraRules().empty());
+	UIEnable(ID_PE_YARA, fi && m_Yara);
+	UIEnable(ID_PE_CAPABILITIES, fi != nullptr);
 	// (of no file: whenever the metadata is there)
 	static bool const metadata = ::GetFileAttributesW(Win32Api::MetadataPath().c_str()) != INVALID_FILE_ATTRIBUTES;
 	UIEnable(ID_PE_WIN32API, metadata);
@@ -1360,6 +1363,7 @@ bool CMainFrame::OpenPE(PCWSTR path) {
 	ResetNavigation();
 	StartSymbolLoad(path);	// the window is usable at once; symbols arrive later (WM_SYMBOLS_LOADED)
 	StartCatalogLookup(path);
+	StartYara();
 	CloseFileViews();
 	m_Archive.Close();
 	m_Object.Close();
@@ -1450,6 +1454,7 @@ void CMainFrame::ResetFileState() {
 	CancelVirusTotal();
 	++m_CatalogGeneration;
 	m_Catalog.reset();
+	ResetYara();
 	m_Overlay = {};
 	m_hOverlay = nullptr;
 	m_hResVersion = m_hResManifest = nullptr;
@@ -1883,6 +1888,7 @@ void CMainFrame::BuildTree(int iconSize) {
 
 	InsertTreeItem(m_Tree, std::format(L"Anomalies ({})", m_Anomalies.size()).c_str(), GetTreeIcon(IDI_EXCEPTION), TreeItemType::Anomalies, root);
 	InsertTreeItem(m_Tree, L"Security Summary", GetTreeIcon(IDI_SECURITY), TreeItemType::SecuritySummary, root);
+	InsertTreeItem(m_Tree, L"Capabilities", GetTreeIcon(IDI_FUNCTION), TreeItemType::Capabilities, root);
 	if (m_Catalog)	// (usually it is found later: OnCatalogFound)
 		InsertTreeItem(m_Tree, L"Catalog Signature", GetTreeIcon(IDI_SECURITY), TreeItemType::CatalogSignature, root);
 	InsertTreeItem(m_Tree, L"Bookmarks", GetTreeIcon(IDI_BOOKMARK), TreeItemType::Bookmarks, root);
@@ -2027,6 +2033,7 @@ LRESULT CMainFrame::OnFileClose(WORD, WORD, HWND, BOOL&) {
 	CancelVirusTotal();
 	++m_CatalogGeneration;	// as for the symbols: a lookup in progress is of the file that was closed
 	m_Catalog.reset();
+	ResetYara();
 	m_Overlay = {};
 	m_hOverlay = nullptr;
 	m_Xrefs.Clear();
@@ -5113,6 +5120,191 @@ LRESULT CMainFrame::OnCatalogFound(UINT, WPARAM generation, LPARAM lParam, BOOL&
 		InsertTreeItem(m_Tree, L"Catalog Signature", GetTreeIcon(IDI_SECURITY), TreeItemType::CatalogSignature,
 			m_Tree.GetParentItem(summary), summary);
 	UpdateUI();
+	return 0;
+}
+
+//
+// YARA rules
+//
+
+void CMainFrame::ResetYara() {
+	++m_YaraGeneration;
+	m_YaraMatches.clear();
+	m_YaraError.clear();
+}
+
+void CMainFrame::StartYara() {
+	auto generation = ++m_YaraGeneration;
+	m_YaraMatches.clear();
+	m_YaraError.clear();
+	auto path = AppSettings::Get().YaraRules();
+	std::wstring file = m_PE ? m_PE.GetPath() : L"";
+	if (path.empty() || (m_Yara && file.empty()))
+		return;
+	SetStatusText(0, m_Yara ? L"Matching YARA rules..." : L"Loading YARA rules...");
+
+	std::thread([hWnd = m_hWnd, generation, path, rules = m_Yara, file] {
+		::SetThreadDescription(::GetCurrentThread(), L"YARA");
+		auto result = std::make_unique<YaraScanResult>();
+		result->Rules = rules;
+		if (!rules) {
+			auto loaded = std::make_shared<YaraRules>();
+			loaded->Load(path);
+			result->Diagnostics = loaded->Diagnostics();
+			result->LoadedNow = true;
+			if (loaded->IsLoaded())
+				result->Rules = loaded;
+		}
+		if (result->Rules && !file.empty()) {
+			// the bytes are read here, not taken from the PEFile: the file may be closed while the rules run
+			result->File = file;
+			std::vector<std::byte> data;
+			wil::unique_hfile h(::CreateFileW(file.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+				nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr));
+			LARGE_INTEGER size{};
+			DWORD read = 0;
+			if (h && ::GetFileSizeEx(h.get(), &size) && size.QuadPart <= MAXDWORD) {
+				data.resize((size_t)size.QuadPart);
+				if (!::ReadFile(h.get(), data.data(), (DWORD)data.size(), &read, nullptr) || read != data.size())
+					data.clear();
+			}
+			if (data.empty() && size.QuadPart)
+				result->Error = "the file cannot be read";
+			else
+				result->Rules->Scan(data, file, result->Matches, &result->Error);
+		}
+		if (::PostMessage(hWnd, WM_YARA_DONE, generation, (LPARAM)result.get()))
+			result.release();
+	}).detach();
+}
+
+LRESULT CMainFrame::OnYaraDone(UINT, WPARAM generation, LPARAM lParam, BOOL&) {
+	std::unique_ptr<YaraScanResult> result((YaraScanResult*)lParam);
+	if ((uint32_t)generation != m_YaraGeneration || !result)
+		return 0;	// the rules were changed, or the file closed, in the meantime
+
+	if (result->LoadedNow) {
+		m_Yara = result->Rules;
+		m_YaraErrors.clear();
+		std::wstring errors;
+		for (auto const& d : result->Diagnostics)
+			if (d.Error) {
+				if (m_YaraErrors.size() < 10)
+					errors += std::format(L"\n{}({}): {}", d.File, d.Line, std::wstring(d.Message.begin(), d.Message.end()));
+				m_YaraErrors.push_back(d);
+			}
+		if (m_YaraErrors.size() > 10)
+			errors += std::format(L"\n... and {} more", m_YaraErrors.size() - 10);
+		auto path = AppSettings::Get().YaraRules();
+		bool asked = std::exchange(m_YaraAsked, false);
+		if (!m_Yara) {
+			// so that the next file does not try again
+			AppSettings::Get().YaraRules(L"");
+			AtlMessageBox(m_hWnd, std::format(L"No YARA rules could be loaded from {}{}", path, errors).c_str(), IDR_MAINFRAME, MB_ICONERROR);
+			SetStatusText(0, L"No YARA rules");
+			return 0;
+		}
+		// when the rules were just chosen, their errors are told now; else (rules from the settings, loaded with the first file)
+		// the view lists them
+		if (asked && !m_YaraErrors.empty())
+			AtlMessageBox(m_hWnd, std::format(L"{} YARA rules loaded from {}.\n\nRule files with errors were left out:{}",
+				m_Yara->RuleCount(), path, errors).c_str(), IDR_MAINFRAME, MB_ICONWARNING);
+	}
+	auto leftOut = m_YaraErrors.empty() ? std::wstring() : std::format(L" ({} rule files with errors left out)", m_YaraErrors.size());
+	if (result->File.empty() || !m_PE || result->File != m_PE.GetPath()) {
+		SetStatusText(0, std::format(L"{} YARA rules loaded{}", m_Yara ? m_Yara->RuleCount() : 0, leftOut).c_str());
+		return 0;
+	}
+
+	m_YaraMatches = std::move(result->Matches);
+	m_YaraError = std::move(result->Error);
+	SetStatusText(0, m_YaraError.empty() ? std::format(L"YARA: {} of {} rules matched{}", m_YaraMatches.size(), m_Yara->RuleCount(), leftOut).c_str()
+		: std::format(L"YARA: {}", std::wstring(m_YaraError.begin(), m_YaraError.end())).c_str());
+	UpdateYaraNode();
+	ReopenView(TreeItemType::Yara);
+	return 0;
+}
+
+// "YARA (n)" after the Security Summary (and the Catalog Signature); none without rules
+void CMainFrame::UpdateYaraNode() {
+	auto hItem = FindTreeItem(TreeItemType::Yara);
+	if (!m_Yara || !m_PE) {
+		if (hItem)
+			m_Tree.DeleteItem(hItem);
+		return;
+	}
+	auto text = std::format(L"YARA ({})", m_YaraMatches.size());
+	if (hItem) {
+		m_Tree.SetItemText(hItem, text.c_str());
+		return;
+	}
+	auto after = FindTreeItem(TreeItemType::CatalogSignature);
+	if (!after)
+		after = FindTreeItem(TreeItemType::SecuritySummary);
+	if (after)
+		InsertTreeItem(m_Tree, text.c_str(), GetTreeIcon(IDI_SECURITY), TreeItemType::Yara, m_Tree.GetParentItem(after), after);
+}
+
+void CMainFrame::ReopenView(TreeItemType type) {
+	for (int i = 0; i < m_Tabs.GetPageCount(); i++) {
+		auto it = m_Views2.find(m_Tabs.GetPageHWND(i));
+		if (it == m_Views2.end() || it->second != type)
+			continue;
+		CloseTab(i);
+		m_Tabs.RemovePage(i);
+		if (auto hItem = FindTreeItem(type))
+			ShowView(type, hItem);
+		return;
+	}
+}
+
+LRESULT CMainFrame::OnYaraRules(WORD, WORD id, HWND, BOOL&) {
+	std::wstring path;
+	if (id == ID_TOOLS_YARAFOLDER)
+		path = (PCWSTR)AskFolder(m_hWnd, L"YARA Rules Folder");
+	else {
+		COMDLG_FILTERSPEC filters[] = { { L"YARA rules", L"*.yar;*.yara;*.yarc" }, { L"All files", L"*.*" } };
+		SuspendResumeHook sr;
+		CShellFileOpenDialog dlg(nullptr, FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST, nullptr, filters, _countof(filters));
+		CString file;
+		if (dlg.DoModal(m_hWnd) == IDOK && SUCCEEDED(dlg.GetFilePath(file)))
+			path = (PCWSTR)file;
+	}
+	if (path.empty())
+		return 0;
+	AppSettings::Get().YaraRules(path);
+	m_Yara.reset();		// loaded again, from the new path
+	m_YaraErrors.clear();
+	m_YaraAsked = true;
+	StartYara();
+	return 0;
+}
+
+LRESULT CMainFrame::OnViewCapabilities(WORD, WORD, HWND, BOOL&) {
+	ShowView(TreeItemType::Capabilities, nullptr, IDI_FUNCTION);
+	return 0;
+}
+
+LRESULT CMainFrame::OnViewYara(WORD, WORD, HWND, BOOL&) {
+	ShowView(TreeItemType::Yara, nullptr, IDI_SECURITY);
+	return 0;
+}
+
+LRESULT CMainFrame::OnYaraClear(WORD, WORD, HWND, BOOL&) {
+	AppSettings::Get().YaraRules(L"");
+	m_Yara.reset();
+	m_YaraErrors.clear();
+	ResetYara();
+	for (int i = 0; i < m_Tabs.GetPageCount(); i++) {
+		auto it = m_Views2.find(m_Tabs.GetPageHWND(i));
+		if (it != m_Views2.end() && it->second == TreeItemType::Yara) {
+			CloseTab(i);
+			m_Tabs.RemovePage(i);
+			break;
+		}
+	}
+	UpdateYaraNode();
+	SetStatusText(0, L"YARA rules cleared");
 	return 0;
 }
 

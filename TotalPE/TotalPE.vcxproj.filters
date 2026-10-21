@@ -282,6 +282,12 @@
     <ClCompile Include="AnomalyView.cpp">
       <Filter>Views</Filter>
     </ClCompile>
+    <ClCompile Include="YaraView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
+    <ClCompile Include="CapabilitiesView.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
     <ClCompile Include="AnimatedCursorView.cpp">
       <Filter>Views\Resources</Filter>
     </ClCompile>
@@ -537,6 +543,12 @@
       <Filter>Views\Resources</Filter>
     </ClInclude>
     <ClInclude Include="AnomalyView.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="YaraView.h">
+      <Filter>Views</Filter>
+    </ClInclude>
+    <ClInclude Include="CapabilitiesView.h">
       <Filter>Views</Filter>
     </ClInclude>
     <ClInclude Include="SymbolSettingsDlg.h">

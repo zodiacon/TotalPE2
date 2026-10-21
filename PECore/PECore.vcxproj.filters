@@ -168,6 +168,12 @@
     <ClInclude Include="PEReport.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="YaraRules.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Capabilities.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="PECore.cpp">
@@ -321,6 +327,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="PEReport.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="YaraRules.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Capabilities.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

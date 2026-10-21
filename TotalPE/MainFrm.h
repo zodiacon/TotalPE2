@@ -123,6 +123,11 @@ public:
 		COMMAND_ID_HANDLER(ID_PE_WIN32API, OnViewWin32Api)
 		COMMAND_ID_HANDLER(ID_TOOLS_WIN32EXPLORER, OnWin32Explorer)
 		COMMAND_ID_HANDLER(ID_TOOLS_ADDSIGNATURES, OnAddSignatures)
+		COMMAND_ID_HANDLER(ID_TOOLS_YARAFILE, OnYaraRules)
+		COMMAND_ID_HANDLER(ID_TOOLS_YARAFOLDER, OnYaraRules)
+		COMMAND_ID_HANDLER(ID_TOOLS_YARACLEAR, OnYaraClear)
+		COMMAND_ID_HANDLER(ID_PE_YARA, OnViewYara)
+		COMMAND_ID_HANDLER(ID_PE_CAPABILITIES, OnViewCapabilities)
 		COMMAND_ID_HANDLER(ID_NAV_COMMENT, OnNotInView)
 		COMMAND_ID_HANDLER(ID_HEX_BOOKMARK_TOGGLE, OnNotInView)
 		MESSAGE_HANDLER(WM_SYMBOLS_LOADED, OnSymbolsLoaded)
@@ -131,6 +136,7 @@ public:
 		MESSAGE_HANDLER(WM_XREFS_BUILT, OnXrefsBuilt)
 		MESSAGE_HANDLER(WM_DRIVER_ANALYZED, OnDriverAnalyzed)
 		MESSAGE_HANDLER(WM_CATALOG_FOUND, OnCatalogFound)
+		MESSAGE_HANDLER(WM_YARA_DONE, OnYaraDone)
 		MESSAGE_HANDLER(WM_VT_STATUS, OnVirusTotalStatus)
 		COMMAND_ID_HANDLER(ID_PE_VIRUSTOTAL, OnVirusTotal)
 		COMMAND_ID_HANDLER(ID_PE_VTAPIKEY, OnVirusTotalKey)
@@ -552,6 +558,11 @@ private:
 	LRESULT OnNavForward(WORD, WORD, HWND, BOOL&);
 	LRESULT OnSymbolsLoaded(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnCatalogFound(UINT, WPARAM, LPARAM, BOOL&);
+	LRESULT OnYaraDone(UINT, WPARAM, LPARAM, BOOL&);
+	LRESULT OnYaraRules(WORD, WORD id, HWND, BOOL&);
+	LRESULT OnYaraClear(WORD, WORD, HWND, BOOL&);
+	LRESULT OnViewYara(WORD, WORD, HWND, BOOL&);
+	LRESULT OnViewCapabilities(WORD, WORD, HWND, BOOL&);
 	LRESULT OnVirusTotalStatus(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnVirusTotal(WORD, WORD, HWND, BOOL&);
 	LRESULT OnVirusTotalKey(WORD, WORD, HWND, BOOL&);
@@ -693,6 +704,17 @@ private:
 	std::unique_ptr<CatalogSignature> m_Catalog;
 	uint32_t m_CatalogGeneration{ 0 };
 	void StartCatalogLookup(std::wstring path);
+	// the YARA rules of the settings are loaded (once) and matched against each file that is opened, on a worker thread
+	std::shared_ptr<YaraRules> m_Yara;
+	std::vector<YaraMatch> m_YaraMatches;	// of the file
+	std::string m_YaraError;
+	std::vector<YaraDiagnostic> m_YaraErrors;	// of the rule files that were left out
+	bool m_YaraAsked{ false };				// the rules were just chosen (their errors are shown at once, not only in the view)
+	uint32_t m_YaraGeneration{ 0 };
+	void StartYara();
+	void ResetYara();						// the file was closed: what was found of it is gone
+	void UpdateYaraNode();
+	void ReopenView(TreeItemType type);		// a view that shows what changed is made again (if it is open)
 	void RefreshViews();
 	void BuildNamedRvas();
 	inline static std::unordered_map<UINT, int> s_ImageIndices;

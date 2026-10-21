@@ -223,6 +223,19 @@ std::string FormatReportText(JsonValue const& report) {
 	if (overlay["size"].AsNumber() > 0)
 		Line(out, "Overlay", std::format("{} bytes at {}, {}entropy {}", Thousands(overlay["size"].AsNumber()), overlay["offset"].AsString(),
 			overlay["kind"].IsString() ? overlay["kind"].AsString() + ", " : "", overlay["entropy"].Write(false)));
+	if (report["yara"].IsObject()) {
+		auto const& yara = report["yara"];
+		auto const& matches = yara["matches"].AsArray();
+		std::string text = matches.empty() ? "no matches" : "";
+		for (auto const& m : matches) {
+			text += (text.empty() ? "" : ", ") + m["rule"].AsString();
+			if (auto const& tags = m["tags"]; !tags.AsArray().empty())
+				text += " [" + Join(tags, ",") + "]";
+		}
+		if (yara["error"].IsString())
+			text += " (" + yara["error"].AsString() + ")";
+		Line(out, "YARA", text);
+	}
 	if (report["rtti"].IsArray())
 		Line(out, "RTTI", std::format("{} classes", report["rtti"].AsArray().size()));
 
@@ -231,6 +244,13 @@ std::string FormatReportText(JsonValue const& report) {
 		for (auto const& s : report["sections"].AsArray())
 			out += std::format("    {:<9} {:>10} {:>12} {:>5.2f}{} {}\n", s["name"].AsString(), s["rva"].AsString(),
 				Thousands(s["virtualSize"].AsNumber()), s["entropy"].AsNumber(), s["highEntropy"].AsBool() ? "!" : " ", Join(s["flags"]));
+	}
+	if (!report["capabilities"].AsArray().empty()) {
+		out += "  Capabilities\n";
+		for (auto const& c : report["capabilities"].AsArray()) {
+			auto attack = Join(c["attack"], ", ");
+			out += std::format("    {:<40} {}{}\n", c["namespace"].AsString(), c["name"].AsString(), attack.empty() ? "" : "  [" + attack + "]");
+		}
 	}
 	if (!report["anomalies"].AsArray().empty()) {
 		out += "  Anomalies\n";

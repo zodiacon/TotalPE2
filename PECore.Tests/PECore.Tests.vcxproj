@@ -142,6 +142,8 @@
     <ClCompile Include="VersionInfoTests.cpp" />
     <ClCompile Include="VirusTotalTests.cpp" />
     <ClCompile Include="PEReportTests.cpp" />
+    <ClCompile Include="YaraTests.cpp" />
+    <ClCompile Include="CapabilityTests.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Win32MetaCore\Win32MetaCore.vcxproj">

@@ -6,6 +6,8 @@
 #include "Json.h"
 
 class PEFile;
+class YaraRules;
+class CapabilityRules;
 
 //
 // A report of a PE file as JSON: what the analyzers of PECore find (headers, sections, imports, the signature, the security
@@ -33,9 +35,10 @@ enum class ReportPart : uint32_t {
 	Overlay = 0x800,
 	Anomalies = 0x1000,
 	Rtti = 0x2000,		// expensive: scans the data sections
+	Capabilities = 0x4000,	// what the program can do (Capabilities.h), from its imports, strings and shape
 
-	Default = 0x1FFF,
-	All = 0x3FFF,
+	Default = 0x5FFF,
+	All = 0x7FFF,
 };
 DEFINE_ENUM_FLAG_OPERATORS(ReportPart);
 
@@ -45,6 +48,9 @@ struct ReportOptions {
 	bool CheckCatalogs{ true };		// look for the catalog of the system that signs a file without a signature of its own
 	bool ResolveOrdinals{ true };	// name the imports by ordinal from the DLLs of this system
 	size_t MaxExports{ SIZE_MAX };	// list at most this many exports ("truncated" says if some were left out)
+	CapabilityRules const* Capabilities{ nullptr };	// the rules of capabilities (null: those that come with TotalPE)
+	YaraRules const* Yara{ nullptr };	// match these rules: the "yara" part (whatever Parts says)
+	int YaraTimeout{ 60 };			// seconds for the rules of a file (0: no limit)
 };
 
 inline constexpr char ReportSchema[] = "totalpe.report/1";
@@ -56,7 +62,9 @@ JsonValue BuildErrorReport(std::wstring const& path, std::string const& error);
 
 // A flat row of a report for a table (a line of CSV): path, sha256, machine, subsystem, isDll, isDriver, timestamp,
 // company, fileVersion, signed, signatureKind, signer, trusted, aslr, dep, cfg, cet, maxEntropy, overlaySize,
-// anomalyErrors, anomalyWarnings, imphash, pdb, error. Values that the report does not have are null.
+// anomalyErrors, anomalyWarnings, imphash, pdb, capabilities and yara (the names of the capabilities and of the rules that
+// matched, separated by ';'), error. Values that the
+// report does not have are null.
 JsonValue SummarizeReport(JsonValue const& report);
 
 // The names of the columns of SummarizeReport, in order
@@ -94,5 +102,5 @@ bool ParseRequirements(std::string_view text, std::vector<std::string>& requirem
 
 // Why a report fails the requirements (one message each), and the anomalies at or above 'failOn' ("info", "warning", "error";
 // empty: anomalies do not fail). Empty if the file passes. A feature that does not apply to the file (SafeSEH in 64-bit code)
-// passes; a partial one (ASLR without relocations) fails.
+// passes; a partial one (ASLR without relocations) fails. A report with a "yara" part fails if any rule matched.
 std::vector<std::string> CheckReport(JsonValue const& report, std::vector<std::string> const& requirements, std::string_view failOn = {});

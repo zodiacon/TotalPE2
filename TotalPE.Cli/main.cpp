@@ -4,6 +4,8 @@
 #include <LIEF/logging.hpp>
 #include "Inputs.h"
 #include "Output.h"
+#include <YaraRules.h>
+#include <Capabilities.h>
 
 //
 // tpe: the analyses of TotalPE from the command line, as JSON for tools or as text for people.
@@ -39,13 +41,20 @@ Usage:
 Report options (info, scan):
   --parts <list>      parts to include, separated by commas (default: "default"):
                       file headers sections imports exports debug rich tls version
-                      signature security overlay anomalies rtti, or all / default
+                      signature security overlay anomalies capabilities rtti,
+                      or all / default (all but rtti)
   --all               all the parts (--parts all)
   --trust             ask Windows whether signatures are valid and trusted
   --no-resolve        do not name imports by ordinal from the DLLs of this system
   --no-catalog        do not look for the system catalogs that sign files without
                       a signature of their own (most files of Windows)
   --max-exports <n>   list at most n exports of a file
+  --yara <path>       match YARA rules: a rule file (.yar, .yara), a directory of
+                      them (subdirectories too), or compiled rules (.yarc). Rule files
+                      with errors are left out (and listed). In check, a match fails.
+  --yara-timeout <s>  seconds for the rules of a file (default 60, 0: no limit)
+  --capabilities <path>  more rules of capabilities (JSON: a file, or a directory of
+                      .json files), matched with those that come with tpe
 
 Output:
   --text              text for people instead of JSON (info, diff)
@@ -94,6 +103,8 @@ Exit codes: 0 success, 1 some files failed, 2 bad arguments, 3 a check failed
 		unsigned Threads{ 0 };
 		std::vector<std::string> Require;
 		std::string FailOn;
+		std::wstring YaraPath;
+		std::wstring CapabilitiesPath;
 	};
 
 	void Error(std::string_view message) {
@@ -141,6 +152,22 @@ Exit codes: 0 success, 1 some files failed, 2 bad arguments, 3 a check failed
 				options.Report.ResolveOrdinals = false;
 			else if (arg == L"--no-catalog")
 				options.Report.CheckCatalogs = false;
+			else if (arg == L"--yara") {
+				if (!value(options.YaraPath))
+					return false;
+			}
+			else if (arg == L"--capabilities") {
+				if (!value(options.CapabilitiesPath))
+					return false;
+			}
+			else if (arg == L"--yara-timeout") {
+				size_t seconds;
+				if (!value(v) || !ParseNumber(v, seconds) || seconds > 3600) {
+					Error("--yara-timeout needs a number of seconds (at most 3600)");
+					return false;
+				}
+				options.Report.YaraTimeout = (int)seconds;
+			}
 			else if (arg == L"--max-exports") {
 				if (!value(v) || !ParseNumber(v, options.Report.MaxExports)) {
 					Error("--max-exports needs a number");
@@ -336,6 +363,8 @@ Exit codes: 0 success, 1 some files failed, 2 bad arguments, 3 a check failed
 		std::atomic<size_t> next{ 0 };
 
 		auto threads = options.Threads ? options.Threads : std::max(1u, std::thread::hardware_concurrency());
+		if (options.Report.Yara)	// libyara scans from at most this many threads at once
+			threads = std::min(threads, YaraRules::MaxThreads);
 		threads = (unsigned)std::min<size_t>(threads, std::max<size_t>(count, 1));
 		std::vector<std::jthread> workers;
 		for (unsigned t = 0; t < threads; t++)
@@ -685,6 +714,44 @@ int wmain(int argc, wchar_t* argv[]) {
 	Options options;
 	if (!ParseArguments(argc, argv, options))
 		return UsageError;
+
+	// the rules are compiled once, for all the files (and threads)
+	YaraRules yara;
+	if (!options.YaraPath.empty()) {
+		bool loaded = yara.Load(options.YaraPath);
+		size_t errors = 0, warnings = 0;
+		for (auto const& d : yara.Diagnostics()) {
+			(d.Error ? errors : warnings)++;
+			if (d.Error || options.Verbose)
+				Error(std::format("{}: {}({}): {}", d.Error ? "yara error" : "yara warning", ToUtf8(d.File), d.Line, d.Message));
+		}
+		if (!loaded) {
+			Error(std::format("no YARA rules could be loaded from {}", ToUtf8(options.YaraPath)));
+			return UsageError;
+		}
+		if (!options.Quiet)
+			Error(std::format("{} YARA rule{} loaded{}{}", yara.RuleCount(), yara.RuleCount() == 1 ? "" : "s",
+				errors ? std::format(", {} error{} (rule files left out)", errors, errors == 1 ? "" : "s") : "",
+				warnings && !options.Verbose ? std::format(", {} warning{} (-v lists them)", warnings, warnings == 1 ? "" : "s") : ""));
+		options.Report.Yara = &yara;
+	}
+
+	CapabilityRules capabilities;
+	if (!options.CapabilitiesPath.empty()) {
+		capabilities.Add(CapabilityRules::BuiltIn());
+		std::vector<std::string> errors;
+		auto before = capabilities.Size();
+		capabilities.AddPath(options.CapabilitiesPath, errors);
+		for (auto const& e : errors)
+			Error("capability rules: " + e);
+		if (capabilities.Size() == before) {
+			Error(std::format("no capability rules could be loaded from {}", ToUtf8(options.CapabilitiesPath)));
+			return UsageError;
+		}
+		if (!options.Quiet)
+			Error(std::format("{} capability rules ({} of them from {})", capabilities.Size(), capabilities.Size() - before, ToUtf8(options.CapabilitiesPath)));
+		options.Report.Capabilities = &capabilities;
+	}
 
 	if (options.Command == L"info")
 		return Info(options);

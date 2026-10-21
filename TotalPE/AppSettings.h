@@ -31,6 +31,7 @@ public:
 	SETTING(Win32ApiActiveTab, -1, SettingType::Int32);
 	SETTING_STRING(CodeColorsLight, L"");	// the colors of code changed from their defaults (CodeColors.h), of the light theme
 	SETTING_STRING(CodeColorsDark, L"");	// and of the dark one
+	SETTING_STRING(YaraRules, L"");	// the YARA rules matched against the files that are opened (a file or a folder), if any
 	END_SETTINGS
 
 	DEF_SETTING(AlwaysOnTop, bool)
@@ -62,6 +63,7 @@ DEF_SETTING(ApplicationFont, LOGFONT)
 	DEF_SETTING_MULTI(Win32ApiHistory)	// the last first
 DEF_SETTING_STRING(CodeColorsLight)
 DEF_SETTING_STRING(CodeColorsDark)
+	DEF_SETTING_STRING(YaraRules)
 
 	static constexpr PCWSTR DefaultSymbolServerUrl = L"https://msdl.microsoft.com/download/symbols";
 	static constexpr PCWSTR DefaultSymbolCache = L"%LOCALAPPDATA%\\TotalPE\\Symbols";

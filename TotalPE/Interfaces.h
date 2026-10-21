@@ -16,6 +16,7 @@
 #include "Driver.h"
 #include "ComServer.h"
 #include "Authenticode.h"
+#include <YaraRules.h>
 
 class Annotations;
 
@@ -36,6 +37,19 @@ static const UINT WM_DRIVER_ANALYZED = WM_APP + 62;
 // posted by the thread that looks for the catalog of the system that signs the file: wParam is the generation of the request,
 // lParam a CatalogSignature* (null if no catalog has the file) that the receiver deletes
 static const UINT WM_CATALOG_FOUND = WM_APP + 63;
+// posted by the thread that loads YARA rules and matches them against the file: wParam is the generation of the request,
+// lParam a YaraScanResult* that the receiver deletes
+static const UINT WM_YARA_DONE = WM_APP + 64;
+
+// what the YARA thread found: the rules it used (loaded now, or those it was given) and the matches of the file
+struct YaraScanResult {
+	std::shared_ptr<YaraRules> Rules;
+	bool LoadedNow{ false };
+	std::vector<YaraDiagnostic> Diagnostics;	// of loading the rules
+	std::wstring File;							// the file that was scanned (empty if none was)
+	std::vector<YaraMatch> Matches;
+	std::string Error;							// of the scan
+};
 
 constexpr uint32_t ItemShift = 8;
 
@@ -191,6 +205,10 @@ enum class TreeItemType : int64_t {
 	WinRt,
 	// the catalog of the system that signs a file that has no signature of its own
 	CatalogSignature,
+	// the YARA rules that matched the file
+	Yara,
+	// what the program can do (Capabilities.h)
+	Capabilities,
 
 	ItemMask = 255,
 };
