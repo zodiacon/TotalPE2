@@ -28,17 +28,6 @@ bool Helpers::ExtractResource(HMODULE hModule, UINT resId, PCWSTR type, PCWSTR p
 	return ok;
 }
 
-bool Helpers::ExtractModules() {
-	WCHAR path[MAX_PATH];
-	::GetModuleFileName(nullptr, path, _countof(path));
-	*wcsrchr(path, L'\\') = 0;
-	std::wstring spath(path);
-
-	auto ok = ExtractResource(nullptr, IDR_DIA, L"BIN", (spath + L"\\msdia140.dll").c_str(), false);
-	ok |= ExtractResource(nullptr, IDR_SYMSRV, L"BIN", (spath + L"\\symsrv.dll").c_str(), false);
-	return ok;
-}
-
 ULONG Helpers::ReadVirtual(PVOID address, ULONG size, PVOID buffer) {
 	memcpy(buffer, address, size);
 	return size;

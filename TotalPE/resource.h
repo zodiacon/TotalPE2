@@ -52,8 +52,6 @@
 #define IDI_FUNC_FORWARD                247
 #define IDI_INTERFACE                   248
 #define IDR_BIN1                        250
-#define IDR_SYMSRV                      251
-#define IDR_DIA                         252
 #define IDI_FUNCTION2                   253
 #define IDR_CONTEXT                     254
 #define IDI_NUM1                        255

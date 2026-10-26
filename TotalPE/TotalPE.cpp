@@ -67,8 +67,6 @@ int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPTSTR lp
 	hRes = _Module.Init(nullptr, hInstance);
 	ATLASSERT(SUCCEEDED(hRes));
 
-	Helpers::ExtractModules();
-
 	Scintilla_RegisterClasses(hInstance);
 
 	WTLHelper::InitDarkMode(settings.DarkMode() ? DarkModeKind::Dark : DarkModeKind::Light);

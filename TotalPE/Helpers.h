@@ -9,7 +9,6 @@ struct IMainFrame;
 
 struct Helpers abstract final {
 	static bool ExtractResource(HMODULE hModule, UINT resId, PCWSTR type, PCWSTR path, bool overwrite = true);
-	static bool ExtractModules();
 	static void FillTreeListView(IMainFrame* frame, CTreeListViewCtrl& tv, HTLITEM hRoot, DiaSymbol const& sym, DiaSession const& session, PVOID address);
 	static std::wstring GetSpecialValue(DiaSymbol const& field, DiaSymbol const& type, PVOID address, bool& isString);
 	static ULONG ReadVirtual(PVOID address, ULONG size, PVOID buffer);

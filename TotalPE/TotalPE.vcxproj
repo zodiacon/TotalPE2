@@ -631,10 +631,6 @@
     <Image Include="res\windows-close.ico" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="res\msdia140.dll" />
-    <None Include="res\symsrv.dll" />
-  </ItemGroup>
-  <ItemGroup>
     <ProjectReference Include="..\DiaHelper\DiaHelper.vcxproj">
       <Project>{d1e93c91-d2d9-460b-a00e-1dcabaafcb9f}</Project>
     </ProjectReference>
