@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ViewBase.h"
+#include <CustomSplitterWindow.h>
 #include "ScintillaView.h"
 #include <GhidraDecompiler.h>
 
@@ -53,7 +54,7 @@ private:
 
 	CString m_Title;
 	PEFile const& m_PE;
-	CSplitterWindow m_Splitter;
+	CCustomSplitterWindow m_Splitter;
 	CScintillaView* m_Asm{ nullptr };
 	CScintillaView* m_C{ nullptr };
 	CScintillaView* m_Active{ nullptr };		// the side the user was in last

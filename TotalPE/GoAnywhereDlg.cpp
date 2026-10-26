@@ -1,5 +1,7 @@
 #include "pch.h"
 #include "GoAnywhereDlg.h"
+#include <DpiHelper.h>
+#include <ListViewhelper.h>
 
 namespace {
 	enum Column { Name, Kind, Details };
@@ -44,7 +46,7 @@ LRESULT CGoAnywhereDlg::OnInitDialog(UINT, WPARAM, LPARAM, BOOL&) {
 	GetParent().GetWindowRect(&owner);
 	GetWindowRect(&rc);
 	auto width = std::max(rc.Width(), owner.Width() / 2);
-	SetWindowPos(nullptr, owner.left + (owner.Width() - width) / 2, owner.top + 80, width, rc.Height(), SWP_NOZORDER);
+	SetWindowPos(nullptr, owner.left + (owner.Width() - width) / 2, owner.top + DpiHelper::Scale(80, m_hWnd), width, rc.Height(), SWP_NOZORDER);
 	// the controls follow the width
 	CRect client, edit, list, status;
 	GetClientRect(&client);
@@ -57,10 +59,11 @@ LRESULT CGoAnywhereDlg::OnInitDialog(UINT, WPARAM, LPARAM, BOOL&) {
 	resize(m_List, list);
 	resize(m_Status, status);
 
-	auto cx = client.Width() - 2 * list.left - ::GetSystemMetrics(SM_CXVSCROLL) - 4;
+	auto cx = client.Width() - 2 * list.left - DpiHelper::GetSystemMetrics(SM_CXVSCROLL, m_hWnd) - DpiHelper::Scale(4, m_hWnd);
 	m_List.InsertColumn(Column::Name, L"Name", LVCFMT_LEFT, cx * 45 / 100);
 	m_List.InsertColumn(Column::Kind, L"Kind", LVCFMT_LEFT, cx * 13 / 100);
 	m_List.InsertColumn(Column::Details, L"Details", LVCFMT_LEFT, cx - cx * 45 / 100 - cx * 13 / 100);
+	ListViewHelper::EnableColumnDpiScaling(m_List);
 
 	{
 		CWaitCursor wait;	// the index is built the first time

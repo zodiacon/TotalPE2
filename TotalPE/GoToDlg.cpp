@@ -1,5 +1,7 @@
 #include "pch.h"
 #include "GoToDlg.h"
+#include <DpiHelper.h>
+#include <ListViewhelper.h>
 #include <unordered_set>
 
 LRESULT CGoToDlg::OnInitDialog(UINT, WPARAM, LPARAM, BOOL&) {
@@ -83,10 +85,11 @@ LRESULT CDisassembleFunctionDlg::OnInitDialog(UINT, WPARAM, LPARAM, BOOL&) {
 	m_List.SetExtendedListViewStyle(LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP);
 	CRect rc;
 	m_List.GetClientRect(&rc);
-	auto cx = rc.Width() - ::GetSystemMetrics(SM_CXVSCROLL);
+	auto cx = rc.Width() - DpiHelper::GetSystemMetrics(SM_CXVSCROLL, m_List);
 	m_List.InsertColumn(FunctionColumn::Name, L"Name", LVCFMT_LEFT, cx * 35 / 100);
 	m_List.InsertColumn(FunctionColumn::Details, L"Details", LVCFMT_LEFT, cx * 45 / 100);
 	m_List.InsertColumn(FunctionColumn::Location, L"Location", LVCFMT_LEFT, cx - cx * 35 / 100 - cx * 45 / 100);
+	ListViewHelper::EnableColumnDpiScaling(m_List);
 	if (m_Host) {
 		m_List.SetImageList(m_Host->GetImageList(), LVSIL_SMALL);	// the tree's (LVS_SHAREIMAGELISTS)
 		CWaitCursor wait;	// the index is built the first time

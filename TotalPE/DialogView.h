@@ -11,11 +11,22 @@ public:
 	DECLARE_WND_CLASS_EX(L"TotalPE.DialogHost", CS_HREDRAW | CS_VREDRAW, COLOR_APPWORKSPACE)
 
 	BEGIN_MSG_MAP(CDialogHost)
+		MESSAGE_HANDLER(WM_DPICHANGED_AFTERPARENT, OnDpiChanged)
+		MESSAGE_HANDLER(WM_PLACE, OnPlace)
 		CHAIN_MSG_MAP(CScrollWindowImpl<CDialogHost>)
 	END_MSG_MAP()
 
 	void DoPaint(CDCHandle) {}
 	bool ShowDialog(DlgTemplate const& dlg);
+
+private:
+	static constexpr UINT WM_PLACE = WM_APP + 1;
+	// the dialog with a margin around it, at the DPI of the host
+	void Place();
+	LRESULT OnDpiChanged(UINT, WPARAM, LPARAM, BOOL&);
+	LRESULT OnPlace(UINT, WPARAM, LPARAM, BOOL&);
+
+	HWND m_hDlg{ nullptr };
 };
 
 class CDialogView :

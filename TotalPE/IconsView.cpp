@@ -3,6 +3,7 @@
 #include "IconsView.h"
 #include "ResourceContent.h"
 #include "SaveData.h"
+#include <DpiHelper.h>
 
 namespace {
 	constexpr uint16_t TypeCursor = 1, TypeIcon = 3;
@@ -31,7 +32,6 @@ void CIconsView::SetGroupIconData(std::span<const std::byte> data) {
 	m_IsIcon = u16(2) == 1;
 	auto count = u16(4);
 
-	int y = 10;
 	auto const& resources = Frame()->GetFlatResources();
 	for (int i = 0; i < count && 6 + (i + 1) * 14 <= (int)data.size(); i++) {
 		auto at = 6 + (size_t)i * 14;
@@ -55,9 +55,8 @@ void CIconsView::SetGroupIconData(std::span<const std::byte> data) {
 		idata.Colors = u16(at + 4) * u16(at + 6);	// planes * bit count
 		idata.Data = it->Data;
 		m_Icons.push_back(std::move(idata));
-		y += width + 12;
 	}
-	SetScrollSize(450, y);
+	Arrange();
 }
 
 void CIconsView::SetIconData(std::span<const std::byte> data, bool icon) {
@@ -73,8 +72,31 @@ void CIconsView::SetIconData(std::span<const std::byte> data, bool icon) {
 	m_IconData.assign(data.begin(), data.end());
 	m_IsIcon = icon;
 	m_Icon = ::CreateIconFromResourceEx((PBYTE)data.data(), (DWORD)data.size(), icon, 0x30000, m_IconSize, m_IconSize, LR_DEFAULTCOLOR);
-	m_IconRect = CRect(10, 50, 10 + m_IconSize, 50 + m_IconSize);
-	SetScrollSize(std::max<int>(500, m_IconRect.right + 10), std::max<int>(300, m_IconRect.bottom + 10));
+	Arrange();
+}
+
+// where the images are, at the DPI of the view (the images themselves are at their sizes)
+void CIconsView::Arrange() {
+	auto dpi = DpiHelper::GetDpi(m_hWnd);
+	auto scale = [&](int n) { return DpiHelper::Scale(n, dpi); };
+	if (m_Icon) {
+		m_IconRect = CRect(scale(10), scale(50), scale(10) + m_IconSize, scale(50) + m_IconSize);
+		SetScrollSize(std::max<int>(scale(500), m_IconRect.right + scale(10)), std::max<int>(scale(300), m_IconRect.bottom + scale(10)));
+		return;
+	}
+	int y = scale(10);
+	for (auto& icon : m_Icons) {
+		icon.Rect = CRect(scale(180), y, scale(180) + icon.Size, y + icon.Size);
+		y += icon.Size + scale(12);
+	}
+	SetScrollSize(scale(450), y);
+}
+
+LRESULT CIconsView::OnDpiChanged(UINT, WPARAM, LPARAM, BOOL& handled) {
+	Arrange();
+	Invalidate();
+	handled = FALSE;
+	return 0;
 }
 
 // the state of Export is shared by the views (the hex view and the flow graph use the command too): it is set here for the icons
@@ -199,35 +221,37 @@ LRESULT CIconsView::OnSave(WORD, WORD, HWND, BOOL&) {
 }
 
 void CIconsView::DoPaint(CDCHandle dc) {
+	auto dpi = DpiHelper::GetDpi(m_hWnd);
+	auto scale = [&](int n) { return DpiHelper::Scale(n, dpi); };
 	CFont font;
-	font.CreatePointFont(110, L"Consolas");
+	font.CreateFont(-::MulDiv(11, dpi, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+		OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, FIXED_PITCH | FF_MODERN, L"Consolas");
 	dc.SelectFont(font);
 	dc.SetBkMode(TRANSPARENT);
 	if (m_Icon) {
-		dc.TextOutW(10, 10, std::format(L"{} X {}", m_IconSize, m_IconSize).c_str());
-		dc.DrawIconEx(10, 50, m_Icon, m_IconSize, m_IconSize, 0, nullptr, DI_NORMAL);
+		dc.TextOutW(scale(10), scale(10), std::format(L"{} X {}", m_IconSize, m_IconSize).c_str());
+		dc.DrawIconEx(m_IconRect.TopLeft(), m_Icon, CSize(m_IconSize, m_IconSize), 0, nullptr, DI_NORMAL);
 	}
 	else {
-		int y = 10;
 		for (int i = 0; i < (int)m_Icons.size(); i++) {
 			auto& icon = m_Icons[i];
 			auto size = icon.Size;
-			CRect rc(10, y, 160, y + size);
+			CRect rc(scale(10), icon.Rect.top, scale(160), icon.Rect.bottom);
 			auto text = std::format(L"{} X {} ({} bit)", size, size, icon.Colors);
 			dc.DrawText(text.c_str(), -1, &rc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-			icon.Icon.DrawIconEx(dc, 180, y, size, size, 0, nullptr, DI_NORMAL);
-			icon.Rect = CRect(180, y, 180 + size, y + size);
+			icon.Icon.DrawIconEx(dc, icon.Rect.left, icon.Rect.top, size, size, 0, nullptr, DI_NORMAL);
 			if (i == m_SelectedIcon) {
 				// the selection: a frame around the image
 				CRect frame(icon.Rect);
-				frame.InflateRect(4, 4);
+				frame.InflateRect(scale(4), scale(4));
 				CBrush brush;
 				brush.CreateSolidBrush(::GetSysColor(COLOR_HIGHLIGHT));
-				dc.FrameRect(&frame, brush);
-				frame.DeflateRect(1, 1);
-				dc.FrameRect(&frame, brush);
+				int width = scale(2);
+				for (int w = 0; w < width; w++) {
+					dc.FrameRect(&frame, brush);
+					frame.DeflateRect(1, 1);
+				}
 			}
-			y += size + 12;
 		}
 	}
 }

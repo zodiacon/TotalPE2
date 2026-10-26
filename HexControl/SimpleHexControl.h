@@ -166,6 +166,7 @@ public:
 		MESSAGE_HANDLER(WM_COPY, OnCopy)
 		MESSAGE_HANDLER(WM_CUT, OnCut)
 		MESSAGE_HANDLER(WM_PASTE, OnPaste)
+		MESSAGE_HANDLER(WM_DPICHANGED_AFTERPARENT, OnDpiChanged)
 		CHAIN_MSG_MAP(CBufferedPaintWindowImpl<CHexControl>)
 	END_MSG_MAP()
 
@@ -190,6 +191,7 @@ private:
 	LRESULT OnCopy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnCut(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnPaste(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
+	LRESULT OnDpiChanged(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 
 private:
 	bool CopyText(PCWSTR text) const;
@@ -198,6 +200,9 @@ private:
 	void SendCaretChanged(int64_t oldOffset);
 	void RecalcLayout();
 	void InitFontMetrics();
+	UINT GetDpi() const;
+	int ScaleToDpi(int value) const;	// a size at 96 DPI, at the DPI of the control
+	int GetCaretWidth() const;
 	CPoint GetPointFromOffset(int64_t offset) const;
 	CPoint GetAsciiPointFromOffset(int64_t offset) const;
 	int64_t GetOffsetFromPoint(const POINT& pt) const;

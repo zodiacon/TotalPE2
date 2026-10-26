@@ -5,6 +5,7 @@
 #pragma once
 
 #include "DockViews.h"
+#include "DpiSupport.h"
 #include <GhidraDecompiler.h>
 #include <Annotations.h>
 #include "Win32Api.h"
@@ -142,6 +143,7 @@ public:
 		COMMAND_ID_HANDLER(ID_PE_VTAPIKEY, OnVirusTotalKey)
 		MESSAGE_HANDLER(WM_UPDATE_DARKMODE, OnUpdateDarkMode)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
+		MESSAGE_HANDLER(WM_DPICHANGED, OnDpiChanged)
 		MESSAGE_HANDLER(WM_DESTROY, OnDestroy)
 		COMMAND_RANGE_HANDLER(ID_FILE_MRU_FIRST, ID_FILE_MRU_LAST, OnRecentFile)
 		MESSAGE_HANDLER(WM_INITMENUPOPUP, OnInitMenuPopup)
@@ -203,7 +205,8 @@ private:
 	bool ShowView(TreeItemType type, HTREEITEM hItem = nullptr, UINT icon = 0);
 	void FileOpened(PCWSTR path);
 	void UpdateUI();
-	void InitMenu(HMENU hMenu);
+	// the icons of a menu's commands, in the size for a DPI (0: the frame's)
+	void InitMenu(HMENU hMenu, UINT dpi = 0);
 	void BuildTree(int iconSize = 16);
 	bool OpenPE(PCWSTR path);
 	bool OpenArchive(PCWSTR path);
@@ -230,7 +233,11 @@ private:
 	void ResetFileState();
 	std::wstring CurrentPath() const;
 	CString DoFileOpen() const;
-	bool BuildTreeImageList(int iconSize = 16);
+	bool BuildTreeImageList();
+	void AddTreeImages(CImageList& images);
+	HICON FileIcon() const;
+	void SetTreeImages();
+	void UpdateStatusParts();
 	void ParseCommandLine();
 	void CloseTab(int page);
 	void RegisterContextMenu(TreeItemType type, UINT menuId, int subMenu);
@@ -257,6 +264,7 @@ private:
 	//	LRESULT NotifyHandler(int /*idCtrl*/, LPNMHDR /*pnmh*/, BOOL& /*bHandled*/)
 
 	LRESULT OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
+	LRESULT OnDpiChanged(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& bHandled);
 	LRESULT OnShowWindow(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnMenuSelect(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/) const;
@@ -605,7 +613,9 @@ private:
 	std::unordered_map<uint64_t, TreeItemType> m_ElfCodeItems;	// the code views of the ELF file, by address
 	std::vector<GuardTable> m_GuardTables;	// of the PE file
 	std::vector<FlatResource> m_FlatResources;
-	CImageList m_TreeImages;
+	static constexpr int TreeIconSize = 16;	// at 96 DPI
+	// of the tree and of the views (the same images for each DPI: GetIconIndex)
+	mutable Dpi::ImageSet m_TreeImages{ TreeIconSize, [this](CImageList& images) { AddTreeImages(images); } };
 	CWin32ApiFrame* m_Win32Frame{ nullptr };	// the Windows API, in its window (Tools > Windows API)
 	std::unordered_map<TreeItemType, IView*> m_Views;
 	std::unordered_map<HWND, TreeItemType> m_Views2;

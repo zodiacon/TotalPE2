@@ -57,6 +57,7 @@ public:
 		MESSAGE_HANDLER(WM_SIZE, OnSize)
 		MESSAGE_HANDLER(WM_SETFOCUS, OnSetFocus)
 		MESSAGE_HANDLER(WM_ERASEBKGND, OnEraseBkgnd)
+		MESSAGE_HANDLER(WM_DPICHANGED_AFTERPARENT, OnDpiChanged)
 		NOTIFY_CODE_HANDLER(LVN_ITEMCHANGED, OnItemChanged)
 		COMMAND_CODE_HANDLER(EN_DELAYCHANGE, OnFilterChanged)
 		COMMAND_CODE_HANDLER(CBN_SELCHANGE, OnKindChanged)
@@ -85,9 +86,11 @@ private:
 	LRESULT OnItemChanged(int, LPNMHDR, BOOL&);
 	LRESULT OnFilterChanged(WORD, WORD, HWND, BOOL&);
 	LRESULT OnKindChanged(WORD, WORD, HWND, BOOL&);
+	LRESULT OnDpiChanged(UINT, WPARAM, LPARAM, BOOL&);
 
 	void Fill();
 	void UpdateLayout();
+	void CreateOwnFont();
 	void UpdateWatermark();
 	void ClearFilter();
 	bool KindShown(Win32Api::Entry::Kinds kind) const;
@@ -124,4 +127,5 @@ private:
 	CQuickFindEdit m_FilterEdit;
 	CComboBox m_Kinds;
 	CListViewCtrl m_List;
+	CFont m_OwnFont;	// of the filter and the kinds, until the host gives a font
 };

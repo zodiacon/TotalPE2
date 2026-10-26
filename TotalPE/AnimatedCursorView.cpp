@@ -2,6 +2,8 @@
 #include "resource.h"
 #include "AnimatedCursorView.h"
 #include <WTLHelper.h>
+#include <DpiHelper.h>
+#include <ListViewhelper.h>
 
 //
 // CAniPreview
@@ -87,7 +89,7 @@ LRESULT CAniPreview::OnContextMenu(UINT, WPARAM, LPARAM lp, BOOL&) {
 	if (OnContext) {
 		CPoint pt(GET_X_LPARAM(lp), GET_Y_LPARAM(lp));
 		if (pt.x == -1 && pt.y == -1) {	// from the keyboard
-			pt = CPoint(10, 10);
+			pt = CPoint(DpiHelper::Scale(10, m_hWnd), DpiHelper::Scale(10, m_hWnd));
 			ClientToScreen(&pt);
 		}
 		OnContext(pt);
@@ -101,11 +103,22 @@ LRESULT CAniPreview::OnDestroy(UINT, WPARAM, LPARAM, BOOL& handled) {
 	return 0;
 }
 
-void CAniPreview::DrawInfo(CDCHandle dc, CRect const& rc) const {
+// the font of the text, at the DPI of the window (made again when it changes)
+HFONT CAniPreview::Font() {
+	auto dpi = DpiHelper::GetDpi(m_hWnd);
+	if (!m_Font || dpi != m_FontDpi) {
+		if (m_Font)
+			m_Font.DeleteObject();
+		m_Font.Attach(DpiHelper::CreateMessageFont(dpi));
+		m_FontDpi = dpi;
+	}
+	return m_Font;
+}
+
+void CAniPreview::DrawInfo(CDCHandle dc, CRect const& rc, int lineHeight) const {
 	dc.FillSolidRect(&rc, ::GetSysColor(COLOR_WINDOW));
 	dc.SetBkMode(TRANSPARENT);
 	dc.SetTextColor(::GetSysColor(COLOR_WINDOWTEXT));
-	dc.SelectFont(AtlGetDefaultGuiFont());
 
 	std::vector<std::wstring> lines;
 	auto& a = *m_Ani;
@@ -121,12 +134,11 @@ void CAniPreview::DrawInfo(CDCHandle dc, CRect const& rc) const {
 		f.IsCursor ? std::format(L", hot spot ({}, {})", f.HotspotX, f.HotspotY) : L""));
 	lines.push_back(m_Playing ? L"Playing. Click or press Space to pause, right-click for more." : L"Paused. Click or press Space to play, Left and Right step through.");
 
-	TEXTMETRIC tm;
-	dc.GetTextMetrics(&tm);
-	int y = rc.top + 8;
+	auto dpi = DpiHelper::GetDpi(m_hWnd);
+	int y = rc.top + DpiHelper::Scale(8, dpi);
 	for (auto& line : lines) {
-		dc.TextOut(rc.left + 10, y, line.c_str(), (int)line.size());
-		y += tm.tmHeight + 3;
+		dc.TextOut(rc.left + DpiHelper::Scale(10, dpi), y, line.c_str(), (int)line.size());
+		y += lineHeight;
 	}
 }
 
@@ -141,12 +153,18 @@ LRESULT CAniPreview::OnPaint(UINT, WPARAM, LPARAM, BOOL&) {
 		return 0;
 	}
 
-	CRect info(rc.left, rc.top, rc.right, rc.top + 8 + 5 * 20 + 8);
-	DrawInfo(dc.m_hDC, info);
+	// the sizes are at the DPI of the window (the images are at their own)
+	auto dpi = DpiHelper::GetDpi(m_hWnd);
+	dc.SelectFont(Font());
+	TEXTMETRIC tm;
+	dc.GetTextMetrics(&tm);
+	int lineHeight = tm.tmHeight + DpiHelper::Scale(3, dpi);
+	CRect info(rc.left, rc.top, rc.right, rc.top + DpiHelper::Scale(8, dpi) * 2 + 5 * lineHeight);
+	DrawInfo(dc.m_hDC, info, lineHeight);
 
 	// a checkerboard behind the images shows their transparency
 	CRect area(rc.left, info.bottom, rc.right, rc.bottom);
-	const int square = 8;
+	const int square = DpiHelper::Scale(8, dpi);
 	COLORREF light = RGB(235, 235, 235), dark = RGB(200, 200, 200);
 	for (int y = area.top; y < area.bottom; y += square)
 		for (int x = area.left; x < area.right; x += square) {
@@ -162,7 +180,7 @@ LRESULT CAniPreview::OnPaint(UINT, WPARAM, LPARAM, BOOL&) {
 
 	// actual size on the left, magnified on the right
 	int w = frame.Width, h = frame.Height;
-	int margin = 16;
+	int margin = DpiHelper::Scale(16, dpi);
 	::DrawIconEx(dc, area.left + margin, area.top + margin, icon, w, h, 0, nullptr, DI_NORMAL);
 
 	int available = std::max(1, std::min(area.Width() - 2 * margin - w - margin, area.Height() - 2 * margin));
@@ -210,12 +228,14 @@ LRESULT CAnimatedCursorView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	m_List.Create(m_Splitter, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS |
 		LVS_REPORT | LVS_SHOWSELALWAYS | LVS_SINGLESEL);
 	m_List.SetExtendedListViewStyle(LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP);
-	m_List.InsertColumn(0, L"Step", LVCFMT_RIGHT, 50);
-	m_List.InsertColumn(1, L"Frame", LVCFMT_RIGHT, 55);
-	m_List.InsertColumn(2, L"Time (ms)", LVCFMT_RIGHT, 75);
-	m_List.InsertColumn(3, L"Size", LVCFMT_LEFT, 80);
-	m_List.InsertColumn(4, L"Bits", LVCFMT_RIGHT, 45);
-	m_List.InsertColumn(5, L"Hot Spot", LVCFMT_LEFT, 80);
+	auto scale = [&](int n) { return DpiHelper::Scale(n, m_List); };
+	m_List.InsertColumn(0, L"Step", LVCFMT_RIGHT, scale(50));
+	m_List.InsertColumn(1, L"Frame", LVCFMT_RIGHT, scale(55));
+	m_List.InsertColumn(2, L"Time (ms)", LVCFMT_RIGHT, scale(75));
+	m_List.InsertColumn(3, L"Size", LVCFMT_LEFT, scale(80));
+	m_List.InsertColumn(4, L"Bits", LVCFMT_RIGHT, scale(45));
+	m_List.InsertColumn(5, L"Hot Spot", LVCFMT_LEFT, scale(80));
+	ListViewHelper::EnableColumnDpiScaling(m_List);
 
 	m_Splitter.SetSplitterPanes(m_Preview, m_List);
 	m_Splitter.SetSplitterPosPct(62);

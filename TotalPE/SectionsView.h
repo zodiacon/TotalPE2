@@ -23,6 +23,7 @@ public:
 	BEGIN_MSG_MAP(CSectionsView)
 		MESSAGE_HANDLER(CFindReplaceDialog::GetFindReplaceMsg(), OnFind)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
+		MESSAGE_HANDLER(WM_DPICHANGED_AFTERPARENT, OnDpiChanged)
 		CHAIN_MSG_MAP(CVirtualListView<CSectionsView>)
 		CHAIN_MSG_MAP(CViewBase<CSectionsView>)
 	ALT_MSG_MAP(1)
@@ -44,6 +45,7 @@ private:
 	CString GetTitle() const override;
 
 	void BuildItems();
+	void SetImages();
 
 	// Handler prototypes (uncomment arguments if needed):
 	//	LRESULT MessageHandler(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)
@@ -54,6 +56,7 @@ private:
 	LRESULT OnCopy(WORD, WORD, HWND, BOOL&) const;
 	LRESULT OnSaveData(WORD, WORD, HWND, BOOL&) const;
 	LRESULT OnFind(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
+	LRESULT OnDpiChanged(UINT, WPARAM, LPARAM, BOOL&);
 
 	CListViewCtrl m_List;
 	CCustomHorSplitterWindow m_Splitter;

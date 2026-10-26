@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "MenuView.h"
+#include <DpiHelper.h>
 
 namespace {
 	std::wstring StripAccel(std::wstring const& text) {
@@ -73,9 +74,18 @@ LRESULT CMenuView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 
 LRESULT CMenuView::OnSize(UINT, WPARAM, LPARAM lParam, BOOL&) {
 	int cx = GET_X_LPARAM(lParam), cy = GET_Y_LPARAM(lParam);
-	int barHeight = HIWORD(m_Bar.GetButtonSize()) + 4;
+	int barHeight = HIWORD(m_Bar.GetButtonSize()) + DpiHelper::Scale(4, m_hWnd);
 	m_Bar.MoveWindow(0, 0, cx, barHeight);
 	m_Tree.MoveWindow(0, barHeight, cx, std::max(0, cy - barHeight));
+	return 0;
+}
+
+LRESULT CMenuView::OnDpiChanged(UINT, WPARAM, LPARAM, BOOL& handled) {
+	// laid out again once the bar (which comes after the view) has its buttons for the new DPI
+	CRect rc;
+	GetClientRect(&rc);
+	PostMessage(WM_SIZE, SIZE_RESTORED, MAKELPARAM(rc.Width(), rc.Height()));
+	handled = FALSE;
 	return 0;
 }
 

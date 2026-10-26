@@ -309,6 +309,9 @@
     <ClCompile Include="DockViews.cpp">
       <Filter>Views</Filter>
     </ClCompile>
+    <ClCompile Include="DpiSupport.cpp">
+      <Filter>Views</Filter>
+    </ClCompile>
     <ClCompile Include="TypeExporter.cpp">
       <Filter>Helpers</Filter>
     </ClCompile>
@@ -572,6 +575,9 @@
     <ClInclude Include="DockViews.h">
       <Filter>Views</Filter>
     </ClInclude>
+    <ClInclude Include="DpiSupport.h">
+      <Filter>Views</Filter>
+    </ClInclude>
     <ClInclude Include="TypeExporter.h">
       <Filter>Helpers</Filter>
     </ClInclude>
@@ -580,6 +586,11 @@
     <ResourceCompile Include="TotalPE.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="TotalPE.manifest">
+      <Filter>Resource Files</Filter>
+    </Manifest>
   </ItemGroup>
   <ItemGroup>
     <Image Include="res\check.ico">

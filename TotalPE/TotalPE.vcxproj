@@ -370,6 +370,7 @@
     <ClCompile Include="BitmapView.cpp" />
     <ClCompile Include="DataDirectoriesView.cpp" />
     <ClCompile Include="DockViews.cpp" />
+    <ClCompile Include="DpiSupport.cpp" />
     <ClCompile Include="DebugView.cpp" />
     <ClCompile Include="DelayImportView.cpp" />
     <ClCompile Include="ExceptionsView.cpp" />
@@ -469,6 +470,7 @@
     <ClInclude Include="BitmapView.h" />
     <ClInclude Include="DataDirectoriesView.h" />
     <ClInclude Include="DockViews.h" />
+    <ClInclude Include="DpiSupport.h" />
     <ClInclude Include="DebugView.h" />
     <ClInclude Include="DelayImportView.h" />
     <ClInclude Include="ExceptionsView.h" />
@@ -553,6 +555,9 @@
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="TotalPE.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="TotalPE.manifest" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="res\array.ico" />

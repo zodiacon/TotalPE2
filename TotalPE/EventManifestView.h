@@ -69,6 +69,7 @@ private:
 	std::vector<int> m_Rows;		// the rows of the table that are shown
 	CListViewCtrl m_List;
 	CToolBarCtrl m_tb;
+	std::vector<std::wstring> m_ButtonTexts;	// the tool bar keeps pointers to them
 	CQuickFindEdit m_Filter;
 	CString m_FilterText;
 

@@ -1,6 +1,8 @@
 #include "pch.h"
 #include "StructView.h"
 #include "Helpers.h"
+#include <DpiHelper.h>
+#include <ListViewhelper.h>
 #include "PEFile.h"
 
 CStructView::CStructView(IMainFrame* frame, DiaSymbol const& sym, CString const& title) : CViewBase(frame), m_Object(sym), m_Title(title), m_HexView(frame) {
@@ -35,10 +37,11 @@ LRESULT CStructView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
     // the image list is the frame's: not to be destroyed with the control
     m_TL.GetListCtrl().ModifyStyle(0, LVS_SHAREIMAGELISTS);
     m_TL.SetImageList(Frame()->GetImageList(), LVSIL_SMALL);
-    m_TL.InsertColumn(0, L"Member", 250);
-    m_TL.InsertColumn(1, L"Offset", 60, LVCFMT_RIGHT);
-    m_TL.InsertColumn(2, L"Type", 180, LVCFMT_CENTER);
-    m_TL.InsertColumn(3, L"Value", 150, LVCFMT_RIGHT);
+    m_TL.InsertColumn(0, L"Member", DpiHelper::Scale(250, m_TL));
+    m_TL.InsertColumn(1, L"Offset", DpiHelper::Scale(60, m_TL), LVCFMT_RIGHT);
+    m_TL.InsertColumn(2, L"Type", DpiHelper::Scale(180, m_TL), LVCFMT_CENTER);
+    m_TL.InsertColumn(3, L"Value", DpiHelper::Scale(150, m_TL), LVCFMT_RIGHT);
+    ListViewHelper::EnableColumnDpiScaling(m_TL.GetListCtrl());
 
     m_HexView.Create(m_Splitter, rcDefault, nullptr, WS_CHILD | WS_VISIBLE);
     m_HexView.SetStatic(true);

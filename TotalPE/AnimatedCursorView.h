@@ -42,13 +42,16 @@ private:
 	LRESULT OnDestroy(UINT, WPARAM, LPARAM, BOOL&);
 
 	void StartTimer(UINT milliseconds);
-	void DrawInfo(CDCHandle dc, CRect const& rc) const;
+	void DrawInfo(CDCHandle dc, CRect const& rc, int lineHeight) const;
+	HFONT Font();
 
 	static constexpr UINT_PTR TimerId = 1;
 	AniFile const* m_Ani{ nullptr };
 	std::vector<HICON> const* m_Icons{ nullptr };
 	size_t m_Step{ 0 };
 	bool m_Playing{ false };
+	CFont m_Font;
+	UINT m_FontDpi{ 0 };
 };
 
 class CAnimatedCursorView : public CViewBase<CAnimatedCursorView> {

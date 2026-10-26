@@ -6,6 +6,7 @@
 #include "ClipboardHelper.h"
 #include <numeric>
 #include <ToolbarHelper.h>
+#include "DpiSupport.h"
 #include <WTLHelper.h>
 
 CHexView::CHexView(IMainFrame* frame, CString const& title) : CViewBase(frame), m_Title(title) {
@@ -118,7 +119,7 @@ LRESULT CHexView::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, 
 		{ ID_HEX_INSPECTOR, IDI_LOOK, BTNS_CHECK | BTNS_SHOWTEXT, L"Inspector" },
 	};
 	CreateSimpleReBar(ATL_SIMPLE_REBAR_NOBORDER_STYLE);
-	m_tb = ToolbarHelper::CreateAndInitToolBar(m_hWnd, buttons, _countof(buttons), 24);
+	m_tb = Dpi::CreateToolBar(m_hWnd, buttons, _countof(buttons), 24);
 
 	AddSimpleReBarBand(m_tb);
 	UIAddToolBar(m_tb);

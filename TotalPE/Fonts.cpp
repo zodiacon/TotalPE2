@@ -1,31 +1,41 @@
 #include "pch.h"
 #include "Fonts.h"
 #include "AppSettings.h"
+#include <DpiHelper.h>
+#include <map>
 
 namespace {
 	PCWSTR const CodeProperty = L"TotalPE.CodeFont";
 
-	// the fonts made of the settings (remade when they change)
+	// the fonts made of the settings, one for each DPI there are controls at (remade when the settings change)
 	struct Made {
-		LOGFONT Font{};
-		HFONT Handle{}, Previous{};
-		HFONT Get(LOGFONT const& font) {
-			if (!Handle || memcmp(&font, &Font, sizeof(font)) != 0) {
-				// (the one before stays until the controls have the new one: it is deleted with the next change)
-				if (Previous)
-					::DeleteObject(Previous);
-				Previous = Handle;
+		LOGFONT Font{};		// at 96 DPI
+		std::map<UINT, HFONT> Handles;
+		std::vector<HFONT> Previous;
+		HFONT Get(LOGFONT const& font, UINT dpi) {
+			if (memcmp(&font, &Font, sizeof(font)) != 0) {
+				// (those before stay until the controls have the new ones: they are deleted with the next change)
+				for (auto h : Previous)
+					::DeleteObject(h);
+				Previous.clear();
+				for (auto& [d, h] : Handles)
+					Previous.push_back(h);
+				Handles.clear();
 				Font = font;
-				Handle = ::CreateFontIndirect(&font);
 			}
-			return Handle;
+			auto& handle = Handles[dpi];
+			if (!handle) {
+				auto scaled = Fonts::ToDpi(font, dpi);
+				handle = ::CreateFontIndirect(&scaled);
+			}
+			return handle;
 		}
 	};
 	Made code, application;
 
-	HFONT ApplicationFont() {
+	HFONT ApplicationFont(UINT dpi) {
 		LOGFONT font;
-		return Fonts::Application(font) ? application.Get(font) : nullptr;
+		return Fonts::Application(font) ? application.Get(font, dpi) : nullptr;
 	}
 
 	// a control of the application's windows that takes the application font: not one of a dialog (nor a dialog's child)
@@ -42,18 +52,44 @@ namespace {
 		return true;
 	}
 
-	void ApplyTo(HWND hWnd, HFONT app) {
+	LRESULT CALLBACK FollowDpiProc(HWND, UINT, WPARAM, LPARAM, UINT_PTR, DWORD_PTR);
+
+	// the font of a control at its DPI (false if it keeps its own); it gets the font for its DPI again when that changes
+	bool ApplyTo(HWND hWnd, BOOL redraw) {
+		HFONT font = nullptr;
 		if (::GetProp(hWnd, CodeProperty))
-			::SendMessage(hWnd, WM_SETFONT, (WPARAM)Fonts::CodeFont(), TRUE);
-		else if (app && TakesApplicationFont(hWnd))
-			::SendMessage(hWnd, WM_SETFONT, (WPARAM)app, TRUE);
+			font = Fonts::CodeFont(hWnd);
+		else if (TakesApplicationFont(hWnd))
+			font = ApplicationFont(DpiHelper::GetDpi(hWnd));
+		if (!font)
+			return false;
+		::SendMessage(hWnd, WM_SETFONT, (WPARAM)font, redraw);
+		::SetWindowSubclass(hWnd, FollowDpiProc, 1, 0);
+		return true;
+	}
+
+	// (the control scales the font it made itself, not one it was given)
+	LRESULT CALLBACK FollowDpiProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR id, DWORD_PTR) {
+		switch (msg) {
+			case WM_DPICHANGED_AFTERPARENT:
+			{
+				auto result = ::DefSubclassProc(hWnd, msg, wp, lp);
+				ApplyTo(hWnd, TRUE);
+				return result;
+			}
+			case WM_NCDESTROY:
+				::RemoveWindowSubclass(hWnd, FollowDpiProc, id);
+				break;
+		}
+		return ::DefSubclassProc(hWnd, msg, wp, lp);
 	}
 
 	void CALLBACK OnCreate(HWINEVENTHOOK, DWORD, HWND hWnd, LONG object, LONG child, DWORD, DWORD) {
 		if (object != OBJID_WINDOW || child != CHILDID_SELF || !hWnd || !::IsWindow(hWnd))
 			return;
-		if (auto app = ApplicationFont(); app && !::GetProp(hWnd, CodeProperty) && TakesApplicationFont(hWnd))
-			::SendMessage(hWnd, WM_SETFONT, (WPARAM)app, FALSE);
+		// (a control of code has its font already)
+		if (!::GetProp(hWnd, CodeProperty))
+			ApplyTo(hWnd, FALSE);
 	}
 }
 
@@ -66,8 +102,7 @@ LOGFONT Fonts::Code() {
 	font.lfWeight = FW_NORMAL;
 	font.lfCharSet = DEFAULT_CHARSET;
 	font.lfPitchAndFamily = FIXED_PITCH | FF_MODERN;
-	CClientDC dc(nullptr);
-	font.lfHeight = -::MulDiv(11, dc.GetDeviceCaps(LOGPIXELSY), 72);
+	font.lfHeight = -::MulDiv(11, USER_DEFAULT_SCREEN_DPI, 72);
 	return font;
 }
 
@@ -77,16 +112,28 @@ bool Fonts::Application(LOGFONT& font) {
 }
 
 int Fonts::Points(LOGFONT const& font) {
-	CClientDC dc(nullptr);
-	return std::max(1, ::MulDiv(std::abs(font.lfHeight), 72, dc.GetDeviceCaps(LOGPIXELSY)));
+	return std::max(1, ::MulDiv(std::abs(font.lfHeight), 72, USER_DEFAULT_SCREEN_DPI));
+}
+
+LOGFONT Fonts::ToDpi(LOGFONT font, UINT dpi) {
+	font.lfHeight = DpiHelper::Scale(font.lfHeight, dpi, USER_DEFAULT_SCREEN_DPI);
+	font.lfWidth = DpiHelper::Scale(font.lfWidth, dpi, USER_DEFAULT_SCREEN_DPI);
+	return font;
+}
+
+LOGFONT Fonts::FromDpi(LOGFONT font, UINT dpi) {
+	font.lfHeight = DpiHelper::Scale(font.lfHeight, USER_DEFAULT_SCREEN_DPI, dpi);
+	font.lfWidth = DpiHelper::Scale(font.lfWidth, USER_DEFAULT_SCREEN_DPI, dpi);
+	return font;
 }
 
 void Fonts::MarkCode(HWND hWnd) {
 	::SetProp(hWnd, CodeProperty, (HANDLE)1);
+	ApplyTo(hWnd, TRUE);
 }
 
-HFONT Fonts::CodeFont() {
-	return code.Get(Code());
+HFONT Fonts::CodeFont(HWND hWnd) {
+	return code.Get(Code(), DpiHelper::GetDpi(hWnd));
 }
 
 void Fonts::Install() {
@@ -97,12 +144,11 @@ void Fonts::Install() {
 }
 
 void Fonts::Apply() {
-	auto app = ApplicationFont();
-	::EnumThreadWindows(::GetCurrentThreadId(), [](HWND top, LPARAM app) {
-		::EnumChildWindows(top, [](HWND hWnd, LPARAM app) {
-			ApplyTo(hWnd, (HFONT)app);
+	::EnumThreadWindows(::GetCurrentThreadId(), [](HWND top, LPARAM) {
+		::EnumChildWindows(top, [](HWND hWnd, LPARAM) {
+			ApplyTo(hWnd, TRUE);
 			return TRUE;
-			}, app);
+			}, 0);
 		return TRUE;
-		}, (LPARAM)app);
+		}, 0);
 }

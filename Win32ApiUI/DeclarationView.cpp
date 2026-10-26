@@ -2,6 +2,7 @@
 #include "DeclarationView.h"
 #include "ApiBrowserIds.h"
 #include <WTLHelper.h>
+#include <DpiHelper.h>
 #include <lexilla/lexlib/LexerModule.h>
 
 // the lexer of C (of the Lexilla library, where it is const): by itself, not through the catalogue of all of them (CreateLexer),
@@ -54,7 +55,7 @@ LRESULT CDeclarationView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	Sci(SCI_USEPOPUP, SC_POPUP_NEVER);
 	Sci(SCI_SETTABWIDTH, 4);
 	Sci(SCI_SETMARGINWIDTHN, 0, 0);
-	Sci(SCI_SETMARGINWIDTHN, 1, 6);
+	Sci(SCI_SETMARGINWIDTHN, 1, DpiHelper::Scale(6, m_hWnd));	// (in pixels: Scintilla scales its fonts, not the margins it is given)
 	Sci(SCI_SETCARETLINEVISIBLE, TRUE);
 	Sci(SCI_SETCARETLINEVISIBLEALWAYS, TRUE);
 	Sci(SCI_SETSCROLLWIDTHTRACKING, TRUE);
@@ -69,6 +70,13 @@ LRESULT CDeclarationView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	Sci(SCI_SETILEXER, 0, (LPARAM)lexer);
 	UpdateColors();
 	Sci(SCI_SETREADONLY, TRUE);
+	return 0;
+}
+
+LRESULT CDeclarationView::OnDpiChanged(UINT, WPARAM, LPARAM, BOOL& handled) {
+	if (m_Sci)
+		Sci(SCI_SETMARGINWIDTHN, 1, DpiHelper::Scale(6, m_hWnd));
+	handled = FALSE;
 	return 0;
 }
 
@@ -88,9 +96,9 @@ void CDeclarationView::UpdateColors() {
 	if (!m_Sci)
 		return;
 	auto p = CurrentPalette();
+	// (Scintilla scales the points to its DPI)
 	auto font = CodeFont();
-	CClientDC dc(m_hWnd);
-	auto points = std::max(1, ::MulDiv(std::abs(font.lfHeight), 72, dc.GetDeviceCaps(LOGPIXELSY)));
+	auto points = std::max(1, ::MulDiv(std::abs(font.lfHeight), 72, USER_DEFAULT_SCREEN_DPI));
 	Sci(SCI_STYLESETFONT, STYLE_DEFAULT, (LPARAM)(PCSTR)CW2A(font.lfFaceName, CP_UTF8));
 	Sci(SCI_STYLESETSIZE, STYLE_DEFAULT, points);
 	Sci(SCI_STYLESETBOLD, STYLE_DEFAULT, font.lfWeight >= FW_BOLD);
@@ -147,8 +155,7 @@ LOGFONT CDeclarationView::CodeFont() {
 		return s_CodeFont;
 	LOGFONT font{};
 	wcscpy_s(font.lfFaceName, L"Consolas");
-	CClientDC dc(nullptr);
-	font.lfHeight = -::MulDiv(10, dc.GetDeviceCaps(LOGPIXELSY), 72);
+	font.lfHeight = -::MulDiv(10, USER_DEFAULT_SCREEN_DPI, 72);
 	font.lfWeight = FW_NORMAL;
 	font.lfCharSet = DEFAULT_CHARSET;
 	return font;

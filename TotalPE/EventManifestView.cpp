@@ -4,6 +4,8 @@
 #include <ClipboardHelper.h>
 #include <ListViewHelper.h>
 #include <ToolbarHelper.h>
+#include "DpiSupport.h"
+#include "Helpers.h"
 
 CEventManifestView::CEventManifestView(IMainFrame* frame, PCWSTR title, EventManifest manifest, std::wstring const& path)
 	: CViewBase(frame), m_Title(title), m_Manifest(std::move(manifest)) {
@@ -246,22 +248,21 @@ void CEventManifestView::ApplyFilter() {
 
 LRESULT CEventManifestView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	// a button for each table, with the number of rows
-	std::vector<std::wstring> texts;
 	for (auto const& t : m_Tables)
-		texts.push_back(std::format(L"{} ({})", t.Name, t.Rows.size()));
+		m_ButtonTexts.push_back(std::format(L"{} ({})", t.Name, t.Rows.size()));
 	std::vector<ToolBarButtonInfo> buttons;
 	for (int i = 0; i < (int)m_Tables.size(); i++)
-		buttons.push_back({ (UINT)(ID_EVENTS_FIRST + i), 0, BTNS_CHECKGROUP | BTNS_SHOWTEXT | BTNS_AUTOSIZE, texts[i].c_str() });
+		buttons.push_back({ (UINT)(ID_EVENTS_FIRST + i), 0, BTNS_CHECKGROUP | BTNS_SHOWTEXT | BTNS_AUTOSIZE, m_ButtonTexts[i].c_str() });
 	CreateSimpleReBar(ATL_SIMPLE_REBAR_NOBORDER_STYLE);
-	m_tb = ToolbarHelper::CreateAndInitToolBar(m_hWnd, buttons.data(), (int)buttons.size(), 16);
+	m_tb = Dpi::CreateToolBar(m_hWnd, buttons.data(), (int)buttons.size(), 16);
 	AddSimpleReBarBand(m_tb);
 	UIAddToolBar(m_tb);
 
-	CRect rc(0, 0, 250, 20);
+	CRect rc(0, 0, DpiHelper::Scale(250, m_hWnd), DpiHelper::Scale(20, m_hWnd));
 	m_Filter.Create(m_hWnd, rc, nullptr, WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL);
-	m_Filter.SetFont(AtlGetDefaultGuiFont());
 	m_Filter.SetWatermark(L"Filter (Esc to clear)");
-	AddSimpleReBarBand(m_Filter, nullptr, FALSE, 250);
+	AddSimpleReBarBand(m_Filter, nullptr, FALSE, DpiHelper::Scale(250, m_hWnd));
+	Helpers::FilterFollowsDpi(m_Filter, 250);
 
 	// the band of the toolbar is as wide as its buttons, so the filter comes after it
 	CRect rcLast;
@@ -271,7 +272,7 @@ LRESULT CEventManifestView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	band.fMask = RBBIM_CHILDSIZE | RBBIM_SIZE | RBBIM_IDEALSIZE;
 	rebar.GetBandInfo(0, &band);
 	band.cxMinChild = band.cxIdeal = rcLast.right;
-	band.cx = rcLast.right + 16;
+	band.cx = rcLast.right + DpiHelper::Scale(16, m_hWnd);
 	rebar.SetBandInfo(0, &band);
 
 	m_hWndClient = m_List.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS |

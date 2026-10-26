@@ -16,9 +16,8 @@ CString CTextView::GetTitle() const {
 LRESULT CTextView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
     m_hWndClient = m_Edit.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | ES_READONLY | ES_MULTILINE | WS_HSCROLL | WS_VSCROLL);
 
-    // the code font (Options > Code Font)
+    // the code font (Options > Code Font), at the DPI of the edit box
     Fonts::MarkCode(m_Edit);
-    m_Edit.SetFont(Fonts::CodeFont());
     m_Edit.SetTabStops(10);
 
     return 0;

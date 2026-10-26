@@ -7,6 +7,8 @@
 #include <SortHelper.h>
 #include <ClipboardHelper.h>
 #include <ListViewHelper.h>
+#include <DpiHelper.h>
+#include "Helpers.h"
 #include <map>
 #include <thread>
 
@@ -340,11 +342,11 @@ void CFunctionsView::UpdateUI(bool first) const {
 LRESULT CFunctionsView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	// the filter, in a band of its own (the rebar passes its notifications on to this window)
 	CreateSimpleReBar(ATL_SIMPLE_REBAR_NOBORDER_STYLE);
-	CRect rc(0, 0, 300, 20);
+	CRect rc(0, 0, DpiHelper::Scale(300, m_hWnd), DpiHelper::Scale(20, m_hWnd));
 	m_Filter.Create(m_hWnd, rc, nullptr, WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL);
-	m_Filter.SetFont(AtlGetDefaultGuiFont());
 	m_Filter.SetWatermark(L"Filter by name or address (Esc to clear)");
-	AddSimpleReBarBand(m_Filter, nullptr, FALSE, 300);
+	AddSimpleReBarBand(m_Filter, nullptr, FALSE, DpiHelper::Scale(300, m_hWnd));
+	Helpers::FilterFollowsDpi(m_Filter, 300);
 
 	m_hWndClient = m_List.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS |
 		LVS_REPORT | LVS_OWNERDATA | LVS_SHOWSELALWAYS | LVS_SHAREIMAGELISTS);

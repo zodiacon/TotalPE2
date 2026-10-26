@@ -3,6 +3,59 @@
 #include "Resource.h"
 #include <DiaHelper.h>
 #include "Interfaces.h"
+#include <DpiHelper.h>
+
+namespace {
+	// a filter box of a rebar: its size (at 96 DPI) and its font
+	struct FilterBand {
+		int Width, Height;
+		CFont Font;
+	};
+
+	void UpdateFilter(HWND hFilter, FilterBand* data, bool band) {
+		auto dpi = DpiHelper::GetDpi(hFilter);
+		data->Font.Attach(DpiHelper::CreateMessageFont(dpi));
+		::SendMessage(hFilter, WM_SETFONT, (WPARAM)(HFONT)data->Font, TRUE);
+		if (!band)
+			return;
+		CReBarCtrl rebar(::GetParent(hFilter));
+		REBARBANDINFO rbbi{ sizeof(rbbi), RBBIM_CHILD };
+		for (UINT i = 0; i < rebar.GetBandCount(); i++)
+			if (rebar.GetBandInfo(i, &rbbi) && rbbi.hwndChild == hFilter) {
+				// (as WTL's AddSimpleReBarBandCtrl has it)
+				rbbi.fMask = RBBIM_CHILDSIZE | RBBIM_SIZE | RBBIM_IDEALSIZE;
+				rbbi.cxMinChild = 0;
+				rbbi.cyMinChild = DpiHelper::Scale(data->Height, dpi);
+				rbbi.cx = rbbi.cxIdeal = DpiHelper::Scale(data->Width, dpi);
+				rebar.SetBandInfo(i, &rbbi);
+				// (the view lays itself out again: the rebar may be of another height)
+				auto view = rebar.GetParent();
+				CRect client;
+				view.GetClientRect(&client);
+				view.SendMessage(WM_SIZE, SIZE_RESTORED, MAKELPARAM(client.Width(), client.Height()));
+				break;
+			}
+	}
+
+	LRESULT CALLBACK FilterProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR id, DWORD_PTR refData) {
+		auto data = reinterpret_cast<FilterBand*>(refData);
+		switch (msg) {
+			case WM_DPICHANGED_AFTERPARENT:
+			{
+				// (the font before is deleted once the box has the new one)
+				CFont old(data->Font.Detach());
+				auto result = ::DefSubclassProc(hWnd, msg, wp, lp);
+				UpdateFilter(hWnd, data, true);
+				return result;
+			}
+			case WM_NCDESTROY:
+				::RemoveWindowSubclass(hWnd, FilterProc, id);
+				delete data;
+				break;
+		}
+		return ::DefSubclassProc(hWnd, msg, wp, lp);
+	}
+}
 
 bool Helpers::ExtractResource(HMODULE hModule, UINT resId, PCWSTR type, PCWSTR path, bool overwrite) {
 	auto hResource = ::FindResource(hModule, MAKEINTRESOURCE(resId), type);
@@ -159,4 +212,11 @@ std::wstring Helpers::GetSpecialValue(DiaSymbol const& field, DiaSymbol const& t
 		return std::format(L"0x{:X}", value);
 	}
 	return L"";
+}
+
+void Helpers::FilterFollowsDpi(HWND hFilter, int width, int height) {
+	auto data = new FilterBand{ width, height };
+	UpdateFilter(hFilter, data, false);
+	if (!::SetWindowSubclass(hFilter, FilterProc, 1, (DWORD_PTR)data))
+		delete data;
 }

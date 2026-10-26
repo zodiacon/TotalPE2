@@ -49,7 +49,7 @@ public:
 	void SetApi(Win32Api& api);
 	// the colors and the font (the code font)
 	void UpdateColors();
-	// the code font: the host's (SetCodeFont), else Consolas of 10 points
+	// the code font (its height at 96 DPI): the host's (SetCodeFont), else Consolas of 10 points
 	static LOGFONT CodeFont();
 	// (an empty name: the default; the views there are, updated by UpdateColors)
 	static void SetCodeFont(LOGFONT const& font);
@@ -65,6 +65,7 @@ public:
 
 	BEGIN_MSG_MAP(CDeclarationView)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
+		MESSAGE_HANDLER(WM_DPICHANGED_AFTERPARENT, OnDpiChanged)
 		MESSAGE_HANDLER(WM_SIZE, OnSize)
 		MESSAGE_HANDLER(WM_SETFOCUS, OnSetFocus)
 		MESSAGE_HANDLER(WM_CONTEXTMENU, OnContextMenu)
@@ -77,6 +78,7 @@ public:
 
 private:
 	LRESULT OnCreate(UINT, WPARAM, LPARAM, BOOL&);
+	LRESULT OnDpiChanged(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnSize(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnSetFocus(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnContextMenu(UINT, WPARAM, LPARAM, BOOL&);

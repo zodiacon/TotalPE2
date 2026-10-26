@@ -41,6 +41,7 @@ public:
 		MESSAGE_HANDLER(WM_SIZE, OnSize)
 		MESSAGE_HANDLER(WM_ERASEBKGND, OnEraseBkgnd)
 		MESSAGE_HANDLER(WM_SETFOCUS, OnSetFocus)
+		MESSAGE_HANDLER(WM_DPICHANGED_AFTERPARENT, OnDpiChanged)
 	END_MSG_MAP()
 
 private:
@@ -75,6 +76,13 @@ private:
 	LRESULT OnSetFocus(UINT, WPARAM, LPARAM, BOOL&) {
 		if (m_hPage)
 			::SetFocus(m_hPage);
+		return 0;
+	}
+	// (the strip gets the message after this window: it is made of the new DPI first, as its height is)
+	LRESULT OnDpiChanged(UINT, WPARAM, LPARAM, BOOL& handled) {
+		m_Strip.UpdateDpi();
+		UpdateLayout();
+		handled = FALSE;
 		return 0;
 	}
 

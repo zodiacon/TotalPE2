@@ -1,9 +1,10 @@
 #include "pch.h"
 #include "QuickOpen.h"
 #include "Images.h"
+#include <ListViewhelper.h>
 
 namespace {
-	constexpr int Width = 640, Height = 420, Gap = 4, MaxResults = 100;
+	constexpr int Width = 640, Height = 420, Gap = 4, MaxResults = 100;	// (the sizes at 96 DPI)
 
 	// the first letters of the words of a name, in lowercase: "CreateFileW": "cfw", "SECURITY_ATTRIBUTES": "sa"
 	std::string Initials(std::string const& name) {
@@ -78,20 +79,42 @@ void CQuickOpen::SetUIFont(HFONT font) {
 	m_Font = font;
 	m_Edit.SetFont(font);
 	m_List.SetFont(font);
+	if (!m_OwnFont.IsNull())
+		m_OwnFont.DeleteObject();
 	UpdateLayout();
 }
 
+// the default GUI font at the window's DPI (until the host gives one): it is of 96 DPI, whatever the DPI
+void CQuickOpen::CreateOwnFont() {
+	CFont font(DpiHelper::ScaleFont(AtlGetDefaultGuiFont(), DpiHelper::GetDpi(m_hWnd), USER_DEFAULT_SCREEN_DPI));
+	m_Font = font;
+	m_Edit.SetFont(font);
+	m_List.SetFont(font);
+	if (!m_OwnFont.IsNull())
+		m_OwnFont.DeleteObject();
+	m_OwnFont.Attach(font.Detach());
+}
+
 LRESULT CQuickOpen::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
-	m_Font = AtlGetDefaultGuiFont();
 	m_Edit.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL, WS_EX_CLIENTEDGE);
-	m_Edit.SetFont(m_Font);
 	m_Edit.SetCueBannerText(L"Go to a function, type or constant by name (CFW: CreateFileW)", TRUE);
 	m_List.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_OWNERDATA | LVS_SINGLESEL |
 		LVS_SHOWSELALWAYS | LVS_NOCOLUMNHEADER | LVS_SHAREIMAGELISTS);
 	m_List.SetExtendedListViewStyle(LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT);
-	m_List.InsertColumn(0, L"Name", LVCFMT_LEFT, 330);
-	m_List.InsertColumn(1, L"Kind", LVCFMT_LEFT, 80);
-	m_List.InsertColumn(2, L"Where", LVCFMT_LEFT, 200);
+	CreateOwnFont();
+	auto dpi = DpiHelper::GetDpi(m_hWnd);
+	m_List.InsertColumn(0, L"Name", LVCFMT_LEFT, DpiHelper::Scale(330, dpi));
+	m_List.InsertColumn(1, L"Kind", LVCFMT_LEFT, DpiHelper::Scale(80, dpi));
+	m_List.InsertColumn(2, L"Where", LVCFMT_LEFT, DpiHelper::Scale(200, dpi));
+	ListViewHelper::EnableColumnDpiScaling(m_List);
+	return 0;
+}
+
+// (a popup: it is of the DPI of the monitor it is shown on; Show places it)
+LRESULT CQuickOpen::OnDpiChanged(UINT, WPARAM, LPARAM, BOOL&) {
+	if (!m_OwnFont.IsNull())
+		CreateOwnFont();
+	UpdateLayout();
 	return 0;
 }
 
@@ -105,10 +128,12 @@ void CQuickOpen::UpdateLayout() {
 	TEXTMETRIC tm;
 	dc.GetTextMetrics(&tm);
 	dc.SelectFont(old);
-	auto height = tm.tmHeight + 10;
-	m_Edit.SetWindowPos(nullptr, Gap, Gap, rc.Width() - 2 * Gap, height, SWP_NOZORDER | SWP_NOACTIVATE);
-	auto top = height + 2 * Gap;
-	m_List.SetWindowPos(nullptr, Gap, (int)top, rc.Width() - 2 * Gap, std::max(0, (int)(rc.Height() - top - Gap)), SWP_NOZORDER | SWP_NOACTIVATE);
+	auto dpi = DpiHelper::GetDpi(m_hWnd);
+	auto gap = DpiHelper::Scale(Gap, dpi);
+	auto height = tm.tmHeight + DpiHelper::Scale(10, dpi);
+	m_Edit.SetWindowPos(nullptr, gap, gap, rc.Width() - 2 * gap, height, SWP_NOZORDER | SWP_NOACTIVATE);
+	auto top = height + 2 * gap;
+	m_List.SetWindowPos(nullptr, gap, (int)top, rc.Width() - 2 * gap, std::max(0, (int)(rc.Height() - top - gap)), SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
 LRESULT CQuickOpen::OnSize(UINT, WPARAM, LPARAM, BOOL&) {
@@ -130,8 +155,11 @@ void CQuickOpen::Show() {
 	CRect client;
 	::GetClientRect(owner, &client);
 	::MapWindowPoints(owner, nullptr, (POINT*)&client, 2);
-	auto width = std::min(Width, client.Width() - 20);
-	SetWindowPos(HWND_TOP, client.left + (client.Width() - width) / 2, client.top + 40, width, Height, SWP_SHOWWINDOW);
+	// (of the owner's DPI: of the monitor it is shown on)
+	auto dpi = DpiHelper::GetDpi(owner);
+	auto width = std::min(DpiHelper::Scale(Width, dpi), client.Width() - DpiHelper::Scale(20, dpi));
+	SetWindowPos(HWND_TOP, client.left + (client.Width() - width) / 2, client.top + DpiHelper::Scale(40, dpi), width,
+		DpiHelper::Scale(Height, dpi), SWP_SHOWWINDOW);
 	m_Edit.SetWindowText(L"");
 	m_Results.clear();
 	m_List.SetItemCount(0);

@@ -6,6 +6,7 @@
 #include <SortHelper.h>
 #include <ClipboardHelper.h>
 #include <ListViewHelper.h>
+#include <DpiHelper.h>
 #include <wincrypt.h>
 #include <cryptuiapi.h>
 #include <WTLHelper.h>
@@ -59,8 +60,9 @@ LRESULT CSecurityView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	m_DetailList.Create(m_Splitter, rcDefault, nullptr,
 		WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_SHAREIMAGELISTS);
 	m_DetailList.SetExtendedListViewStyle(LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP);
-	m_DetailList.InsertColumn(0, L"Property", LVCFMT_LEFT,  160);
-	m_DetailList.InsertColumn(1, L"Value",    LVCFMT_LEFT,  900);
+	m_DetailList.InsertColumn(0, L"Property", LVCFMT_LEFT,  DpiHelper::Scale(160, m_DetailList));
+	m_DetailList.InsertColumn(1, L"Value",    LVCFMT_LEFT,  DpiHelper::Scale(900, m_DetailList));
+	ListViewHelper::EnableColumnDpiScaling(m_DetailList);
 
 	m_Splitter.SetSplitterPanes(m_List, m_DetailList);
 	m_Splitter.SetSplitterPosPct(25);

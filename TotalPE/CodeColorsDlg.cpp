@@ -2,6 +2,8 @@
 #include "resource.h"
 #include "CodeColorsDlg.h"
 #include "AppSettings.h"
+#include <DpiHelper.h>
+#include <ListViewhelper.h>
 
 bool CCodeColorsDlg::Dark() const {
 	return m_Scheme.GetCurSel() == 1;
@@ -38,9 +40,10 @@ LRESULT CCodeColorsDlg::OnInitDialog(UINT, WPARAM, LPARAM, BOOL&) {
 
 	m_List.Attach(GetDlgItem(IDC_COLORS_LIST));
 	m_List.SetExtendedListViewStyle(LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
-	m_List.InsertColumn(0, L"Language", LVCFMT_LEFT, 120);
-	m_List.InsertColumn(1, L"Element", LVCFMT_LEFT, 200);
-	m_List.InsertColumn(2, L"Color", LVCFMT_LEFT, 110);
+	m_List.InsertColumn(0, L"Language", LVCFMT_LEFT, DpiHelper::Scale(120, m_List));
+	m_List.InsertColumn(1, L"Element", LVCFMT_LEFT, DpiHelper::Scale(200, m_List));
+	m_List.InsertColumn(2, L"Color", LVCFMT_LEFT, DpiHelper::Scale(110, m_List));
+	ListViewHelper::EnableColumnDpiScaling(m_List);
 	for (int i = 0; i < (int)elements.size(); i++) {
 		m_List.InsertItem(i, elements[i].Language);
 		m_List.SetItemText(i, 1, elements[i].Name);
@@ -140,7 +143,8 @@ LRESULT CCodeColorsDlg::OnCustomDraw(int, LPNMHDR hdr, BOOL&) {
 			CRect rc;
 			m_List.GetSubItemRect(element, 2, LVIR_BOUNDS, &rc);
 			CDCHandle dc(cd->nmcd.hdc);
-			rc.DeflateRect(2, 2);
+			int inset = DpiHelper::Scale(2, m_List);
+			rc.DeflateRect(inset, inset);
 			// (a background element, as the related lines' is, is shown as a fill; the others as text on the theme's background)
 			bool fill = std::string_view(CodeColors::Elements()[element].Key) == "Common.Related";
 			dc.FillSolidRect(&rc, fill ? c.Color : Dark() ? RGB(30, 30, 30) : RGB(255, 255, 255));

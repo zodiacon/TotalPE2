@@ -5,6 +5,7 @@
 #include <SortHelper.h>
 #include <ClipboardHelper.h>
 #include <ListViewhelper.h>
+#include <DpiHelper.h>
 #include "SaveData.h"
 #include "resource.h"
 
@@ -120,10 +121,7 @@ LRESULT CSectionsView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	//cm->AddColumn(L"Ptr to Lines", LVCFMT_RIGHT, 60, ColumnType::PointerToLines);
 	cm->AddColumn(L"Characteristics", LVCFMT_LEFT, 300, ColumnType::Characteristics);
 
-	CImageList images;
-	images.Create(16, 16, ILC_COLOR32 | ILC_MASK, 1, 1);
-	images.AddIcon(AtlLoadIconImage(IDI_SECTION, 0, 16, 16));
-	m_List.SetImageList(images, LVSIL_SMALL);
+	SetImages();
 
 	m_HexView.Create(m_Splitter, rcDefault, nullptr, WS_CHILD | WS_VISIBLE);
 	m_HexView.SetStatic(true);
@@ -133,6 +131,25 @@ LRESULT CSectionsView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	m_Splitter.SetSplitterPanes(m_List, m_HexView);
 	m_Splitter.SetSplitterPosPct(50);
 
+	return 0;
+}
+
+// the icon of the sections, in the small icon size of the list's DPI (the list owns the image list)
+void CSectionsView::SetImages() {
+	int size = DpiHelper::SmallIconSize(m_List);
+	CImageList images;
+	images.Create(size, size, ILC_COLOR32 | ILC_MASK, 1, 1);
+	auto icon = AtlLoadIconImage(IDI_SECTION, 0, size, size);
+	images.AddIcon(icon);
+	::DestroyIcon(icon);
+	CImageList old = m_List.SetImageList(images, LVSIL_SMALL);
+	if (old)
+		old.Destroy();
+}
+
+LRESULT CSectionsView::OnDpiChanged(UINT, WPARAM, LPARAM, BOOL& handled) {
+	SetImages();
+	handled = FALSE;
 	return 0;
 }
 

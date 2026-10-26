@@ -6,6 +6,13 @@
 #include <Images.h>
 #include <ToolbarHelper.h>
 #include <WTLHelper.h>
+#include "DpiSupport.h"
+
+namespace {
+	// the icons of the browser's lists, tree and tabs (Images::Index)
+	UINT const s_Icons[] = { IDI_FUNCTION, IDI_FUNCTION2, IDI_TYPE, IDI_UNION, IDI_ENUM, IDI_DATA, IDI_INTERFACE, IDI_FIELD,
+		IDI_SYSTEM, IDI_FOLDER_CLOSED, IDI_DIR_OPEN };
+}
 
 CWin32ApiFrame::CWin32ApiFrame(IMainFrame* main, std::function<void()> closed) : m_Main(main), m_Closed(std::move(closed)) {
 }
@@ -40,7 +47,7 @@ void CWin32ApiFrame::CreateToolBar() {
 		{ ID_WIN32_EXPLORER, 0, BTNS_BUTTON | BTNS_AUTOSIZE, L"Open in Explorer" },
 	};
 	CreateSimpleReBar(ATL_SIMPLE_REBAR_NOBORDER_STYLE);
-	m_ToolBar = ToolbarHelper::CreateAndInitToolBar(m_hWnd, buttons, _countof(buttons), 16);
+	m_ToolBar = Dpi::CreateToolBar(m_hWnd, buttons, _countof(buttons), 16);
 	AddSimpleReBarBand(m_ToolBar);
 	UIAddToolBar(m_ToolBar);
 }
@@ -63,8 +70,7 @@ bool CWin32ApiFrame::Open(Win32Api& api, std::unordered_set<std::string> imports
 	state.History = settings.Win32ApiHistory();
 	CDeclarationView::SetCodeFont(Fonts::Code());
 
-	m_Images = Images::Create({ IDI_FUNCTION, IDI_FUNCTION2, IDI_TYPE, IDI_UNION, IDI_ENUM, IDI_DATA, IDI_INTERFACE, IDI_FIELD,
-		IDI_SYSTEM, IDI_FOLDER_CLOSED, IDI_DIR_OPEN });
+	m_Images = Images::Create(s_Icons, DpiHelper::GetDpi(m_hWnd));
 	m_Browser = std::make_unique<CApiBrowser>(api, m_Images, std::move(state));
 	m_Browser->OnStatus = [this](std::wstring const& text) { ::SetWindowText(m_hWndStatusBar, text.c_str()); };
 	m_Browser->OnTitleChanged = [this] { UpdateTitle(); };
@@ -84,10 +90,11 @@ bool CWin32ApiFrame::Open(Win32Api& api, std::unordered_set<std::string> imports
 	if (wp.length == sizeof(wp) && wp.showCmd != SW_HIDE) {
 		if (wp.showCmd == SW_SHOWMINIMIZED)
 			wp.showCmd = SW_SHOWNORMAL;
-		SetWindowPlacement(&wp);
+		Dpi::RestorePlacement(m_hWnd, wp, settings.Win32ApiWindowDpi());
 	}
 	else {
-		SetWindowPos(nullptr, 0, 0, 1300, 800, SWP_NOMOVE | SWP_NOZORDER);
+		auto dpi = DpiHelper::GetDpi(m_hWnd);
+		SetWindowPos(nullptr, 0, 0, DpiHelper::Scale(1300, dpi), DpiHelper::Scale(800, dpi), SWP_NOMOVE | SWP_NOZORDER);
 		CenterWindow();
 		ShowWindow(SW_SHOW);
 	}
@@ -157,6 +164,7 @@ void CWin32ApiFrame::SaveState() {
 	WINDOWPLACEMENT wp{ sizeof(wp) };
 	GetWindowPlacement(&wp);
 	settings.Win32ApiWindowPlacement(wp);
+	settings.Win32ApiWindowDpi(DpiHelper::GetDpi(m_hWnd));
 	if (!m_Browser || !m_Browser->IsWindow())
 		return;
 	auto state = m_Browser->GetState();
@@ -221,13 +229,30 @@ void CWin32ApiFrame::ApplyFonts() {
 	LOGFONT logFont;
 	if (!Fonts::Application(logFont))
 		return;
+	// (at the window's DPI; the tabs make theirs of the font at 96 DPI)
+	auto scaled = Fonts::ToDpi(logFont, DpiHelper::GetDpi(m_hWnd));
 	CFont font;
-	font.CreateFontIndirect(&logFont);
+	font.CreateFontIndirect(&scaled);
 	m_Browser->SetUIFont(font, &logFont);
 	// (the one the controls had goes when they have this one)
 	if (!m_UIFont.IsNull())
 		m_UIFont.DeleteObject();
 	m_UIFont.Attach(font.Detach());
+}
+
+//
+// The window moved to a monitor of another DPI (or the DPI of its monitor changed): it takes the rectangle Windows
+// suggests; the icons of the browser are made again in the new size in the same image list (the controls have it), and the
+// application font for the new DPI. The rest follows by itself (WM_DPICHANGED_AFTERPARENT, which comes after this).
+//
+LRESULT CWin32ApiFrame::OnDpiChanged(UINT, WPARAM wParam, LPARAM lParam, BOOL&) {
+	Dpi::TakeSuggestedRect(m_hWnd, lParam);
+	if (Images::SetDpi(m_Images, s_Icons, LOWORD(wParam)))
+		Dpi::ImageListResized(m_Images);
+	if (m_Browser)
+		ApplyFonts();
+	UpdateLayout();
+	return 0;
 }
 
 bool CWin32ApiFrame::CanShowReferences() const {

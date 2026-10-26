@@ -34,7 +34,7 @@ public:
 	struct State {
 		bool ShowDocumentation{ true };
 		int DocumentationPercent{ 45 };	// of the height of the right side
-		int NavigatorWidth{ 0 };		// in pixels (0: the default)
+		int NavigatorWidth{ 0 };		// in pixels at 96 DPI (0: the default)
 		int NavigatorPage{ 0 };
 		int ShowMode{ 0 };				// CDeclarationView::Mode
 		bool SingleLine{ false };		// functions declared on a line each (CDeclarationView::SetSingleLine)
@@ -97,6 +97,7 @@ public:
 		MESSAGE_HANDLER(WM_SIZE, OnSize)
 		MESSAGE_HANDLER(WM_SETFOCUS, OnSetFocus)
 		MESSAGE_HANDLER(WM_DESTROY, OnDestroy)
+		MESSAGE_HANDLER(WM_DPICHANGED_AFTERPARENT, OnDpiChanged)
 		COMMAND_ID_HANDLER(ID_EDIT_COPY, OnCopy)
 		COMMAND_ID_HANDLER(ID_EDIT_SELECT_ALL, OnSelectAll)
 		COMMAND_ID_HANDLER(ID_EDIT_COPYNAME, OnCopyName)
@@ -146,6 +147,7 @@ private:
 	LRESULT OnSize(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnSetFocus(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnDestroy(UINT, WPARAM, LPARAM, BOOL&);
+	LRESULT OnDpiChanged(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnCopy(WORD, WORD, HWND, BOOL&);
 	LRESULT OnSelectAll(WORD, WORD, HWND, BOOL&);
 	LRESULT OnCopyName(WORD, WORD, HWND, BOOL&);
@@ -235,6 +237,7 @@ private:
 	Win32Api* m_Api;
 	HIMAGELIST m_Images;
 	State m_State;
+	UINT m_Dpi{ USER_DEFAULT_SCREEN_DPI };	// of the navigator's width
 	HACCEL m_Accelerators{ nullptr };
 	CCustomSplitterWindow m_Splitter;
 	CCustomHorSplitterWindow m_Right;

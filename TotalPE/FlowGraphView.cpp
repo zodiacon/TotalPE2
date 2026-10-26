@@ -4,6 +4,7 @@
 #include <PEFile.h>
 #include <unordered_set>
 #include <WTLHelper.h>
+#include <DpiHelper.h>
 
 using namespace NodeGraphCtrl;
 
@@ -205,7 +206,9 @@ void CFlowGraphView::ShowStart() {
 		return;
 
 	auto node = m_Graph.GetModel()->GetNode(m_Nodes[m_FlowGraph.EntryBlock]);
-	m_Graph.CenterOn(node->X, node->Y - node->Height * 0.5f + (rc.Height() * 0.5f - 40.0f) / zoom, zoom);
+	// (the zoom is of DIPs per graph unit: the pixels of the view in graph units at it)
+	auto pixels = zoom * DpiHelper::GetDpi(m_hWnd) / USER_DEFAULT_SCREEN_DPI;
+	m_Graph.CenterOn(node->X, node->Y - node->Height * 0.5f + (rc.Height() * 0.5f - DpiHelper::Scale(40, m_hWnd)) / pixels, zoom);
 }
 
 void CFlowGraphView::UpdateUI(bool) const {

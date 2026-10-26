@@ -4,6 +4,7 @@
 #include <string>
 #include <Win32Api.h>
 #include <ClipboardHelper.h>
+#include <DpiHelper.h>
 #include "Values.h"
 
 //
@@ -25,8 +26,13 @@ public:
 		CRect client;
 		::GetClientRect(owner, &client);
 		::MapWindowPoints(owner, nullptr, (POINT*)&client, 2);
-		auto width = std::min(640, client.Width() - 20);
-		SetWindowPos(HWND_TOP, client.left + (client.Width() - width) / 2, client.top + 40, width, Height(), SWP_SHOWWINDOW);
+		// (of the owner's DPI: of the monitor it is shown on)
+		auto dpi = DpiHelper::GetDpi(owner);
+		auto width = std::min(DpiHelper::Scale(640, dpi), client.Width() - DpiHelper::Scale(20, dpi));
+		SetWindowPos(HWND_TOP, client.left + (client.Width() - width) / 2, client.top + DpiHelper::Scale(40, dpi), width, Height(),
+			SWP_SHOWWINDOW);
+		// (as tall as its font is there: it may have come from a monitor of another DPI)
+		SetWindowPos(nullptr, 0, 0, width, Height(), SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 		m_Edit.SetWindowText(L"");
 		m_Edit.SetFocus();
 		Invalidate();
@@ -35,6 +41,8 @@ public:
 		m_Font = font;
 		if (m_Edit)
 			m_Edit.SetFont(font);
+		if (!m_OwnFont.IsNull())
+			m_OwnFont.DeleteObject();
 		UpdateLayout();
 	}
 	BOOL PreTranslateMessage(MSG* pMsg) {
@@ -59,11 +67,25 @@ public:
 		MESSAGE_HANDLER(WM_PAINT, OnPaint)
 		MESSAGE_HANDLER(WM_ERASEBKGND, OnEraseBkgnd)
 		MESSAGE_HANDLER(WM_ACTIVATE, OnActivate)
+		MESSAGE_HANDLER(WM_DPICHANGED, OnDpiChanged)
 		COMMAND_CODE_HANDLER(EN_CHANGE, OnChange)
 	END_MSG_MAP()
 
 private:
-	static constexpr int Gap = 6;
+	static constexpr int Gap = 6;	// (the sizes at 96 DPI)
+
+	int Scale(int value) const {
+		return DpiHelper::Scale(value, m_hWnd);
+	}
+	// the default GUI font at the window's DPI (until the host gives one): it is of 96 DPI, whatever the DPI
+	void CreateOwnFont() {
+		CFont font(DpiHelper::ScaleFont(AtlGetDefaultGuiFont(), DpiHelper::GetDpi(m_hWnd), USER_DEFAULT_SCREEN_DPI));
+		m_Font = font;
+		m_Edit.SetFont(font);
+		if (!m_OwnFont.IsNull())
+			m_OwnFont.DeleteObject();
+		m_OwnFont.Attach(font.Detach());
+	}
 
 	int LineHeight() const {
 		CClientDC dc(m_hWnd);
@@ -76,7 +98,8 @@ private:
 	// the title, the box, two lines of names
 	int Height() const {
 		auto line = LineHeight();
-		return Gap + line + Gap + line + 10 + Gap + 2 * line + Gap + 2;
+		auto gap = Scale(Gap);
+		return gap + line + gap + line + Scale(10) + gap + 2 * line + gap + Scale(2);
 	}
 	void UpdateLayout() {
 		if (!m_Edit)
@@ -84,15 +107,22 @@ private:
 		CRect rc;
 		GetClientRect(&rc);
 		auto line = LineHeight();
-		m_Edit.SetWindowPos(nullptr, Gap, Gap + line + Gap, rc.Width() - 2 * Gap, line + 10, SWP_NOZORDER | SWP_NOACTIVATE);
+		auto gap = Scale(Gap);
+		m_Edit.SetWindowPos(nullptr, gap, gap + line + gap, rc.Width() - 2 * gap, line + Scale(10), SWP_NOZORDER | SWP_NOACTIVATE);
 		Invalidate();
 	}
 
 	LRESULT OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
-		m_Font = AtlGetDefaultGuiFont();
 		m_Edit.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL, WS_EX_CLIENTEDGE);
-		m_Edit.SetFont(m_Font);
+		CreateOwnFont();
 		m_Edit.SetCueBannerText(L"5, 0x80070005, -1", TRUE);
+		return 0;
+	}
+	// (a popup: it is of the DPI of the monitor it is shown on; Show places it)
+	LRESULT OnDpiChanged(UINT, WPARAM, LPARAM, BOOL&) {
+		if (!m_OwnFont.IsNull())
+			CreateOwnFont();
+		UpdateLayout();
 		return 0;
 	}
 	LRESULT OnSize(UINT, WPARAM, LPARAM, BOOL&) {
@@ -110,10 +140,11 @@ private:
 		dc.SetBkMode(TRANSPARENT);
 		auto font = dc.SelectFont(m_Font);
 		auto line = LineHeight();
-		CRect title(Gap, Gap, rc.right - Gap, Gap + line);
+		auto gap = Scale(Gap);
+		CRect title(gap, gap, rc.right - gap, gap + line);
 		dc.SetTextColor(::GetSysColor(COLOR_WINDOWTEXT));
 		dc.DrawText(m_Title.c_str(), -1, &title, DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
-		CRect result(Gap, Gap + line + Gap + line + 10 + Gap, rc.right - Gap, rc.bottom - Gap);
+		CRect result(gap, gap + line + gap + line + Scale(10) + gap, rc.right - gap, rc.bottom - gap);
 		dc.SetTextColor(::GetSysColor(m_Decoded ? COLOR_WINDOWTEXT : COLOR_GRAYTEXT));
 		dc.DrawText(m_Result.c_str(), -1, &result, DT_WORDBREAK | DT_NOPREFIX | DT_END_ELLIPSIS);
 		dc.SelectFont(font);
@@ -148,4 +179,5 @@ private:
 	bool m_Decoded{ false };
 	CEdit m_Edit;
 	HFONT m_Font{ nullptr };
+	CFont m_OwnFont;	// until the host gives one
 };

@@ -14,6 +14,9 @@ struct Helpers abstract final {
 	static ULONG ReadVirtual(PVOID address, ULONG size, PVOID buffer);
 	static std::wstring ValueToString(DiaSymbol const& value, PVOID address);
 	static std::wstring FormatSimpleValue(PVOID value, ULONG size, SimpleType type);
+	// a filter box in a band of a view's rebar (width, height: at 96 DPI) gets the message font at its DPI, and that font
+	// and the size of its band again when the DPI changes
+	static void FilterFollowsDpi(HWND hFilter, int width, int height = 20);
 
 	template<typename T> requires std::is_trivially_constructible_v<T>
 	static T ReadValue(PVOID address) {

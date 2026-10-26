@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ViewBase.h"
+#include <CustomSplitterWindow.h>
 #include "resource.h"
 #include "ScintillaView.h"
 #include <QuickFindEdit.h>
@@ -92,7 +93,7 @@ private:
 
 	PEFile const& m_PE;
 	ClrMetadata m_Md;
-	CSplitterWindow m_Splitter;
+	CCustomSplitterWindow m_Splitter;
 	CTreeViewCtrl m_Tree;
 	CScintillaView* m_Code{ nullptr };
 	CQuickFindEdit m_Filter;

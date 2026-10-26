@@ -4,6 +4,8 @@
 #include <ClrDecompiler.h>
 #include <PEFile.h>
 #include <ToolbarHelper.h>
+#include "DpiSupport.h"
+#include "Helpers.h"
 
 namespace {
 	// a type's name without the number of generic parameters ("List`1" -> "List")
@@ -87,14 +89,14 @@ LRESULT CClrTypesView::OnCreate(UINT, WPARAM, LPARAM, BOOL& handled) {
 		{ ID_CLR_IL, 0, BTNS_CHECKGROUP | BTNS_SHOWTEXT | BTNS_AUTOSIZE, L"IL" },
 	};
 	CreateSimpleReBar(ATL_SIMPLE_REBAR_NOBORDER_STYLE);
-	m_tb = ToolbarHelper::CreateAndInitToolBar(m_hWnd, buttons, _countof(buttons), 16);
+	m_tb = Dpi::CreateToolBar(m_hWnd, buttons, _countof(buttons), 16);
 	AddSimpleReBarBand(m_tb);
 	UIAddToolBar(m_tb);
-	CRect rc(0, 0, 300, 20);
+	CRect rc(0, 0, DpiHelper::Scale(300, m_hWnd), DpiHelper::Scale(20, m_hWnd));
 	m_Filter.Create(m_hWnd, rc, nullptr, WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL);
-	m_Filter.SetFont(AtlGetDefaultGuiFont());
 	m_Filter.SetWatermark(L"Filter types and members (Esc to clear)");
-	AddSimpleReBarBand(m_Filter, nullptr, FALSE, 300);
+	AddSimpleReBarBand(m_Filter, nullptr, FALSE, DpiHelper::Scale(300, m_hWnd));
+	Helpers::FilterFollowsDpi(m_Filter, 300);
 	// the band of the toolbar is as wide as its buttons, so the filter comes after them
 	CRect rcLast;
 	m_tb.GetItemRect(m_tb.GetButtonCount() - 1, &rcLast);
@@ -103,7 +105,7 @@ LRESULT CClrTypesView::OnCreate(UINT, WPARAM, LPARAM, BOOL& handled) {
 	band.fMask = RBBIM_CHILDSIZE | RBBIM_SIZE | RBBIM_IDEALSIZE;
 	rebar.GetBandInfo(0, &band);
 	band.cxMinChild = band.cxIdeal = rcLast.right;
-	band.cx = rcLast.right + 16;
+	band.cx = rcLast.right + DpiHelper::Scale(16, m_hWnd);
 	rebar.SetBandInfo(0, &band);
 	UISetCheck(ID_CLR_CSHARP, m_CSharp);
 	UISetCheck(ID_CLR_IL, !m_CSharp);

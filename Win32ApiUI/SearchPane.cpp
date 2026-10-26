@@ -43,7 +43,7 @@ namespace {
 		return guid;
 	}
 
-	constexpr int KindsWidth = 140, Gap = 4;
+	constexpr int KindsWidth = 140, KindsHeight = 300, Gap = 4;	// (at 96 DPI)
 }
 
 CSearchPane::CSearchPane(Win32Api& api) : m_Api(&api) {
@@ -157,14 +157,13 @@ bool CSearchPane::Matches(Query const& query, size_t entry) const {
 }
 
 LRESULT CSearchPane::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
-	auto font = AtlGetDefaultGuiFont();
 	m_FilterEdit.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL, WS_EX_CLIENTEDGE);
-	m_FilterEdit.SetFont(font);
 	UpdateWatermark();
 
-	CRect rc(0, 0, KindsWidth, 300);
+	auto dpi = DpiHelper::GetDpi(m_hWnd);
+	CRect rc(0, 0, DpiHelper::Scale(KindsWidth, dpi), DpiHelper::Scale(KindsHeight, dpi));
 	m_Kinds.Create(m_hWnd, rc, nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | CBS_DROPDOWNLIST);
-	m_Kinds.SetFont(font);
+	CreateOwnFont();
 	for (auto const& choice : s_KindChoices)
 		m_Kinds.AddString(choice.Text);
 	m_Kinds.SetCurSel(0);
@@ -192,7 +191,28 @@ void CSearchPane::SetUIFont(HFONT font) {
 	m_FilterEdit.SetFont(font);
 	m_Kinds.SetFont(font);
 	m_List.SetFont(font);
+	if (!m_OwnFont.IsNull())
+		m_OwnFont.DeleteObject();
 	UpdateLayout();	// (the list of kinds is as high as its font)
+}
+
+// the default GUI font at the pane's DPI, of the filter and the kinds (until the host gives a font): it is of 96 DPI,
+// whatever the DPI
+void CSearchPane::CreateOwnFont() {
+	CFont font(DpiHelper::ScaleFont(AtlGetDefaultGuiFont(), DpiHelper::GetDpi(m_hWnd), USER_DEFAULT_SCREEN_DPI));
+	m_FilterEdit.SetFont(font);
+	m_Kinds.SetFont(font);
+	if (!m_OwnFont.IsNull())
+		m_OwnFont.DeleteObject();
+	m_OwnFont.Attach(font.Detach());
+}
+
+LRESULT CSearchPane::OnDpiChanged(UINT, WPARAM, LPARAM, BOOL& handled) {
+	if (!m_OwnFont.IsNull())
+		CreateOwnFont();
+	UpdateLayout();
+	handled = FALSE;
+	return 0;
 }
 
 void CSearchPane::SetImageList(HIMAGELIST images) {
@@ -205,9 +225,11 @@ void CSearchPane::UpdateLayout() {
 	CRect combo;
 	m_Kinds.GetWindowRect(&combo);
 	auto height = combo.Height();
-	m_FilterEdit.SetWindowPos(nullptr, Gap, Gap, std::max(0, rc.Width() - KindsWidth - 3 * Gap), height, SWP_NOZORDER | SWP_NOACTIVATE);
-	m_Kinds.SetWindowPos(nullptr, rc.Width() - KindsWidth - Gap, Gap, KindsWidth, 300, SWP_NOZORDER | SWP_NOACTIVATE);
-	auto top = height + 2 * Gap;
+	auto dpi = DpiHelper::GetDpi(m_hWnd);
+	auto gap = DpiHelper::Scale(Gap, dpi), kindsWidth = DpiHelper::Scale(KindsWidth, dpi);
+	m_FilterEdit.SetWindowPos(nullptr, gap, gap, std::max(0, rc.Width() - kindsWidth - 3 * gap), height, SWP_NOZORDER | SWP_NOACTIVATE);
+	m_Kinds.SetWindowPos(nullptr, rc.Width() - kindsWidth - gap, gap, kindsWidth, DpiHelper::Scale(KindsHeight, dpi), SWP_NOZORDER | SWP_NOACTIVATE);
+	auto top = height + 2 * gap;
 	m_List.SetWindowPos(nullptr, 0, top, rc.Width(), std::max(0, rc.Height() - top), SWP_NOZORDER | SWP_NOACTIVATE);
 }
 

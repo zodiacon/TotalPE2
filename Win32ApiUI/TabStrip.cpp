@@ -1,8 +1,10 @@
 #include "pch.h"
 #include "TabStrip.h"
 #include <WTLHelper.h>
+#include <DpiHelper.h>
 
 namespace {
+	// (at 96 DPI)
 	constexpr int PadX = 10;
 	constexpr int ImageSize = 16, ImageGap = 5;
 	constexpr int CloseSize = 16, CloseGap = 6;
@@ -33,16 +35,25 @@ void CTabStrip::SetListButton(bool show) {
 	Layout();
 }
 
+int CTabStrip::Scale(int value) const {
+	return DpiHelper::Scale(value, m_hWnd);
+}
+
+int CTabStrip::ImageWidth() const {
+	int cx = 0, cy;
+	return m_Images && ::ImageList_GetIconSize(m_Images, &cx, &cy) ? cx : 0;
+}
+
 int CTabStrip::TabsWidth() const {
 	CRect rc;
 	GetClientRect(&rc);
-	return std::max(0, rc.Width() - (m_ListButton ? ListWidth : 0));
+	return std::max(0, rc.Width() - (m_ListButton ? Scale(ListWidth) : 0));
 }
 
 CRect CTabStrip::ListButtonRect() const {
 	CRect rc;
 	GetClientRect(&rc);
-	return m_ListButton ? CRect(rc.right - ListWidth, rc.top, rc.right, rc.bottom) : CRect();
+	return m_ListButton ? CRect(rc.right - Scale(ListWidth), rc.top, rc.right, rc.bottom) : CRect();
 }
 
 // a menu of the tabs: the one chosen selected
@@ -147,7 +158,14 @@ void CTabStrip::SetImage(int index, int image) {
 }
 
 int CTabStrip::GetIdealHeight() const {
-	return std::max(m_FontHeight, ImageSize) + 12;
+	return std::max(m_FontHeight, m_Images ? ImageWidth() : Scale(ImageSize)) + Scale(12);
+}
+
+void CTabStrip::UpdateDpi() {
+	if (!m_hWnd)
+		return;
+	CreateFonts();
+	Layout();
 }
 
 void CTabStrip::UpdateColors() {
@@ -166,15 +184,17 @@ void CTabStrip::SetFont(LOGFONT const* font) {
 	}
 }
 
+// the fonts at the strip's DPI
 void CTabStrip::CreateFonts() {
+	auto dpi = DpiHelper::GetDpi(m_hWnd);
 	LOGFONT font;
-	if (m_CustomFont)
+	if (m_CustomFont) {
 		font = *m_CustomFont;
-	else {
-		NONCLIENTMETRICS ncm{ sizeof(ncm) };
-		::SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
-		font = ncm.lfMessageFont;
+		font.lfHeight = DpiHelper::Scale(font.lfHeight, dpi, USER_DEFAULT_SCREEN_DPI);
+		font.lfWidth = DpiHelper::Scale(font.lfWidth, dpi, USER_DEFAULT_SCREEN_DPI);
 	}
+	else
+		font = DpiHelper::GetNonClientMetrics(dpi).lfMessageFont;
 	if (!m_Font.IsNull())
 		m_Font.DeleteObject();
 	if (!m_ItalicFont.IsNull())
@@ -188,7 +208,7 @@ void CTabStrip::CreateFonts() {
 	TEXTMETRIC tm;
 	dc.GetTextMetrics(&tm);
 	dc.SelectFont(old);
-	m_FontHeight = tm.tmHeight + 2;
+	m_FontHeight = tm.tmHeight + Scale(2);
 }
 
 // The tabs' widths: as their texts need (within limits), narrower if they do not fit (to the minimum: then they scroll)
@@ -197,18 +217,19 @@ void CTabStrip::Layout() {
 		return;
 	CClientDC dc(m_hWnd);
 	CRect rc(0, 0, TabsWidth(), 0);
-	auto extra = 2 * PadX + (m_Images ? ImageSize + ImageGap : 0) + (m_Closable ? CloseSize + CloseGap : 0);
+	auto extra = Scale(2 * PadX) + (m_Images ? ImageWidth() + Scale(ImageGap) : 0) + (m_Closable ? Scale(CloseSize + CloseGap) : 0);
+	auto minWidth = Scale(MinWidth), maxWidth = Scale(MaxWidth);
 	int total = 0;
 	for (auto& tab : m_Tabs) {
 		auto font = dc.SelectFont(tab.Italic ? m_ItalicFont : m_Font);
 		CSize size;
 		dc.GetTextExtent(tab.Text.c_str(), (int)tab.Text.size(), &size);
 		dc.SelectFont(font);
-		tab.Width = std::clamp((int)size.cx + extra, MinWidth, MaxWidth);
+		tab.Width = std::clamp((int)size.cx + extra, minWidth, maxWidth);
 		total += tab.Width;
 	}
 	if (total > rc.Width() && !m_Tabs.empty()) {
-		auto each = std::max(MinWidth, rc.Width() / (int)m_Tabs.size());
+		auto each = std::max(minWidth, rc.Width() / (int)m_Tabs.size());
 		total = 0;
 		for (auto& tab : m_Tabs) {
 			tab.Width = std::min(tab.Width, each);
@@ -247,8 +268,9 @@ CRect CTabStrip::TabRect(int index) const {
 
 CRect CTabStrip::CloseRect(int index) const {
 	auto rc = TabRect(index);
-	auto top = rc.top + (rc.Height() - CloseSize) / 2;
-	return CRect(rc.right - PadX + 4 - CloseSize, top, rc.right - PadX + 4, top + CloseSize);
+	int size = Scale(CloseSize), right = rc.right - Scale(PadX - 4);
+	auto top = rc.top + (rc.Height() - size) / 2;
+	return CRect(right - size, top, right, top + size);
 }
 
 bool CTabStrip::HasCloseButton(int index) const {
@@ -282,6 +304,12 @@ LRESULT CTabStrip::OnSettingChange(UINT, WPARAM, LPARAM, BOOL& handled) {
 	return 0;
 }
 
+LRESULT CTabStrip::OnDpiChanged(UINT, WPARAM, LPARAM, BOOL& handled) {
+	UpdateDpi();
+	handled = FALSE;
+	return 0;
+}
+
 LRESULT CTabStrip::OnSize(UINT, WPARAM, LPARAM, BOOL&) {
 	Layout();
 	EnsureVisible(m_Selected);
@@ -296,6 +324,10 @@ LRESULT CTabStrip::OnPaint(UINT, WPARAM, LPARAM, BOOL&) {
 	auto colors = CurrentColors();
 	dc.FillSolidRect(&client, colors.Strip);
 	dc.SetBkMode(TRANSPARENT);
+	auto dpi = DpiHelper::GetDpi(m_hWnd);
+	auto scale = [&](int value) { return DpiHelper::Scale(value, dpi); };
+	auto image = ImageWidth();
+	auto line = std::max(1, scale(1));	// (the width of the glyphs' strokes)
 
 	CPen border;
 	border.CreatePen(PS_SOLID, 1, colors.Border);
@@ -319,7 +351,7 @@ LRESULT CTabStrip::OnPaint(UINT, WPARAM, LPARAM, BOOL&) {
 		body.right--;
 		dc.FillSolidRect(&body, back);
 		if (selected) {
-			CRect accent(body.left, body.top, body.right, body.top + AccentHeight);
+			CRect accent(body.left, body.top, body.right, body.top + scale(AccentHeight));
 			dc.FillSolidRect(&accent, colors.Accent);
 		}
 		else {
@@ -329,13 +361,13 @@ LRESULT CTabStrip::OnPaint(UINT, WPARAM, LPARAM, BOOL&) {
 		dc.MoveTo(body.right, body.top);
 		dc.LineTo(body.right, body.bottom);
 
-		auto x = rc.left + PadX;
+		auto x = rc.left + scale(PadX);
 		if (m_Images) {
 			if (tab.Image >= 0)
-				::ImageList_Draw(m_Images, tab.Image, dc, x, rc.top + (rc.Height() - ImageSize) / 2, ILD_TRANSPARENT);
-			x += ImageSize + ImageGap;
+				::ImageList_Draw(m_Images, tab.Image, dc, x, rc.top + (rc.Height() - image) / 2, ILD_TRANSPARENT);
+			x += image + scale(ImageGap);
 		}
-		CRect text(x, rc.top, rc.right - PadX - (m_Closable ? CloseSize + CloseGap - 4 : 0), rc.bottom);
+		CRect text(x, rc.top, rc.right - scale(PadX) - (m_Closable ? scale(CloseSize + CloseGap - 4) : 0), rc.bottom);
 		auto font = dc.SelectFont(tab.Italic ? m_ItalicFont : m_Font);
 		dc.SetTextColor(selected ? colors.SelectedText : colors.Text);
 		dc.DrawText(tab.Text.c_str(), (int)tab.Text.size(), &text, DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX);
@@ -348,11 +380,14 @@ LRESULT CTabStrip::OnPaint(UINT, WPARAM, LPARAM, BOOL&) {
 			CPen pen;
 			pen.CreatePen(PS_SOLID, 1, selected ? colors.SelectedText : colors.Text);
 			auto old = dc.SelectPen(pen);
-			close.DeflateRect(4, 4);
-			dc.MoveTo(close.left, close.top);
-			dc.LineTo(close.right, close.bottom);
-			dc.MoveTo(close.right - 1, close.top);
-			dc.LineTo(close.left - 1, close.bottom);
+			close.DeflateRect(scale(4), scale(4));
+			// (each stroke as wide as a pixel at 96 DPI: lines side by side)
+			for (int i = 0; i < line; i++) {
+				dc.MoveTo(close.left + i, close.top);
+				dc.LineTo(close.right + i, close.bottom);
+				dc.MoveTo(close.right - 1 + i, close.top);
+				dc.LineTo(close.left - 1 + i, close.bottom);
+			}
 			dc.SelectPen(old);
 		}
 	}
@@ -364,10 +399,10 @@ LRESULT CTabStrip::OnPaint(UINT, WPARAM, LPARAM, BOOL&) {
 		pen.CreatePen(PS_SOLID, 1, colors.Text);
 		auto old = dc.SelectPen(pen);
 		auto cx = button.left + button.Width() / 2, cy = button.top + button.Height() / 2;
-		for (int row = 0; row < 2; row++) {
-			dc.MoveTo(cx - 4, cy - 2 + row);
-			dc.LineTo(cx, cy + 2 + row);
-			dc.LineTo(cx + 5, cy - 3 + row);
+		for (int row = 0; row < 2 * line; row++) {
+			dc.MoveTo(cx - scale(4), cy - scale(2) + row);
+			dc.LineTo(cx, cy + scale(2) + row);
+			dc.LineTo(cx + scale(5), cy - scale(3) + row);
 		}
 		dc.SelectPen(old);
 	}
@@ -454,7 +489,7 @@ LRESULT CTabStrip::OnMouseMove(UINT, WPARAM wp, LPARAM lp, BOOL&) {
 	// a tab dragged: where the mouse is (among the others)
 	if (m_Dragged >= 0 && (wp & MK_LBUTTON)) {
 		CPoint pt(GET_X_LPARAM(lp), GET_Y_LPARAM(lp));
-		if (!m_Dragging && std::abs(pt.x - m_DragStart.x) >= ::GetSystemMetrics(SM_CXDRAG))
+		if (!m_Dragging && std::abs(pt.x - m_DragStart.x) >= DpiHelper::GetSystemMetrics(SM_CXDRAG, m_hWnd))
 			m_Dragging = true;
 		if (!m_Dragging)
 			return 0;
@@ -503,7 +538,7 @@ LRESULT CTabStrip::OnMouseWheel(UINT, WPARAM wp, LPARAM, BOOL&) {
 	CRect rc;
 	GetClientRect(&rc);
 	auto delta = GET_WHEEL_DELTA_WPARAM(wp);
-	m_Scroll = std::clamp(m_Scroll - delta * 60 / WHEEL_DELTA, 0, std::max(0, m_TotalWidth - TabsWidth()));
+	m_Scroll = std::clamp(m_Scroll - delta * Scale(60) / WHEEL_DELTA, 0, std::max(0, m_TotalWidth - TabsWidth()));
 	Invalidate();
 	return 0;
 }

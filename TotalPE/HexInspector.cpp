@@ -1,5 +1,7 @@
 #include "pch.h"
 #include "HexInspector.h"
+#include <DpiHelper.h>
+#include <ListViewhelper.h>
 
 namespace {
 	// reads sizeof(T) bytes at the start of the data in the requested byte order
@@ -83,14 +85,17 @@ LRESULT CHexInspector::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 
 	m_Values.Create(m_Split, rcDefault, nullptr, style | LVS_NOSORTHEADER, 0, IdValues);
 	m_Values.SetExtendedListViewStyle(LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP);
-	m_Values.InsertColumn(0, L"Type", LVCFMT_LEFT, 110);
-	m_Values.InsertColumn(1, L"Value", LVCFMT_LEFT, 200);
+	auto scale = [&](int n) { return DpiHelper::Scale(n, m_hWnd); };
+	m_Values.InsertColumn(0, L"Type", LVCFMT_LEFT, scale(110));
+	m_Values.InsertColumn(1, L"Value", LVCFMT_LEFT, scale(200));
+	ListViewHelper::EnableColumnDpiScaling(m_Values);
 
 	m_RegionList.Create(m_Split, rcDefault, nullptr, style, 0, IdRegions);
 	m_RegionList.SetExtendedListViewStyle(LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP);
-	m_RegionList.InsertColumn(0, L"Region", LVCFMT_LEFT, 150);
-	m_RegionList.InsertColumn(1, L"Offset", LVCFMT_RIGHT, 80);
-	m_RegionList.InsertColumn(2, L"Size", LVCFMT_RIGHT, 80);
+	m_RegionList.InsertColumn(0, L"Region", LVCFMT_LEFT, scale(150));
+	m_RegionList.InsertColumn(1, L"Offset", LVCFMT_RIGHT, scale(80));
+	m_RegionList.InsertColumn(2, L"Size", LVCFMT_RIGHT, scale(80));
+	ListViewHelper::EnableColumnDpiScaling(m_RegionList);
 
 	m_Split.SetSplitterPanes(m_Values, m_RegionList);
 	m_Split.SetSplitterPosPct(60);

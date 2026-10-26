@@ -4,6 +4,8 @@
 #include <ClipboardHelper.h>
 #include <ListViewHelper.h>
 #include <ToolbarHelper.h>
+#include "DpiSupport.h"
+#include "Helpers.h"
 
 CCompareView::CCompareView(IMainFrame* frame, ISearchHost* host, PEDiff diff, std::wstring otherPath)
 	: CViewBase(frame), m_Host(host), m_Diff(std::move(diff)), m_OtherPath(std::move(otherPath)) {
@@ -133,15 +135,15 @@ LRESULT CCompareView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 		{ ID_COMPARE_SHOWSAME, 0, BTNS_CHECK | BTNS_SHOWTEXT, L"Show Unchanged" },
 	};
 	CreateSimpleReBar(ATL_SIMPLE_REBAR_NOBORDER_STYLE);
-	m_tb = ToolbarHelper::CreateAndInitToolBar(m_hWnd, buttons, _countof(buttons), 16);
+	m_tb = Dpi::CreateToolBar(m_hWnd, buttons, _countof(buttons), 16);
 	AddSimpleReBarBand(m_tb);
 	UIAddToolBar(m_tb);
 
-	CRect rc(0, 0, 250, 20);
+	CRect rc(0, 0, DpiHelper::Scale(250, m_hWnd), DpiHelper::Scale(20, m_hWnd));
 	m_Filter.Create(m_hWnd, rc, nullptr, WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL);
-	m_Filter.SetFont(AtlGetDefaultGuiFont());
 	m_Filter.SetWatermark(L"Filter (Esc to clear)");
-	AddSimpleReBarBand(m_Filter, nullptr, FALSE, 250);
+	AddSimpleReBarBand(m_Filter, nullptr, FALSE, DpiHelper::Scale(250, m_hWnd));
+	Helpers::FilterFollowsDpi(m_Filter, 250);
 
 	// the band of the toolbar is as wide as its button, so the filter comes after it
 	CRect rcLast;
@@ -151,7 +153,7 @@ LRESULT CCompareView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	band.fMask = RBBIM_CHILDSIZE | RBBIM_SIZE | RBBIM_IDEALSIZE;
 	rebar.GetBandInfo(0, &band);
 	band.cxMinChild = band.cxIdeal = rcLast.right;
-	band.cx = rcLast.right + 16;
+	band.cx = rcLast.right + DpiHelper::Scale(16, m_hWnd);
 	rebar.SetBandInfo(0, &band);
 
 	m_hWndClient = m_List.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS |

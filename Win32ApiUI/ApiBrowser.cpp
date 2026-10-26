@@ -3,6 +3,7 @@
 #include "Images.h"
 #include <ClipboardHelper.h>
 #include <WTLHelper.h>
+#include <DpiHelper.h>
 
 namespace {
 	// (the names of the metadata are ASCII)
@@ -16,7 +17,7 @@ namespace {
 		return result;
 	}
 
-	constexpr int DefaultNavigatorWidth = 440;
+	constexpr int DefaultNavigatorWidth = 440;	// (at 96 DPI)
 
 	bool IsEdit(HWND hWnd) {
 		WCHAR name[32]{};
@@ -135,10 +136,23 @@ LRESULT CApiBrowser::OnSize(UINT, WPARAM, LPARAM lp, BOOL&) {
 	static constexpr int Laid = -1;
 	if (m_State.NavigatorWidth != Laid && cx > 0 && cy > 0) {
 		auto width = m_State.NavigatorWidth;
-		m_Splitter.SetSplitterPos(width > 100 ? width : DefaultNavigatorWidth);
+		m_Dpi = DpiHelper::GetDpi(m_hWnd);
+		m_Splitter.SetSplitterPos(DpiHelper::Scale(width > 100 ? width : DefaultNavigatorWidth, m_Dpi));
 		m_Right.SetSplitterPosPct(100 - std::clamp(m_State.DocumentationPercent, 10, 90));
 		m_State.NavigatorWidth = Laid;
 	}
+	return 0;
+}
+
+// the navigator keeps its width (the splitter is not proportional), at the new DPI
+LRESULT CApiBrowser::OnDpiChanged(UINT, WPARAM, LPARAM, BOOL& handled) {
+	handled = FALSE;
+	auto dpi = DpiHelper::GetDpi(m_hWnd);
+	if (dpi == m_Dpi || !m_Splitter)
+		return 0;
+	if (m_State.NavigatorWidth < 0)		// (laid out already)
+		m_Splitter.SetSplitterPos(DpiHelper::Scale(m_Splitter.GetSplitterPos(), dpi, m_Dpi));
+	m_Dpi = dpi;
 	return 0;
 }
 
@@ -162,8 +176,8 @@ LRESULT CApiBrowser::OnDestroy(UINT, WPARAM, LPARAM, BOOL& handled) {
 
 CApiBrowser::State CApiBrowser::GetState() const {
 	auto state = m_State;
-	if (m_Splitter) {
-		state.NavigatorWidth = m_Splitter.GetSplitterPos();
+	if (m_Splitter && m_State.NavigatorWidth < 0) {
+		state.NavigatorWidth = DpiHelper::Scale(m_Splitter.GetSplitterPos(), USER_DEFAULT_SCREEN_DPI, m_Dpi);
 		if (state.ShowDocumentation)
 			state.DocumentationPercent = 100 - m_Right.GetSplitterPosPct();
 	}

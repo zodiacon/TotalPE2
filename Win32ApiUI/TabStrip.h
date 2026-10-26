@@ -44,8 +44,10 @@ public:
 	// the height it needs
 	int GetIdealHeight() const;
 	void UpdateColors();
-	// the font of the texts (an italic one is made of it); null: the system's (of messages)
+	// the font of the texts (an italic one is made of it), at 96 DPI (it is made for the strip's); null: the system's (of messages)
 	void SetFont(LOGFONT const* font);
+	// the fonts and the sizes for the strip's DPI (it changed); the strip does it on WM_DPICHANGED_AFTERPARENT too
+	void UpdateDpi();
 
 	BEGIN_MSG_MAP(CTabStrip)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
@@ -61,6 +63,7 @@ public:
 		MESSAGE_HANDLER(WM_MOUSELEAVE, OnMouseLeave)
 		MESSAGE_HANDLER(WM_MOUSEWHEEL, OnMouseWheel)
 		MESSAGE_HANDLER(WM_SETTINGCHANGE, OnSettingChange)
+		MESSAGE_HANDLER(WM_DPICHANGED_AFTERPARENT, OnDpiChanged)
 	END_MSG_MAP()
 
 private:
@@ -87,7 +90,12 @@ private:
 	LRESULT OnMouseLeave(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnMouseWheel(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnSettingChange(UINT, WPARAM, LPARAM, BOOL&);
+	LRESULT OnDpiChanged(UINT, WPARAM, LPARAM, BOOL&);
 
+	// a size at 96 DPI at the strip's
+	int Scale(int value) const;
+	// of the images (0: none)
+	int ImageWidth() const;
 	void CreateFonts();
 	void Layout();
 	void EnsureVisible(int index);

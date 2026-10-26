@@ -6,7 +6,9 @@ class AppSettings : public Settings {
 public:
 	BEGIN_SETTINGS(AppSettings)
 	SETTING(MainWindowPlacement, WINDOWPLACEMENT{}, SettingType::Binary);
+	SETTING(MainWindowDpi, 0, SettingType::Int32);		// of its sizes (0: saved when TotalPE was not DPI aware)
 	SETTING(Win32ApiWindowPlacement, WINDOWPLACEMENT{}, SettingType::Binary);
+	SETTING(Win32ApiWindowDpi, 0, SettingType::Int32);
 	SETTING(CodeFont, LOGFONT{}, SettingType::Binary);			// of the views of code (Fonts.h)
 	SETTING(ApplicationFont, LOGFONT{}, SettingType::Binary);	// of everything else
 	SETTING(AlwaysOnTop, 0, SettingType::Bool);
@@ -36,7 +38,9 @@ public:
 
 	DEF_SETTING(AlwaysOnTop, bool)
 	DEF_SETTING(MainWindowPlacement, WINDOWPLACEMENT)
+	DEF_SETTING(MainWindowDpi, int)
 	DEF_SETTING(Win32ApiWindowPlacement, WINDOWPLACEMENT)
+	DEF_SETTING(Win32ApiWindowDpi, int)
 	DEF_SETTING(CodeFont, LOGFONT)
 DEF_SETTING(ApplicationFont, LOGFONT)
 	DEF_SETTING(TreeIconSize, int)

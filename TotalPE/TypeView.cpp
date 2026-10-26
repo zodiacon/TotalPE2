@@ -1,6 +1,8 @@
 #include "pch.h"
 #include "TypeView.h"
 #include <ClipboardHelper.h>
+#include <DpiHelper.h>
+#include <ListViewhelper.h>
 #include "resource.h"
 #include "TypeExporter.h"
 
@@ -213,11 +215,12 @@ LRESULT CTypeView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	m_TL.GetListCtrl().ModifyStyle(0, LVS_SHAREIMAGELISTS);
 	m_TL.SetImageList(Frame()->GetImageList(), LVSIL_SMALL);
 
-	m_TL.InsertColumn(Column::Member, L"Member", 280);
-	m_TL.InsertColumn(Column::Offset, L"Offset", 80, LVCFMT_RIGHT);
-	m_TL.InsertColumn(Column::Size, L"Size", 70, LVCFMT_RIGHT);
-	m_TL.InsertColumn(Column::Type, L"Type", 250);
-	m_TL.InsertColumn(Column::Details, L"Details", 200);
+	m_TL.InsertColumn(Column::Member, L"Member", DpiHelper::Scale(280, m_TL));
+	m_TL.InsertColumn(Column::Offset, L"Offset", DpiHelper::Scale(80, m_TL), LVCFMT_RIGHT);
+	m_TL.InsertColumn(Column::Size, L"Size", DpiHelper::Scale(70, m_TL), LVCFMT_RIGHT);
+	m_TL.InsertColumn(Column::Type, L"Type", DpiHelper::Scale(250, m_TL));
+	m_TL.InsertColumn(Column::Details, L"Details", DpiHelper::Scale(200, m_TL));
+	ListViewHelper::EnableColumnDpiScaling(m_TL.GetListCtrl());
 
 	m_TL.BeginUpdate();
 	auto hRoot = m_TL.InsertItem(TLV_ROOT, TLV_LAST, m_Type.Name().c_str(), Frame()->GetIconIndex(TypeIcon(m_Type)));

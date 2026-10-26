@@ -18,6 +18,7 @@ public:
 
 	BEGIN_MSG_MAP(CFontView)
 		MESSAGE_HANDLER(WM_ERASEBKGND, OnEraseBkgnd)
+		MESSAGE_HANDLER(WM_DPICHANGED_AFTERPARENT, OnDpiChanged)
 		CHAIN_MSG_MAP(CScrollImpl<CFontView>)
 		CHAIN_MSG_MAP(CViewBase<CFontView>)
 	ALT_MSG_MAP(1)
@@ -26,6 +27,7 @@ public:
 
 private:
 	LRESULT OnEraseBkgnd(UINT, WPARAM, LPARAM, BOOL&) { return 1; }
+	LRESULT OnDpiChanged(UINT, WPARAM, LPARAM, BOOL&);
 
 	// draws the view (or only measures it, without a DC to draw on); returns its size
 	CSize Render(CDCHandle dc, bool draw);

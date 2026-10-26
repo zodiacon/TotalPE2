@@ -7,6 +7,8 @@
 #include <ClipboardHelper.h>
 #include <ListViewHelper.h>
 #include <ToolbarHelper.h>
+#include "DpiSupport.h"
+#include "Helpers.h"
 #include <ClrIL.h>
 #include "FlowGraph.h"
 
@@ -294,18 +296,18 @@ LRESULT CStringsView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 		{ ID_STRINGS_USEDONLY, 0, BTNS_CHECK | BTNS_SHOWTEXT, L"Used Only" },
 	};
 	CreateSimpleReBar(ATL_SIMPLE_REBAR_NOBORDER_STYLE);
-	m_tb = ToolbarHelper::CreateAndInitToolBar(m_hWnd, buttons, _countof(buttons), 16);
+	m_tb = Dpi::CreateToolBar(m_hWnd, buttons, _countof(buttons), 16);
 	AddSimpleReBarBand(m_tb);
 	UIAddToolBar(m_tb);
 	UISetCheck(ID_STRINGS_ASCII, m_Options.Ascii);
 	UISetCheck(ID_STRINGS_UTF16, m_Options.Utf16);
 
 	// the rebar passes the filter's notifications on to this window
-	CRect rc(0, 0, 250, 20);
+	CRect rc(0, 0, DpiHelper::Scale(250, m_hWnd), DpiHelper::Scale(20, m_hWnd));
 	m_Filter.Create(m_hWnd, rc, nullptr, WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL);
-	m_Filter.SetFont(AtlGetDefaultGuiFont());
 	m_Filter.SetWatermark(L"Filter (Esc to clear)");
-	AddSimpleReBarBand(m_Filter, nullptr, FALSE, 250);
+	AddSimpleReBarBand(m_Filter, nullptr, FALSE, DpiHelper::Scale(250, m_hWnd));
+	Helpers::FilterFollowsDpi(m_Filter, 250);
 
 	// the band of the toolbar is as wide as all of its buttons (the dropdown included), so the filter comes after them
 	CRect rcLast;
@@ -316,7 +318,7 @@ LRESULT CStringsView::OnCreate(UINT, WPARAM, LPARAM, BOOL&) {
 	rebar.GetBandInfo(0, &band);
 	band.fMask = RBBIM_CHILDSIZE | RBBIM_SIZE | RBBIM_IDEALSIZE;
 	band.cxMinChild = band.cxIdeal = rcLast.right;
-	band.cx = rcLast.right + 16;	// the gripper and the band's borders
+	band.cx = rcLast.right + DpiHelper::Scale(16, m_hWnd);	// the gripper and the band's borders
 	rebar.SetBandInfo(0, &band);
 
 	m_hWndClient = m_List.Create(m_hWnd, rcDefault, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS |

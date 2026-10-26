@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "DialogView.h"
+#include <DpiHelper.h>
 
 namespace {
 	INT_PTR CALLBACK PreviewDlgProc(HWND, UINT, WPARAM, LPARAM) {
@@ -33,12 +34,33 @@ bool CDialogHost::ShowDialog(DlgTemplate const& dlg) {
 	if (!hDlg)
 		return false;
 
-	const int margin = 12;
-	CRect rc;
-	::GetWindowRect(hDlg, &rc);
-	::SetWindowPos(hDlg, nullptr, margin, margin, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_SHOWWINDOW);
-	SetScrollSize(rc.Width() + 2 * margin, rc.Height() + 2 * margin);
+	m_hDlg = hDlg;
+	Place();
+	::ShowWindow(hDlg, SW_SHOWNA);
 	return true;
+}
+
+void CDialogHost::Place() {
+	if (!m_hDlg)
+		return;
+	int margin = DpiHelper::Scale(12, m_hWnd);
+	CRect rc;
+	::GetWindowRect(m_hDlg, &rc);
+	SetScrollOffset(0, 0, FALSE);
+	::SetWindowPos(m_hDlg, nullptr, margin, margin, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+	SetScrollSize(rc.Width() + 2 * margin, rc.Height() + 2 * margin);
+}
+
+LRESULT CDialogHost::OnDpiChanged(UINT, WPARAM, LPARAM, BOOL& handled) {
+	// (after the dialog, which comes after the host, has taken its size for the new DPI)
+	PostMessage(WM_PLACE);
+	handled = FALSE;
+	return 0;
+}
+
+LRESULT CDialogHost::OnPlace(UINT, WPARAM, LPARAM, BOOL&) {
+	Place();
+	return 0;
 }
 
 CDialogView::CDialogView(IMainFrame* frame, PCWSTR title) : CViewBase(frame), m_Title(title) {

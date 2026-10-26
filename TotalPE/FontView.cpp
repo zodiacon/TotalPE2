@@ -2,12 +2,13 @@
 #include "FontView.h"
 #include "ResourceContent.h"
 #include <deque>
+#include <DpiHelper.h>
 
 namespace {
 	const int SampleSizes[] = { 9, 12, 16, 20, 28, 36, 48, 72 };
 	const wchar_t Sample[] = L"The quick brown fox jumps over the lazy dog. 0123456789";
 	const wchar_t Characters[] = L"ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz 0123456789 .,;:!?\"'()[]{}<>@#$%&*+-=/\\";
-	const int Margin = 12;
+	const int Margin = 12;		// at 96 DPI
 }
 
 CFontView::CFontView(IMainFrame* frame, PCWSTR title) : CViewBase(frame), m_Title(title) {
@@ -37,22 +38,33 @@ bool CFontView::SetData(std::span<const std::byte> data) {
 	return m_hFont && !m_FaceName.empty();
 }
 
+LRESULT CFontView::OnDpiChanged(UINT, WPARAM, LPARAM, BOOL& handled) {
+	CClientDC dc(m_hWnd);
+	SetScrollSize(Render(dc.m_hDC, false));
+	Invalidate();
+	handled = FALSE;
+	return 0;
+}
+
 CSize CFontView::Render(CDCHandle dc, bool draw) {
-	int y = Margin, width = 0;
+	// the sizes are at the DPI of the view
+	auto dpi = DpiHelper::GetDpi(m_hWnd);
+	auto scale = [&](int n) { return DpiHelper::Scale(n, dpi); };
+	int margin = scale(Margin), y = margin, width = 0;
 	auto line = [&](HFONT hFont, PCWSTR text) {
 		auto old = dc.SelectFont(hFont);
 		CSize size;
 		dc.GetTextExtent(text, -1, &size);
 		if (draw)
-			dc.TextOut(Margin, y, text);
+			dc.TextOut(margin, y, text);
 		dc.SelectFont(old);
-		y += size.cy + 4;
+		y += size.cy + scale(4);
 		width = std::max(width, (int)size.cx);
 	};
 	std::deque<CFont> fonts;	// deleted at the end; a deque does not move its elements
 	auto makeFont = [&](PCWSTR face, int points, int weight = FW_NORMAL) -> HFONT {
 		auto& font = fonts.emplace_back();
-		font.CreateFont(-::MulDiv(points, dc.GetDeviceCaps(LOGPIXELSY), 72), 0, 0, 0, weight, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+		font.CreateFont(-::MulDiv(points, dpi, 72), 0, 0, 0, weight, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
 			OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, face);
 		return font;
 	};
@@ -64,20 +76,20 @@ CSize CFontView::Render(CDCHandle dc, bool draw) {
 		line(ui, std::format(L"{} fonts in the resource", m_FontCount).c_str());
 	if (!m_Message.empty()) {
 		line(ui, m_Message.c_str());
-		return CSize(width + Margin * 2, y + Margin);
+		return CSize(width + margin * 2, y + margin);
 	}
-	y += 8;
+	y += scale(8);
 
 	auto chars = makeFont(m_FaceName.c_str(), 20);
 	line(chars, Characters);
-	y += 12;
+	y += scale(12);
 	for (auto points : SampleSizes) {
 		line(ui, std::format(L"{} pt", points).c_str());
 		auto sample = makeFont(m_FaceName.c_str(), points);
 		line(sample, Sample);
-		y += 6;
+		y += scale(6);
 	}
-	return CSize(width + Margin * 2, y + Margin);
+	return CSize(width + margin * 2, y + margin);
 }
 
 void CFontView::DoPaint(CDCHandle dc) {

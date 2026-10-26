@@ -24,6 +24,7 @@ public:
 		MESSAGE_HANDLER(WM_LBUTTONDOWN, OnLeftButtonDown)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
 		MESSAGE_HANDLER(WM_DESTROY, OnDestroy)
+		MESSAGE_HANDLER(WM_DPICHANGED_AFTERPARENT, OnDpiChanged)
 		CHAIN_MSG_MAP(CScrollImpl<CIconsView>)
 		CHAIN_MSG_MAP(CViewBase)
 	ALT_MSG_MAP(1)
@@ -45,12 +46,14 @@ private:
 	LRESULT OnContextMenu(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnLeftButtonDown(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
+	LRESULT OnDpiChanged(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnExportIcon(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnSave(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 
 	// the image of a group (or the icon itself) under a point of the client area; -1 if none
 	int HitTest(CPoint pt) const;
 	void Select(int index);
+	void Arrange();
 	// saves the resource data of an icon or a cursor image as a file of its own
 	void SaveImage(std::span<const std::byte> data);
 	void SaveGroup();

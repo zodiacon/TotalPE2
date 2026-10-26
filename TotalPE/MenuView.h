@@ -17,6 +17,7 @@ public:
 	BEGIN_MSG_MAP(CMenuView)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
 		MESSAGE_HANDLER(WM_SIZE, OnSize)
+		MESSAGE_HANDLER(WM_DPICHANGED_AFTERPARENT, OnDpiChanged)
 		COMMAND_RANGE_HANDLER(FirstBarId, FirstBarId + 0xFFF, OnBarClick)
 		CHAIN_MSG_MAP(CViewBase<CMenuView>)
 	ALT_MSG_MAP(1)
@@ -26,6 +27,7 @@ public:
 	LRESULT OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnSize(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnBarClick(WORD, WORD id, HWND, BOOL&);
+	LRESULT OnDpiChanged(UINT, WPARAM, LPARAM, BOOL&);
 
 private:
 	void BuildTree(std::vector<MenuNode> const& nodes, HTREEITEM parent);

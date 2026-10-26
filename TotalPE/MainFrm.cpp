@@ -11,6 +11,7 @@
 #include <IconHelper.h>
 #include "SecurityHelper.h"
 #include <ToolbarHelper.h>
+#include "DpiSupport.h"
 #include "PEStrings.h"
 #include "ApiSetMap.h"
 #include "AppSettings.h"
@@ -163,7 +164,14 @@ int CMainFrame::GetResourceIconIndex(WORD resType) const {
 	return ResourceTypeToIcon(resType);
 }
 
-void CMainFrame::InitMenu(HMENU hMenu) {
+void CMainFrame::InitMenu(HMENU hMenu, UINT dpi) {
+	if (dpi == 0)
+		dpi = DpiHelper::GetDpi(m_hWnd);
+	// (WTLHelper keeps the menus' bitmaps by icon: the shield is made once for each size)
+	static std::map<UINT, HICON> shields;
+	auto& shield = shields[dpi];
+	if (!shield)
+		shield = IconHelper::GetShieldIcon(dpi);
 	MenuItemData commands[] {
 		{ ID_EDIT_COPY, IDI_COPY },
 		{ ID_EDIT_PASTE, IDI_PASTE },
@@ -183,7 +191,7 @@ void CMainFrame::InitMenu(HMENU hMenu) {
 		{ ID_EDIT_FIND, IDI_FIND },
 		{ ID_EDIT_FIND_PREVIOUS, IDI_FIND_PREV },
 		{ ID_EDIT_FIND_NEXT, IDI_FIND_NEXT },
-		{ ID_FILE_RUNASADMINISTRATOR, 0, IconHelper::GetShieldIcon() },
+		{ ID_FILE_RUNASADMINISTRATOR, 0, shield },
 		{ ID_FILE_CLOSE, IDI_CLOSE },
 		{ ID_WINDOW_CLOSE, IDI_WIN_CLOSE },
 		{ ID_WINDOW_CLOSE_ALL, IDI_WIN_CLOSEALL },
@@ -193,7 +201,7 @@ void CMainFrame::InitMenu(HMENU hMenu) {
 		{ ID_NAV_BACK, IDI_BACK },
 		{ ID_NAV_FORWARD, IDI_FORWARD },
 	};
-	WTLHelper::InitMenu(hMenu, commands, _countof(commands));
+	WTLHelper::InitMenu(hMenu, commands, _countof(commands), DpiHelper::SmallIconSize(dpi));
 }
 
 TreeItemType CMainFrame::GetIndex(TreeItemType value) {
@@ -240,12 +248,12 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 	DragAcceptFiles();
 	// (the application font, to the controls as they are made)
 	Fonts::Install();
+	Dpi::Install();		// (the lists and trees take the images of their DPI)
 	auto& settings = AppSettings::Get();
 
 	CreateSimpleStatusBar();
 	m_StatusBar.SubclassWindow(m_hWndStatusBar);
-	int parts[] = { 200, 560, 760, 1160, -1 };	// (the last two: the work in the background)
-	m_StatusBar.SetParts(_countof(parts), parts);
+	UpdateStatusParts();
 
 	ToolBarButtonInfo const buttons[] = {
 		{ ID_NAV_BACK, IDI_BACK },
@@ -269,7 +277,7 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 		{ ID_EDIT_FIND, IDI_FIND},
 	};
 	CreateSimpleReBar(ATL_SIMPLE_REBAR_NOBORDER_STYLE);
-	auto tb = ToolbarHelper::CreateAndInitToolBar(m_hWnd, buttons, _countof(buttons));
+	auto tb = Dpi::CreateToolBar(m_hWnd, buttons, _countof(buttons));
 
 	AddSimpleReBarBand(tb);
 	UIAddToolBar(tb);
@@ -390,6 +398,7 @@ LRESULT CMainFrame::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*
 		GetWindowPlacement(&wp);
 		auto& settings = AppSettings::Get();
 		settings.MainWindowPlacement(wp);
+		settings.MainWindowDpi(DpiHelper::GetDpi(m_hWnd));
 		settings.AlwaysOnTop(GetExStyle() & WS_EX_TOPMOST);
 
 		bHandled = FALSE;
@@ -415,7 +424,8 @@ LRESULT CMainFrame::OnFileExit(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCt
 }
 
 HIMAGELIST CMainFrame::GetImageList() const {
-	return m_TreeImages.m_hImageList;
+	// (none before a file is opened)
+	return m_TreeImages.Empty() ? nullptr : m_TreeImages.For(DpiHelper::GetDpi(m_hWnd));
 }
 
 LRESULT CMainFrame::OnViewStatusBar(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/) {
@@ -1411,11 +1421,7 @@ bool CMainFrame::OpenArchive(PCWSTR path) {
 void CMainFrame::BuildArchiveTree(int iconSize) {
 	m_Tree.SetRedraw(FALSE);
 	m_Tree.DeleteAllItems();
-	m_Tree.SetItemHeight(iconSize + 2);
-	if (BuildTreeImageList(iconSize)) {
-		m_Tree.SetImageList(m_TreeImages);
-		m_Tabs.SetImageList(m_TreeImages);
-	}
+	SetTreeImages();
 
 	auto& path = m_Archive.Path();
 	auto root = InsertTreeItem(m_Tree, path.substr(path.rfind(L'\\') + 1).c_str(), 0, TreeItemType::ArchiveMembers);
@@ -1505,11 +1511,7 @@ bool CMainFrame::OpenObject(PCWSTR path) {
 void CMainFrame::BuildObjectTree(int iconSize) {
 	m_Tree.SetRedraw(FALSE);
 	m_Tree.DeleteAllItems();
-	m_Tree.SetItemHeight(iconSize + 2);
-	if (BuildTreeImageList(iconSize)) {
-		m_Tree.SetImageList(m_TreeImages);
-		m_Tabs.SetImageList(m_TreeImages);
-	}
+	SetTreeImages();
 
 	auto& path = m_Object.Path();
 	auto root = InsertTreeItem(m_Tree, path.substr(path.rfind(L'\\') + 1).c_str(), 0, TreeItemType::ObjectHeader);
@@ -1633,11 +1635,7 @@ bool CMainFrame::OpenElf(PCWSTR path) {
 void CMainFrame::BuildElfTree(int iconSize) {
 	m_Tree.SetRedraw(FALSE);
 	m_Tree.DeleteAllItems();
-	m_Tree.SetItemHeight(iconSize + 2);
-	if (BuildTreeImageList(iconSize)) {
-		m_Tree.SetImageList(m_TreeImages);
-		m_Tabs.SetImageList(m_TreeImages);
-	}
+	SetTreeImages();
 
 	auto& path = m_Elf.Path();
 	auto root = InsertTreeItem(m_Tree, path.substr(path.rfind(L'\\') + 1).c_str(), 0, TreeItemType::ElfHeader);
@@ -1836,12 +1834,7 @@ TreeItemType CMainFrame::TreeItemWithIndex(TreeItemType type, int64_t index) {
 void CMainFrame::BuildTree(int iconSize) {
 	m_Tree.SetRedraw(FALSE);
 	m_Tree.DeleteAllItems();
-	m_Tree.SetItemHeight(iconSize + 2);
-
-	if (BuildTreeImageList(iconSize)) {
-		m_Tree.SetImageList(m_TreeImages);
-		m_Tabs.SetImageList(m_TreeImages);
-	}
+	SetTreeImages();
 
 	auto& path = m_PE.GetPath();
 
@@ -1966,7 +1959,8 @@ HWND CMainFrame::GetHwnd() const {
 }
 
 BOOL CMainFrame::ShowContextMenu(HMENU hMenu, DWORD flags, int x, int y, HWND hWnd) {
-	InitMenu(hMenu);
+	// (the icons in the size of the DPI where the menu is shown: of the window it is for)
+	InitMenu(hMenu, DpiHelper::GetDpi(hWnd ? hWnd : m_hWnd));
 	return TrackPopupMenu(hMenu, flags, x, y, 0, hWnd ? hWnd : m_hWnd, nullptr);
 }
 
@@ -2213,26 +2207,31 @@ int CMainFrame::GetIconIndex(UINT icon) const {
 	return s_ImageIndices.at(icon);
 }
 
-bool CMainFrame::BuildTreeImageList(int iconSize) {
-	//
-	// return true if image list existed already
-	//
-	bool exist = m_TreeImages != nullptr;
-
-	if(!exist)
-		m_TreeImages.Create(iconSize, iconSize, ILC_COLOR32, 32, 16);
-
+HICON CMainFrame::FileIcon() const {
 	WORD icon = 0;
 	CString path = CurrentPath().c_str();
 	auto hIcon = ::ExtractAssociatedIcon(_Module.GetModuleInstance(), path.GetBuffer(), &icon);
 	if (!hIcon)
 		hIcon = AtlLoadSysIcon(IDI_APPLICATION);
-	if(!exist)
-		m_TreeImages.AddIcon(hIcon);
-	else {
-		m_TreeImages.ReplaceIcon(0, hIcon);
+	return hIcon;
+}
+
+// false if the images were there already (the file's icon is the new file's, in every list of them)
+bool CMainFrame::BuildTreeImageList() {
+	if (!m_TreeImages.Empty()) {
+		auto icon = FileIcon();
+		m_TreeImages.ForEach([&](CImageList& images) { images.ReplaceIcon(0, icon); });
 		return false;
 	}
+	m_TreeImages.For(DpiHelper::GetDpi(m_hWnd));
+	return true;
+}
+
+// The images of the tree (and of the views), in the size of the image list: the file's icon, then the others
+void CMainFrame::AddTreeImages(CImageList& images) {
+	int iconSize, cy;
+	images.GetIconSize(iconSize, cy);
+	images.AddIcon(FileIcon());
 
 	UINT const icons[] = {
 		IDI_SECTIONS, IDI_DIR_OPEN, IDI_RESOURCE, IDI_HEADERS, IDI_DIRS, IDI_SECURITY,
@@ -2248,11 +2247,51 @@ bool CMainFrame::BuildTreeImageList(int iconSize) {
 
 	bool insert = s_ImageIndices.empty();
 	for (auto icon : icons) {
-		int image = m_TreeImages.AddIcon(IconHelper::LoadCached(icon, iconSize));
+		int image = images.AddIcon(IconHelper::LoadCached(icon, iconSize));
 		if (insert)
 			s_ImageIndices.insert({ icon, image });
 	}
-	return true;
+}
+
+// The tree's images (the views have their DPI's of the same) in the size of the frame's DPI, the items as tall
+void CMainFrame::SetTreeImages() {
+	auto dpi = DpiHelper::GetDpi(m_hWnd);
+	m_Tree.SetItemHeight(DpiHelper::Scale(TreeIconSize + 2, dpi));
+	if (BuildTreeImageList()) {
+		auto images = m_TreeImages.For(dpi);
+		m_Tree.SetImageList(images);
+		m_Tabs.SetImageList(images);
+	}
+}
+
+void CMainFrame::UpdateStatusParts() {
+	int parts[] = { 200, 560, 760, 1160, -1 };	// (at 96 DPI; the last two: the work in the background)
+	for (auto& part : parts)
+		if (part > 0)
+			part = DpiHelper::Scale(part, m_hWnd);
+	m_StatusBar.SetParts(_countof(parts), parts);
+}
+
+//
+// The frame moved to a monitor of another DPI (or the DPI of its monitor changed). It takes the rectangle Windows suggests;
+// what is of the frame is made again for the new DPI: the status bar's parts, the icons of the menus, and the images of the
+// tree and of the tabs. The tool bars and the controls follow by themselves (WM_DPICHANGED_AFTERPARENT, which comes after
+// this): the views' lists and trees take the tree's images of their DPI (Dpi::ImageSet), wherever they are docked.
+//
+LRESULT CMainFrame::OnDpiChanged(UINT, WPARAM wParam, LPARAM lParam, BOOL&) {
+	UINT dpi = LOWORD(wParam);
+	Dpi::TakeSuggestedRect(m_hWnd, lParam);
+	UpdateStatusParts();
+	InitMenu(GetMenu(), dpi);
+	DrawMenuBar();
+	if (!m_TreeImages.Empty()) {
+		auto images = m_TreeImages.For(dpi);
+		m_Tree.SetImageList(images);
+		m_Tree.SetItemHeight(DpiHelper::Scale(TreeIconSize + 2, dpi));
+		m_Tabs.SetImageList(images);
+	}
+	UpdateLayout();
+	return 0;
 }
 
 void CMainFrame::SetStatusText(int index, PCWSTR text) {
@@ -2696,9 +2735,10 @@ LRESULT CMainFrame::OnShowWindow(UINT, WPARAM show, LPARAM, BOOL&) {
 	bool static shown = false;
 	if (show && !shown) {
 		shown = true;
-		auto wp = AppSettings::Get().MainWindowPlacement();
+		auto& settings = AppSettings::Get();
+		auto wp = settings.MainWindowPlacement();
 		if (wp.showCmd != SW_HIDE) {
-			SetWindowPlacement(&wp);
+			Dpi::RestorePlacement(m_hWnd, wp, settings.MainWindowDpi());
 			UpdateLayout();
 		}
 		if (AppSettings::Get().AlwaysOnTop())
@@ -4924,26 +4964,35 @@ void CMainFrame::UpdateCodeStyle() {
 		}, 0);
 }
 
+// the DPI the font dialog converts between points and heights at: that of the screen's DC
+static UINT FontDialogDpi() {
+	CClientDC dc(nullptr);
+	return dc.GetDeviceCaps(LOGPIXELSY);
+}
+
 // the application font: of lists, trees, edit boxes... (the default GUI font until one is chosen)
 LRESULT CMainFrame::OnOptionsFont(WORD, WORD, HWND, BOOL&) {
+	auto dpi = FontDialogDpi();
 	LOGFONT font;
 	if (!Fonts::Application(font))
-		::GetObject(AtlGetDefaultGuiFont(), sizeof(font), &font);
+		::GetObject(AtlGetDefaultGuiFont(), sizeof(font), &font);	// (of 8 points at 96 DPI, whatever the DPI)
+	font = Fonts::ToDpi(font, dpi);
 	CFontDialog dlg(&font, CF_SCREENFONTS | CF_INITTOLOGFONTSTRUCT | CF_NOVERTFONTS, nullptr, m_hWnd);
 	if (dlg.DoModal() != IDOK)
 		return 0;
-	AppSettings::Get().ApplicationFont(dlg.m_lf);
+	AppSettings::Get().ApplicationFont(Fonts::FromDpi(dlg.m_lf, dpi));
 	UpdateCodeStyle();
 	return 0;
 }
 
 // the code font: of disassembly, C/C++, IDL... (fixed pitch, as the columns of disassembly need)
 LRESULT CMainFrame::OnOptionsCodeFont(WORD, WORD, HWND, BOOL&) {
-	auto font = Fonts::Code();
+	auto dpi = FontDialogDpi();
+	auto font = Fonts::ToDpi(Fonts::Code(), dpi);
 	CFontDialog dlg(&font, CF_SCREENFONTS | CF_FIXEDPITCHONLY | CF_INITTOLOGFONTSTRUCT | CF_NOVERTFONTS, nullptr, m_hWnd);
 	if (dlg.DoModal() != IDOK)
 		return 0;
-	AppSettings::Get().CodeFont(dlg.m_lf);
+	AppSettings::Get().CodeFont(Fonts::FromDpi(dlg.m_lf, dpi));
 	UpdateCodeStyle();
 	return 0;
 }

@@ -30,6 +30,7 @@ public:
 		MESSAGE_HANDLER(WM_SIZE, OnSize)
 		MESSAGE_HANDLER(WM_ERASEBKGND, OnEraseBkgnd)
 		MESSAGE_HANDLER(WM_ACTIVATE, OnActivate)
+		MESSAGE_HANDLER(WM_DPICHANGED, OnDpiChanged)
 		COMMAND_CODE_HANDLER(EN_CHANGE, OnTextChanged)
 		NOTIFY_CODE_HANDLER(LVN_GETDISPINFO, OnGetDispInfo)
 		NOTIFY_CODE_HANDLER(NM_DBLCLK, OnDoubleClick)
@@ -40,6 +41,7 @@ private:
 	LRESULT OnSize(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnEraseBkgnd(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnActivate(UINT, WPARAM, LPARAM, BOOL&);
+	LRESULT OnDpiChanged(UINT, WPARAM, LPARAM, BOOL&);
 	LRESULT OnTextChanged(WORD, WORD, HWND, BOOL&);
 	LRESULT OnGetDispInfo(int, LPNMHDR, BOOL&);
 	LRESULT OnDoubleClick(int, LPNMHDR, BOOL&);
@@ -47,6 +49,7 @@ private:
 	void Search();
 	void Accept();
 	void UpdateLayout();
+	void CreateOwnFont();
 	// the names of the entries in lowercase, and the initials of their words (made when they are first searched)
 	void Index();
 
@@ -56,4 +59,5 @@ private:
 	CEdit m_Edit;
 	CListViewCtrl m_List;
 	HFONT m_Font{ nullptr };
+	CFont m_OwnFont;	// until the host gives one
 };
